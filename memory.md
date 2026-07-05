@@ -1,75 +1,191 @@
 # ZEXVRO Shared Memory
 
-This file is the shared working memory for all developers and their coding agents.
+This file is the chronological operating memory for ZEXVRO developers and coding agents.
 
-Every developer and every agent must read this file before starting work, then update it after meaningful changes. The goal is to let three developers and their agents work in the same repo without overwriting each other's work, duplicating decisions, or breaking service boundaries.
+Use it to record what changed, why it changed, what decisions were made, what is blocked, and what another agent needs to know before continuing. Keep it precise. Do not paste long logs, unrelated brainstorms, or raw context dumps.
 
-## Rules For Developers And Agents
+## Required Agent Startup
 
-1. Read `context.md` and `memory.md` before starting any task.
-2. Check `git status` before editing.
-3. Do not overwrite another developer's work.
-4. Do not refactor another service unless that developer has agreed or the change is required for a shared interface.
-5. Keep service ownership clear:
-   - Paris / `paris-29`: Zero-Knowledge Privacy Pool, Transformation Agent.
-   - Rushi / `Wraient`: A-2-A Trade Pipeline, Captcha-like Agent Authentication Service.
-   - Nabil / `n4bi10p`: NFT Service, De-pin.
-6. If a task touches shared contracts, APIs, schemas, auth, wallet logic, deployment, or platform navigation, document the change here.
-7. After every meaningful update, add a dated memory entry before committing.
-8. Commit the code change and the memory update together.
-9. Keep entries factual. Write what changed, why it changed, what remains, and who owns the next step.
-10. If work is blocked, record the blocker and the person or decision needed to unblock it.
+Before any coding or documentation task, every agent must:
 
-## What Not To Do
+1. Read `README.md`.
+2. Read `context.md`.
+3. Read this file from top to bottom.
+4. Run `git status --short`.
+5. Identify the service or shared area being touched.
+6. Check the latest memory entries for ownership, blockers, and decisions.
+7. Make scoped changes only.
+8. Add a memory entry before committing.
 
-- Do not delete or rewrite old memory entries.
-- Do not remove another developer's notes unless they are moved into a more permanent doc and the move is recorded.
-- Do not silently change service boundaries.
-- Do not add large unrelated refactors to a service task.
-- Do not commit generated secrets, API keys, private keys, wallet seed phrases, `.env` files, or credentials.
-- Do not invent De-pin scope before Nabil provides context.
-- Do not assume platform-wide standards are decided unless they are documented here or in `context.md`.
+## Purpose Of This File
 
-## Agent-First Development Notes
+This file exists so three developers and their agents can work in one repo without losing context or breaking each other's work.
 
-ZEXVRO should be built in an agent-first way.
+It should answer:
 
-Agents should be able to quickly discover:
+- Who changed what?
+- Why was it changed?
+- Which service or shared area was touched?
+- What decisions are now active?
+- What is blocked?
+- What should the next agent do?
+- Which files are safe or unsafe to edit?
 
-- What service they are working on.
-- Who owns it.
-- Which files and directories are safe to edit.
-- What shared interfaces exist.
-- What recent changes other agents made.
-- What context the web agent and CLI agent should share.
+It should not contain:
 
-When code is scaffolded, add clear service-level READMEs or comments that point agents to the right context. If a dedicated agent skill is created later, it should teach agents where to look for `context.md`, `memory.md`, service READMEs, API contracts, and platform comments.
+- Full terminal logs.
+- Full chat transcripts.
+- Random ideas with no owner.
+- Secrets, keys, wallet seeds, tokens, or private credentials.
+- Large copied documentation from external sources.
+- Service explanations that belong in `context.md`.
+
+## Source Of Truth Rules
+
+| File | Purpose |
+| --- | --- |
+| `README.md` | Public project overview and brand entry point |
+| `context.md` | Stable product context, service definitions, ownership, agent rules |
+| `memory.md` | Work history, decisions, blockers, handoffs, active coordination |
+| Future service README | Service-local setup, contracts, architecture, and edit boundaries |
+
+If a detail becomes stable product context, move it to `context.md` and record that move here.
+
+If a detail is only a work update, keep it here.
+
+## Ownership
+
+| Service | Owner | Current status | Edit rule |
+| --- | --- | --- | --- |
+| Zero-Knowledge Privacy Pool | Paris / `paris-29` | Planned | Ask or record coordination before changing core design |
+| Transformation Agent | Paris / `paris-29` | Planned | Ask or record coordination before changing memory, CLI, or agent architecture |
+| A-2-A Trade Pipeline | Rushi / `Wraient` | Planned | Ask or record coordination before changing protocol, wallet, or negotiation design |
+| Captcha-like Agent Authentication Service | Rushi / `Wraient` | Planned | Ask or record coordination before changing identity, SDK, classifier, or HDM design |
+| NFT Service | Nabil / `n4bi10p` | Planned | Ask or record coordination before changing minting, metadata, checkout, or NFT model |
+| De-pin | Nabil / `n4bi10p` | Needs Nabil context | Do not implement until scope is documented |
+
+Shared areas that need extra care:
+
+- Auth.
+- Wallets.
+- Agent memory.
+- Account/workspace model.
+- API contracts.
+- Data schemas.
+- Deployment.
+- Security.
+- Billing.
+- Navigation that affects multiple services.
+
+## Work Rules
+
+1. Keep changes scoped to the requested task.
+2. Do not rewrite another developer's service direction without coordination.
+3. Do not silently change shared contracts.
+4. Do not introduce secrets or credentials.
+5. Do not commit `.env` files.
+6. Do not invent De-pin scope.
+7. Do not treat planned stack choices as fully designed architecture.
+8. Update this file after meaningful changes.
+9. Commit the code/docs change and memory update together.
+10. If a decision is uncertain, mark it as `Draft` or `Proposed`, not `Accepted`.
+
+## Context Discipline
+
+Agents should gather enough context to solve the task, then stop.
+
+Good memory entry:
+
+- Names the files changed.
+- States the actual decision.
+- Lists follow-ups.
+- Records blockers.
+- Is short enough for another agent to scan.
+
+Bad memory entry:
+
+- Dumps command output.
+- Copies an entire conversation.
+- Mentions vague progress with no files or next step.
+- Says "updated stuff" without details.
+- Hides a decision inside a paragraph.
+
+## Decision Labels
+
+Use these labels in memory entries when needed:
+
+- `Draft`: idea is being explored.
+- `Proposed`: direction is suggested but not final.
+- `Accepted`: team should follow this until changed.
+- `Blocked`: work cannot continue without input or a decision.
+- `Deprecated`: previous direction should no longer be used.
+
+Decision format:
+
+```md
+- Decision: Accepted - Use Vite + React for the frontend scaffold unless the team changes direction.
+```
+
+## Handoff Format
+
+Use this when a task is incomplete or another developer/agent must continue:
+
+```md
+- Handoff:
+  - Current state:
+  - Next step:
+  - Files to inspect:
+  - Do not touch:
+  - Owner needed:
+```
 
 ## Memory Entry Template
 
-Use this format for every update:
+Add new entries at the bottom of this file.
 
 ```md
-## YYYY-MM-DD - Developer or agent name - Short title
+## YYYY-MM-DD - Name or agent - Short title
 
 - Service or area:
 - Files changed:
 - Summary:
-- Decisions made:
+- Decisions:
 - Follow-ups:
 - Blockers:
+- Verification:
 ```
 
-## Active Service Ownership
+Use `None` for empty fields. Do not delete fields.
 
-| Service | Owner | Current status |
+## Active Decisions
+
+- Decision: Accepted - README stays brand-level and should not explain individual services.
+- Decision: Accepted - Detailed service context belongs in `context.md`.
+- Decision: Accepted - Work state, decisions, blockers, and handoffs belong in `memory.md`.
+- Decision: Accepted - MVP priority is the six unique services before generic PaaS features.
+- Decision: Accepted - Frontend direction is Vite + React.
+- Decision: Accepted - Prefer Stellar Network for Web3/backend pieces where technically appropriate.
+- Decision: Proposed - Use AWS for cloud infrastructure where needed.
+- Decision: Blocked - De-pin scope needs Nabil's input before implementation.
+
+## Active Blockers
+
+| Blocker | Owner needed | Impact |
 | --- | --- | --- |
-| Zero-Knowledge Privacy Pool | Paris / `paris-29` | Planned |
-| Transformation Agent | Paris / `paris-29` | Planned |
-| A-2-A Trade Pipeline | Rushi / `Wraient` | Planned |
-| Captcha-like Agent Authentication Service | Rushi / `Wraient` | Planned |
-| NFT Service | Nabil / `n4bi10p` | Planned |
-| De-pin | Nabil / `n4bi10p` | Needs Nabil brainstorming/context |
+| De-pin scope is undefined | Nabil / `n4bi10p` | De-pin should not be implemented yet |
+| App not scaffolded | Any owner can propose | No install/dev/build/test commands exist yet |
+| Service architecture not defined | Each service owner | Agents should not create final architecture without recording decisions |
+
+## Active Handoffs
+
+- Handoff:
+  - Current state: Repo has brand assets, README, context, and shared memory docs. No app scaffold exists.
+  - Next step: Scaffold the Vite + React frontend or create service directories when the team decides to start implementation.
+  - Files to inspect: `README.md`, `context.md`, `memory.md`, `assets/brand/`.
+  - Do not touch: Do not implement De-pin before Nabil defines scope.
+  - Owner needed: Any developer for app scaffold; Nabil for De-pin details.
+
+## Change History
 
 ## 2026-07-05 - Codex - Initial project memory
 
@@ -88,3 +204,13 @@ Use this format for every update:
 - Decisions made: Kept README high-level and avoided explaining individual services for now.
 - Follow-ups: Replace remote badge images with local/generated badges later if the repo should avoid external README assets.
 - Blockers: None.
+
+## 2026-07-05 - Codex - Agent-first context and memory
+
+- Service or area: project documentation and agent workflow.
+- Files changed: `context.md`, `memory.md`.
+- Summary: Reworked context and memory into precise agent-first operating docs with startup steps, ownership boundaries, context discipline, decision labels, blockers, handoff format, and service-specific edit rules.
+- Decisions: Accepted - Keep README brand-level; keep detailed service context in `context.md`; keep work history and handoffs in `memory.md`.
+- Follow-ups: Add service-local READMEs when code directories are scaffolded.
+- Blockers: De-pin scope still needs Nabil's input.
+- Verification: Read the Markdown diff for clarity and scope.
