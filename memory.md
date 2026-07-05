@@ -214,3 +214,13 @@ Use `None` for empty fields. Do not delete fields.
 - Follow-ups: Add service-local READMEs when code directories are scaffolded.
 - Blockers: De-pin scope still needs Nabil's input.
 - Verification: Read the Markdown diff for clarity and scope.
+
+## 2026-07-05 - Codex - README logo2 update
+
+- Service or area: project documentation and brand assets.
+- Files changed: `README.md`, `context.md`, `memory.md`, `assets/brand/logo2.png`.
+- Summary: Added `logo2.png` to tracked brand assets and updated the README hero image to use it.
+- Decisions: Accepted - README should use `assets/brand/logo2.png` as the primary displayed logo.
+- Follow-ups: None.
+- Blockers: None.
+- Verification: Checked README image reference and asset path.
