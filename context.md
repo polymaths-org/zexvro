@@ -1,189 +1,388 @@
 # ZEXVRO Context
 
+This file is the source of truth for product context. It is written for humans and coding agents.
+
+Use this file to understand what ZEXVRO is, what the MVP contains, who owns each area, and what assumptions are already known. Do not use this file as a dumping ground for logs, copied chats, temporary notes, or unclear ideas. Put work updates in `memory.md`.
+
+## Agent Boot Sequence
+
+Every agent must start here:
+
+1. Read `README.md` for the public project summary.
+2. Read this file for product context and service boundaries.
+3. Read `memory.md` for current work state, handoffs, blockers, and decisions.
+4. Run `git status --short` before editing.
+5. Identify the service or shared area being touched.
+6. Make the smallest useful change.
+7. Update `memory.md` with what changed and what remains.
+8. Commit code and memory updates together.
+
 ## Platform Identity
 
-- Platform name: ZEXVRO
-- Repository: https://github.com/polymaths-org/zexvro.git
-- Category: Unified Web3 PaaS
-- Product direction: clean, simple, professional, understandable UI inspired by Vercel and Cloudflare.
-- Brand assets:
-  - `assets/brand/logo.png`
-  - `assets/brand/typo-logo.png`
-  - `assets/brand/brand-design.png`
+| Field | Value |
+| --- | --- |
+| Platform name | ZEXVRO |
+| Repository | `https://github.com/polymaths-org/zexvro.git` |
+| Category | Unified Web3 PaaS |
+| Product style | Clean, simple, professional, understandable |
+| UI references | Vercel and Cloudflare |
+| MVP priority | Six unique Web3 services first |
+| Secondary priority | DB, deploy, hosting, security, connectors, and standard PaaS features if time allows |
 
-## Purpose
+Brand assets:
 
-ZEXVRO is a unified platform-as-a-service for Web3 products and infrastructure. The platform should provide common unified-platform capabilities such as databases, deployment, hosting, security, connectors, and related infrastructure, while also offering unique Web3 services that are not commonly available from other platforms.
+- `assets/brand/logo.png`
+- `assets/brand/typo-logo.png`
+- `assets/brand/brand-design.png`
 
-The MVP priority is to build six unique services first. General platform features such as DB, deploy, hosting, security, and connectors are secondary and should be added if time allows.
+## One Sentence
 
-The existing repository summary describes ZEXVRO as:
+ZEXVRO is a unified Web3 PaaS that helps teams move from Web2 to Web3 infrastructure through private, verifiable, agent-ready services.
 
-> Web2-to-Web3 PaaS middleware that abstracts complex public blockchain rails into secure, private, enterprise-grade endpoints using Zero-Knowledge Execution (ZEX) and Verifiable Routing Orchestration (VRO).
+## Product Purpose
 
-## Target Stack
+ZEXVRO should make advanced Web3 infrastructure usable by teams that do not want to manage raw blockchain complexity.
+
+The platform should:
+
+- Provide a unified dashboard and developer workflow.
+- Prefer clear product flows over blockchain jargon.
+- Expose powerful Web3 capabilities through simple APIs, SDKs, UI flows, and agent actions.
+- Support enterprise-grade privacy, identity, authentication, deployment, and commerce workflows.
+- Make agents first-class users of the platform, not an afterthought.
+
+The platform should not:
+
+- Become a generic crypto dashboard.
+- Prioritize speculative token features over real developer workflows.
+- Add common PaaS features before the MVP services need them.
+- Hide unclear ownership or decisions inside random notes.
+
+## Current Repo State
+
+The repository currently contains:
+
+- Project documentation.
+- Brand assets.
+- Shared memory workflow.
+
+The application has not been scaffolded yet.
+
+Expected future stack:
 
 - Frontend: Vite and React.
-- Blockchain/Web3 backend preference: Stellar Network.
-- Reason for Stellar preference: Stellar is sponsoring the project, so use Stellar technology where it fits the product.
-- Cloud/infrastructure: AWS.
-- Product design benchmark: Vercel/Cloudflare-like clarity, with a simple and professional developer experience.
+- Web3/backend preference: Stellar Network where technically appropriate.
+- Cloud infrastructure: AWS.
+- Agent workflow: shared context between web agent, CLI agent, and developer agents.
 
-## MVP Team Split
+## Team Ownership
 
-There are three developers. Each developer owns two services, for a total of six MVP services.
+There are three developers. Each developer owns two MVP services.
 
-| Developer | Alias | Assigned services |
+| Developer | Alias | Owns |
 | --- | --- | --- |
-| Paris | `paris-29` | Zero-knowledge Privacy Pool, Transformation Agent |
+| Paris | `paris-29` | Zero-Knowledge Privacy Pool, Transformation Agent |
 | Rushi | `Wraient` | A-2-A Trade Pipeline, Captcha-like Agent Authentication Service |
 | Nabil | `n4bi10p` | NFT Service, De-pin |
 
-## MVP Services
+Ownership means:
+
+- The owner decides service direction.
+- Other developers can propose changes, but should not reshape the service without coordination.
+- Shared contracts must be documented in `memory.md`.
+- Cross-service changes require a memory entry explaining impact and follow-ups.
+
+## Service Map
 
 ### 1. Zero-Knowledge Privacy Pool
 
-Owner: `paris-29` / Paris
+Owner: Paris / `paris-29`
 
-Web3 has strong public-verifiability properties, but companies often avoid moving sensitive workflows on-chain because they need transaction privacy. The Zero-Knowledge Privacy Pool service should let companies use Web3 while preserving privacy for their transactions.
+Problem:
 
-Core idea:
+- Companies may want Web3 benefits but cannot expose sensitive transaction details publicly.
 
-- Provide privacy for business transactions.
-- Use zero-knowledge techniques where possible.
-- Make Web3 adoption more acceptable for companies that cannot expose transaction details publicly.
+MVP intent:
+
+- Provide transaction privacy for business use cases.
+- Use zero-knowledge techniques where they fit.
+- Make on-chain or Web3-backed activity acceptable for privacy-sensitive teams.
+
+Agent boundaries:
+
+- Do not choose a final proving system, circuit design, smart contract model, or privacy architecture without a recorded decision.
+- If researching implementation, record options and tradeoffs in `memory.md`.
+- Any Stellar-specific privacy approach must explain why Stellar is suitable for that part.
+
+Unknowns:
+
+- Exact privacy model.
+- Compliance requirements.
+- Which data must be hidden versus verifiable.
+- Whether this is a protocol, API, dashboard feature, or all three.
 
 ### 2. Transformation Agent
 
-Owner: `paris-29` / Paris
+Owner: Paris / `paris-29`
 
-This is a key agent service for the platform. It should feel like a workspace-level assistant similar in placement and importance to Gemini in Google Workspace, but focused on ZEXVRO platform operations and Web2-to-Web3 transformation.
+Problem:
 
-The service needs a better product name later. Inspiration mentioned: Snowflake Cortex-style platform intelligence.
+- Teams need help migrating Web2 code, deployments, and workflows into Web3-ready infrastructure.
 
-Core idea:
+MVP intent:
 
-- Agent that helps users deploy from the CLI and from the platform UI.
-- Agent that helps migrate old Web2 codebases and workflows into Web3-ready architecture.
-- Users should be able to share or connect a Git repository so the agent can inspect the full codebase.
-- CLI agent and web agent should share unified memory across the same account.
-- If the web agent learns authenticated context, the CLI agent should know the relevant context too.
-- The platform should be developed in an agent-first way.
-- Code comments, conventions, and possibly a dedicated skill should tell agents where to look for important context and task-specific notes.
-- The goal is to make agent work more accurate and reduce duplicated exploration.
+- Provide a platform agent that can inspect repositories, explain migration work, and help deploy through the CLI and web UI.
+- Share useful account memory between web agent and CLI agent.
+- Make ZEXVRO itself agent-first so future agents know where to look, what changed, and what is safe to edit.
+
+Inspiration:
+
+- Workspace-level assistant placement like Gemini in Google Workspace.
+- Platform intelligence direction similar to Snowflake Cortex-style assistants.
+
+Agent boundaries:
+
+- Do not invent the final product name yet.
+- Do not add broad autonomous actions without permission and audit trail design.
+- All agent memory behavior must separate durable user memory, temporary task context, secrets, and logs.
+- Repository inspection must avoid leaking private code across accounts.
+
+Unknowns:
+
+- Agent runtime.
+- Memory storage model.
+- CLI architecture.
+- Auth model between web agent and CLI agent.
+- Repository ingestion strategy.
 
 ### 3. A-2-A Trade Pipeline
 
-Owner: `Wraient` / Rushi
+Owner: Rushi / `Wraient`
 
-This is a trading pipeline for agents. One user's agent should be able to approach another agent when it is trading or selling something, then negotiate through the pipeline.
+Problem:
 
-Core idea:
+- Agents need a trusted way to approach other agents, negotiate, and complete trades.
 
-- Agent-to-agent commerce or negotiation.
-- Agents can have wallets.
-- Agents may need a dedicated skill/capability for wallet operations and trade negotiation.
-- The platform should provide the pipeline, identity context, and transaction rails needed for trusted agent trade.
+MVP intent:
+
+- Provide an agent-to-agent trade pipeline.
+- Let agents represent offers, counteroffers, wallet intent, and settlement state.
+- Support negotiation between agents with clear identity and transaction boundaries.
+
+Agent boundaries:
+
+- Do not implement wallet custody assumptions without an explicit decision.
+- Do not let agents spend funds without user-controlled authorization rules.
+- Record any message protocol, offer schema, settlement flow, or wallet interface in `memory.md`.
+
+Unknowns:
+
+- Negotiation protocol.
+- Wallet model.
+- Agent identity standard.
+- Settlement mechanism.
+- Dispute or cancellation flow.
 
 ### 4. Captcha-Like Agent Authentication Service
 
-Owner: `Wraient` / Rushi
+Owner: Rushi / `Wraient`
 
-This is an authentication and identification service that distinguishes humans from agents. It should give platforms control over how they treat humans, agents, and automated activity.
+Problem:
 
-Core idea:
+- Platforms need to distinguish humans from agents and control how each can access product flows.
 
-- Auth service that identifies agents and humans.
-- Use Web3 and Stellar technology where it fits.
-- Identify behavioral patterns and other signals to classify human vs agent activity with high accuracy.
-- Provide SDK and API service access for external platforms.
-- Provide a ZEXVRO sub-platform for human and agent classification.
-- The immediate work is to label internet users as human or agent with higher accuracy.
+MVP intent:
 
-Related concept: HDM, the Human Data Marketplace.
+- Build an auth service that classifies humans and agents.
+- Provide SDK/API access for external platforms.
+- Use Web3 and Stellar technology where useful.
+- Support high-accuracy labeling of internet users as human or agent.
 
-HDM idea:
+Related concept: HDM, Human Data Marketplace.
 
-- When a user logs in to HDM, they are identified as human.
-- Human users can sell their data to AI training companies.
+HDM intent:
+
+- A verified human can choose to sell data to AI training companies.
+- AI companies get human-origin data instead of AI-content-polluted data.
 - Users can earn from their data.
-- AI companies can access actual human data instead of AI-content-polluted datasets.
+
+Agent boundaries:
+
+- Do not claim perfect detection.
+- Do not store biometric, behavioral, or personal data without a privacy model.
+- Do not design HDM data sale flows without consent, auditability, and deletion requirements.
+- Any classification model must describe input signals, confidence score, appeal flow, and false-positive handling.
+
+Unknowns:
+
+- Classification signals.
+- Web3 identity method.
+- Stellar role.
+- SDK shape.
+- Data marketplace consent and payment model.
 
 ### 5. NFT Service
 
-Owner: `n4bi10p` / Nabil
+Owner: Nabil / `n4bi10p`
 
-This service should let non-Web3 users deploy and manage NFTs with only a few simple steps.
+Problem:
 
-Target users:
+- Non-Web3 users such as indie game developers and small studios need NFT functionality without learning complex Web3 tooling.
 
-- Indie game developers.
-- Small studios.
-- Creators or teams that need NFT functionality without needing deep Web3 knowledge.
+MVP intent:
 
-Core idea:
+- Let users deploy NFTs in a few guided steps.
+- Provide simple NFT management.
+- Support checkout or purchase flows from the platform.
+- Hide wallet, metadata, and chain complexity behind clear UI and APIs.
 
-- Easy NFT deployment.
-- NFT management from the ZEXVRO platform.
-- Checkout and related flows handled from the platform.
-- Hide complex Web3 steps behind a simple product interface.
+Agent boundaries:
+
+- Do not assume a final NFT standard, storage provider, marketplace model, or checkout provider without a recorded decision.
+- Keep the user experience non-Web3 friendly.
+- Any metadata, royalty, minting, or ownership assumptions must be documented.
+
+Unknowns:
+
+- Target chain or Stellar asset model.
+- Metadata storage.
+- Payment and checkout flow.
+- Minting permissions.
+- Game/studio workflow requirements.
 
 ### 6. De-pin
 
-Owner: `n4bi10p` / Nabil
+Owner: Nabil / `n4bi10p`
 
-This service needs more brainstorming and detailed context from Nabil.
+Status:
 
-Current instruction:
+- Scope not defined yet.
+- Needs brainstorming and written context from Nabil.
 
-- Ask Nabil to brainstorm and provide context for De-pin.
-- Do not invent the final service scope without Nabil's input.
-- Add the finalized scope to this file and `memory.md` once it is decided.
+Rules:
 
-## Product Principles
+- Do not invent final De-pin scope.
+- Do not build De-pin code before scope is recorded.
+- When Nabil provides the idea, update this section and add a memory entry.
 
-- Build a clean, simple, professional UI.
-- Prioritize understandability over visual complexity.
-- Use a Vercel/Cloudflare-like interface style: calm, clear, developer-friendly, and fast to scan.
-- MVP scope should focus on the six unique services first.
-- Add common PaaS capabilities only when they support the unique services or when there is enough time.
-- Prefer Stellar-backed implementations where technically appropriate.
-- Keep the agent experience central to the product architecture.
+## Shared Platform Areas
+
+These are not primary MVP services yet, but they will likely become shared modules.
+
+| Area | Current status | Agent rule |
+| --- | --- | --- |
+| Auth | Not designed | Do not create permanent auth architecture without documenting the flow |
+| Accounts/workspaces | Not designed | Keep future multi-user needs in mind |
+| Billing | Not designed | Do not add payment logic until product scope requires it |
+| Deployment | Not designed | Prefer service-driven needs over generic deploy features |
+| Database | Not designed | Choose storage after data models are clearer |
+| Connectors | Not designed | Add only when a service needs one |
+| Security | Required but not designed | Never commit secrets; document trust boundaries |
+| Agent memory | Important but not designed | Separate user memory, project memory, task memory, logs, and secrets |
+
+## Product Design Rules
+
+- Use a calm, professional interface.
+- Avoid crypto-native clutter.
+- Use readable labels and predictable navigation.
+- Design like a developer platform, not a marketing-only website.
+- Keep first screens actionable.
+- Make service status, setup state, errors, and next actions clear.
+- Prefer precise product copy over hype.
+
+## Agent Context Rules
+
+Agents should collect only the context needed for the current task.
+
+Allowed context:
+
+- Relevant files.
+- Current service ownership.
+- Recent memory entries.
+- Shared contracts touched by the task.
+- Commands needed to verify the change.
+
+Avoid:
+
+- Dumping full command logs into docs.
+- Copying long chat transcripts into repo files.
+- Mixing brainstorm notes with decisions.
+- Editing unrelated service areas.
+- Turning `context.md` into a scratchpad.
+
+Use the right file:
+
+- `README.md`: public-facing project overview.
+- `context.md`: stable product and architecture context.
+- `memory.md`: chronological work state, decisions, blockers, handoffs.
+- Future service READMEs: service-local setup, API, architecture, and ownership.
+
+## Decision Levels
+
+Use these labels in `memory.md` when needed:
+
+- `Draft`: idea is being explored.
+- `Proposed`: a specific direction is suggested but not final.
+- `Accepted`: team should follow this until changed.
+- `Blocked`: work cannot proceed without a decision or input.
+- `Deprecated`: old direction should not be used.
+
+## Future Directory Direction
+
+When code is scaffolded, prefer a structure that helps agents navigate quickly. This is a direction, not a final decision.
+
+```text
+apps/
+  web/                 # Vite + React platform UI
+  cli/                 # Future CLI agent or developer CLI
+services/
+  privacy-pool/
+  transformation-agent/
+  a2a-trade-pipeline/
+  agent-auth/
+  nft-service/
+  depin/
+packages/
+  shared/
+  ui/
+  config/
+docs/
+  architecture/
+  decisions/
+```
+
+Each service should eventually have a local README with:
+
+- Owner.
+- Purpose.
+- Current status.
+- Setup commands.
+- API/contracts.
+- Data model.
+- Known blockers.
+- Agent-safe edit notes.
 
 ## Setup Instructions
 
-Current repo state:
+Initial setup:
 
-- This repo currently contains project context, brand assets, and planning documentation.
-- The frontend/backend application has not been scaffolded yet.
+```bash
+git clone https://github.com/polymaths-org/zexvro.git
+cd zexvro
+cat context.md
+cat memory.md
+```
 
-Initial developer setup:
+Current verification:
 
-1. Clone the repo:
+- There are no app tests yet because no application has been scaffolded.
+- Documentation changes should be reviewed by reading the rendered Markdown.
 
-   ```bash
-   git clone https://github.com/polymaths-org/zexvro.git
-   cd zexvro
-   ```
+Future setup instructions should be added when the app is scaffolded:
 
-2. Read the context before coding:
-
-   ```bash
-   cat context.md
-   cat memory.md
-   ```
-
-3. Use the shared memory workflow:
-
-   - Before starting work, read the latest `memory.md`.
-   - During work, avoid changing another developer's owned service without coordination.
-   - After every meaningful update, append a new entry to `memory.md`.
-   - Commit code and the memory update together.
-
-4. Expected future app setup:
-
-   - Frontend should be scaffolded with Vite and React.
-   - Backend/service integrations should prefer Stellar Network where appropriate.
-   - AWS should be used for cloud infrastructure where needed.
-   - Add exact install, dev, build, and test commands here once the app is scaffolded.
-
+- Install command.
+- Dev command.
+- Build command.
+- Test command.
+- Required environment variables, without secrets.
+- Local service dependencies.
