@@ -80,3 +80,11 @@ Use this format for every update:
 - Follow-ups: Scaffold the Vite/React frontend, define service directories, add exact setup commands, and ask Nabil for De-pin context.
 - Blockers: De-pin scope is not defined yet.
 
+## 2026-07-05 - Codex - README brand refresh
+
+- Service or area: project documentation.
+- Files changed: `README.md`, `memory.md`.
+- Summary: Refreshed the README into a cleaner brand-facing page using the logo and typo-logo assets, stack badges, and links to project docs.
+- Decisions made: Kept README high-level and avoided explaining individual services for now.
+- Follow-ups: Replace remote badge images with local/generated badges later if the repo should avoid external README assets.
+- Blockers: None.
