@@ -32,6 +32,7 @@ Every agent must start here:
 Brand assets:
 
 - `assets/brand/logo.png`
+- `assets/brand/logo2.png`
 - `assets/brand/typo-logo.png`
 - `assets/brand/brand-design.png`
 

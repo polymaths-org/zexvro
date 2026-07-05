@@ -1,9 +1,5 @@
 <p align="center">
-  <img src="assets/brand/logo.png" alt="ZEXVRO logo" width="112" />
-</p>
-
-<p align="center">
-  <img src="assets/brand/typo-logo.png" alt="ZEXVRO" width="360" />
+  <img src="assets/brand/logo2.png" alt="ZEXVRO logo" width="168" />
 </p>
 
 <p align="center">
