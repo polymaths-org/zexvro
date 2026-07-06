@@ -244,3 +244,13 @@ Use `None` for empty fields. Do not delete fields.
 - Follow-ups: Map these tokens into Tailwind/shadcn variables when the frontend is scaffolded.
 - Blockers: None.
 - Verification: Visually inspected `assets/brand/logo2.png` and `assets/brand/typo-logo.png`, then reviewed the Markdown file.
+
+## 2026-07-06 - Codex - Extracted UI prototype cleanup
+
+- Service or area: frontend UI/UX prototype.
+- Files changed: `extracted/zexvro-ui/src/App.tsx`, `extracted/zexvro-ui/src/components/dashboard/Overview.tsx`, `extracted/zexvro-ui/src/components/dashboard/AgentStudio.tsx`, `extracted/zexvro-ui/src/components/dashboard/Projects.tsx`, `extracted/zexvro-ui/src/components/dashboard/Security.tsx`, `extracted/zexvro-ui/src/components/dashboard/Analytics.tsx`, `extracted/zexvro-ui/src/components/dashboard/Deployments.tsx`, `extracted/zexvro-ui/src/components/dashboard/Memory.tsx`, `extracted/zexvro-ui/src/components/dashboard/Settings.tsx`, `extracted/zexvro-ui/src/components/dashboard/Team.tsx`, `extracted/zexvro-ui/src/components/services/Services.tsx`, `extracted/zexvro-ui/src/data/mock.ts`, `extracted/zexvro-ui/src/index.css`, `extracted/zexvro-ui/public/brand/logo-transparent.png`, `extracted/zexvro-ui/public/brand/wordmark-transparent.png`, `extracted/zexvro-ui/public/brand/lockup-transparent.png`, `extracted/zexvro-ui/package.json`, `extracted/zexvro-ui/package-lock.json`, `extracted/zexvro-ui/README.md`, `memory.md`.
+- Summary: Cleaned the AI Studio UI prototype into a more sensible ZEXVRO workspace dashboard. Replaced remote logo URLs with local transparent brand assets, fixed mobile layout spacing, rewrote the overview around setup readiness and next actions, replaced misleading dummy data with MVP placeholders, softened agent actions into approval-first prototype states, and removed generated fake production/security claims from visible UI copy.
+- Decisions: Proposed - Treat `extracted/zexvro-ui` as the current UI prototype workspace until the team decides whether to promote it into the root app structure.
+- Follow-ups: Review all secondary screens visually, split large dashboard bundles with route-level code splitting later, and decide whether the app should move from `extracted/zexvro-ui` into the repo root or `apps/web`.
+- Blockers: Root workspace is still not a Git checkout, so pushes require syncing through the existing checkout path.
+- Verification: Ran `npm run lint` and `npm run build` successfully. Captured desktop and mobile screenshots with Chromium; fixed the mobile sidebar width bug found in the first mobile screenshot.
