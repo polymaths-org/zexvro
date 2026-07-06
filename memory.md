@@ -224,3 +224,13 @@ Use `None` for empty fields. Do not delete fields.
 - Follow-ups: None.
 - Blockers: None.
 - Verification: Checked README image reference and asset path.
+
+## 2026-07-06 - Codex - Google AI Studio frontend prompt
+
+- Service or area: frontend planning and UI prompt.
+- Files changed: `docs/prompts/google-ai-studio-frontend-ui.md`, `memory.md`.
+- Summary: Added a precise Google AI Studio prompt for generating the first ZEXVRO Vite/React frontend UI with shadcn/ui, dashboard shell, sidebar, platform sections, charts, collaboration, memory, security, and animation requirements.
+- Decisions: Proposed - Use the prompt as the initial frontend generation spec before scaffolding code in this repo.
+- Follow-ups: Run the prompt in Google AI Studio, review generated code, then scaffold or merge the selected frontend implementation.
+- Blockers: None.
+- Verification: Created the prompt file, checked the target path, and pushed it to `origin/main`.
