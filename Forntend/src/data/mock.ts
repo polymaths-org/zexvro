@@ -1,7 +1,7 @@
 import { Project, Deployment, Service, TeamMember, CollaborationNote, MemoryEntry, AuditLog, SecurityKey } from '../types';
 
 // AI NOTE: This file intentionally uses product-safe placeholders, not production metrics.
-// Keep values realistic for an MVP workspace and avoid claims that live blockchain/backend systems exist.
+// Keep values realistic for a setup workspace and avoid claims that live blockchain/backend systems exist.
 
 export const mockProjects: Project[] = [
   {
@@ -10,7 +10,7 @@ export const mockProjects: Project[] = [
     status: 'active',
     serviceUsage: ['Transformation Agent', 'Agent Memory'],
     region: 'Local prototype',
-    network: 'Stellar Testnet planned',
+    network: 'Network not connected',
     lastDeployment: 'Not deployed',
     owner: 'Workspace',
     branch: 'main',
@@ -59,13 +59,13 @@ export const mockDeployments: Deployment[] = [
     id: 'dep-ui-local',
     projectName: 'zexvro-platform-ui',
     commitHash: 'local',
-    commitMessage: 'Generated frontend prototype extracted from AI Studio zip',
+    commitMessage: 'Generated frontend prototype from AI Studio zip',
     status: 'Pending',
     timestamp: '2026-07-06 13:08',
     duration: 'Not run',
     author: 'Workspace',
     logs: [
-      '[INFO] Prototype extracted into extracted/zexvro-ui.',
+      '[INFO] Prototype prepared in the frontend workspace.',
       '[NEXT] Install dependencies, run type check, review UI spacing.',
       '[NOTE] No backend, auth, wallet, or deployment provider is connected yet.'
     ]
@@ -213,7 +213,7 @@ export const mockCollaborationNotes: CollaborationNote[] = [
     id: 'note-ui',
     author: 'Workspace',
     timestamp: '2026-07-06 13:08',
-    currentState: 'AI Studio generated a frontend prototype and it was extracted into extracted/zexvro-ui.',
+    currentState: 'AI Studio generated the first frontend prototype and it now lives in the frontend workspace.',
     nextStep: 'Improve spacing, branding, copy, and replace generated demo content with setup placeholders.',
     filesToInspect: ['src/App.tsx', 'src/components/dashboard/Overview.tsx', 'src/data/mock.ts'],
     doNotTouch: ['context.md service ownership rules without recording a decision'],

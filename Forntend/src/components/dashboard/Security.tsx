@@ -280,7 +280,7 @@ export default function Security() {
           <div className="space-y-3 text-xs font-mono">
             {[
               { rule: 'Repository changes', role: 'Human operator sign-off', val: 'REQUIRED' },
-              { rule: 'Testnet deployment', role: 'Human operator sign-off', val: 'REQUIRED' },
+              { rule: 'Deployment approval', role: 'Human operator sign-off', val: 'REQUIRED' },
               { rule: 'Wallet policy changes', role: 'Workspace approval', val: 'Approval' },
               { rule: 'Telemetry read', role: 'Read-only agent', val: 'PLANNED' },
               { rule: 'Security scan proposal', role: 'Read-only agent', val: 'PLANNED' }
