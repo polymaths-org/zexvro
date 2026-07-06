@@ -67,15 +67,23 @@ The repository currently contains:
 - Project documentation.
 - Brand assets.
 - Shared memory workflow.
+- `Forntend/`, the Vite + React frontend workspace.
 
-The application has not been scaffolded yet.
+The frontend application is scaffolded in `Forntend/`. Run frontend commands from that folder.
 
-Expected future stack:
+Current and expected stack:
 
 - Frontend: Vite and React.
 - Web3/backend preference: Stellar Network where technically appropriate.
 - Cloud infrastructure: AWS.
 - Agent workflow: shared context between web agent, CLI agent, and developer agents.
+
+Frontend workspace notes:
+
+- Path: `Forntend/`.
+- Run locally: `cd Forntend && npm run dev`.
+- Validate before handoff: `cd Forntend && npm run lint && npm run build`.
+- The UI is still prototype/frontend-only. Do not claim live backend, auth, wallet, blockchain, deployment provider, or secrets-manager integrations until those are implemented.
 
 ## Team Ownership
 

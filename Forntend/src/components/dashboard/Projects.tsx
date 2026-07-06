@@ -30,8 +30,8 @@ export default function Projects({
 
   // Form states for creating a new project
   const [newProjName, setNewProjName] = useState('');
-  const [newProjEnv, setNewProjEnv] = useState('Testnet');
-  const [newProjNetwork, setNewProjNetwork] = useState('Stellar Testnet');
+  const [newProjEnv, setNewProjEnv] = useState('Prototype');
+  const [newProjNetwork, setNewProjNetwork] = useState('Network not connected');
   const [newProjTemplate, setNewProjTemplate] = useState('stellar-smart-contract-starter');
   const [newProjServices, setNewProjServices] = useState<string[]>([]);
   const [formError, setFormError] = useState('');
@@ -69,7 +69,7 @@ export default function Projects({
       name: newProjName,
       status: 'active',
       serviceUsage: newProjServices.length > 0 ? newProjServices : ['Transformation Agent'],
-      region: 'us-east-1 (Stellar Testnet)',
+      region: 'Local prototype',
       network: newProjNetwork,
       lastDeployment: 'Just now',
       owner: 'Workspace',
@@ -342,7 +342,7 @@ export default function Projects({
                       onChange={(e) => setNewProjNetwork(e.target.value)}
                       className="w-full px-3 py-2 text-xs rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#0A0A0B] text-zinc-800 dark:text-zinc-200 focus:outline-none"
                     >
-                      <option value="Stellar Testnet">Stellar Testnet</option>
+                      <option value="Network not connected">Network not connected</option>
                       <option value="Sovereign Sandbox">Sovereign Sandbox (Offline)</option>
                     </select>
                   </div>
@@ -353,7 +353,7 @@ export default function Projects({
                       onChange={(e) => setNewProjEnv(e.target.value)}
                       className="w-full px-3 py-2 text-xs rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#0A0A0B] text-zinc-800 dark:text-zinc-200 focus:outline-none"
                     >
-                      <option value="Testnet">Testnet (Public Sandbox)</option>
+                      <option value="Prototype">Prototype</option>
                       <option value="Internal">Internal Dev</option>
                     </select>
                   </div>

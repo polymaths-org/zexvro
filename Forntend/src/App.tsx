@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, FolderKanban, Rocket, Blocks, Bot, 
   ChartNoAxesCombined, Users, Brain, ShieldCheck, Settings,
-  Radio, Lock, KeyRound, Sparkles,
+  Radio, Lock, KeyRound,
   Search, Menu, X, ChevronRight, User, 
   HelpCircle, Sun, Moon, RefreshCw 
 } from 'lucide-react';
@@ -256,7 +256,6 @@ export default function App() {
                       <span className="block text-xs font-semibold text-zinc-800 dark:text-zinc-200 truncate font-sans">ZEXVRO Workspace</span>
                       <span className="text-[10px] text-zinc-400 font-sans">Prototype</span>
                     </div>
-                    <span className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold bg-brand-blue/10 text-brand-blue uppercase tracking-wide">Testnet</span>
                   </div>
                 </div>
 
@@ -524,14 +523,6 @@ export default function App() {
 
             {/* Right side operational controls */}
             <div className="flex items-center gap-2.5 relative">
-              <button
-                onClick={() => setAgentWidgetOpen(true)}
-                className="hidden sm:inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-900 dark:hover:text-white"
-              >
-                <Sparkles className="h-3.5 w-3.5 text-zinc-400" />
-                Ask AI
-              </button>
-
               <button
                 onClick={() => setActiveTab('settings')}
                 className="hidden sm:inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-900 dark:hover:text-white"

@@ -92,7 +92,7 @@ Infrastructure group:
 - Logs
 
 Footer:
-- Current network: Stellar Testnet.
+- Network state: not connected yet; show network setup as a placeholder only.
 - Usage indicator.
 - User avatar and account menu.
 
@@ -401,4 +401,3 @@ OUTPUT EXPECTATIONS
 - Do not explain individual services in long marketing text. Keep service copy compact and dashboard-focused.
 - Prioritize a complete, polished UI over backend behavior.
 ```
-
