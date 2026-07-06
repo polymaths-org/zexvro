@@ -11,11 +11,12 @@ Every agent must start here:
 1. Read `README.md` for the public project summary.
 2. Read this file for product context and service boundaries.
 3. Read `memory.md` for current work state, handoffs, blockers, and decisions.
-4. Run `git status --short` before editing.
-5. Identify the service or shared area being touched.
-6. Make the smallest useful change.
-7. Update `memory.md` with what changed and what remains.
-8. Commit code and memory updates together.
+4. Read `design.md` before changing UI, theme, typography, layout, charts, motion, or brand usage.
+5. Run `git status --short` before editing.
+6. Identify the service or shared area being touched.
+7. Make the smallest useful change.
+8. Update `memory.md` with what changed and what remains.
+9. Commit code and memory updates together.
 
 ## Platform Identity
 
@@ -316,6 +317,7 @@ Use the right file:
 - `README.md`: public-facing project overview.
 - `context.md`: stable product and architecture context.
 - `memory.md`: chronological work state, decisions, blockers, handoffs.
+- `design.md`: visual system, themes, typography, brand usage, UI behavior, and motion rules.
 - Future service READMEs: service-local setup, API, architecture, and ownership.
 
 ## Decision Levels
