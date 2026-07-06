@@ -67,9 +67,9 @@ The repository currently contains:
 - Project documentation.
 - Brand assets.
 - Shared memory workflow.
-- `Forntend/`, the Vite + React frontend workspace.
+- `frontend/`, the Vite + React frontend workspace.
 
-The frontend application is scaffolded in `Forntend/`. Run frontend commands from that folder.
+The frontend application is scaffolded in `frontend/`. Run frontend commands from that folder.
 
 Current and expected stack:
 
@@ -80,9 +80,9 @@ Current and expected stack:
 
 Frontend workspace notes:
 
-- Path: `Forntend/`.
-- Run locally: `cd Forntend && npm run dev`.
-- Validate before handoff: `cd Forntend && npm run lint && npm run build`.
+- Path: `frontend/`.
+- Run locally: `cd frontend && npm run dev`.
+- Validate before handoff: `cd frontend && npm run lint && npm run build`.
 - The UI is still prototype/frontend-only. Do not claim live backend, auth, wallet, blockchain, deployment provider, or secrets-manager integrations until those are implemented.
 
 ## Team Ownership
