@@ -234,3 +234,13 @@ Use `None` for empty fields. Do not delete fields.
 - Follow-ups: Run the prompt in Google AI Studio, review generated code, then scaffold or merge the selected frontend implementation.
 - Blockers: None.
 - Verification: Created the prompt file, checked the target path, and pushed it to `origin/main`.
+
+## 2026-07-06 - Codex - Design system doc
+
+- Service or area: design system and frontend guidance.
+- Files changed: `design.md`, `README.md`, `context.md`, `memory.md`.
+- Summary: Added a dedicated design reference extracted from the logo/typo-logo direction and prior product conversations, covering dark-first design, required light theme, color tokens, typography, components, motion, charts, settings theme behavior, accessibility, and agent-first UI rules. Linked it from README and context for agent discoverability.
+- Decisions: Proposed - Use `design.md` as the stable design reference when building the platform UI.
+- Follow-ups: Map these tokens into Tailwind/shadcn variables when the frontend is scaffolded.
+- Blockers: None.
+- Verification: Visually inspected `assets/brand/logo2.png` and `assets/brand/typo-logo.png`, then reviewed the Markdown file.
