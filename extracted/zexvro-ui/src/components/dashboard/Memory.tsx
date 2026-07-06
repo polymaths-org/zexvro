@@ -61,7 +61,7 @@ export default function Memory({
       blockers: newBlockers.split('\n').map(b => b.trim()).filter(Boolean),
       verification: newVerification,
       date: 'Just now',
-      owner: 'paris-29',
+      owner: 'Workspace',
       label: newLabel
     };
 
@@ -180,7 +180,7 @@ export default function Memory({
                   </div>
                   <div>
                     <span className="text-xs font-bold text-zinc-900 dark:text-white font-mono">{m.service}</span>
-                    <p className="text-[10px] text-zinc-400 mt-0.5">Author: <span className="text-zinc-500 dark:text-zinc-300">@{m.owner}</span> • {m.date}</p>
+                    <p className="text-[10px] text-zinc-400 mt-0.5">Source: <span className="text-zinc-500 dark:text-zinc-300">{m.owner}</span> • {m.date}</p>
                   </div>
                 </div>
 

@@ -1,6 +1,6 @@
 import { Project, Deployment, Service, TeamMember, CollaborationNote, MemoryEntry, AuditLog, SecurityKey } from '../types';
 
-// AI NOTE: This file intentionally uses product-safe placeholders, not fake production metrics.
+// AI NOTE: This file intentionally uses product-safe placeholders, not production metrics.
 // Keep values realistic for an MVP workspace and avoid claims that live blockchain/backend systems exist.
 
 export const mockProjects: Project[] = [
@@ -12,7 +12,7 @@ export const mockProjects: Project[] = [
     region: 'Local prototype',
     network: 'Stellar Testnet planned',
     lastDeployment: 'Not deployed',
-    owner: 'paris-29',
+    owner: 'Workspace',
     branch: 'main',
     framework: 'Vite + React'
   },
@@ -24,7 +24,7 @@ export const mockProjects: Project[] = [
     region: 'Architecture draft',
     network: 'TBD',
     lastDeployment: 'Needs backend scope',
-    owner: 'paris-29',
+    owner: 'Unassigned',
     branch: 'docs/service-contracts',
     framework: 'OpenAPI draft'
   },
@@ -36,7 +36,7 @@ export const mockProjects: Project[] = [
     region: 'Repository docs',
     network: 'None',
     lastDeployment: 'Documented in memory.md',
-    owner: 'paris-29',
+    owner: 'Workspace Agent',
     branch: 'main',
     framework: 'Markdown + future API'
   },
@@ -47,8 +47,8 @@ export const mockProjects: Project[] = [
     serviceUsage: ['De-pin'],
     region: 'Blocked',
     network: 'TBD',
-    lastDeployment: 'Waiting for Nabil',
-    owner: 'n4bi10p',
+    lastDeployment: 'Waiting for product scope',
+    owner: 'Unassigned',
     branch: 'blocked/depin-scope',
     framework: 'Not selected'
   }
@@ -63,7 +63,7 @@ export const mockDeployments: Deployment[] = [
     status: 'Pending',
     timestamp: '2026-07-06 13:08',
     duration: 'Not run',
-    author: 'paris-29',
+    author: 'Workspace',
     logs: [
       '[INFO] Prototype extracted into extracted/zexvro-ui.',
       '[NEXT] Install dependencies, run type check, review UI spacing.',
@@ -78,7 +78,7 @@ export const mockDeployments: Deployment[] = [
     status: 'Live',
     timestamp: '2026-07-06 10:27',
     duration: 'Docs only',
-    author: 'Codex',
+    author: 'Workspace Agent',
     logs: [
       '[DOCS] design.md added as stable UI reference.',
       '[DOCS] context.md now tells agents to read design.md before UI work.',
@@ -93,11 +93,11 @@ export const mockDeployments: Deployment[] = [
     status: 'Live',
     timestamp: '2026-07-06 10:16',
     duration: 'Docs only',
-    author: 'Codex',
+    author: 'Workspace Agent',
     logs: [
       '[PROMPT] Google AI Studio frontend prompt added.',
       '[SCOPE] Vite + React + shadcn/ui direction captured.',
-      '[NEXT] Review generated UI and replace dummy content with product placeholders.'
+      '[NEXT] Review generated UI and replace demo content with product placeholders.'
     ]
   }
 ];
@@ -106,128 +106,128 @@ export const mockServices: Service[] = [
   {
     id: 'srv-privacy',
     name: 'Zero-Knowledge Privacy Pool',
-    owner: 'paris-29',
+    owner: 'Unassigned',
     status: 'configuring',
     description: 'Private transaction workflow for companies that need Web3 verification without public transaction detail exposure.',
-    progress: 35,
-    lastActivity: 'Architecture pending',
+    progress: 0,
+    lastActivity: 'Needs requirements',
     category: 'privacy'
   },
   {
     id: 'srv-transform',
     name: 'Transformation Agent',
-    owner: 'paris-29',
-    status: 'active',
+    owner: 'Unassigned',
+    status: 'configuring',
     description: 'Agent-first migration workspace for scanning repositories, planning Web2-to-Web3 changes, and preparing approved actions.',
-    progress: 55,
-    lastActivity: 'Prompt and memory docs ready',
+    progress: 0,
+    lastActivity: 'Ready for setup draft',
     category: 'transformation'
   },
   {
     id: 'srv-trade',
     name: 'A-2-A Trade Pipeline',
-    owner: 'Wraient',
+    owner: 'Unassigned',
     status: 'configuring',
     description: 'Agent-to-agent negotiation and settlement pipeline. Protocol and wallet rules still need owner decisions.',
-    progress: 20,
+    progress: 0,
     lastActivity: 'Needs protocol draft',
     category: 'trade'
   },
   {
     id: 'srv-agent-auth',
     name: 'Captcha-like Agent Authentication Service',
-    owner: 'Wraient',
+    owner: 'Unassigned',
     status: 'configuring',
     description: 'Human vs agent access classification service with SDK/API direction. Privacy model and signals are not finalized.',
-    progress: 25,
+    progress: 0,
     lastActivity: 'Needs classification model',
     category: 'auth'
   },
   {
     id: 'srv-nft',
     name: 'NFT Service',
-    owner: 'n4bi10p',
+    owner: 'Unassigned',
     status: 'inactive',
     description: 'Simple NFT deployment and management flow for non-Web3 users such as indie game developers and small studios.',
-    progress: 10,
+    progress: 0,
     lastActivity: 'Needs chain/storage decision',
     category: 'nft'
   },
   {
     id: 'srv-depin',
     name: 'De-pin',
-    owner: 'n4bi10p',
+    owner: 'Unassigned',
     status: 'inactive',
-    description: 'Scope not defined yet. Do not implement until Nabil provides the service concept and boundaries.',
+    description: 'Scope not defined yet. Do not implement until the service concept, target user, and boundaries are accepted.',
     progress: 0,
-    lastActivity: 'Blocked on Nabil',
+    lastActivity: 'Needs product scope',
     category: 'depin'
   }
 ];
 
 export const mockTeamMembers: TeamMember[] = [
   {
-    id: 'team-paris',
-    name: 'Paris',
-    alias: 'paris-29',
-    email: 'paris@zexvro.local',
+    id: 'team-owner',
+    name: 'Workspace Admin',
+    alias: 'workspace-admin',
+    email: 'admin@zexvro.local',
     role: 'Owner',
     status: 'active',
     lastActive: 'Just now',
-    servicesOwned: ['Zero-Knowledge Privacy Pool', 'Transformation Agent']
+    servicesOwned: []
   },
   {
-    id: 'team-rushi',
-    name: 'Rushi',
-    alias: 'Wraient',
-    email: 'rushi@zexvro.local',
+    id: 'team-frontend',
+    name: 'Frontend Reviewer',
+    alias: 'frontend-reviewer',
+    email: 'frontend@zexvro.local',
     role: 'Developer',
     status: 'active',
-    lastActive: 'Needs sync',
-    servicesOwned: ['A-2-A Trade Pipeline', 'Captcha-like Agent Authentication Service']
+    lastActive: 'Invite pending',
+    servicesOwned: []
   },
   {
-    id: 'team-nabil',
-    name: 'Nabil',
-    alias: 'n4bi10p',
-    email: 'nabil@zexvro.local',
+    id: 'team-service',
+    name: 'Service Designer',
+    alias: 'service-designer',
+    email: 'services@zexvro.local',
     role: 'Developer',
     status: 'active',
-    lastActive: 'Needs De-pin scope',
-    servicesOwned: ['NFT Service', 'De-pin']
+    lastActive: 'Invite pending',
+    servicesOwned: []
   },
   {
     id: 'team-agent',
-    name: 'ZEXVRO Assistant',
+    name: 'Workspace Agent',
     alias: 'workspace-agent',
     email: 'agent@zexvro.local',
     role: 'Agent',
     status: 'active',
     lastActive: 'Prototype only',
-    servicesOwned: ['Transformation Agent']
+    servicesOwned: ['Agent Memory']
   }
 ];
 
 export const mockCollaborationNotes: CollaborationNote[] = [
   {
     id: 'note-ui',
-    author: 'paris-29',
+    author: 'Workspace',
     timestamp: '2026-07-06 13:08',
     currentState: 'AI Studio generated a frontend prototype and it was extracted into extracted/zexvro-ui.',
-    nextStep: 'Improve spacing, branding, copy, and replace generated dummy data with setup placeholders.',
+    nextStep: 'Improve spacing, branding, copy, and replace generated demo content with setup placeholders.',
     filesToInspect: ['src/App.tsx', 'src/components/dashboard/Overview.tsx', 'src/data/mock.ts'],
     doNotTouch: ['context.md service ownership rules without recording a decision'],
-    ownerNeeded: 'paris-29'
+    ownerNeeded: 'workspace-admin'
   },
   {
     id: 'note-depin',
-    author: 'Codex',
+    author: 'Workspace Agent',
     timestamp: '2026-07-06 10:27',
     currentState: 'De-pin remains intentionally undefined in context.md.',
-    nextStep: 'Ask Nabil for the De-pin concept, target users, MVP boundary, and data model.',
+    nextStep: 'Collect the De-pin concept, target users, MVP boundary, and data model before implementation.',
     filesToInspect: ['context.md', 'memory.md'],
     doNotTouch: ['services/depin implementation files until scope is accepted'],
-    ownerNeeded: 'n4bi10p'
+    ownerNeeded: 'service-designer'
   }
 ];
 
@@ -242,7 +242,7 @@ export const mockMemoryEntries: MemoryEntry[] = [
     blockers: [],
     verification: 'Logo and typo-logo were visually inspected and the Markdown was reviewed.',
     date: '2026-07-06',
-    owner: 'Codex',
+    owner: 'Workspace Agent',
     label: 'decision'
   },
   {
@@ -255,20 +255,20 @@ export const mockMemoryEntries: MemoryEntry[] = [
     blockers: [],
     verification: 'Prompt file was pushed to origin/main.',
     date: '2026-07-06',
-    owner: 'Codex',
+    owner: 'Workspace Agent',
     label: 'general'
   },
   {
     id: 'mem-depin',
     service: 'De-pin',
     filesChanged: ['context.md', 'memory.md'],
-    summary: 'De-pin scope is blocked until Nabil provides service details.',
+    summary: 'De-pin scope is blocked until service details are documented.',
     decisions: ['Blocked - Do not implement De-pin before scope is documented.'],
-    followUps: ['Collect Nabil brainstorming and update context.md plus memory.md.'],
-    blockers: ['Needs Nabil input.'],
+    followUps: ['Collect De-pin scope notes and update context.md plus memory.md.'],
+    blockers: ['Needs product scope input.'],
     verification: 'Context and memory both list De-pin as blocked.',
     date: '2026-07-05',
-    owner: 'n4bi10p',
+    owner: 'Service Designer',
     label: 'blocker'
   }
 ];
@@ -277,7 +277,7 @@ export const mockAuditLogs: AuditLog[] = [
   {
     id: 'log-design',
     timestamp: '2026-07-06 10:27',
-    actor: 'Codex',
+    actor: 'Workspace Agent',
     action: 'ADD_DESIGN_GUIDANCE',
     target: 'design.md',
     status: 'success',
@@ -286,7 +286,7 @@ export const mockAuditLogs: AuditLog[] = [
   {
     id: 'log-prompt',
     timestamp: '2026-07-06 10:16',
-    actor: 'Codex',
+    actor: 'Workspace Agent',
     action: 'ADD_FRONTEND_PROMPT',
     target: 'docs/prompts/google-ai-studio-frontend-ui.md',
     status: 'success',
@@ -295,7 +295,7 @@ export const mockAuditLogs: AuditLog[] = [
   {
     id: 'log-blocker',
     timestamp: '2026-07-05 20:48',
-    actor: 'Codex',
+    actor: 'Workspace Agent',
     action: 'RECORD_BLOCKER',
     target: 'De-pin scope',
     status: 'warning',
@@ -311,7 +311,7 @@ export const mockSecurityKeys: SecurityKey[] = [
     created: 'Not created',
     lastUsed: 'Never',
     status: 'active',
-    owner: 'paris-29'
+    owner: 'Workspace'
   },
   {
     id: 'key-placeholder-2',
@@ -329,7 +329,7 @@ export const mockSecurityKeys: SecurityKey[] = [
     created: 'Generated prototype',
     lastUsed: 'Never',
     status: 'revoked',
-    owner: 'Codex'
+    owner: 'Workspace Agent'
   }
 ];
 
@@ -360,8 +360,8 @@ export const agentRunsData = [
 ];
 
 export const memberPerformanceData = [
-  { name: 'paris-29', runs: 4, projects: 2, keys: 1 },
-  { name: 'Wraient', runs: 0, projects: 1, keys: 0 },
-  { name: 'n4bi10p', runs: 0, projects: 1, keys: 0 },
-  { name: 'workspace-agent', runs: 6, projects: 0, keys: 1 }
+  { name: 'Workspace', runs: 0, projects: 0, keys: 0 },
+  { name: 'Frontend', runs: 0, projects: 0, keys: 0 },
+  { name: 'Services', runs: 0, projects: 0, keys: 0 },
+  { name: 'Agent', runs: 0, projects: 0, keys: 0 }
 ];

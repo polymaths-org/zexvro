@@ -30,7 +30,7 @@ export default function AgentStudio() {
     {
       id: 'msg-1',
       sender: 'agent',
-      text: 'Hi Paris. I am the ZEXVRO workspace assistant. I can inspect provided context, draft setup steps, and prepare approval cards. I cannot run backend actions until integrations exist.',
+      text: 'I am the ZEXVRO workspace assistant. I can inspect provided context, draft setup steps, and prepare approval cards. I cannot run backend actions until integrations exist.',
       timestamp: '21:40'
     },
     {
@@ -50,7 +50,7 @@ export default function AgentStudio() {
         riskScore: 'Medium',
         tree: [
           { path: 'src/App.tsx', risk: 'vulnerable', desc: 'Generated shell copy needs product-safe language' },
-          { path: 'src/components/dashboard/Overview.tsx', risk: 'vulnerable', desc: 'Overview should focus on setup flow, not fake production metrics' },
+          { path: 'src/components/dashboard/Overview.tsx', risk: 'vulnerable', desc: 'Overview should focus on setup flow, not production metrics' },
           { path: 'src/data/mock.ts', risk: 'vulnerable', desc: 'Dummy data should become MVP placeholders' },
           { path: 'src/index.css', risk: 'secure' }
         ]

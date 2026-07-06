@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, FolderKanban, Rocket, Blocks, Bot, 
   ChartNoAxesCombined, Users, Brain, ShieldCheck, Settings,
-  Database, Server, Radio, Lock, KeyRound, ScrollText,
-  Search, Menu, X, ChevronLeft, ChevronRight, User, 
-  Bell, HelpCircle, Laptop, Sun, Moon, Fingerprint, RefreshCw 
+  Radio, Lock, KeyRound, Sparkles,
+  Search, Menu, X, ChevronRight, User, 
+  HelpCircle, Sun, Moon, RefreshCw 
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -33,6 +33,39 @@ import { Project, Deployment, Service, TeamMember, MemoryEntry, ThemeType, Densi
 const BRAND_MARK = '/brand/logo-transparent.png';
 const BRAND_WORDMARK = '/brand/wordmark-transparent.png';
 
+function ScreenSkeleton() {
+  return (
+    <div className="space-y-6" aria-label="Loading screen">
+      <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-[#080809]">
+        <div className="h-5 w-40 rounded bg-zinc-200 dark:bg-zinc-900 animate-shimmer" />
+        <div className="mt-4 h-8 w-full max-w-lg rounded bg-zinc-200 dark:bg-zinc-900 animate-shimmer" />
+        <div className="mt-3 h-4 w-full max-w-2xl rounded bg-zinc-200 dark:bg-zinc-900 animate-shimmer" />
+      </div>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <div key={index} className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-[#0A0A0B]">
+            <div className="h-4 w-24 rounded bg-zinc-200 dark:bg-zinc-900 animate-shimmer" />
+            <div className="mt-4 h-7 w-20 rounded bg-zinc-200 dark:bg-zinc-900 animate-shimmer" />
+            <div className="mt-3 h-3 w-32 rounded bg-zinc-200 dark:bg-zinc-900 animate-shimmer" />
+          </div>
+        ))}
+      </div>
+      <div className="grid gap-5 lg:grid-cols-2">
+        {Array.from({ length: 2 }).map((_, index) => (
+          <div key={index} className="h-72 rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-[#0A0A0B]">
+            <div className="h-4 w-36 rounded bg-zinc-200 dark:bg-zinc-900 animate-shimmer" />
+            <div className="mt-6 space-y-3">
+              <div className="h-12 rounded bg-zinc-200 dark:bg-zinc-900 animate-shimmer" />
+              <div className="h-12 rounded bg-zinc-200 dark:bg-zinc-900 animate-shimmer" />
+              <div className="h-12 rounded bg-zinc-200 dark:bg-zinc-900 animate-shimmer" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   // Navigation & Shell states
   const [activeTab, setActiveTab] = useState<string>('overview');
@@ -47,6 +80,7 @@ export default function App() {
   const [density, setDensity] = useState<DensityType>('comfortable');
   const [reducedMotion, setReducedMotion] = useState<boolean>(false);
   const [userMenuOpen, setUserMenuOpen] = useState<boolean>(false);
+  const [screenLoading, setScreenLoading] = useState<boolean>(false);
 
   // Sharing states so actions propagate across tabs
   const [projects, setProjects] = useState<Project[]>(mockProjects);
@@ -150,6 +184,12 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  useEffect(() => {
+    setScreenLoading(true);
+    const timer = window.setTimeout(() => setScreenLoading(false), reducedMotion ? 0 : 180);
+    return () => window.clearTimeout(timer);
+  }, [activeTab, reducedMotion]);
+
   // Filter commands for search
   const navigationItems = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -177,18 +217,18 @@ export default function App() {
       <div className="flex min-h-screen">
         
         {/* 1. Persistent Left Sidebar (Desktop) */}
-        <div className={`hidden md:block relative shrink-0 z-30 transition-all duration-300 h-screen sticky top-0 ${
-          sidebarCollapsed ? 'w-16' : 'w-64'
+        <div className={`hidden md:block relative shrink-0 z-30 transition-[width] ${reducedMotion ? 'duration-0' : 'duration-300'} ease-[cubic-bezier(0.22,1,0.36,1)] h-screen sticky top-0 ${
+          sidebarCollapsed ? 'w-[52px]' : 'w-[252px]'
         }`}>
           <aside className="hidden md:flex flex-col border-r border-zinc-200 dark:border-zinc-900 bg-white dark:bg-black select-none sticky top-0 h-screen overflow-y-auto overflow-x-hidden w-full h-full">
             {/* Sidebar Brand Top */}
-            <div className="h-[72px] shrink-0 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-start px-6">
+            <div className={`h-14 shrink-0 border-b border-zinc-200 dark:border-zinc-900 flex items-center ${sidebarCollapsed ? 'justify-center px-0' : 'justify-start px-4'}`}>
               {sidebarCollapsed ? (
                 <div className="w-full flex items-center justify-center pt-2">
                   <img 
                     src={BRAND_MARK} 
                     alt="ZEXVRO Logo" 
-                    className="h-8.5 w-8.5 object-contain shrink-0 invert dark:invert-0"
+                    className="h-[34px] w-[34px] object-contain shrink-0 invert dark:invert-0"
                   />
                 </div>
               ) : (
@@ -201,7 +241,7 @@ export default function App() {
                   <img 
                     src={BRAND_WORDMARK} 
                     alt="ZEXVRO" 
-                    className="h-5.5 object-contain max-w-[130px] shrink-0 mt-0.5 invert dark:invert-0"
+                    className="h-[22px] object-contain max-w-[130px] shrink-0 mt-0.5 invert dark:invert-0"
                   />
                 </div>
               )}
@@ -213,8 +253,8 @@ export default function App() {
                 <div className="p-3 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/20 m-2 rounded-lg shrink-0">
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
-                      <span className="block text-xs font-semibold text-zinc-800 dark:text-zinc-200 truncate font-sans">Polymaths Lab</span>
-                      <span className="text-[10px] text-zinc-400 font-sans">MVP workspace</span>
+                      <span className="block text-xs font-semibold text-zinc-800 dark:text-zinc-200 truncate font-sans">ZEXVRO Workspace</span>
+                      <span className="text-[10px] text-zinc-400 font-sans">Prototype</span>
                     </div>
                     <span className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold bg-brand-blue/10 text-brand-blue uppercase tracking-wide">Testnet</span>
                   </div>
@@ -411,22 +451,22 @@ export default function App() {
             </div>
           )}
 
-          {/* Pinned User profile footer */}
-          <div className="border-t border-zinc-100 dark:border-zinc-850/40 p-3 shrink-0">
+            {/* Pinned workspace footer */}
+            <div className="border-t border-zinc-100 dark:border-zinc-850/40 p-3 shrink-0">
             {!sidebarCollapsed ? (
               <div className="flex items-center gap-2.5 px-1 py-0.5">
                 <div className="h-7 w-7 rounded-full bg-brand-blue/10 text-brand-blue font-bold flex items-center justify-center text-xs shrink-0">
-                  PA
+                  ZX
                 </div>
                 <div className="min-w-0 flex-1">
-                  <span className="block text-xs font-semibold text-zinc-855 dark:text-zinc-200 truncate leading-none">Paris</span>
-                  <span className="text-[10px] text-zinc-400 truncate block mt-1">@paris-29</span>
+                  <span className="block text-xs font-semibold text-zinc-855 dark:text-zinc-200 truncate leading-none">Workspace</span>
+                  <span className="text-[10px] text-zinc-400 truncate block mt-1">Local prototype</span>
                 </div>
               </div>
             ) : (
               <div className="flex justify-center py-1">
                 <div className="h-7 w-7 rounded-full bg-brand-blue/10 text-brand-blue font-bold flex items-center justify-center text-xs shrink-0">
-                  PA
+                  ZX
                 </div>
               </div>
             )}
@@ -436,7 +476,7 @@ export default function App() {
         {/* Floating Collapse Trigger 50-50 on the right border of sidebar, placed aligned with the workspace owner/switcher section level */}
         <button 
           onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-          className="hidden md:flex absolute top-[112px] -right-3 h-6 w-6 rounded-full border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#0A0A0B] text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200 items-center justify-center cursor-pointer shadow-md hover:scale-105 transition-all z-50"
+          className="hidden md:flex absolute top-[112px] -right-3 h-6 w-6 rounded-full border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#0A0A0B] text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200 items-center justify-center cursor-pointer shadow-md hover:scale-105 transition-all duration-200 z-50"
           title={sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
         >
           <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -473,7 +513,7 @@ export default function App() {
                 
                 {/* Workspace breadcrumb with current section name */}
                 <div className="flex items-center gap-1.5 text-xs sm:text-sm">
-                  <span className="font-semibold text-zinc-500 dark:text-zinc-400 hidden sm:inline">Polymaths Lab</span>
+                  <span className="font-semibold text-zinc-500 dark:text-zinc-400 hidden sm:inline">ZEXVRO</span>
                   <span className="text-zinc-300 dark:text-zinc-700 hidden sm:inline">/</span>
                   <span className="font-semibold text-zinc-900 dark:text-white capitalize tracking-tight px-2 py-0.5 rounded bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-150 dark:border-zinc-800">
                     {activeTab === 'agent' ? 'Agent Studio' : activeTab === 'services' ? 'Services' : activeTab === 'memory' ? 'Memory' : activeTab === 'security' ? 'Security' : activeTab === 'analytics' ? 'Analytics' : activeTab === 'team' ? 'Team' : activeTab}
@@ -484,6 +524,21 @@ export default function App() {
 
             {/* Right side operational controls */}
             <div className="flex items-center gap-2.5 relative">
+              <button
+                onClick={() => setAgentWidgetOpen(true)}
+                className="hidden sm:inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-900 dark:hover:text-white"
+              >
+                <Sparkles className="h-3.5 w-3.5 text-zinc-400" />
+                Ask AI
+              </button>
+
+              <button
+                onClick={() => setActiveTab('settings')}
+                className="hidden sm:inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-900 dark:hover:text-white"
+              >
+                <HelpCircle className="h-3.5 w-3.5 text-zinc-400" />
+                Support
+              </button>
               
               {/* Search toggle for tablets/mobile */}
               <button 
@@ -501,7 +556,7 @@ export default function App() {
                   title="User Profile & Settings"
                 >
                   <User className="h-4 w-4 text-zinc-500" />
-                  <span className="hidden sm:inline text-zinc-600 dark:text-zinc-400">Paris</span>
+                  <span className="hidden sm:inline text-zinc-600 dark:text-zinc-400">Workspace</span>
                 </button>
 
                 {userMenuOpen && (
@@ -514,8 +569,8 @@ export default function App() {
                       {/* User Info Section */}
                       <div className="px-3.5 py-2.5 border-b border-zinc-100 dark:border-zinc-900">
                         <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Current User</p>
-                        <p className="font-semibold text-zinc-900 dark:text-white truncate mt-0.5">kulkarniparis01@gmail.com</p>
-                        <p className="text-[10px] text-zinc-400 font-mono mt-0.5">Workspace: Polymaths Lab</p>
+                        <p className="font-semibold text-zinc-900 dark:text-white truncate mt-0.5">Workspace user</p>
+                        <p className="text-[10px] text-zinc-400 font-mono mt-0.5">Workspace: ZEXVRO Prototype</p>
                       </div>
 
                       {/* Menu Options */}
@@ -565,7 +620,9 @@ export default function App() {
                     exit={{ opacity: 0, y: -6 }}
                     transition={{ duration: reducedMotion ? 0 : 0.15, ease: 'easeOut' }}
                   >
-                    {activeTab === 'overview' && (
+                    {screenLoading ? (
+                      <ScreenSkeleton />
+                    ) : activeTab === 'overview' && (
                       <Overview 
                         setActiveTab={setActiveTab} 
                         setOpenNewProjectModal={setOpenNewProjectModal}
@@ -575,7 +632,7 @@ export default function App() {
                         services={services}
                       />
                     )}
-                    {activeTab === 'projects' && (
+                    {!screenLoading && activeTab === 'projects' && (
                       <Projects 
                         projects={projects} 
                         setProjects={setProjects}
@@ -584,27 +641,27 @@ export default function App() {
                         setActiveTab={setActiveTab}
                       />
                     )}
-                    {activeTab === 'deployments' && (
+                    {!screenLoading && activeTab === 'deployments' && (
                       <Deployments 
                         deployments={deployments} 
                         setDeployments={setDeployments} 
                       />
                     )}
-                    {activeTab === 'services' && (
+                    {!screenLoading && activeTab === 'services' && (
                       <Services 
                         services={services} 
                         setServices={setServices} 
                       />
                     )}
-                    {activeTab === 'agent' && (
+                    {!screenLoading && activeTab === 'agent' && (
                       <AgentStudio />
                     )}
-                    {activeTab === 'analytics' && (
+                    {!screenLoading && activeTab === 'analytics' && (
                       <Analytics 
                         isDark={isDarkActive} 
                       />
                     )}
-                    {activeTab === 'team' && (
+                    {!screenLoading && activeTab === 'team' && (
                       <Team 
                         teamMembers={teamMembers} 
                         setTeamMembers={setTeamMembers}
@@ -612,7 +669,7 @@ export default function App() {
                         setOpenInviteModal={setOpenInviteTeammateModal}
                       />
                     )}
-                    {activeTab === 'memory' && (
+                    {!screenLoading && activeTab === 'memory' && (
                       <Memory 
                         memoryEntries={memoryEntries} 
                         setMemoryEntries={setMemoryEntries}
@@ -620,10 +677,10 @@ export default function App() {
                         setOpenNewMemoryModal={setOpenNewMemoryModal}
                       />
                     )}
-                    {activeTab === 'security' && (
+                    {!screenLoading && activeTab === 'security' && (
                       <Security />
                     )}
-                    {activeTab === 'settings' && (
+                    {!screenLoading && activeTab === 'settings' && (
                       <SettingsView 
                         theme={theme}
                         setTheme={setTheme}
@@ -712,11 +769,11 @@ export default function App() {
               {/* Mobile Profile info */}
               <div className="border-t border-zinc-100 dark:border-zinc-800 pt-3 flex items-center gap-3 text-xs font-mono">
                 <div className="h-7 w-7 rounded-full bg-brand-blue/10 text-brand-blue font-bold flex items-center justify-center">
-                  PA
+                  ZX
                 </div>
                 <div>
-                  <span className="block font-bold text-zinc-800 dark:text-zinc-200">Paris</span>
-                  <span className="text-[10px] text-zinc-400">Stellar Testnet Node</span>
+                  <span className="block font-bold text-zinc-800 dark:text-zinc-200">Workspace</span>
+                  <span className="text-[10px] text-zinc-400">Local prototype</span>
                 </div>
               </div>
             </motion.div>

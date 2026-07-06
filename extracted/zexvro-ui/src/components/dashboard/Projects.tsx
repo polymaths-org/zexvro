@@ -39,7 +39,7 @@ export default function Projects({
   const availableTemplates = [
     { id: 'stellar-smart-contract-starter', name: 'Stellar Smart Contract Starter (Rust)', desc: 'Pre-configured Soroban contract template with test suites' },
     { id: 'privacy-pool-api', name: 'Privacy Pool API starter', desc: 'Zero-Knowledge Privacy Pool setup template' },
-    { id: 'trade-pipeline-agent', name: 'A-2-A Trade Pipeline Agent (Go)', desc: 'Automated high-frequency arbitrage trading skeleton' },
+    { id: 'trade-pipeline-agent', name: 'A-2-A Trade Pipeline Agent (Go)', desc: 'Agent negotiation and wallet-policy starter' },
     { id: 'depin-telemetry-connector', name: 'De-pin Telemetry Connector (Rust)', desc: 'Secure node monitoring connector configured for Horizon' }
   ];
 
@@ -72,7 +72,7 @@ export default function Projects({
       region: 'us-east-1 (Stellar Testnet)',
       network: newProjNetwork,
       lastDeployment: 'Just now',
-      owner: 'paris-29',
+      owner: 'Workspace',
       branch: 'main',
       framework: newProjTemplate.includes('Go') ? 'Go' : newProjTemplate.includes('Rust') ? 'Rust' : 'React + Node'
     };
@@ -325,7 +325,7 @@ export default function Projects({
                   <input
                     type="text"
                     required
-                    placeholder="e.g. smart-contract-arbitrage"
+                    placeholder="e.g. smart-contract-demo"
                     value={newProjName}
                     onChange={(e) => setNewProjName(e.target.value)}
                     className="w-full px-3 py-2 text-xs rounded-md border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:border-brand-blue"

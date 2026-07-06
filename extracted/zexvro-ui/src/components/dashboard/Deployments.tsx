@@ -44,7 +44,7 @@ export default function Deployments({ deployments, setDeployments }: Deployments
             status: 'Live',
             timestamp: 'Just now',
             duration: '1m 20s',
-            author: 'paris-29',
+            author: 'Workspace',
             logs: [
               '[SYSTEM] Rollback request initiated...',
               `[SYSTEM] Restoring container image from historical build: ${selectedDeployment.commitHash}`,

@@ -35,11 +35,11 @@ export default function Security() {
       const newAudit: AuditLog = {
         id: `log-${Date.now()}`,
         timestamp: 'Just now',
-        actor: 'paris-29',
+        actor: 'Workspace',
         action: 'REVOKE_API_KEY',
         target: revokedKeyName,
         status: 'warning',
-        ip: '198.162.4.29'
+        ip: 'local'
       };
       setAuditLogs([newAudit, ...auditLogs]);
     }
@@ -50,7 +50,7 @@ export default function Security() {
     e.preventDefault();
     if (!newKeyName.trim()) return;
 
-    const rawKey = `zex_pk_live_${Math.random().toString(16).slice(2, 10)}...${Math.random().toString(16).slice(2, 6)}`;
+    const rawKey = `zex_test_placeholder_${Math.random().toString(16).slice(2, 10)}...${Math.random().toString(16).slice(2, 6)}`;
     
     const newKey: SecurityKey = {
       id: `key-${Date.now()}`,
@@ -59,22 +59,22 @@ export default function Security() {
       created: 'Just now',
       lastUsed: 'Never',
       status: 'active',
-      owner: 'paris-29'
+      owner: 'Workspace'
     };
 
     setKeys([newKey, ...keys]);
-    setGeneratedKeyValue(`zex_pk_live_${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`);
+    setGeneratedKeyValue(`zex_test_placeholder_${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`);
     setNewKeyName('');
     
     // Add audit log entry
     const newAudit: AuditLog = {
       id: `log-${Date.now()}`,
       timestamp: 'Just now',
-      actor: 'paris-29',
+      actor: 'Workspace',
       action: 'CREATE_API_KEY',
       target: newKeyName,
       status: 'success',
-      ip: '198.162.4.29'
+      ip: 'local'
     };
     setAuditLogs([newAudit, ...auditLogs]);
   };
@@ -102,9 +102,9 @@ export default function Security() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {[
           {
-            title: 'Audit compliance score',
-            value: '98%',
-            desc: 'A+ Secure rating verified',
+            title: 'Audit policy',
+            value: 'Draft',
+            desc: 'Backend verification not connected',
             status: 'secure',
             color: 'text-emerald-500 border-emerald-500/20 bg-emerald-500/5'
           },
@@ -117,8 +117,8 @@ export default function Security() {
           },
           {
             title: 'Exposure Incidents',
-            value: '0 Active',
-            desc: '1 historic leak patched in zk-proof.ts',
+            value: 'No data',
+            desc: 'Incident stream is not connected',
             status: 'warning',
             color: 'text-amber-500 border-amber-500/20 bg-amber-500/5'
           }
@@ -171,7 +171,7 @@ export default function Security() {
                     <input
                       type="text"
                       required
-                      placeholder="e.g. Jenkins build node validator"
+                      placeholder="e.g. Local development key"
                       value={newKeyName}
                       onChange={(e) => setNewKeyName(e.target.value)}
                       className="w-full px-2.5 py-1.5 text-xs rounded border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 focus:outline-none"
@@ -225,7 +225,7 @@ export default function Security() {
                       {visibleKeyId === k.id ? (
                         <span>{k.keyPrefix}</span>
                       ) : (
-                        <span>zex_pk_••••••••••••••</span>
+                        <span>zex_test_••••••••••••••</span>
                       )}
                     </td>
                     <td className="py-3 text-zinc-400 text-[10px]">{k.created}</td>
@@ -279,17 +279,17 @@ export default function Security() {
 
           <div className="space-y-3 text-xs font-mono">
             {[
-              { rule: 'Git Commit Swap', role: 'Human Operator Sign-off', val: 'REQUIRED' },
-              { rule: 'Testnet deploy swap', role: 'Human Operator Sign-off', val: 'REQUIRED' },
-              { rule: 'Arbitrage limit modification', role: 'Teammate Consensus', val: 'Consensus (2/3)' },
-              { rule: 'Telemetry metric pull', role: 'Autonomous Agent Scan', val: 'AUTONOMIC' },
-              { rule: 'Vulnerability remediation scan', role: 'Autonomous Agent Scan', val: 'AUTONOMIC' }
+              { rule: 'Repository changes', role: 'Human operator sign-off', val: 'REQUIRED' },
+              { rule: 'Testnet deployment', role: 'Human operator sign-off', val: 'REQUIRED' },
+              { rule: 'Wallet policy changes', role: 'Workspace approval', val: 'Approval' },
+              { rule: 'Telemetry read', role: 'Read-only agent', val: 'PLANNED' },
+              { rule: 'Security scan proposal', role: 'Read-only agent', val: 'PLANNED' }
             ].map((rule) => (
               <div key={rule.rule} className="p-2.5 rounded bg-zinc-50/50 dark:bg-zinc-900/40 border border-zinc-100 dark:border-zinc-800 space-y-1">
                 <div className="flex items-center justify-between text-[11px] font-semibold text-zinc-800 dark:text-zinc-200">
                   <span className="truncate">{rule.rule}</span>
                   <span className={`text-[10px] font-bold ${
-                    rule.val === 'REQUIRED' ? 'text-amber-500' : rule.val.includes('Consensus') ? 'text-purple-500' : 'text-emerald-500'
+                    rule.val === 'REQUIRED' ? 'text-amber-500' : rule.val === 'Approval' ? 'text-purple-500' : 'text-zinc-500'
                   }`}>{rule.val}</span>
                 </div>
                 <p className="text-[9px] text-zinc-400">Authorized: {rule.role}</p>

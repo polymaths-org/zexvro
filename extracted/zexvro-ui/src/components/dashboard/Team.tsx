@@ -34,7 +34,7 @@ export default function Team({
   const [nextStep, setNextStep] = useState('');
   const [filesToInspect, setFilesToInspect] = useState('');
   const [doNotTouch, setDoNotTouch] = useState('');
-  const [ownerNeeded, setOwnerNeeded] = useState('paris-29');
+  const [ownerNeeded, setOwnerNeeded] = useState('workspace-admin');
 
   // Handle member invite
   const handleInviteMember = (e: React.FormEvent) => {
@@ -69,7 +69,7 @@ export default function Team({
 
     const newNote: CollaborationNote = {
       id: `note-${Date.now()}`,
-      author: 'paris-29',
+      author: 'Workspace',
       timestamp: 'Just now',
       currentState,
       nextStep,
@@ -230,8 +230,8 @@ export default function Team({
                   </div>
 
                   <div className="flex items-center justify-between border-t border-zinc-100 dark:border-zinc-800/50 pt-2 font-mono text-[10px] text-zinc-400">
-                    <span>Handoff signed via PGP signature</span>
-                    <span>Assigned Owner: <span className="text-brand-blue font-semibold">@{note.ownerNeeded}</span></span>
+                    <span>Handoff saved to workspace memory</span>
+                    <span>Owner needed: <span className="text-brand-blue font-semibold">@{note.ownerNeeded}</span></span>
                   </div>
                 </div>
               ))}
@@ -343,7 +343,7 @@ export default function Team({
               className="relative w-full max-w-md overflow-hidden rounded-lg border border-zinc-200 dark:border-[#27272A] bg-white dark:bg-[#0A0A0B] p-6 shadow-2xl"
             >
               <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
-                <h3 className="text-sm font-semibold text-zinc-950 dark:text-white font-heading">Invite teammate to Polymaths Lab</h3>
+                <h3 className="text-sm font-semibold text-zinc-950 dark:text-white font-heading">Invite teammate to ZEXVRO</h3>
                 <button onClick={() => setOpenInviteModal(false)} className="text-zinc-400 hover:text-zinc-600">
                   <X className="h-4 w-4" />
                 </button>
