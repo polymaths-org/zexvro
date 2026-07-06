@@ -1,10 +1,10 @@
 import React, { useMemo } from 'react';
-import { Area, AreaChart, Bar, BarChart, ResponsiveContainer, Tooltip, XAxis } from 'recharts';
 import { motion } from 'motion/react';
 import {
   ArrowRight,
   Blocks,
   Bot,
+  ChartNoAxesCombined,
   CheckCircle2,
   Clock3,
   FolderKanban,
@@ -28,27 +28,10 @@ interface OverviewProps {
   services: Service[];
 }
 
-const readinessTrend = [
-  { day: 'Mon', configured: 1, reviewed: 1 },
-  { day: 'Tue', configured: 2, reviewed: 1 },
-  { day: 'Wed', configured: 2, reviewed: 2 },
-  { day: 'Thu', configured: 3, reviewed: 2 },
-  { day: 'Fri', configured: 3, reviewed: 3 },
-  { day: 'Sat', configured: 4, reviewed: 3 },
-  { day: 'Sun', configured: 4, reviewed: 4 },
-];
-
-const serviceFocus = [
-  { name: 'Agent', value: 42 },
-  { name: 'Privacy', value: 28 },
-  { name: 'Auth', value: 18 },
-  { name: 'NFT', value: 12 },
-];
-
 const setupSteps = [
   { label: 'Brand and design system captured', status: 'done' },
   { label: 'Frontend shell generated from AI Studio prompt', status: 'done' },
-  { label: 'Replace generated dummy data with product placeholders', status: 'active' },
+  { label: 'Replace generated demo content with product placeholders', status: 'active' },
   { label: 'Map service routes and ownership boundaries', status: 'next' },
   { label: 'Connect auth, workspace, and agent memory APIs', status: 'next' },
 ];
@@ -57,19 +40,16 @@ const activity = [
   {
     title: 'Design system added',
     meta: 'Dark-first tokens, light theme, typography, motion, and component rules are ready.',
-    owner: 'Codex',
     time: 'Today',
   },
   {
     title: 'Frontend prompt created',
     meta: 'Google AI Studio prompt generated the first construction UI.',
-    owner: 'paris-29',
     time: 'Today',
   },
   {
-    title: 'De-pin scope still blocked',
-    meta: 'Wait for Nabil before creating implementation or final UX flows.',
-    owner: 'n4bi10p',
+    title: 'De-pin scope still pending',
+    meta: 'Capture product scope before creating implementation or final UX flows.',
     time: 'Open',
   },
 ];
@@ -104,11 +84,11 @@ export default function Overview({
 }: OverviewProps) {
   const activeServices = useMemo(() => services.filter((service) => service.status === 'active').length, [services]);
   const configuringServices = useMemo(() => services.filter((service) => service.status === 'configuring').length, [services]);
-  const readiness = Math.round((services.reduce((sum, service) => sum + service.progress, 0) / (services.length * 100)) * 100);
+  const scopedServices = useMemo(() => services.filter((service) => service.category !== 'depin').length, [services]);
 
   return (
     <div className="space-y-6">
-      {/* AI NOTE: Overview is the product workspace home. Keep it focused on setup readiness, next actions, and honest placeholders. Do not add fake production metrics. */}
+      {/* AI NOTE: Overview is the product workspace home. Keep it focused on setup readiness, next actions, and honest placeholders. Do not add production metrics. */}
       <section className="flex flex-col gap-4 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm shadow-zinc-950/[0.03] dark:border-zinc-800 dark:bg-[#080809] sm:p-6 lg:flex-row lg:items-center lg:justify-between">
         <div className="max-w-3xl">
           <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -147,7 +127,7 @@ export default function Overview({
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {[
-          { label: 'Service readiness', value: `${readiness}%`, meta: `${activeServices} active, ${configuringServices} configuring`, icon: Blocks },
+          { label: 'Service readiness', value: 'Setup', meta: `${activeServices} active, ${configuringServices} configuring, ${scopedServices} scoped`, icon: Blocks },
           { label: 'Projects', value: '0 live', meta: 'Create the first real project', icon: FolderKanban },
           { label: 'Agent memory', value: 'Ready', meta: 'Shared memory format exists', icon: Workflow },
           { label: 'Security setup', value: 'Draft', meta: 'API keys and auth are placeholders', icon: ShieldCheck },
@@ -211,21 +191,14 @@ export default function Overview({
                 </div>
                 <span className="rounded-full border border-zinc-200 px-2 py-1 text-[11px] text-zinc-500 dark:border-zinc-800">7 days</span>
               </div>
-              <div className="h-56">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={readinessTrend}>
-                    <defs>
-                      <linearGradient id="configured" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.25} />
-                        <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#71717A' }} />
-                    <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #27272A', background: '#09090B', color: '#FAFAFA' }} />
-                    <Area dataKey="configured" type="monotone" stroke="#3B82F6" fill="url(#configured)" strokeWidth={2} />
-                    <Area dataKey="reviewed" type="monotone" stroke="#7C3AED" fill="transparent" strokeWidth={2} />
-                  </AreaChart>
-                </ResponsiveContainer>
+              <div className="flex h-56 items-center justify-center rounded-lg border border-dashed border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/20">
+                <div className="max-w-xs text-center">
+                  <ChartNoAxesCombined className="mx-auto h-6 w-6 text-zinc-400" />
+                  <p className="mt-3 text-sm font-medium text-zinc-900 dark:text-zinc-100">No service telemetry yet</p>
+                  <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
+                    Charts will appear after the backend sends setup and usage events.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -243,7 +216,7 @@ export default function Overview({
             {[
               { title: 'Connect the UI to workspace data', action: 'Projects', tab: 'projects' },
               { title: 'Review service ownership and setup state', action: 'Services', tab: 'services' },
-              { title: 'Invite Rushi and Nabil into the workspace', action: 'Team', tab: 'team' },
+              { title: 'Invite service owners into the workspace', action: 'Team', tab: 'team' },
               { title: 'Create the first API key policy draft', action: 'Security', tab: 'security' },
             ].map((item) => (
               <button
@@ -267,7 +240,7 @@ export default function Overview({
           <div className="mb-5 flex items-center justify-between">
             <div>
               <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Service setup</h2>
-              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">MVP services are represented as setup cards, not fake live products.</p>
+              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">MVP services are represented as setup cards, not live products.</p>
             </div>
             <button onClick={() => setActiveTab('services')} className="text-xs font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400">
               View all
@@ -322,7 +295,6 @@ export default function Overview({
                     <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">{item.time}</span>
                   </div>
                   <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{item.meta}</p>
-                  <p className="mt-2 text-[11px] font-medium text-zinc-500 dark:text-zinc-500">Owner: {item.owner}</p>
                 </div>
               </div>
             ))}
@@ -339,14 +311,13 @@ export default function Overview({
             </div>
             <GitBranch className="h-4 w-4 text-zinc-400" />
           </div>
-          <div className="h-56">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={serviceFocus}>
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#71717A' }} />
-                <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #27272A', background: '#09090B', color: '#FAFAFA' }} />
-                <Bar dataKey="value" fill="#3B82F6" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="grid h-56 gap-3 sm:grid-cols-2">
+            {['Service setup', 'Agent memory', 'Deployments', 'Security'].map((label) => (
+              <div key={label} className="flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900/20">
+                <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{label}</span>
+                <span className="rounded-full border border-zinc-200 px-2 py-0.5 text-[11px] text-zinc-500 dark:border-zinc-800">No data</span>
+              </div>
+            ))}
           </div>
         </Card>
 

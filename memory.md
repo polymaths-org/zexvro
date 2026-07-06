@@ -254,3 +254,13 @@ Use `None` for empty fields. Do not delete fields.
 - Follow-ups: Review all secondary screens visually, split large dashboard bundles with route-level code splitting later, and decide whether the app should move from `extracted/zexvro-ui` into the repo root or `apps/web`.
 - Blockers: Root workspace is still not a Git checkout, so pushes require syncing through the existing checkout path.
 - Verification: Ran `npm run lint` and `npm run build` successfully. Captured desktop and mobile screenshots with Chromium; fixed the mobile sidebar width bug found in the first mobile screenshot.
+
+## 2026-07-06 - Codex - UI shell smoothing and clean service setup
+
+- Service or area: frontend UI/UX prototype.
+- Files changed: `extracted/zexvro-ui/src/App.tsx`, `extracted/zexvro-ui/src/components/services/Services.tsx`, `extracted/zexvro-ui/src/components/dashboard/Overview.tsx`, `extracted/zexvro-ui/src/components/dashboard/Projects.tsx`, `extracted/zexvro-ui/src/components/dashboard/Security.tsx`, `extracted/zexvro-ui/src/components/dashboard/Deployments.tsx`, `extracted/zexvro-ui/src/components/dashboard/Memory.tsx`, `extracted/zexvro-ui/src/components/dashboard/Team.tsx`, `extracted/zexvro-ui/src/components/dashboard/AgentStudio.tsx`, `extracted/zexvro-ui/src/data/mock.ts`, `memory.md`.
+- Summary: Smoothed the platform shell with a lean Cloudflare-style top bar, narrower sidebar, smoother collapse timing, and screen-level skeleton loading. Rebuilt the Services screen into a clean configuration surface with required inputs, setup options, approval actions, and honest empty-state language. Removed personal developer aliases, owner labels, demo metrics, and pretend production/security data from visible app screens.
+- Decisions: Proposed - Services UI should stay setup-first until backend contracts exist. Do not show owners, progress, balances, usage charts, incidents, IP addresses, or live telemetry unless they come from a real integration.
+- Follow-ups: Visually review Analytics and Settings next; replace any remaining generated metrics with empty states once real data contracts are known.
+- Blockers: Root workspace is still not a Git checkout, so pushes require syncing through the existing checkout path.
+- Verification: Ran `npm run lint` and `npm run build` successfully. Captured desktop and mobile Chromium screenshots at `/tmp/zexvro-ui-overview-clean.png` and `/tmp/zexvro-ui-mobile-clean.png`.
