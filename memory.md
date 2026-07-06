@@ -248,17 +248,17 @@ Use `None` for empty fields. Do not delete fields.
 ## 2026-07-06 - Codex - Extracted UI prototype cleanup
 
 - Service or area: frontend UI/UX prototype.
-- Files changed: `Forntend/src/App.tsx`, `Forntend/src/components/dashboard/Overview.tsx`, `Forntend/src/components/dashboard/AgentStudio.tsx`, `Forntend/src/components/dashboard/Projects.tsx`, `Forntend/src/components/dashboard/Security.tsx`, `Forntend/src/components/dashboard/Analytics.tsx`, `Forntend/src/components/dashboard/Deployments.tsx`, `Forntend/src/components/dashboard/Memory.tsx`, `Forntend/src/components/dashboard/Settings.tsx`, `Forntend/src/components/dashboard/Team.tsx`, `Forntend/src/components/services/Services.tsx`, `Forntend/src/data/mock.ts`, `Forntend/src/index.css`, `Forntend/public/brand/logo-transparent.png`, `Forntend/public/brand/wordmark-transparent.png`, `Forntend/public/brand/lockup-transparent.png`, `Forntend/package.json`, `Forntend/package-lock.json`, `Forntend/README.md`, `memory.md`.
+- Files changed: `frontend/src/App.tsx`, `frontend/src/components/dashboard/Overview.tsx`, `frontend/src/components/dashboard/AgentStudio.tsx`, `frontend/src/components/dashboard/Projects.tsx`, `frontend/src/components/dashboard/Security.tsx`, `frontend/src/components/dashboard/Analytics.tsx`, `frontend/src/components/dashboard/Deployments.tsx`, `frontend/src/components/dashboard/Memory.tsx`, `frontend/src/components/dashboard/Settings.tsx`, `frontend/src/components/dashboard/Team.tsx`, `frontend/src/components/services/Services.tsx`, `frontend/src/data/mock.ts`, `frontend/src/index.css`, `frontend/public/brand/logo-transparent.png`, `frontend/public/brand/wordmark-transparent.png`, `frontend/public/brand/lockup-transparent.png`, `frontend/package.json`, `frontend/package-lock.json`, `frontend/README.md`, `memory.md`.
 - Summary: Cleaned the AI Studio UI prototype into a more sensible ZEXVRO workspace dashboard. Replaced remote logo URLs with local transparent brand assets, fixed mobile layout spacing, rewrote the overview around setup readiness and next actions, replaced misleading dummy data with MVP placeholders, softened agent actions into approval-first prototype states, and removed generated fake production/security claims from visible UI copy.
-- Decisions: Proposed - Treat `Forntend/` as the frontend workspace.
-- Follow-ups: Review all secondary screens visually, split large dashboard bundles with route-level code splitting later, and decide later whether `Forntend/` should be renamed to `apps/web`.
+- Decisions: Proposed - Treat `frontend/` as the frontend workspace.
+- Follow-ups: Review all secondary screens visually, split large dashboard bundles with route-level code splitting later, and decide later whether `frontend/` should be renamed to `apps/web`.
 - Blockers: Root workspace is still not a Git checkout, so pushes require syncing through the existing checkout path.
 - Verification: Ran `npm run lint` and `npm run build` successfully. Captured desktop and mobile screenshots with Chromium; fixed the mobile sidebar width bug found in the first mobile screenshot.
 
 ## 2026-07-06 - Codex - UI shell smoothing and clean service setup
 
 - Service or area: frontend UI/UX prototype.
-- Files changed: `Forntend/src/App.tsx`, `Forntend/src/components/services/Services.tsx`, `Forntend/src/components/dashboard/Overview.tsx`, `Forntend/src/components/dashboard/Projects.tsx`, `Forntend/src/components/dashboard/Security.tsx`, `Forntend/src/components/dashboard/Deployments.tsx`, `Forntend/src/components/dashboard/Memory.tsx`, `Forntend/src/components/dashboard/Team.tsx`, `Forntend/src/components/dashboard/AgentStudio.tsx`, `Forntend/src/data/mock.ts`, `memory.md`.
+- Files changed: `frontend/src/App.tsx`, `frontend/src/components/services/Services.tsx`, `frontend/src/components/dashboard/Overview.tsx`, `frontend/src/components/dashboard/Projects.tsx`, `frontend/src/components/dashboard/Security.tsx`, `frontend/src/components/dashboard/Deployments.tsx`, `frontend/src/components/dashboard/Memory.tsx`, `frontend/src/components/dashboard/Team.tsx`, `frontend/src/components/dashboard/AgentStudio.tsx`, `frontend/src/data/mock.ts`, `memory.md`.
 - Summary: Smoothed the platform shell with a lean Cloudflare-style top bar, narrower sidebar, smoother collapse timing, and screen-level skeleton loading. Rebuilt the Services screen into a clean configuration surface with required inputs, setup options, approval actions, and honest empty-state language. Removed personal developer aliases, owner labels, demo metrics, and pretend production/security data from visible app screens.
 - Decisions: Proposed - Services UI should stay setup-first until backend contracts exist. Do not show owners, progress, balances, usage charts, incidents, IP addresses, or live telemetry unless they come from a real integration.
 - Follow-ups: Visually review Analytics and Settings next; replace any remaining generated metrics with empty states once real data contracts are known.
@@ -268,19 +268,29 @@ Use `None` for empty fields. Do not delete fields.
 ## 2026-07-06 - Codex - Frontend folder promotion and overview cleanup
 
 - Service or area: frontend structure and UI/UX.
-- Files changed: `Forntend/`, `README.md`, `context.md`, `memory.md`, `docs/prompts/google-ai-studio-frontend-ui.md`.
-- Summary: Moved the frontend app into `Forntend/`, removed the topbar assistant action, removed workspace/network badges from the shell and overview, improved the overview hero into a cleaner setup summary, replaced the default browser title with `ZEXVRO Dashboard`, and rewrote the frontend README so it is project-specific.
-- Decisions: Accepted - `Forntend/` is the active frontend workspace. Agents should not look for the old frontend wrapper path.
-- Follow-ups: Consider whether to keep the requested `Forntend` spelling or later rename it to `Frontend`/`apps/web` if the team standardizes repo structure.
+- Files changed: `frontend/`, `README.md`, `context.md`, `memory.md`, `docs/prompts/google-ai-studio-frontend-ui.md`.
+- Summary: Moved the frontend app into `frontend/`, removed the topbar assistant action, removed workspace/network badges from the shell and overview, improved the overview hero into a cleaner setup summary, replaced the default browser title with `ZEXVRO Dashboard`, and rewrote the frontend README so it is project-specific.
+- Decisions: Accepted - `frontend/` is the active frontend workspace. Agents should not look for the old frontend wrapper path.
+- Follow-ups: Consider whether to keep the requested `frontend` spelling or later rename it to `frontend`/`apps/web` if the team standardizes repo structure.
 - Blockers: Root workspace is still not a Git checkout, so pushes require syncing through the existing checkout path.
-- Verification: Ran `npm run lint` and `npm run build` from `Forntend/` successfully. Confirmed served title is `ZEXVRO Dashboard`. Captured desktop and mobile Chromium screenshots at `/tmp/zexvro-frontend-overview.png` and `/tmp/zexvro-frontend-mobile.png`.
+- Verification: Ran `npm run lint` and `npm run build` from `frontend/` successfully. Confirmed served title is `ZEXVRO Dashboard`. Captured desktop and mobile Chromium screenshots at `/tmp/zexvro-frontend-overview.png` and `/tmp/zexvro-frontend-mobile.png`.
 
 ## 2026-07-06 - Codex - Frontend favicon
 
 - Service or area: frontend branding.
-- Files changed: `Forntend/index.html`, `memory.md`.
+- Files changed: `frontend/index.html`, `memory.md`.
 - Summary: Added the transparent ZEXVRO logo as the browser favicon and Apple touch icon.
-- Decisions: Accepted - Use `Forntend/public/brand/logo-transparent.png` for the frontend favicon until a dedicated `.ico` or maskable icon set is created.
+- Decisions: Accepted - Use `frontend/public/brand/logo-transparent.png` for the frontend favicon until a dedicated `.ico` or maskable icon set is created.
 - Follow-ups: Generate a complete favicon set later if production browser/device polish is needed.
 - Blockers: None.
-- Verification: Ran `npm run lint` and `npm run build` from `Forntend/` successfully.
+- Verification: Ran `npm run lint` and `npm run build` from `frontend/` successfully.
+
+## 2026-07-06 - Codex - Correct frontend directory name
+
+- Service or area: frontend structure.
+- Files changed: `frontend/`, `README.md`, `context.md`, `memory.md`.
+- Summary: Renamed the frontend workspace to `frontend/` and updated documentation references.
+- Decisions: Accepted - `frontend/` is the active frontend workspace path.
+- Follow-ups: None.
+- Blockers: None.
+- Verification: Ran `npm run lint` and `npm run build` from `frontend/` successfully.

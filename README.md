@@ -13,7 +13,7 @@
   ·
   <a href="design.md">Design</a>
   ·
-  <a href="Forntend">Frontend</a>
+  <a href="frontend">Frontend</a>
   ·
   <a href="assets/brand">Brand Assets</a>
 </p>
@@ -40,7 +40,7 @@ This repository currently holds the project foundation:
 - `context.md` - product, team, stack, and setup context.
 - `memory.md` - shared working memory for developers and agents.
 - `design.md` - visual system, themes, typography, and UI rules.
-- `Forntend/` - Vite + React frontend workspace.
+- `frontend/` - Vite + React frontend workspace.
 - `assets/brand/` - logo, typo logo, and brand design assets.
 
 Before starting work, read `context.md` and `memory.md`. After meaningful changes, update `memory.md` and commit the memory update with the code.
