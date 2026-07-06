@@ -274,3 +274,13 @@ Use `None` for empty fields. Do not delete fields.
 - Follow-ups: Consider whether to keep the requested `Forntend` spelling or later rename it to `Frontend`/`apps/web` if the team standardizes repo structure.
 - Blockers: Root workspace is still not a Git checkout, so pushes require syncing through the existing checkout path.
 - Verification: Ran `npm run lint` and `npm run build` from `Forntend/` successfully. Confirmed served title is `ZEXVRO Dashboard`. Captured desktop and mobile Chromium screenshots at `/tmp/zexvro-frontend-overview.png` and `/tmp/zexvro-frontend-mobile.png`.
+
+## 2026-07-06 - Codex - Frontend favicon
+
+- Service or area: frontend branding.
+- Files changed: `Forntend/index.html`, `memory.md`.
+- Summary: Added the transparent ZEXVRO logo as the browser favicon and Apple touch icon.
+- Decisions: Accepted - Use `Forntend/public/brand/logo-transparent.png` for the frontend favicon until a dedicated `.ico` or maskable icon set is created.
+- Follow-ups: Generate a complete favicon set later if production browser/device polish is needed.
+- Blockers: None.
+- Verification: Ran `npm run lint` and `npm run build` from `Forntend/` successfully.
