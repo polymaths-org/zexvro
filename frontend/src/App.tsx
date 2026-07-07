@@ -1,10 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  LayoutDashboard, FolderKanban, Rocket, Blocks, Bot, 
-  ChartNoAxesCombined, Users, Brain, ShieldCheck, Settings,
-  Radio, Lock, KeyRound,
   Search, Menu, X, ChevronRight, User, 
-  HelpCircle, Sun, Moon, RefreshCw 
+  HelpCircle, Sun, Moon, Settings, Send, ArrowUpRight, Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -32,6 +29,173 @@ import { Project, Deployment, Service, TeamMember, MemoryEntry, ThemeType, Densi
 
 const BRAND_MARK = '/brand/logo-transparent.png';
 const BRAND_WORDMARK = '/brand/wordmark-transparent.png';
+const MORPH_LOGO = '/morph/morph-logo.svg';
+const MORPH_ILLUSTRATION = '/morph/morph-illustration-transparent.png';
+
+const SECTION_LABELS: Record<string, string> = {
+  overview: 'Overview',
+  projects: 'Projects',
+  deployments: 'Deployments',
+  services: 'Services',
+  agent: 'Agentic Operations',
+  analytics: 'Analytics',
+  team: 'Team',
+  memory: 'Memory',
+  security: 'Security',
+  settings: 'Settings'
+};
+
+type WidgetMessage = {
+  id: number;
+  sender: 'user' | 'agent';
+  text: string;
+  time: string;
+};
+
+type CustomIconName =
+  | 'overview'
+  | 'projects'
+  | 'deployments'
+  | 'services'
+  | 'agent'
+  | 'analytics'
+  | 'team'
+  | 'memory'
+  | 'security'
+  | 'settings'
+  | 'privacy'
+  | 'transform'
+  | 'trade'
+  | 'auth'
+  | 'nft'
+  | 'depin';
+
+type NavItem = {
+  id: string;
+  label: string;
+  icon: CustomIconName;
+};
+
+function MorphIcon({ className = '' }: { className?: string }) {
+  return (
+    <img
+      src={MORPH_LOGO}
+      alt=""
+      aria-hidden="true"
+      className={`scale-[1.55] object-contain invert dark:invert-0 ${className}`}
+    />
+  );
+}
+
+function CustomIcon({ name, className = '' }: { name: CustomIconName; className?: string }) {
+  if (name === 'agent') return <MorphIcon className={className} />;
+
+  const common = 'fill-none stroke-current stroke-[1.8] stroke-linecap-round stroke-linejoin-round';
+  const accent = 'fill-current stroke-none';
+  const icons: Record<Exclude<CustomIconName, 'agent'>, React.ReactNode> = {
+    overview: (
+      <>
+        <path className={common} d="M5 6.5h5.2v5.2H5zM13.8 6.5H19v3.8h-5.2zM5 15h5.2v2.5H5zM13.8 13.2H19v4.3h-5.2z" />
+        <path className={common} d="M10.2 9.1h3.6M10.2 16.2h3.6" />
+      </>
+    ),
+    projects: (
+      <>
+        <path className={common} d="M4.5 7.8h5.1l1.5 2h8.4v7.4H4.5z" />
+        <path className={common} d="M7.5 13h5.8M7.5 15.4h3.6" />
+      </>
+    ),
+    deployments: (
+      <>
+        <path className={common} d="M12 4.5 17.6 10l-3.3.6-.6 3.3L8.1 8.4zM6 16l-1.5 3.5L8 18M14.7 18l3.5 1.5L16.7 16" />
+        <path className={common} d="M9.8 12.2 6.8 15.2M12.8 15.2l-3 3" />
+      </>
+    ),
+    services: (
+      <>
+        <path className={common} d="M12 4.5 18.2 8v8L12 19.5 5.8 16V8z" />
+        <path className={common} d="m5.8 8 6.2 3.5L18.2 8M12 11.5v8" />
+        <path className={accent} d="M11 3.7h2v1.7h-2zM18.9 7.2h1.7v2h-1.7zM3.4 7.2h1.7v2H3.4z" />
+      </>
+    ),
+    analytics: (
+      <>
+        <path className={common} d="M5 17.5h14M6.2 15.2l3-3.1 3 1.8 5-6.2" />
+        <path className={common} d="M7 17.5v-3M12 17.5v-5M17 17.5v-8" />
+      </>
+    ),
+    team: (
+      <>
+        <path className={common} d="M12 6.2a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8ZM6.8 9.2a1.9 1.9 0 1 0 0 3.8 1.9 1.9 0 0 0 0-3.8ZM17.2 9.2a1.9 1.9 0 1 0 0 3.8 1.9 1.9 0 0 0 0-3.8ZM8.2 17.7c.6-2.1 2-3.2 3.8-3.2s3.2 1.1 3.8 3.2" />
+        <path className={common} d="M3.8 17.2c.4-1.5 1.3-2.3 2.7-2.3M17.5 14.9c1.4 0 2.3.8 2.7 2.3" />
+      </>
+    ),
+    memory: (
+      <>
+        <path className={common} d="M8.2 7.2h7.6v9.6H8.2zM5.2 10.2h3M15.8 10.2h3M5.2 13.8h3M15.8 13.8h3" />
+        <path className={common} d="M10.5 9.8h3M10.5 12h3M10.5 14.2h2" />
+      </>
+    ),
+    security: (
+      <>
+        <path className={common} d="M12 4.5 18.2 7v5c0 3.8-2.4 6.2-6.2 7.5-3.8-1.3-6.2-3.7-6.2-7.5V7z" />
+        <path className={common} d="m9.2 12.2 1.9 1.9 3.9-4.2" />
+      </>
+    ),
+    settings: (
+      <>
+        <path className={common} d="M6 7.5h12M6 12h12M6 16.5h12" />
+        <path className={common} d="M9 5.8v3.4M15 10.3v3.4M11.5 14.8v3.4" />
+      </>
+    ),
+    privacy: (
+      <>
+        <path className={common} d="M7.2 10.5h9.6v7.2H7.2zM9 10.5V8.2a3 3 0 0 1 6 0v2.3" />
+        <path className={common} d="M12 13.2v1.9" />
+      </>
+    ),
+    transform: (
+      <>
+        <path className={common} d="M5.2 7.2h5.6v5.6H5.2zM13.2 11.2h5.6v5.6h-5.6z" />
+        <path className={common} d="M11 8.2h2.6c1.6 0 2.5.8 2.5 2.4v.6M13 15.8h-2.6c-1.6 0-2.5-.8-2.5-2.4v-.6" />
+      </>
+    ),
+    trade: (
+      <>
+        <path className={common} d="M6 8.2h9.5l-2-2.1M18 15.8H8.5l2 2.1" />
+        <path className={common} d="M15.5 8.2 18 10.7M8.5 15.8 6 13.3" />
+      </>
+    ),
+    auth: (
+      <>
+        <path className={common} d="M8.8 12.2a3 3 0 1 1 2.4 2.9L9 17.3H6.8v-2.2z" />
+        <path className={common} d="M14.5 6.3c2 .5 3.5 2 4 4M14.4 9.3c.7.3 1.2.8 1.4 1.5" />
+      </>
+    ),
+    nft: (
+      <>
+        <path className={common} d="M12 4.8 18.2 12 12 19.2 5.8 12z" />
+        <path className={common} d="M8.9 12h6.2M12 8.4v7.2" />
+      </>
+    ),
+    depin: (
+      <>
+        <path className={common} d="M12 12.2a2.3 2.3 0 1 0 0-4.6 2.3 2.3 0 0 0 0 4.6ZM5.8 17.8a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6ZM18.2 17.8a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6Z" />
+        <path className={common} d="m10.1 11.2-2.8 3.2M13.9 11.2l2.8 3.2M7.6 16h8.8" />
+      </>
+    ),
+  };
+
+  return (
+    <svg className={`scale-[1.28] ${className}`} viewBox="0 0 24 24" aria-hidden="true">
+      {icons[name]}
+    </svg>
+  );
+}
+
+function NavIcon({ item, className = '' }: { item: NavItem; className?: string }) {
+  return <CustomIcon name={item.icon} className={className} />;
+}
 
 function ScreenSkeleton() {
   return (
@@ -104,22 +268,17 @@ export default function App() {
   });
 
   const [agentWidgetOpen, setAgentWidgetOpen] = useState<boolean>(false);
-  const [widgetMessages, setWidgetMessages] = useState([
-    {
-      id: 1,
-      sender: 'agent',
-      text: 'I can help review setup tasks, summarize memory entries, prepare service checklists, and flag actions that need approval. No backend actions are connected yet.',
-      time: 'Just now'
-    }
-  ]);
+  const [widgetMessages, setWidgetMessages] = useState<WidgetMessage[]>([]);
   const [widgetInput, setWidgetInput] = useState('');
   const [widgetThinking, setWidgetThinking] = useState(false);
+  const currentSectionLabel = SECTION_LABELS[activeTab] || activeTab;
+  const assistantDockOpen = agentWidgetOpen && activeTab !== 'agent';
 
   const handleSendWidgetMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (!widgetInput.trim()) return;
 
-    const userMsg = {
+    const userMsg: WidgetMessage = {
       id: Date.now(),
       sender: 'user',
       text: widgetInput,
@@ -132,13 +291,13 @@ export default function App() {
     setWidgetThinking(true);
 
     setTimeout(() => {
-      let reply = "I can draft the next UI or service setup step, but I will keep it as a proposal until a developer approves it.";
+      let reply = `I am using your current page context: ${currentSectionLabel}. I can draft the next setup step, summarize the visible workspace state, or prepare an approval card without running backend actions.`;
       if (prompt.toLowerCase().includes('audit') || prompt.toLowerCase().includes('log')) {
-        reply = "I would review memory entries, blockers, and security notes first. Current rule: do not paste raw logs into memory; summarize decisions and handoffs.";
+        reply = `For ${currentSectionLabel}, I would review memory entries, blockers, and security notes first. Current rule: do not paste raw logs into memory; summarize decisions and handoffs.`;
       } else if (prompt.toLowerCase().includes('transform') || prompt.toLowerCase().includes('trigger')) {
-        reply = "Transformation is not connected to a backend yet. I can prepare a migration checklist and mark the action as needing approval.";
+        reply = `Transformation is not connected to a backend yet. From ${currentSectionLabel}, I can prepare a migration checklist and mark the action as needing approval.`;
       } else if (prompt.toLowerCase().includes('help') || prompt.toLowerCase().includes('hello')) {
-        reply = "Useful commands for this prototype: review setup state, create a service checklist, prepare a memory note, or open the security policy draft.";
+        reply = "Useful commands for this prototype: review this page, create a service checklist, prepare a memory note, open Agentic Operations, or draft a security policy.";
       }
 
       setWidgetMessages(prev => [...prev, {
@@ -191,22 +350,70 @@ export default function App() {
   }, [activeTab, reducedMotion]);
 
   // Filter commands for search
-  const navigationItems = [
-    { id: 'overview', label: 'Overview', icon: LayoutDashboard },
-    { id: 'projects', label: 'Projects', icon: FolderKanban },
-    { id: 'deployments', label: 'Deployments', icon: Rocket },
-    { id: 'services', label: 'Services', icon: Blocks },
-    { id: 'agent', label: 'Agent Studio', icon: Bot },
-    { id: 'analytics', label: 'Analytics', icon: ChartNoAxesCombined },
-    { id: 'team', label: 'Team', icon: Users },
-    { id: 'memory', label: 'Memory', icon: Brain },
-    { id: 'security', label: 'Security', icon: ShieldCheck },
-    { id: 'settings', label: 'Settings', icon: Settings }
+  const navigationItems: NavItem[] = [
+    { id: 'overview', label: 'Overview', icon: 'overview' },
+    { id: 'projects', label: 'Projects', icon: 'projects' },
+    { id: 'deployments', label: 'Deployments', icon: 'deployments' },
+    { id: 'services', label: 'Services', icon: 'services' },
+    { id: 'agent', label: 'Agentic Operations', icon: 'agent' },
+    { id: 'analytics', label: 'Analytics', icon: 'analytics' },
+    { id: 'team', label: 'Team', icon: 'team' },
+    { id: 'memory', label: 'Memory', icon: 'memory' },
+    { id: 'security', label: 'Security', icon: 'security' },
+    { id: 'settings', label: 'Settings', icon: 'settings' }
   ];
 
   const filteredSearchItems = navigationItems.filter(item => 
     item.label.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const compactNavigationItems = navigationItems.filter(item => item.id !== 'overview');
+  const sidebarCategories: Array<{ id: string; label: string; subItems: NavItem[] }> = [
+    {
+      id: 'compute',
+      label: 'Compute & Deploy',
+      subItems: [
+        { id: 'projects', label: 'Projects', icon: 'projects' },
+        { id: 'deployments', label: 'Deployments', icon: 'deployments' },
+      ],
+    },
+    {
+      id: 'services',
+      label: 'MVP Services',
+      subItems: [
+        { id: 'services', label: 'Privacy Pool', icon: 'privacy' },
+        { id: 'services', label: 'Transformation', icon: 'transform' },
+        { id: 'services', label: 'Trade Pipeline', icon: 'trade' },
+        { id: 'services', label: 'Agent Auth', icon: 'auth' },
+        { id: 'services', label: 'NFT Service', icon: 'nft' },
+        { id: 'services', label: 'De-pin', icon: 'depin' },
+      ],
+    },
+    {
+      id: 'intelligence',
+      label: 'Intelligence & Memory',
+      subItems: [
+        { id: 'agent', label: 'Agentic Operations', icon: 'agent' },
+        { id: 'memory', label: 'Memory', icon: 'memory' },
+      ],
+    },
+    {
+      id: 'security',
+      label: 'Security & Insights',
+      subItems: [
+        { id: 'security', label: 'Security', icon: 'security' },
+        { id: 'analytics', label: 'Analytics', icon: 'analytics' },
+        { id: 'team', label: 'Team', icon: 'team' },
+      ],
+    },
+    {
+      id: 'config',
+      label: 'Config & Support',
+      subItems: [
+        { id: 'settings', label: 'Settings', icon: 'settings' },
+      ],
+    },
+  ];
 
   return (
     <div className={`min-h-screen font-sans antialiased text-zinc-900 dark:text-zinc-100 bg-zinc-50 dark:bg-[#050505] transition-colors duration-200 ${
@@ -222,9 +429,9 @@ export default function App() {
         }`}>
           <aside className="hidden md:flex flex-col border-r border-zinc-200 dark:border-zinc-900 bg-white dark:bg-black select-none sticky top-0 h-screen overflow-y-auto overflow-x-hidden w-full h-full">
             {/* Sidebar Brand Top */}
-            <div className={`h-14 shrink-0 border-b border-zinc-200 dark:border-zinc-900 flex items-center ${sidebarCollapsed ? 'justify-center px-0' : 'justify-start px-4'}`}>
+            <div className={`h-14 shrink-0 border-b border-zinc-200 dark:border-zinc-900 flex items-center ${sidebarCollapsed ? 'justify-center px-0' : 'justify-start pl-5 pr-4'}`}>
               {sidebarCollapsed ? (
-                <div className="w-full flex items-center justify-center pt-2">
+                <div className="flex h-full w-full items-center justify-center">
                   <img 
                     src={BRAND_MARK} 
                     alt="ZEXVRO Logo" 
@@ -232,16 +439,16 @@ export default function App() {
                   />
                 </div>
               ) : (
-                <div className="flex items-center gap-3 min-w-0 w-full justify-start pt-2 pl-0.5">
+                <div className="flex h-full min-w-0 w-full items-center justify-start gap-2.5 pl-1">
                   <img 
                     src={BRAND_MARK} 
                     alt="ZEXVRO Logo" 
-                    className="h-9 w-9 object-contain shrink-0 invert dark:invert-0"
+                    className="h-[34px] w-[34px] object-contain shrink-0 invert dark:invert-0"
                   />
                   <img 
                     src={BRAND_WORDMARK} 
                     alt="ZEXVRO" 
-                    className="h-[22px] object-contain max-w-[130px] shrink-0 mt-0.5 invert dark:invert-0"
+                    className="h-[18px] max-w-[148px] shrink-0 translate-y-[1px] object-contain object-left invert dark:invert-0"
                   />
                 </div>
               )}
@@ -298,7 +505,7 @@ export default function App() {
                     : 'text-zinc-400 hover:text-zinc-650 dark:hover:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-900/40'
                 }`}
               >
-                <LayoutDashboard className="h-4 w-4 shrink-0" />
+                <CustomIcon name="overview" className="h-5 w-5 shrink-0" />
                 <div className="absolute left-14 top-1/2 -translate-y-1/2 px-2 py-1 rounded bg-zinc-900 dark:bg-zinc-800 text-white dark:text-zinc-100 text-[10px] font-medium tracking-wide opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-md font-sans">
                   Overview
                 </div>
@@ -306,17 +513,7 @@ export default function App() {
               
               <div className="w-8 h-px bg-zinc-100 dark:bg-zinc-800 my-1" />
 
-              {[
-                { id: 'projects', label: 'Projects', icon: FolderKanban },
-                { id: 'deployments', label: 'Deployments', icon: Rocket },
-                { id: 'services', label: 'Services', icon: Blocks },
-                { id: 'agent', label: 'Agent Studio', icon: Bot },
-                { id: 'memory', label: 'Memory', icon: Brain },
-                { id: 'security', label: 'Security', icon: ShieldCheck },
-                { id: 'analytics', label: 'Analytics', icon: ChartNoAxesCombined },
-                { id: 'team', label: 'Team', icon: Users },
-                { id: 'settings', label: 'Settings', icon: Settings }
-              ].map((item, idx) => {
+              {compactNavigationItems.map((item, idx) => {
                 const isSelected = activeTab === item.id;
                 return (
                   <button
@@ -328,7 +525,7 @@ export default function App() {
                         : 'text-zinc-400 hover:text-zinc-650 dark:hover:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-900/40'
                     }`}
                   >
-                    <item.icon className="h-4 w-4 shrink-0" />
+                    <NavIcon item={item} className="h-5 w-5 shrink-0" />
                     <div className="absolute left-14 top-1/2 -translate-y-1/2 px-2 py-1 rounded bg-zinc-900 dark:bg-zinc-800 text-white dark:text-zinc-100 text-[10px] font-medium tracking-wide opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-md font-sans">
                       {item.label}
                     </div>
@@ -349,58 +546,13 @@ export default function App() {
                       : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-900/40'
                   }`}
                 >
-                  <LayoutDashboard className="h-3.5 w-3.5 shrink-0 text-brand-blue" />
+                  <CustomIcon name="overview" className="h-5 w-5 shrink-0 text-brand-blue" />
                   <span>Overview</span>
                 </button>
               </div>
 
               {/* Cloudflare categories */}
-              {[
-                {
-                  id: 'compute',
-                  label: 'Compute & Deploy',
-                  subItems: [
-                    { id: 'projects', label: 'Projects', icon: FolderKanban },
-                    { id: 'deployments', label: 'Deployments', icon: Rocket },
-                  ]
-                },
-                {
-                  id: 'services',
-                  label: 'MVP Services',
-                  subItems: [
-                    { id: 'services', label: 'Privacy Pool', icon: Lock },
-                    { id: 'services', label: 'Transformation', icon: Brain },
-                    { id: 'services', label: 'Trade Pipeline', icon: RefreshCw },
-                    { id: 'services', label: 'Agent Auth', icon: KeyRound },
-                    { id: 'services', label: 'NFT Service', icon: Blocks },
-                    { id: 'services', label: 'De-pin', icon: Radio },
-                  ]
-                },
-                {
-                  id: 'intelligence',
-                  label: 'Intelligence & Memory',
-                  subItems: [
-                    { id: 'agent', label: 'Agent Studio', icon: Bot },
-                    { id: 'memory', label: 'Memory', icon: Brain },
-                  ]
-                },
-                {
-                  id: 'security',
-                  label: 'Security & Insights',
-                  subItems: [
-                    { id: 'security', label: 'Security', icon: ShieldCheck },
-                    { id: 'analytics', label: 'Analytics', icon: ChartNoAxesCombined },
-                    { id: 'team', label: 'Team', icon: Users },
-                  ]
-                },
-                {
-                  id: 'config',
-                  label: 'Config & Support',
-                  subItems: [
-                    { id: 'settings', label: 'Settings', icon: Settings }
-                  ]
-                }
-              ].map((cat) => {
+              {sidebarCategories.map((cat) => {
                 const isExpanded = expandedCats[cat.id];
                 return (
                   <div key={cat.id} className="space-y-1">
@@ -425,7 +577,6 @@ export default function App() {
                             // MVP services map to the shared Services screen until service-local routes exist.
                             // Other direct tabs highlight if tab matches.
                             const isSelected = activeTab === sub.id;
-                            const SubIcon = sub.icon || Blocks;
                             return (
                               <button
                                 key={`${sub.label}-${sIdx}`}
@@ -436,7 +587,7 @@ export default function App() {
                                     : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-zinc-200 hover:bg-zinc-50/50 dark:hover:bg-zinc-900/30'
                                 }`}
                               >
-                                <SubIcon className={`h-3 w-3 shrink-0 ${isSelected ? 'text-brand-blue' : 'text-zinc-400'}`} />
+                                <NavIcon item={sub} className={`h-5 w-5 shrink-0 ${isSelected ? 'text-brand-blue' : 'text-zinc-400'}`} />
                                 <span className="truncate">{sub.label}</span>
                               </button>
                             );
@@ -489,7 +640,7 @@ export default function App() {
       </div>
 
         {/* 2. Main content container + Top command bar */}
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className={`flex-1 flex flex-col min-w-0 transition-[padding] duration-200 ${assistantDockOpen ? 'lg:pr-[430px]' : ''}`}>
           
           {/* Top header bar */}
           <header className="h-14 border-b border-zinc-200 dark:border-zinc-900 bg-white dark:bg-black flex items-center justify-between px-4 sticky top-0 z-40 shrink-0">
@@ -515,7 +666,7 @@ export default function App() {
                   <span className="font-semibold text-zinc-500 dark:text-zinc-400 hidden sm:inline">ZEXVRO</span>
                   <span className="text-zinc-300 dark:text-zinc-700 hidden sm:inline">/</span>
                   <span className="font-semibold text-zinc-900 dark:text-white capitalize tracking-tight px-2 py-0.5 rounded bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-150 dark:border-zinc-800">
-                    {activeTab === 'agent' ? 'Agent Studio' : activeTab === 'services' ? 'Services' : activeTab === 'memory' ? 'Memory' : activeTab === 'security' ? 'Security' : activeTab === 'analytics' ? 'Analytics' : activeTab === 'team' ? 'Team' : activeTab}
+                    {currentSectionLabel}
                   </span>
                 </div>
               </div>
@@ -749,7 +900,7 @@ export default function App() {
                             : 'text-zinc-400'
                         }`}
                       >
-                        <item.icon className="h-4 w-4 shrink-0" />
+                        <NavIcon item={item} className="h-5 w-5 shrink-0" />
                         <span>{item.label}</span>
                       </button>
                     );
@@ -827,7 +978,7 @@ export default function App() {
                       className="w-full text-left p-2 hover:bg-zinc-50 dark:hover:bg-zinc-900 rounded-md flex items-center justify-between group transition-colors cursor-pointer"
                     >
                       <div className="flex items-center gap-2.5 text-zinc-700 dark:text-zinc-300">
-                        <item.icon className="h-4 w-4 text-zinc-400 group-hover:text-brand-blue" />
+                        <NavIcon item={item} className="h-5 w-5 text-zinc-400 group-hover:text-brand-blue" />
                         <span>Navigate to {item.label}</span>
                       </div>
                       <span className="text-[10px] text-zinc-400 opacity-0 group-hover:opacity-100">Jump ↵</span>
@@ -840,132 +991,148 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* 5. Sliding Agent Widget Sheet (Drawer) with Backdrop Blur */}
-      <AnimatePresence>
-        {agentWidgetOpen && (
-          <div className="fixed inset-0 z-50 flex justify-end">
-            {/* Backdrop with blurring effect */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setAgentWidgetOpen(false)}
-              className="absolute inset-0 bg-black/25 dark:bg-black/55 backdrop-blur-md"
-            ></motion.div>
-
-            {/* Panel */}
-            <motion.div
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'tween', ease: 'easeInOut', duration: 0.3 }}
-              className="relative w-full max-w-md h-full border-l border-zinc-200 dark:border-[#27272A] bg-white dark:bg-[#0A0A0B] shadow-2xl p-6 flex flex-col z-10"
-            >
-              {/* Header inside the drawer */}
-              <div className="flex items-center justify-between border-b border-zinc-150 dark:border-zinc-850 pb-4 shrink-0">
-                <div className="flex items-center gap-2">
-                  <span className="p-1.5 rounded-lg bg-brand-purple/10 text-brand-purple">
-                    <Brain className="h-5 w-5" />
-                  </span>
-                  <div>
-                    <h3 className="text-sm font-bold text-zinc-955 dark:text-white font-mono">ZEXVRO Assistant</h3>
-                    <p className="text-[10px] text-zinc-400 font-mono">Prototype • approval-first</p>
+      {/* 6. Docked Morph Assistant. It has no page backdrop, so the workspace stays visible and usable. */}
+      {activeTab !== 'agent' && (
+        <>
+          <AnimatePresence>
+            {agentWidgetOpen && (
+              <motion.aside
+                initial={{ x: 430 }}
+                animate={{ x: 0 }}
+                exit={{ x: 430 }}
+                transition={{ duration: reducedMotion ? 0 : 0.22, ease: [0.22, 1, 0.36, 1] }}
+                className="fixed right-0 top-0 z-50 flex h-screen w-full max-w-[430px] flex-col border-l border-white/10 bg-zinc-950/88 shadow-2xl shadow-black/30 backdrop-blur-xl"
+                aria-label="Morph workspace assistant"
+              >
+                <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/10 px-4">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <img src={MORPH_LOGO} alt="Morph" className="h-8 w-8 shrink-0 object-contain" />
+                    <div className="min-w-0">
+                      <h3 className="truncate text-sm font-semibold text-white">Morph Assistant</h3>
+                      <p className="truncate text-xs text-zinc-400">Context: {currentSectionLabel}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => {
+                        setActiveTab('agent');
+                        setAgentWidgetOpen(false);
+                      }}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-white/[0.04] text-zinc-300 transition hover:bg-white/10 hover:text-white"
+                      title="Open Agentic Operations"
+                    >
+                      <ArrowUpRight className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => setAgentWidgetOpen(false)}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-white/[0.04] text-zinc-300 transition hover:bg-white/10 hover:text-white"
+                      title="Close Morph Assistant"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
                   </div>
                 </div>
-                <button 
-                  onClick={() => setAgentWidgetOpen(false)}
-                  className="text-xs text-zinc-400 hover:text-zinc-650 dark:hover:text-zinc-200 border border-zinc-200 dark:border-zinc-800 px-2.5 py-1.5 rounded-md font-medium cursor-pointer transition-all hover:bg-zinc-50 dark:hover:bg-zinc-900"
-                >
-                  Dismiss
-                </button>
-              </div>
 
-              {/* Dynamic interactive assistant sheet. Keep actions mocked until backend approval flows exist. */}
-              <div className="flex-1 mt-5 rounded-lg border border-brand-purple/15 bg-zinc-50/20 dark:bg-zinc-950/20 p-4 space-y-4 flex flex-col min-h-0">
-                <div className="flex items-center justify-between border-b border-zinc-150 dark:border-zinc-850 pb-2.5 shrink-0">
-                  <span className="text-[10px] font-semibold text-brand-purple uppercase tracking-wider flex items-center gap-1.5">
-                    <span className="h-1.5 w-1.5 rounded-full bg-brand-purple"></span>
-                    Workspace Assistant
-                  </span>
-                  <span className="text-[9px] font-mono text-zinc-400">Local mock</span>
+                <div className="flex shrink-0 items-center gap-2 border-b border-white/10 px-4 py-3 text-sm text-zinc-200">
+                  <Sparkles className="h-4 w-4 text-violet-400" />
+                  <span>Page-aware workspace help</span>
                 </div>
 
-                {/* Message history - Scrollable */}
-                <div className="flex-1 overflow-y-auto space-y-3 pr-1 text-xs">
-                  {widgetMessages.map((msg) => (
-                    <div key={msg.id} className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}>
-                      <div className={`p-2.5 rounded-lg max-w-[90%] ${
-                        msg.sender === 'user' 
-                          ? 'bg-zinc-100 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 rounded-tr-none' 
-                          : 'bg-brand-purple/5 border border-brand-purple/15 text-zinc-800 dark:text-zinc-200 rounded-tl-none'
-                      }`}>
-                        <p className="leading-relaxed whitespace-pre-line text-[11px]">{msg.text}</p>
+                <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
+                  {widgetMessages.length === 0 && !widgetThinking ? (
+                    <div className="flex min-h-full flex-col justify-center">
+                      <div className="mb-10 flex justify-center">
+                        <img src={MORPH_ILLUSTRATION} alt="Morph assistant" className="h-36 w-36 object-contain" />
                       </div>
-                      <span className="text-[9px] text-zinc-400 mt-0.5 px-1">{msg.time}</span>
+                      <div className="space-y-2">
+                        <h4 className="text-2xl font-semibold tracking-tight text-white">
+                          Hello, workspace
+                        </h4>
+                        <p className="text-xl font-semibold text-zinc-400">
+                          How can Morph help?
+                        </p>
+                      </div>
+                      <div className="mt-7 space-y-3">
+                        {[
+                          { label: 'Review this page', text: `Review the current ${currentSectionLabel} screen` },
+                          { label: 'Create a setup checklist', text: 'Create a service setup checklist' },
+                          { label: 'Draft an approval card', text: 'Draft an approval card for a transformation action' },
+                        ].map((chip) => (
+                          <button
+                            key={chip.label}
+                            onClick={() => setWidgetInput(chip.text)}
+                            className="block w-fit max-w-full rounded-full border border-white/15 bg-white/[0.03] px-4 py-2 text-left text-sm font-medium text-blue-300 transition hover:border-violet-400/50 hover:bg-violet-500/10 hover:text-violet-100"
+                          >
+                            {chip.label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  ))}
-
-                  {widgetThinking && (
-                    <div className="flex items-center gap-2 text-zinc-400 dark:text-zinc-500 italic text-[10px] pl-1">
-                      <span className="flex gap-1">
-                        <span className="h-1 w-1 bg-zinc-400 rounded-full animate-bounce"></span>
-                        <span className="h-1 w-1 bg-zinc-400 rounded-full animate-bounce [animation-delay:0.2s]"></span>
-                        <span className="h-1 w-1 bg-zinc-400 rounded-full animate-bounce [animation-delay:0.4s]"></span>
-                      </span>
-                      Assistant is preparing a safe proposal...
+                  ) : (
+                    <div className="space-y-4 text-sm">
+                      {widgetMessages.map((msg) => (
+                        <div key={msg.id} className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}>
+                          <div className={`max-w-[88%] rounded-lg px-4 py-3 ${
+                            msg.sender === 'user'
+                              ? 'bg-violet-500 text-white'
+                              : 'border border-white/10 bg-white/[0.05] text-zinc-100'
+                          }`}>
+                            <p className="whitespace-pre-line leading-6">{msg.text}</p>
+                          </div>
+                          <span className="mt-1 px-1 text-xs text-zinc-500">{msg.time}</span>
+                        </div>
+                      ))}
+                      {widgetThinking && (
+                        <div className="flex items-center gap-2 text-sm italic text-zinc-400">
+                          <span className="flex gap-1">
+                            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-violet-400"></span>
+                            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-violet-400 [animation-delay:0.2s]"></span>
+                            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-violet-400 [animation-delay:0.4s]"></span>
+                          </span>
+                          Morph is preparing a safe proposal...
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
 
-                {/* Suggestion Quick Chips */}
-                <div className="flex flex-wrap gap-1.5 pb-1 shrink-0">
-                  {[
-                    { label: 'Review memory', text: 'Audit recent memory entries' },
-                    { label: 'Setup plan', text: 'Create a service setup checklist' }
-                  ].map((chip) => (
+                <div className="shrink-0 border-t border-white/10 p-4">
+                  <form onSubmit={handleSendWidgetMessage} className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 py-2 shadow-inner">
+                    <input
+                      type="text"
+                      value={widgetInput}
+                      onChange={(e) => setWidgetInput(e.target.value)}
+                      placeholder="Ask Morph"
+                      className="min-w-0 flex-1 bg-transparent px-1 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none"
+                    />
                     <button
-                      key={chip.label}
-                      onClick={() => {
-                        setWidgetInput(chip.text);
-                      }}
-                      className="px-2 py-1 rounded bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-150 dark:border-zinc-800 text-[10px] font-medium text-zinc-600 dark:text-zinc-400 transition-all cursor-pointer"
+                      type="submit"
+                      disabled={!widgetInput.trim() || widgetThinking}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-violet-500 text-white transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-50"
+                      title="Send message"
                     >
-                      {chip.label}
+                      <Send className="h-4 w-4" />
                     </button>
-                  ))}
+                  </form>
+                  <p className="mt-3 text-xs leading-5 text-zinc-500">
+                    Morph can make mistakes. Review proposals before approval.
+                  </p>
                 </div>
+              </motion.aside>
+            )}
+          </AnimatePresence>
 
-                {/* Chat input form */}
-                <form onSubmit={handleSendWidgetMessage} className="flex gap-1.5 shrink-0 pt-1">
-                  <input
-                    type="text"
-                    value={widgetInput}
-                    onChange={(e) => setWidgetInput(e.target.value)}
-                    placeholder="Instruct agent..."
-                    className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded px-2.5 py-1.5 text-xs text-zinc-800 dark:text-zinc-150 placeholder-zinc-400 focus:outline-none focus:border-brand-purple transition-all"
-                  />
-                  <button
-                    type="submit"
-                    className="px-3 py-1.5 rounded bg-brand-purple text-white text-xs font-semibold hover:bg-brand-purple/90 transition-all cursor-pointer"
-                  >
-                    Send
-                  </button>
-                </form>
-              </div>
-
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Floating Right Agent Tab Trigger (Brain) */}
-      <button
-        onClick={() => setAgentWidgetOpen(!agentWidgetOpen)}
-        className="fixed right-0 bottom-12 z-40 rounded-l-lg border-y border-l border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#0A0A0B] text-brand-purple hover:text-brand-purple/80 hover:bg-zinc-50 dark:hover:bg-zinc-900 p-2.5 shadow-md hover:pl-3.5 transition-all cursor-pointer flex items-center justify-center"
-        title={agentWidgetOpen ? "Collapse ZEXVRO Assistant" : "Expand ZEXVRO Assistant"}
-      >
-        <Brain className="h-4.5 w-4.5 text-brand-purple shrink-0" />
-      </button>
+          {!agentWidgetOpen && (
+            <button
+              onClick={() => setAgentWidgetOpen(true)}
+              className="fixed right-0 top-1/2 z-40 flex -translate-y-1/2 items-center justify-center rounded-l-lg border-y border-l border-zinc-200 bg-white/85 px-2.5 py-3 shadow-lg shadow-zinc-950/10 backdrop-blur-md transition hover:pl-4 dark:border-white/10 dark:bg-black/70"
+              title="Open Morph Assistant"
+            >
+              <img src={MORPH_LOGO} alt="Morph Assistant" className="h-6 w-6 shrink-0 object-contain invert dark:invert-0" />
+            </button>
+          )}
+        </>
+      )}
 
     </div>
   );

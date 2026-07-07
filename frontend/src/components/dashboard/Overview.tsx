@@ -3,7 +3,6 @@ import { motion } from 'motion/react';
 import {
   ArrowRight,
   Blocks,
-  Bot,
   ChartNoAxesCombined,
   CheckCircle2,
   Clock3,
@@ -17,6 +16,8 @@ import {
   Workflow,
 } from 'lucide-react';
 import { Service } from '../../types';
+
+const MORPH_LOGO = '/morph/morph-logo.svg';
 
 interface OverviewProps {
   setActiveTab: (tab: string) => void;
@@ -113,7 +114,7 @@ export default function Overview({
           <div>
             <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Start with setup</h2>
             <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
-              Create a project shell or open the agent studio to prepare approval-first setup notes.
+              Create a project shell or open Agentic Operations to prepare approval-first setup notes.
             </p>
           </div>
           <button
@@ -127,8 +128,8 @@ export default function Overview({
             onClick={() => setActiveTab('agent')}
             className="inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900"
           >
-            <Bot className="h-4 w-4" />
-            Open agent
+            <img src={MORPH_LOGO} alt="" aria-hidden="true" className="h-5 w-5 object-contain invert dark:invert-0" />
+            Open operations
           </button>
         </div>
       </section>
