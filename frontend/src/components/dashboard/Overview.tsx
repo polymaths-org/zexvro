@@ -1,19 +1,16 @@
 import React, { useMemo } from 'react';
-import { motion } from 'motion/react';
 import {
   ArrowRight,
-  Blocks,
+  ArrowUpRight,
+  Boxes,
   ChartNoAxesCombined,
-  CheckCircle2,
-  Clock3,
+  Database,
   FolderKanban,
-  GitBranch,
   KeyRound,
   ListChecks,
   Plus,
   ShieldCheck,
   Users,
-  Workflow,
 } from 'lucide-react';
 import { Service } from '../../types';
 
@@ -26,38 +23,6 @@ interface OverviewProps {
   setOpenNewMemoryModal: (open: boolean) => void;
   isDark: boolean;
   services: Service[];
-}
-
-const setupSteps = [
-  { label: 'Brand and design system captured', status: 'done' },
-  { label: 'Frontend shell generated from AI Studio prompt', status: 'done' },
-  { label: 'Replace generated demo content with product placeholders', status: 'active' },
-  { label: 'Map service routes and ownership boundaries', status: 'next' },
-  { label: 'Connect auth, workspace, and agent memory APIs', status: 'next' },
-];
-
-const activity = [
-  {
-    title: 'Design system added',
-    meta: 'Dark-first tokens, light theme, typography, motion, and component rules are ready.',
-    time: 'Today',
-  },
-  {
-    title: 'Frontend prompt created',
-    meta: 'Google AI Studio prompt generated the first construction UI.',
-    time: 'Today',
-  },
-  {
-    title: 'De-pin scope still pending',
-    meta: 'Capture product scope before creating implementation or final UX flows.',
-    time: 'Open',
-  },
-];
-
-function statusTone(status: Service['status']) {
-  if (status === 'active') return 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400';
-  if (status === 'configuring') return 'border-blue-500/20 bg-blue-500/10 text-blue-600 dark:text-blue-400';
-  return 'border-zinc-300 bg-zinc-100 text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400';
 }
 
 function Card({
@@ -79,277 +44,235 @@ export default function Overview({
   setActiveTab,
   setOpenNewProjectModal,
   setOpenInviteTeammateModal,
-  setOpenNewMemoryModal,
   services,
 }: OverviewProps) {
   const configuringServices = useMemo(() => services.filter((service) => service.status === 'configuring').length, [services]);
+  const activeServices = useMemo(() => services.filter((service) => service.status === 'active').length, [services]);
   const scopedServices = useMemo(() => services.filter((service) => service.category !== 'depin').length, [services]);
+  const readinessScore = 78;
+  const completedSteps = 2;
+  const totalSteps = 6;
+
+  const systemStatus = [
+    {
+      label: 'Services',
+      value: scopedServices,
+      meta: `${activeServices} ready`,
+      icon: Boxes,
+      dot: 'bg-emerald-500',
+    },
+    {
+      label: 'Security',
+      value: 'Draft',
+      meta: 'Policy pending',
+      icon: ShieldCheck,
+      dot: 'bg-amber-500',
+    },
+    {
+      label: 'Memory',
+      value: 'Ready',
+      meta: 'Workspace context',
+      icon: Database,
+      dot: 'bg-emerald-500',
+    },
+    {
+      label: 'Projects',
+      value: 0,
+      meta: 'No live projects',
+      icon: FolderKanban,
+      dot: 'bg-zinc-400',
+    },
+  ];
+
+  const focusItems = [
+    {
+      title: 'Connect workspace data',
+      detail: 'Link your backend and enable data sync.',
+      icon: Boxes,
+      onClick: () => setActiveTab('projects'),
+    },
+    {
+      title: 'Configure authentication',
+      detail: 'Set up agent auth and secure your services.',
+      icon: KeyRound,
+      onClick: () => setActiveTab('security'),
+    },
+    {
+      title: 'Invite team members',
+      detail: 'Collaborate by inviting your team.',
+      icon: Users,
+      onClick: () => setOpenInviteTeammateModal(true),
+    },
+  ];
 
   return (
-    <div className="space-y-6">
-      {/* AI NOTE: Overview is the product workspace home. Keep it focused on setup readiness, next actions, and honest placeholders. Do not add production metrics. */}
-      <section className="grid gap-0 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm shadow-zinc-950/[0.03] dark:border-zinc-800 dark:bg-[#080809] lg:grid-cols-[1.35fr_0.65fr]">
-        <div className="p-5 sm:p-6">
-          <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Account home</p>
-          <h1 className="mt-3 text-2xl font-semibold tracking-tight text-zinc-950 dark:text-white sm:text-3xl">
-            ZEXVRO platform overview
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-            Review what is ready to configure, what needs scope, and which setup actions should happen before backend integrations are connected.
-          </p>
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            {[
-              { label: 'Services scoped', value: scopedServices },
-              { label: 'Needs setup', value: configuringServices },
-              { label: 'Live projects', value: 0 },
-            ].map((item) => (
-              <div key={item.label} className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-900/30">
-                <p className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">{item.label}</p>
-                <p className="mt-1 text-2xl font-semibold text-zinc-950 dark:text-white">{item.value}</p>
-              </div>
-            ))}
-          </div>
+    <div className="mx-auto max-w-7xl space-y-8">
+      <section className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-zinc-950 dark:text-white">Overview</h1>
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">A quick summary of your workspace and next steps.</p>
         </div>
-        <div className="flex flex-col justify-between gap-4 border-t border-zinc-200 bg-zinc-50 p-5 dark:border-zinc-800 dark:bg-zinc-950/30 lg:border-l lg:border-t-0">
-          <div>
-            <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Start with setup</h2>
-            <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
-              Create a project shell or open Agentic Operations to prepare approval-first setup notes.
-            </p>
-          </div>
-          <button
-            onClick={() => setOpenNewProjectModal(true)}
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-zinc-950 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
-          >
-            <Plus className="h-4 w-4" />
-            New project
-          </button>
-          <button
-            onClick={() => setActiveTab('agent')}
-            className="inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900"
-          >
-            <img src={MORPH_LOGO} alt="" aria-hidden="true" className="h-5 w-5 object-contain invert dark:invert-0" />
-            Open operations
-          </button>
-        </div>
+        <button
+          onClick={() => setActiveTab('agent')}
+          className="inline-flex w-fit items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3.5 py-2 text-xs font-semibold text-zinc-800 transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-[#0A0A0B] dark:text-zinc-200 dark:hover:border-zinc-700 dark:hover:bg-zinc-900"
+        >
+          <img src={MORPH_LOGO} alt="" aria-hidden="true" className="h-5 w-5 object-contain invert dark:invert-0" />
+          Open Operations
+          <ArrowUpRight className="h-3.5 w-3.5 text-zinc-400" />
+        </button>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {[
-          { label: 'Service readiness', value: 'Setup', meta: `${configuringServices} services need setup`, icon: Blocks },
-          { label: 'Projects', value: '0 live', meta: 'Create the first real project', icon: FolderKanban },
-          { label: 'Agent memory', value: 'Ready', meta: 'Shared memory format exists', icon: Workflow },
-          { label: 'Security setup', value: 'Draft', meta: 'API keys and auth are placeholders', icon: ShieldCheck },
-        ].map((item) => (
-          <Card key={item.label} className="p-4">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{item.label}</span>
-              <item.icon className="h-4 w-4 text-zinc-400" />
-            </div>
-            <div className="mt-3 text-2xl font-semibold tracking-tight text-zinc-950 dark:text-white">{item.value}</div>
-            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{item.meta}</p>
-          </Card>
-        ))}
-      </section>
-
-      <section className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
-        <Card className="overflow-hidden">
-          <div className="flex flex-col gap-3 border-b border-zinc-200 p-5 dark:border-zinc-800 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Platform setup flow</h2>
-              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Use this as the construction checklist before real backend integrations.</p>
-            </div>
-            <button
-              onClick={() => setOpenNewMemoryModal(true)}
-              className="inline-flex items-center gap-2 rounded-md border border-zinc-200 px-3 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900"
+      <Card className="overflow-hidden p-5 sm:p-6">
+        <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-center">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+            <div
+              className="flex h-24 w-24 shrink-0 items-center justify-center rounded-full p-1.5"
+              style={{ background: `conic-gradient(rgb(255 255 255) ${readinessScore * 3.6}deg, rgba(113,113,122,0.18) 0deg)` }}
             >
-              <ListChecks className="h-4 w-4" />
-              Add memory note
+              <div className="flex h-full w-full items-center justify-center rounded-full bg-white text-xl font-semibold text-zinc-950 dark:bg-[#0A0A0B] dark:text-white">
+                {readinessScore}%
+              </div>
+            </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <h2 className="text-lg font-semibold text-zinc-950 dark:text-white">Workspace Ready</h2>
+                <span className="rounded-full border border-zinc-200 bg-zinc-950 px-2.5 py-1 text-[11px] font-semibold text-white dark:border-white/15 dark:bg-white/10">
+                  Getting there
+                </span>
+              </div>
+              <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-zinc-600 dark:text-zinc-400">
+                <span><strong className="font-semibold text-zinc-950 dark:text-white">{scopedServices}</strong> Services</span>
+                <span><strong className="font-semibold text-zinc-950 dark:text-white">{configuringServices}</strong> Pending</span>
+                <span><strong className="font-semibold text-zinc-950 dark:text-white">0</strong> Live</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center lg:flex-col lg:items-stretch">
+            <button
+              onClick={() => setOpenNewProjectModal(true)}
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-950 shadow-sm shadow-white/10 transition hover:bg-zinc-100 dark:border-white/15 dark:bg-white dark:hover:bg-zinc-200"
+            >
+              New Project
+              <Plus className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => setActiveTab('projects')}
+              className="inline-flex items-center justify-center gap-2 rounded-lg px-1 py-1 text-xs font-semibold text-zinc-600 transition hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white"
+            >
+              Open existing project
+              <ArrowUpRight className="h-3.5 w-3.5" />
             </button>
           </div>
-          <div className="grid gap-0 lg:grid-cols-[0.9fr_1.1fr]">
-            <div className="border-b border-zinc-200 p-5 dark:border-zinc-800 lg:border-b-0 lg:border-r">
-              <div className="space-y-4">
-                {setupSteps.map((step, index) => (
-                  <div key={step.label} className="flex gap-3">
-                    <div className="flex flex-col items-center">
-                      <div className={`flex h-7 w-7 items-center justify-center rounded-full border text-xs ${
-                        step.status === 'done'
-                          ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-500'
-                          : step.status === 'active'
-                            ? 'border-blue-500/20 bg-blue-500/10 text-blue-500'
-                            : 'border-zinc-200 bg-zinc-50 text-zinc-400 dark:border-zinc-800 dark:bg-zinc-900'
-                      }`}>
-                        {step.status === 'done' ? <CheckCircle2 className="h-4 w-4" /> : index + 1}
-                      </div>
-                      {index < setupSteps.length - 1 && <div className="mt-2 h-7 w-px bg-zinc-200 dark:bg-zinc-800" />}
-                    </div>
-                    <div className="min-w-0 pt-1">
-                      <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{step.label}</p>
-                      <p className="mt-1 text-xs capitalize text-zinc-500 dark:text-zinc-400">{step.status}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="p-5">
-              <div className="mb-4 flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-semibold text-zinc-950 dark:text-white">Readiness trend</h3>
-                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Placeholder data until services send real telemetry.</p>
-                </div>
-                <span className="rounded-full border border-zinc-200 px-2 py-1 text-[11px] text-zinc-500 dark:border-zinc-800">7 days</span>
-              </div>
-              <div className="flex h-56 items-center justify-center rounded-lg border border-dashed border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/20">
-                <div className="max-w-xs text-center">
-                  <ChartNoAxesCombined className="mx-auto h-6 w-6 text-zinc-400" />
-                  <p className="mt-3 text-sm font-medium text-zinc-900 dark:text-zinc-100">No service telemetry yet</p>
-                  <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
-                    Charts will appear after the backend sends setup and usage events.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </Card>
+        </div>
+      </Card>
 
+      <section>
+        <h2 className="mb-4 text-sm font-semibold text-zinc-950 dark:text-white">System Status</h2>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {systemStatus.map((item) => (
+            <Card key={item.label} className="p-4">
+              <div className="flex items-center justify-between">
+                <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-300">
+                  <item.icon className="h-5 w-5" />
+                </span>
+                <span className={`h-1.5 w-1.5 rounded-full ${item.dot}`} />
+              </div>
+              <p className="mt-4 text-xs font-semibold text-zinc-500 dark:text-zinc-400">{item.label}</p>
+              <div className="mt-2 flex items-center gap-2">
+                <span className="text-lg font-semibold text-zinc-950 dark:text-white">{item.value}</span>
+                <span className="text-xs text-zinc-500 dark:text-zinc-400">{item.meta}</span>
+              </div>
+            </Card>
+          ))}
+        </div>
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
         <Card className="p-5">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Recommended next actions</h2>
-              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Small steps that move the platform from prototype to usable MVP.</p>
-            </div>
-            <Clock3 className="h-4 w-4 text-zinc-400" />
+          <div className="mb-5">
+            <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Today's Focus</h2>
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Complete these steps to get your workspace fully operational.</p>
           </div>
-          <div className="mt-5 space-y-3">
-            {[
-              { title: 'Connect the UI to workspace data', action: 'Projects', tab: 'projects' },
-              { title: 'Review service ownership and setup state', action: 'Services', tab: 'services' },
-              { title: 'Invite service owners into the workspace', action: 'Team', tab: 'team' },
-              { title: 'Create the first API key policy draft', action: 'Security', tab: 'security' },
-            ].map((item) => (
+          <div className="space-y-3">
+            {focusItems.map((item) => (
               <button
                 key={item.title}
-                onClick={() => setActiveTab(item.tab)}
-                className="group flex w-full items-center justify-between gap-3 rounded-lg border border-zinc-200 p-3 text-left transition hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
+                onClick={item.onClick}
+                className="group flex w-full items-center gap-3 rounded-lg border border-zinc-200 bg-zinc-50/50 p-3 text-left transition hover:border-zinc-300 hover:bg-white dark:border-zinc-800 dark:bg-zinc-950/30 dark:hover:border-zinc-700 dark:hover:bg-zinc-900/50"
               >
-                <span className="min-w-0">
-                  <span className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">{item.title}</span>
-                  <span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">Open {item.action}</span>
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 text-brand-blue">
+                  <item.icon className="h-4.5 w-4.5" />
                 </span>
-                <ArrowRight className="h-4 w-4 text-zinc-400 transition group-hover:translate-x-0.5 group-hover:text-blue-500" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold text-zinc-900 dark:text-zinc-100">{item.title}</span>
+                  <span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">{item.detail}</span>
+                </span>
+                <ArrowRight className="h-4 w-4 shrink-0 text-zinc-400 transition group-hover:translate-x-0.5 group-hover:text-brand-blue" />
               </button>
             ))}
           </div>
+          <button
+            onClick={() => setActiveTab('services')}
+            className="mt-5 inline-flex items-center gap-2 text-xs font-semibold text-zinc-600 transition hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white"
+          >
+            View all actions
+            <ArrowRight className="h-3.5 w-3.5" />
+          </button>
         </Card>
-      </section>
 
-      <section className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
-        <Card className="p-5">
-          <div className="mb-5 flex items-center justify-between">
-            <div>
-              <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Service setup</h2>
-              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">MVP services are represented as setup cards, not live products.</p>
-            </div>
-            <button onClick={() => setActiveTab('services')} className="text-xs font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400">
-              View all
-            </button>
-          </div>
-          <div className="space-y-3">
-            {services.slice(0, 4).map((service) => (
-              <motion.button
-                key={service.id}
-                whileHover={{ y: -1 }}
+        <div className="space-y-6">
+          <Card className="p-5">
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Setup Progress</h2>
+                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{completedSteps} of {totalSteps} steps completed</p>
+              </div>
+              <button
                 onClick={() => setActiveTab('services')}
-                className="w-full rounded-lg border border-zinc-200 p-3 text-left transition hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
+                className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">{service.name}</p>
-                    <p className="mt-1 line-clamp-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{service.description}</p>
-                  </div>
-                  <span className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-medium capitalize ${statusTone(service.status)}`}>
-                    {service.status}
-                  </span>
-                </div>
-                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-900">
-                  <div className="h-full rounded-full bg-blue-500" style={{ width: `${service.progress}%` }} />
-                </div>
-              </motion.button>
-            ))}
-          </div>
-        </Card>
-
-        <Card className="overflow-hidden">
-          <div className="flex items-center justify-between border-b border-zinc-200 p-5 dark:border-zinc-800">
-            <div>
-              <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Team activity and handoffs</h2>
-              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Recent project context future agents should see first.</p>
+                Continue Setup
+                <ArrowRight className="h-3.5 w-3.5" />
+              </button>
             </div>
+            <div className="h-2 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-900">
+              <div className="h-full rounded-full bg-brand-blue" style={{ width: `${(completedSteps / totalSteps) * 100}%` }} />
+            </div>
+          </Card>
+
+          <Card className="p-5">
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Telemetry</h2>
+                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">No telemetry data yet</p>
+              </div>
+              <ChartNoAxesCombined className="h-5 w-5 text-zinc-400" />
+            </div>
+            <p className="text-xs leading-5 text-zinc-500 dark:text-zinc-400">Connect your backend to start collecting metrics.</p>
             <button
-              onClick={() => setOpenInviteTeammateModal(true)}
-              className="inline-flex items-center gap-2 rounded-md border border-zinc-200 px-3 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900"
+              onClick={() => setActiveTab('settings')}
+              className="mt-4 inline-flex items-center gap-2 rounded-lg border border-zinc-200 px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900"
             >
-              <Users className="h-4 w-4" />
-              Invite
+              Go to Integrations
+              <ArrowRight className="h-3.5 w-3.5" />
             </button>
-          </div>
-          <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
-            {activity.map((item) => (
-              <div key={item.title} className="flex gap-3 p-5">
-                <div className="mt-1 h-2 w-2 rounded-full bg-blue-500" />
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{item.title}</p>
-                    <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">{item.time}</span>
-                  </div>
-                  <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{item.meta}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      </section>
+          </Card>
 
-      <section className="grid gap-5 lg:grid-cols-3">
-        <Card className="p-5 lg:col-span-2">
-          <div className="mb-4 flex items-center justify-between">
-            <div>
-              <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Where users will spend time</h2>
-              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Planning placeholder for dashboard information architecture.</p>
-            </div>
-            <GitBranch className="h-4 w-4 text-zinc-400" />
-          </div>
-          <div className="grid h-56 gap-3 sm:grid-cols-2">
-            {['Service setup', 'Agent memory', 'Deployments', 'Security'].map((label) => (
-              <div key={label} className="flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900/20">
-                <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{label}</span>
-                <span className="rounded-full border border-zinc-200 px-2 py-0.5 text-[11px] text-zinc-500 dark:border-zinc-800">No data</span>
+          <Card className="p-5">
+            <div className="flex items-start gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 text-brand-blue">
+                <ListChecks className="h-4.5 w-4.5" />
+              </span>
+              <div>
+                <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Agent Operations</h2>
+                <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
+                  Use Morph for workspace chat and operational planning without covering the dashboard.
+                </p>
               </div>
-            ))}
-          </div>
-        </Card>
-
-        <Card className="p-5">
-          <div className="flex h-full flex-col justify-between gap-6">
-            <div>
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900">
-                <KeyRound className="h-5 w-5 text-blue-500" />
-              </div>
-              <h2 className="mt-4 text-sm font-semibold text-zinc-950 dark:text-white">Security starts as policy</h2>
-              <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-                API keys, secrets, and human/agent access controls should stay as placeholders until the backend contract is agreed.
-              </p>
             </div>
-            <button
-              onClick={() => setActiveTab('security')}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900"
-            >
-              Review security
-              <ArrowRight className="h-4 w-4" />
-            </button>
-          </div>
-        </Card>
+          </Card>
+        </div>
       </section>
     </div>
   );
