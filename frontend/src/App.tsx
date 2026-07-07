@@ -32,6 +32,12 @@ const BRAND_WORDMARK = '/brand/wordmark-transparent.png';
 const MORPH_LOGO = '/morph/morph-logo.svg';
 const MORPH_ILLUSTRATION = '/morph/morph-illustration-transparent.png';
 
+const WORKSPACES = [
+  { id: 'zexvro', name: 'ZEXVRO Workspace', plan: 'Free Prototype', initials: 'ZX' },
+  { id: 'morph', name: 'Morph Lab', plan: 'Agent workspace', initials: 'ML' },
+  { id: 'frontend', name: 'Frontend Review', plan: 'Design pass', initials: 'FR' },
+];
+
 const SECTION_LABELS: Record<string, string> = {
   overview: 'Overview',
   projects: 'Projects',
@@ -244,6 +250,8 @@ export default function App() {
   const [density, setDensity] = useState<DensityType>('comfortable');
   const [reducedMotion, setReducedMotion] = useState<boolean>(false);
   const [userMenuOpen, setUserMenuOpen] = useState<boolean>(false);
+  const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState<boolean>(false);
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>(WORKSPACES[0].id);
   const [screenLoading, setScreenLoading] = useState<boolean>(false);
 
   // Sharing states so actions propagate across tabs
@@ -273,6 +281,7 @@ export default function App() {
   const [widgetThinking, setWidgetThinking] = useState(false);
   const currentSectionLabel = SECTION_LABELS[activeTab] || activeTab;
   const assistantDockOpen = agentWidgetOpen && activeTab !== 'agent';
+  const selectedWorkspace = WORKSPACES.find(workspace => workspace.id === selectedWorkspaceId) || WORKSPACES[0];
 
   const handleSendWidgetMessage = (e: React.FormEvent) => {
     e.preventDefault();
@@ -348,6 +357,10 @@ export default function App() {
     const timer = window.setTimeout(() => setScreenLoading(false), reducedMotion ? 0 : 180);
     return () => window.clearTimeout(timer);
   }, [activeTab, reducedMotion]);
+
+  useEffect(() => {
+    if (sidebarCollapsed) setWorkspaceMenuOpen(false);
+  }, [sidebarCollapsed]);
 
   // Filter commands for search
   const navigationItems: NavItem[] = [
@@ -457,13 +470,62 @@ export default function App() {
             {/* Workspace Switcher & Search Bar */}
             {!sidebarCollapsed ? (
               <>
-                <div className="p-3 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/20 m-2 rounded-lg shrink-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <span className="block text-xs font-semibold text-zinc-800 dark:text-zinc-200 truncate font-sans">ZEXVRO Workspace</span>
-                      <span className="text-[10px] text-zinc-400 font-sans">Prototype</span>
-                    </div>
-                  </div>
+                <div className="relative mx-2 mt-2 mb-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setWorkspaceMenuOpen(prev => !prev)}
+                    className="w-full rounded-lg border border-zinc-200 bg-zinc-50/70 p-2.5 text-left transition hover:border-zinc-300 hover:bg-white dark:border-zinc-800 dark:bg-zinc-950/30 dark:hover:border-zinc-700 dark:hover:bg-zinc-900/50"
+                  >
+                    <span className="flex items-center gap-2.5">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-brand-blue/10 text-xs font-semibold text-brand-blue">
+                        {selectedWorkspace.initials}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-xs font-semibold text-zinc-800 dark:text-zinc-200">{selectedWorkspace.name}</span>
+                        <span className="mt-0.5 block truncate text-[10px] text-zinc-400">{selectedWorkspace.plan}</span>
+                      </span>
+                      <ChevronRight className={`h-3.5 w-3.5 shrink-0 text-zinc-400 transition-transform ${workspaceMenuOpen ? 'rotate-90' : ''}`} />
+                    </span>
+                  </button>
+
+                  <AnimatePresence>
+                    {workspaceMenuOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -4 }}
+                        transition={{ duration: 0.12 }}
+                        className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-xl shadow-zinc-950/10 dark:border-zinc-800 dark:bg-[#0A0A0B] dark:shadow-black/30"
+                      >
+                        {WORKSPACES.map(workspace => {
+                          const isCurrent = workspace.id === selectedWorkspaceId;
+                          return (
+                            <button
+                              key={workspace.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedWorkspaceId(workspace.id);
+                                setWorkspaceMenuOpen(false);
+                              }}
+                              className={`flex w-full items-center gap-2.5 px-3 py-2 text-left transition ${
+                                isCurrent
+                                  ? 'bg-brand-blue/10 text-zinc-950 dark:text-white'
+                                  : 'text-zinc-600 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-900'
+                              }`}
+                            >
+                              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-brand-blue/10 text-[10px] font-semibold text-brand-blue">
+                                {workspace.initials}
+                              </span>
+                              <span className="min-w-0">
+                                <span className="block truncate text-xs font-semibold">{workspace.name}</span>
+                                <span className="mt-0.5 block truncate text-[10px] text-zinc-400">{workspace.plan}</span>
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
 
                 {/* Global Search shortcut block */}
@@ -601,23 +663,35 @@ export default function App() {
             </div>
           )}
 
-            {/* Pinned workspace footer */}
+            {/* Support footer */}
             <div className="border-t border-zinc-100 dark:border-zinc-850/40 p-3 shrink-0">
             {!sidebarCollapsed ? (
-              <div className="flex items-center gap-2.5 px-1 py-0.5">
-                <div className="h-7 w-7 rounded-full bg-brand-blue/10 text-brand-blue font-bold flex items-center justify-center text-xs shrink-0">
-                  ZX
-                </div>
-                <div className="min-w-0 flex-1">
-                  <span className="block text-xs font-semibold text-zinc-855 dark:text-zinc-200 truncate leading-none">Workspace</span>
-                  <span className="text-[10px] text-zinc-400 truncate block mt-1">Local prototype</span>
-                </div>
-              </div>
+              <button
+                type="button"
+                onClick={() => setActiveTab('settings')}
+                className="group flex w-full items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-zinc-50/70 px-3 py-2.5 text-left transition hover:border-zinc-300 hover:bg-white dark:border-zinc-800 dark:bg-zinc-950/30 dark:hover:border-zinc-700 dark:hover:bg-zinc-900/50"
+              >
+                <span className="flex min-w-0 items-center gap-2.5">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-blue/10 text-brand-blue">
+                    <HelpCircle className="h-4 w-4" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-xs font-semibold leading-none text-zinc-855 dark:text-zinc-200">Need help?</span>
+                    <span className="mt-1 block truncate text-[10px] text-zinc-400">Contact support</span>
+                  </span>
+                </span>
+                <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-zinc-400 transition group-hover:text-brand-blue" />
+              </button>
             ) : (
               <div className="flex justify-center py-1">
-                <div className="h-7 w-7 rounded-full bg-brand-blue/10 text-brand-blue font-bold flex items-center justify-center text-xs shrink-0">
-                  ZX
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('settings')}
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-blue/10 text-brand-blue transition hover:bg-brand-blue/15"
+                  title="Contact support"
+                >
+                  <HelpCircle className="h-4 w-4" />
+                </button>
               </div>
             )}
           </div>
@@ -694,7 +768,7 @@ export default function App() {
               <div className="relative">
                 <button
                   onClick={() => setUserMenuOpen(!userMenuOpen)}
-                  className="flex items-center gap-2 p-1 px-2.5 rounded border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100 cursor-pointer text-xs font-mono font-medium transition-all"
+                  className="flex items-center gap-2 p-1 px-2.5 rounded border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100 cursor-pointer text-xs font-medium transition-all"
                   title="User Profile & Settings"
                 >
                   <User className="h-4 w-4 text-zinc-500" />
@@ -710,9 +784,9 @@ export default function App() {
                     <div className="absolute right-0 mt-2 w-56 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#0A0A0B] shadow-lg z-50 py-1 text-xs">
                       {/* User Info Section */}
                       <div className="px-3.5 py-2.5 border-b border-zinc-100 dark:border-zinc-900">
-                        <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Current User</p>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Current User</p>
                         <p className="font-semibold text-zinc-900 dark:text-white truncate mt-0.5">Workspace user</p>
-                        <p className="text-[10px] text-zinc-400 font-mono mt-0.5">Workspace: ZEXVRO Prototype</p>
+                        <p className="text-[10px] text-zinc-400 mt-0.5">Workspace: {selectedWorkspace.name}</p>
                       </div>
 
                       {/* Menu Options */}
@@ -894,7 +968,7 @@ export default function App() {
                           setActiveTab(item.id);
                           setMobileMenuOpen(false);
                         }}
-                        className={`w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-lg font-mono font-semibold transition-all ${
+                        className={`w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-lg font-semibold transition-all ${
                           isSelected
                             ? 'bg-zinc-100 dark:bg-zinc-900 text-zinc-950 dark:text-white'
                             : 'text-zinc-400'
@@ -908,16 +982,26 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Mobile Profile info */}
-              <div className="border-t border-zinc-100 dark:border-zinc-800 pt-3 flex items-center gap-3 text-xs font-mono">
-                <div className="h-7 w-7 rounded-full bg-brand-blue/10 text-brand-blue font-bold flex items-center justify-center">
-                  ZX
-                </div>
-                <div>
-                  <span className="block font-bold text-zinc-800 dark:text-zinc-200">Workspace</span>
-                  <span className="text-[10px] text-zinc-400">Local prototype</span>
-                </div>
-              </div>
+              {/* Mobile support action */}
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('settings');
+                  setMobileMenuOpen(false);
+                }}
+                className="flex items-center justify-between gap-3 border-t border-zinc-100 pt-3 text-left text-xs dark:border-zinc-800"
+              >
+                <span className="flex min-w-0 items-center gap-3">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-blue/10 text-brand-blue">
+                    <HelpCircle className="h-4 w-4" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block font-semibold text-zinc-800 dark:text-zinc-200">Need help?</span>
+                    <span className="text-[10px] text-zinc-400">Contact support</span>
+                  </span>
+                </span>
+                <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+              </button>
             </motion.div>
           </div>
         )}
@@ -956,14 +1040,14 @@ export default function App() {
                 />
                 <button 
                   onClick={() => setSearchOpen(false)}
-                  className="text-[10px] font-mono border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded text-zinc-400 hover:text-zinc-600"
+                  className="text-[10px] border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded text-zinc-400 hover:text-zinc-600"
                 >
                   ESC
                 </button>
               </div>
 
               {/* Suggestions */}
-              <div className="mt-2.5 max-h-[220px] overflow-y-auto font-mono text-xs">
+              <div className="mt-2.5 max-h-[220px] overflow-y-auto text-xs">
                 {filteredSearchItems.length === 0 ? (
                   <p className="p-3 text-center text-zinc-400 text-[11px]">No matching screens or commands found.</p>
                 ) : (
