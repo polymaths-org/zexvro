@@ -1,0 +1,6 @@
+{
+  "name": "ZEXVRO",
+  "description": "Unified Web3 PaaS Dashboard for professional developer workflows",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
