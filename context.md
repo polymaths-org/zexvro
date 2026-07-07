@@ -84,6 +84,7 @@ Frontend workspace notes:
 - Run locally: `cd frontend && npm run dev`.
 - Validate before handoff: `cd frontend && npm run lint && npm run build`.
 - The UI is still prototype/frontend-only. Do not claim live backend, auth, wallet, blockchain, deployment provider, or secrets-manager integrations until those are implemented.
+- Morph frontend surfaces are currently prototype UI only: a right-side assistant dock, an Agentic Operations chat page, a Morph logo sidebar label, a workspace selector, a support CTA, and an overview layout focused on workspace readiness. Future page-aware assistance should pass current route/page context through a documented backend contract before real actions are enabled.
 
 ## Team Ownership
 

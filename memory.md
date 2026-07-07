@@ -294,3 +294,13 @@ Use `None` for empty fields. Do not delete fields.
 - Follow-ups: None.
 - Blockers: None.
 - Verification: Ran `npm run lint` and `npm run build` from `frontend/` successfully.
+
+## 2026-07-08 - Codex - Morph frontend workspace UI
+
+- Service or area: frontend UI/UX and shared agent context.
+- Files changed: `frontend/src/App.tsx`, `frontend/src/components/dashboard/Overview.tsx`, `context.md`, `memory.md`.
+- Summary: Recorded and polished the Morph frontend assistant work. The UI now has a Firebase-style right assistant dock, an Agentic Operations chat surface, Morph-branded sidebar label, workspace selector dropdown, support CTA, overview workspace readiness layout, and a smaller sidebar Morph icon that matches the rest of the nav.
+- Decisions: Proposed - Keep Morph available as both a compact page-aware dock and a full Agentic Operations chat page until the backend/CLI agent contract is defined.
+- Follow-ups: Wire real page-context payloads, backend agent actions, auth, and durable memory only after the contract and audit boundaries are documented.
+- Blockers: Morph backend/LLM wiring is not connected to the frontend yet.
+- Verification: Ran `npm run lint` and `npm run build` from `frontend/`.
