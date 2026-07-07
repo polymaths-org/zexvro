@@ -88,7 +88,7 @@ function MorphIcon({ className = '' }: { className?: string }) {
       src={MORPH_LOGO}
       alt=""
       aria-hidden="true"
-      className={`scale-[1.55] object-contain invert dark:invert-0 ${className}`}
+      className={`scale-95 object-contain invert dark:invert-0 ${className}`}
     />
   );
 }
