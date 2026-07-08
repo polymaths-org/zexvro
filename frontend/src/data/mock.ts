@@ -8,12 +8,12 @@ export const mockProjects: Project[] = [
     id: 'proj-platform-ui',
     name: 'zexvro-platform-ui',
     status: 'active',
-    serviceUsage: ['Transformation Agent', 'Agent Memory'],
+    serviceUsage: ['Transformation Agent', 'Agent Memory', 'Workspace Management', 'Agent Auth'],
     region: 'Local prototype',
     network: 'Network not connected',
-    lastDeployment: 'Not deployed',
+    lastDeployment: 'Frontend push pending',
     owner: 'Workspace',
-    branch: 'main',
+    branch: 'feat/Morph',
     framework: 'Vite + React'
   },
   {
@@ -119,8 +119,8 @@ export const mockServices: Service[] = [
     owner: 'Unassigned',
     status: 'configuring',
     description: 'Agent-first migration workspace for scanning repositories, planning Web2-to-Web3 changes, and preparing approved actions.',
-    progress: 0,
-    lastActivity: 'Ready for setup draft',
+    progress: 35,
+    lastActivity: 'Frontend opencode proxy and agent settings wired',
     category: 'transformation'
   },
   {
@@ -139,8 +139,8 @@ export const mockServices: Service[] = [
     owner: 'Unassigned',
     status: 'configuring',
     description: 'Human vs agent access classification service with SDK/API direction. Privacy model and signals are not finalized.',
-    progress: 0,
-    lastActivity: 'Needs classification model',
+    progress: 25,
+    lastActivity: 'Cognito sign-in/signup/reset UI connected; app client flow still needs AWS setting',
     category: 'auth'
   },
   {
@@ -184,7 +184,7 @@ export const mockTeamMembers: TeamMember[] = [
     role: 'Developer',
     status: 'active',
     lastActive: 'Invite pending',
-    servicesOwned: []
+    servicesOwned: ['Workspace Management', 'Agent Auth']
   },
   {
     id: 'team-service',
@@ -204,7 +204,7 @@ export const mockTeamMembers: TeamMember[] = [
     role: 'Agent',
     status: 'active',
     lastActive: 'Prototype only',
-    servicesOwned: ['Agent Memory']
+    servicesOwned: ['Agent Memory', 'Transformation Agent']
   }
 ];
 
@@ -212,11 +212,11 @@ export const mockCollaborationNotes: CollaborationNote[] = [
   {
     id: 'note-ui',
     author: 'Workspace',
-    timestamp: '2026-07-06 13:08',
-    currentState: 'AI Studio generated the first frontend prototype and it now lives in the frontend workspace.',
-    nextStep: 'Improve spacing, branding, copy, and replace generated demo content with setup placeholders.',
-    filesToInspect: ['src/App.tsx', 'src/components/dashboard/Overview.tsx', 'src/data/mock.ts'],
-    doNotTouch: ['context.md service ownership rules without recording a decision'],
+    timestamp: '2026-07-08 22:58',
+    currentState: 'Frontend now has normal auth screens, per-user workspaces, local workspace invites, and configurable opencode provider/model/key settings.',
+    nextStep: 'Push frontend only, then connect the workspace and invite flows to backend APIs after hosted auth is stable.',
+    filesToInspect: ['src/App.tsx', 'src/components/auth/AuthOverlay.tsx', 'src/components/dashboard/Settings.tsx', 'src/data/mock.ts'],
+    doNotTouch: ['services/transformation-agent CLI files during frontend-only pushes'],
     ownerNeeded: 'workspace-admin'
   },
   {
@@ -232,6 +232,32 @@ export const mockCollaborationNotes: CollaborationNote[] = [
 ];
 
 export const mockMemoryEntries: MemoryEntry[] = [
+  {
+    id: 'mem-frontend-auth-workspaces',
+    service: 'Frontend Platform',
+    filesChanged: [
+      'src/components/auth/AuthOverlay.tsx',
+      'src/auth/cognito.ts',
+      'src/App.tsx',
+      'src/components/dashboard/Settings.tsx',
+      'src/agent/settings.ts',
+      'vite.config.ts'
+    ],
+    summary: 'Added normal Cognito-backed auth UI, random auth backgrounds, per-user workspace management, invite placeholders, and editable opencode provider/model/API key settings.',
+    decisions: [
+      'Keep API keys out of committed source; local settings can forward a browser-saved key to the Vite proxy for development.',
+      'Default workspace is generated from the signed-in user and local invites remain frontend-only until backend endpoints exist.'
+    ],
+    followUps: [
+      'Enable ALLOW_USER_PASSWORD_AUTH on the Cognito app client before real sign-in works.',
+      'Replace localStorage workspace/invite persistence with backend APIs after the HTTPS domain is ready.'
+    ],
+    blockers: ['AWS device-code CLI auth endpoint currently returns 500 before issuing a device code.'],
+    verification: 'TypeScript lint, production build, and browser checks passed for settings save plus workspace create/invite flows.',
+    date: '2026-07-08',
+    owner: 'Workspace Agent',
+    label: 'handoff'
+  },
   {
     id: 'mem-design',
     service: 'Design System',

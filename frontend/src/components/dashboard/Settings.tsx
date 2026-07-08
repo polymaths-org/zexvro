@@ -1,10 +1,17 @@
 import React, { useState } from 'react';
-import { 
-  Settings, User, Sliders, Laptop, Globe, ShieldAlert, CheckCircle2, 
-  HelpCircle, CreditCard, ToggleLeft, ToggleRight, Sparkles 
+import {
+  Settings, ShieldAlert, CheckCircle2, ToggleLeft, ToggleRight, Sparkles, Save
 } from 'lucide-react';
 import { ThemeType, DensityType } from '../../types';
-import { motion } from 'motion/react';
+import {
+  OPENCODE_MODEL,
+  OPENCODE_PROVIDER,
+  buildAgentChatPayload,
+  defaultAgentSettings,
+  loadAgentSettings,
+  saveAgentSettings,
+  type AgentSettings,
+} from '../../agent/settings';
 
 interface SettingsProps {
   theme: ThemeType;
@@ -23,7 +30,7 @@ export default function SettingsView({
   reducedMotion,
   setReducedMotion
 }: SettingsProps) {
-  
+
   // Custom states for mocking flags
   const [flags, setFlags] = useState({
     'service-readiness-checks': true,
@@ -39,39 +46,48 @@ export default function SettingsView({
     }));
   };
 
-  // Agent settings state persisted in localStorage
-  const [agentSettings, setAgentSettings] = useState(() => {
-    const saved = localStorage.getItem('zexvro_agent_settings');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {}
-    }
-    return {
-      provider: 'google-gemini',
-      apiKey: '',
-      model: 'gemini-1.5-pro',
-      baseUrl: ''
-    };
-  });
+  const [agentSettings, setAgentSettings] = useState<AgentSettings>(() => loadAgentSettings());
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'dirty' | 'saved'>('idle');
 
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
 
-  const updateAgentSetting = (key: string, value: string) => {
+  const updateAgentSetting = (key: keyof AgentSettings, value: string) => {
     const updated = { ...agentSettings, [key]: value };
     setAgentSettings(updated);
-    localStorage.setItem('zexvro_agent_settings', JSON.stringify(updated));
+    setSaveStatus('dirty');
+    setTestStatus('idle');
   };
 
-  const testConnection = () => {
-    if (!agentSettings.apiKey && agentSettings.provider !== 'ollama-local') {
-      setTestStatus('error');
-      return;
-    }
+  const saveAgentProviderSettings = () => {
+    saveAgentSettings(agentSettings);
+    setSaveStatus('saved');
+  };
+
+  const testConnection = async () => {
     setTestStatus('testing');
-    setTimeout(() => {
+    try {
+      const response = await fetch('/api/agent/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildAgentChatPayload(
+          'Settings',
+          [
+            {
+              role: 'user',
+              content: 'Reply with one short sentence confirming Morph provider connectivity.',
+            },
+          ],
+          agentSettings,
+        )),
+      });
+      if (!response.ok) {
+        setTestStatus('error');
+        return;
+      }
       setTestStatus('success');
-    }, 1200);
+    } catch {
+      setTestStatus('error');
+    }
   };
 
   return (
@@ -88,14 +104,14 @@ export default function SettingsView({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
+
         {/* Left Column (2 Cols Wide): Core configuration */}
         <div className="lg:col-span-2 space-y-6">
-          
+
           {/* Appearance Section */}
           <div className="p-5 rounded-lg border border-zinc-200 dark:border-[#27272A] bg-white dark:bg-[#0A0A0B] space-y-4">
             <span className="text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wide block font-sans">Appearance & Density</span>
-            
+
             <div className="space-y-4 text-xs font-sans">
               {/* Theme selection */}
               <div>
@@ -168,7 +184,7 @@ export default function SettingsView({
           {/* Environment Variables Pane */}
           <div className="p-5 rounded-lg border border-zinc-200 dark:border-[#27272A] bg-white dark:bg-[#0A0A0B] space-y-4">
             <span className="text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wide block font-sans">Environment parameters</span>
-            
+
             <div className="p-3 border border-red-500/20 bg-red-500/5 rounded text-red-500 text-xs flex items-start gap-2.5 font-sans">
               <ShieldAlert className="h-4.5 w-4.5 shrink-0 mt-0.5" />
               <div>
@@ -186,7 +202,9 @@ export default function SettingsView({
                 { name: 'AWS_REGION', value: import.meta.env.VITE_AWS_REGION || 'us-east-1', type: 'Cloud Provision' },
                 { name: 'COGNITO_USER_POOL_ID', value: import.meta.env.VITE_COGNITO_USER_POOL_ID || 'us-east-1_vyONcitBD', type: 'Cloud Provision' },
                 { name: 'COGNITO_CLIENT_ID', value: import.meta.env.VITE_COGNITO_CLIENT_ID || '7qmkq33si9qk8pgo6ebi3qantm', type: 'Cloud Provision' },
-                { name: 'GEMINI_API_KEY', value: '••••••••••••••••••••••••••••••••', type: 'Secret Proxy' }
+                { name: 'OPENCODE_PROVIDER', value: agentSettings.provider, type: 'Agent Chat' },
+                { name: 'OPENCODE_MODEL', value: agentSettings.model, type: 'Agent Chat' },
+                { name: 'OPENCODE_API_KEY', value: agentSettings.apiKey ? 'saved locally' : 'not saved', type: 'Secret Proxy' }
               ].map((env) => (
                 <div key={env.name} className="flex items-center justify-between p-2.5 rounded bg-zinc-50/50 dark:bg-zinc-900/30 border border-zinc-100 dark:border-zinc-800">
                   <div className="min-w-0">
@@ -203,7 +221,7 @@ export default function SettingsView({
           <div className="p-5 rounded-lg border border-zinc-200 dark:border-[#27272A] bg-white dark:bg-[#0A0A0B] space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wide block font-sans">
-                Agentic Provider Configurations
+                Agent provider
               </span>
               <span className="flex items-center gap-1 text-[10px] bg-brand-blue/15 text-brand-blue px-2 py-0.5 rounded font-semibold font-mono uppercase">
                 <Sparkles className="h-3 w-3" /> MVP Active
@@ -211,7 +229,7 @@ export default function SettingsView({
             </div>
 
             <p className="text-xs text-zinc-550 dark:text-zinc-400 font-sans leading-normal">
-              Manage LLM configurations and API credentials used to execute code transformation pipelines locally or via web portals.
+              Provider defaults are pinned for the prototype. In local dev, this key is saved in your browser and forwarded only to the Vite proxy.
             </p>
 
             <div className="space-y-4 font-sans text-xs">
@@ -219,48 +237,50 @@ export default function SettingsView({
                 {/* Provider select */}
                 <div>
                   <label className="text-[10px] font-bold text-zinc-400 dark:text-zinc-550 block mb-1.5 uppercase">
-                    LLM Provider
+                    Provider
                   </label>
-                  <select
+                  <input
+                    type="text"
                     value={agentSettings.provider}
                     onChange={(e) => updateAgentSetting('provider', e.target.value)}
-                    className="w-full rounded border border-zinc-200 bg-zinc-55/30 px-3 py-2 text-xs text-zinc-800 dark:border-zinc-800 dark:bg-zinc-950/50 dark:text-zinc-250 focus:outline-none focus:border-brand-blue transition-colors"
-                  >
-                    <option value="google-gemini">Google Gemini</option>
-                    <option value="openai">OpenAI (GPT)</option>
-                    <option value="anthropic">Anthropic (Claude)</option>
-                    <option value="ollama-local">Ollama (Local Host)</option>
-                  </select>
+                    placeholder={OPENCODE_PROVIDER}
+                    spellCheck={false}
+                    className="w-full rounded border border-zinc-200 bg-zinc-55/30 px-3 py-2 text-xs text-zinc-800 dark:border-zinc-800 dark:bg-zinc-950/50 dark:text-zinc-250 focus:outline-none focus:border-brand-blue transition-colors font-mono"
+                  />
                 </div>
 
                 {/* Model Name */}
                 <div>
                   <label className="text-[10px] font-bold text-zinc-400 dark:text-zinc-550 block mb-1.5 uppercase">
-                    Default Model Name
+                    Model
                   </label>
                   <input
                     type="text"
                     value={agentSettings.model}
                     onChange={(e) => updateAgentSetting('model', e.target.value)}
-                    placeholder="e.g. gemini-1.5-pro"
+                    placeholder={OPENCODE_MODEL}
+                    spellCheck={false}
                     className="w-full rounded border border-zinc-200 bg-zinc-55/30 px-3 py-2 text-xs text-zinc-800 dark:border-zinc-800 dark:bg-zinc-950/50 dark:text-zinc-250 focus:outline-none focus:border-brand-blue transition-colors font-mono"
                   />
                 </div>
               </div>
 
-              {/* API Key */}
               <div>
                 <label className="text-[10px] font-bold text-zinc-400 dark:text-zinc-550 block mb-1.5 uppercase">
-                  API Authorization Key
+                  Opencode API key
                 </label>
                 <input
                   type="password"
                   value={agentSettings.apiKey}
                   onChange={(e) => updateAgentSetting('apiKey', e.target.value)}
-                  placeholder={agentSettings.provider === 'ollama-local' ? 'Not required for local host' : '••••••••••••••••••••••••••••••••'}
-                  disabled={agentSettings.provider === 'ollama-local'}
+                  placeholder="sk-..."
+                  autoComplete="off"
+                  spellCheck={false}
                   className="w-full rounded border border-zinc-200 bg-zinc-55/30 px-3 py-2 text-xs text-zinc-850 dark:border-zinc-800 dark:bg-zinc-950/50 dark:text-zinc-200 focus:outline-none focus:border-brand-blue transition-colors font-mono disabled:opacity-50"
                 />
+                <p className="mt-1.5 text-[10px] leading-normal text-zinc-400">
+                  Save it here for this browser, or set OPENCODE_API_KEY in the dev server env.
+                </p>
               </div>
 
               {/* Base URL override */}
@@ -272,30 +292,49 @@ export default function SettingsView({
                   type="text"
                   value={agentSettings.baseUrl}
                   onChange={(e) => updateAgentSetting('baseUrl', e.target.value)}
-                  placeholder={agentSettings.provider === 'ollama-local' ? 'http://localhost:11434/v1' : 'Default gateway url'}
+                  placeholder="https://api.opencode.ai/v1"
                   className="w-full rounded border border-zinc-200 bg-zinc-55/30 px-3 py-2 text-xs text-zinc-850 dark:border-zinc-800 dark:bg-zinc-950/50 dark:text-zinc-200 focus:outline-none focus:border-brand-blue transition-colors font-mono"
                 />
               </div>
 
               {/* Test Button & Status */}
-              <div className="flex items-center gap-3 pt-2">
+              <div className="flex flex-wrap items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={saveAgentProviderSettings}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded bg-brand-blue text-white font-semibold cursor-pointer hover:bg-brand-blue/90 transition-colors"
+                >
+                  <Save className="h-4 w-4" />
+                  Save settings
+                </button>
+
                 <button
                   type="button"
                   onClick={testConnection}
                   disabled={testStatus === 'testing'}
-                  className="px-4 py-2 rounded bg-zinc-900 text-white dark:bg-white dark:text-zinc-950 font-semibold cursor-pointer hover:bg-zinc-800 dark:hover:bg-zinc-100 transition-colors disabled:opacity-50"
+                  className="px-4 py-2 rounded border border-zinc-200 bg-zinc-50 text-zinc-800 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 font-semibold cursor-pointer hover:border-brand-blue/50 transition-colors disabled:opacity-50"
                 >
-                  {testStatus === 'testing' ? 'Testing Connection...' : 'Test Connection'}
+                  {testStatus === 'testing' ? 'Testing opencode...' : 'Test opencode'}
                 </button>
 
+                {saveStatus === 'saved' && (
+                  <span className="text-emerald-500 font-semibold flex items-center gap-1">
+                    <CheckCircle2 className="h-4 w-4" /> saved
+                  </span>
+                )}
+                {saveStatus === 'dirty' && (
+                  <span className="text-amber-500 font-semibold flex items-center gap-1">
+                    <ShieldAlert className="h-4 w-4" /> unsaved changes
+                  </span>
+                )}
                 {testStatus === 'success' && (
                   <span className="text-emerald-500 font-semibold flex items-center gap-1">
-                    <CheckCircle2 className="h-4 w-4" /> Provider Connection Confirmed
+                    <CheckCircle2 className="h-4 w-4" /> opencode proxy responded
                   </span>
                 )}
                 {testStatus === 'error' && (
                   <span className="text-rose-500 font-semibold flex items-center gap-1">
-                    <ShieldAlert className="h-4 w-4" /> API Key Required
+                    <ShieldAlert className="h-4 w-4" /> Check saved key/proxy
                   </span>
                 )}
               </div>
@@ -306,11 +345,11 @@ export default function SettingsView({
 
         {/* Right Column: Feature flags and billing */}
         <div className="space-y-6 font-sans">
-          
+
           {/* Feature Flags Toggle Panel */}
           <div className="p-5 rounded-lg border border-zinc-200 dark:border-[#27272A] bg-white dark:bg-[#0A0A0B] space-y-4 h-fit">
             <span className="text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wide block">Active feature flags</span>
-            
+
             <div className="space-y-3 text-xs">
               {[
                 { key: 'service-readiness-checks', label: 'Service readiness checks', desc: 'Show setup checks before enabling a service' },
@@ -352,7 +391,7 @@ export default function SettingsView({
               <p className="text-xs text-zinc-400 leading-normal">
                 This prototype is running locally. Billing, usage limits, and agent cycle quotas are placeholders until backend scope is defined.
               </p>
-              
+
               <div className="space-y-1 text-xs text-zinc-400 pt-1.5 border-t border-zinc-100 dark:border-zinc-800/60">
                 <div className="flex justify-between">
                   <span>Services Configured</span>
