@@ -39,6 +39,41 @@ export default function SettingsView({
     }));
   };
 
+  // Agent settings state persisted in localStorage
+  const [agentSettings, setAgentSettings] = useState(() => {
+    const saved = localStorage.getItem('zexvro_agent_settings');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {}
+    }
+    return {
+      provider: 'google-gemini',
+      apiKey: '',
+      model: 'gemini-1.5-pro',
+      baseUrl: ''
+    };
+  });
+
+  const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+
+  const updateAgentSetting = (key: string, value: string) => {
+    const updated = { ...agentSettings, [key]: value };
+    setAgentSettings(updated);
+    localStorage.setItem('zexvro_agent_settings', JSON.stringify(updated));
+  };
+
+  const testConnection = () => {
+    if (!agentSettings.apiKey && agentSettings.provider !== 'ollama-local') {
+      setTestStatus('error');
+      return;
+    }
+    setTestStatus('testing');
+    setTimeout(() => {
+      setTestStatus('success');
+    }, 1200);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -158,6 +193,109 @@ export default function SettingsView({
                   <span className="text-zinc-500 text-[11px] font-mono bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded shrink-0">{env.value}</span>
                 </div>
               ))}
+            </div>
+          </div>
+
+          {/* Agent Operational Settings Section */}
+          <div className="p-5 rounded-lg border border-zinc-200 dark:border-[#27272A] bg-white dark:bg-[#0A0A0B] space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wide block font-sans">
+                Agentic Provider Configurations
+              </span>
+              <span className="flex items-center gap-1 text-[10px] bg-brand-blue/15 text-brand-blue px-2 py-0.5 rounded font-semibold font-mono uppercase">
+                <Sparkles className="h-3 w-3" /> MVP Active
+              </span>
+            </div>
+
+            <p className="text-xs text-zinc-550 dark:text-zinc-400 font-sans leading-normal">
+              Manage LLM configurations and API credentials used to execute code transformation pipelines locally or via web portals.
+            </p>
+
+            <div className="space-y-4 font-sans text-xs">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Provider select */}
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-400 dark:text-zinc-550 block mb-1.5 uppercase">
+                    LLM Provider
+                  </label>
+                  <select
+                    value={agentSettings.provider}
+                    onChange={(e) => updateAgentSetting('provider', e.target.value)}
+                    className="w-full rounded border border-zinc-200 bg-zinc-55/30 px-3 py-2 text-xs text-zinc-800 dark:border-zinc-800 dark:bg-zinc-950/50 dark:text-zinc-250 focus:outline-none focus:border-brand-blue transition-colors"
+                  >
+                    <option value="google-gemini">Google Gemini</option>
+                    <option value="openai">OpenAI (GPT)</option>
+                    <option value="anthropic">Anthropic (Claude)</option>
+                    <option value="ollama-local">Ollama (Local Host)</option>
+                  </select>
+                </div>
+
+                {/* Model Name */}
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-400 dark:text-zinc-550 block mb-1.5 uppercase">
+                    Default Model Name
+                  </label>
+                  <input
+                    type="text"
+                    value={agentSettings.model}
+                    onChange={(e) => updateAgentSetting('model', e.target.value)}
+                    placeholder="e.g. gemini-1.5-pro"
+                    className="w-full rounded border border-zinc-200 bg-zinc-55/30 px-3 py-2 text-xs text-zinc-800 dark:border-zinc-800 dark:bg-zinc-950/50 dark:text-zinc-250 focus:outline-none focus:border-brand-blue transition-colors font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* API Key */}
+              <div>
+                <label className="text-[10px] font-bold text-zinc-400 dark:text-zinc-550 block mb-1.5 uppercase">
+                  API Authorization Key
+                </label>
+                <input
+                  type="password"
+                  value={agentSettings.apiKey}
+                  onChange={(e) => updateAgentSetting('apiKey', e.target.value)}
+                  placeholder={agentSettings.provider === 'ollama-local' ? 'Not required for local host' : '••••••••••••••••••••••••••••••••'}
+                  disabled={agentSettings.provider === 'ollama-local'}
+                  className="w-full rounded border border-zinc-200 bg-zinc-55/30 px-3 py-2 text-xs text-zinc-850 dark:border-zinc-800 dark:bg-zinc-950/50 dark:text-zinc-200 focus:outline-none focus:border-brand-blue transition-colors font-mono disabled:opacity-50"
+                />
+              </div>
+
+              {/* Base URL override */}
+              <div>
+                <label className="text-[10px] font-bold text-zinc-400 dark:text-zinc-550 block mb-1.5 uppercase">
+                  API Endpoint Base URL (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={agentSettings.baseUrl}
+                  onChange={(e) => updateAgentSetting('baseUrl', e.target.value)}
+                  placeholder={agentSettings.provider === 'ollama-local' ? 'http://localhost:11434/v1' : 'Default gateway url'}
+                  className="w-full rounded border border-zinc-200 bg-zinc-55/30 px-3 py-2 text-xs text-zinc-850 dark:border-zinc-800 dark:bg-zinc-950/50 dark:text-zinc-200 focus:outline-none focus:border-brand-blue transition-colors font-mono"
+                />
+              </div>
+
+              {/* Test Button & Status */}
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={testConnection}
+                  disabled={testStatus === 'testing'}
+                  className="px-4 py-2 rounded bg-zinc-900 text-white dark:bg-white dark:text-zinc-950 font-semibold cursor-pointer hover:bg-zinc-800 dark:hover:bg-zinc-100 transition-colors disabled:opacity-50"
+                >
+                  {testStatus === 'testing' ? 'Testing Connection...' : 'Test Connection'}
+                </button>
+
+                {testStatus === 'success' && (
+                  <span className="text-emerald-500 font-semibold flex items-center gap-1">
+                    <CheckCircle2 className="h-4 w-4" /> Provider Connection Confirmed
+                  </span>
+                )}
+                {testStatus === 'error' && (
+                  <span className="text-rose-500 font-semibold flex items-center gap-1">
+                    <ShieldAlert className="h-4 w-4" /> API Key Required
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 

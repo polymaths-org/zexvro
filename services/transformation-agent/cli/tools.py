@@ -40,6 +40,11 @@ class ToolRegistry:
             self.tool_analyze_codebase,
             "Get an overview of the codebase structure.",
         )
+        self.register(
+            "query_stellar_knowledge",
+            self.tool_query_stellar_knowledge,
+            "Query the Stellar/Soroban reference knowledge base. Args: query (str)",
+        )
 
     def register(self, name: str, fn: callable, description: str):
         self._tools[name] = {"fn": fn, "description": description}
@@ -107,3 +112,70 @@ class ToolRegistry:
                 if ext:
                     langs.add(ext)
         return f"Files: {file_count} | Types: {', '.join(sorted(langs)) if langs else 'unknown'}"
+
+    def tool_query_stellar_knowledge(self, query: str) -> str:
+        """Query the Stellar/Soroban reference knowledge base for technical references."""
+        import re
+        kb_dir = Path(__file__).parent.parent / "data" / "stellar_kb"
+        if not kb_dir.exists():
+            return "Error: Stellar Knowledge Base directory not found."
+            
+        query_words = [w.lower() for w in re.findall(r'\w+', query) if len(w) > 2]
+        if not query_words:
+            query_words = [query.lower()]
+            
+        results = []
+        for file_path in kb_dir.glob("*.md"):
+            try:
+                content = file_path.read_text()
+                # Split content into sections by ## headings
+                sections = re.split(r'\n(##+ )', content)
+                
+                # Re-assemble the split sections
+                reconstructed_sections = []
+                # First chunk before any heading
+                if sections and not sections[0].startswith("##"):
+                    reconstructed_sections.append(("", sections[0]))
+                
+                for i in range(1, len(sections), 2):
+                    heading_marker = sections[i]
+                    section_body = sections[i+1] if i+1 < len(sections) else ""
+                    # find the heading title line
+                    heading_lines = section_body.split("\n", 1)
+                    heading_title = heading_lines[0].strip() if heading_lines else ""
+                    reconstructed_sections.append((heading_title, heading_marker + section_body))
+                    
+                for title, text in reconstructed_sections:
+                    # Score section based on word occurrences
+                    score = 0
+                    text_lower = text.lower()
+                    for word in query_words:
+                        if word in text_lower:
+                            score += 10
+                            # Bonus for exact counts
+                            score += text_lower.count(word)
+                        if word in title.lower():
+                            score += 20
+                            
+                    if score > 0:
+                        results.append({
+                            "file": file_path.name,
+                            "heading": title,
+                            "text": text.strip(),
+                            "score": score
+                        })
+            except Exception as e:
+                continue
+                
+        if not results:
+            return "No matching Stellar or Soroban knowledge base articles found."
+            
+        # Sort by score descending
+        results.sort(key=lambda x: x["score"], reverse=True)
+        
+        # Take the top 3 results
+        output = []
+        for r in results[:3]:
+            output.append(f"--- SOURCE: {r['file']} > {r['heading']} (Score: {r['score']}) ---\n{r['text']}\n")
+            
+        return "\n".join(output)
