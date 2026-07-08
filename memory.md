@@ -306,3 +306,20 @@ Use `None` for empty fields. Do not delete fields.
 - Follow-ups: Wire OpenAI API into agent loop, add web panel, add vision support, integrate with Zexvro frontend.
 - Blockers: None.
 - Verification: Files created. Run with `cd services/transformation-agent && pip install -r cli/requirements.txt && python cli/morph.py chat`.
+
+## 2026-07-08 - Antigravity - Morph TUI Redesign
+
+- Service or area: Transformation Agent (Morph) CLI TUI
+- Files changed: `services/transformation-agent/cli/tui/styles/icons.py`, `services/transformation-agent/cli/tui/styles/theme.py`, `services/transformation-agent/cli/tui/screens/welcome.py`, `services/transformation-agent/cli/tui/app.py`, `services/transformation-agent/cli/tui/screens/main.py`, `services/transformation-agent/cli/tui/screens/chat.py`, `services/transformation-agent/cli/tui/screens/memory.py`, `services/transformation-agent/cli/tui/screens/tools.py`, `services/transformation-agent/cli/tui/screens/about.py`, `services/transformation-agent/cli/tui/components/logo.py`, `memory.md`
+- Summary: Redesigned the Morph TUI into a professional, high-contrast, emoji-free developer console. Implemented a skippable animated booting screen with ASCII progress logging, centered layout alignment systems, multi-panel chat interface (agent status sidebar + card-style messages running on background worker threads), and DataTable implementations for tools and memory browsers. Converted the official brand mascot SVG (`frontend/public/morph/morph-logo.svg`) into a pure-ASCII, symmetric robot mascot layout (width 30, height 14) and updated the logo component to display it. Adjusted container heights in `theme.py` to fit the mascot perfectly without layout overflows or scrolling. Unified the layout of the Main, Memory, Tools, and About screens to render nested inside the centered `#main-container` panel for design consistency. Added a compact small mascot logo (`SMALL_LOGO`) at the top of the chat sidebar, centered the main menu list container horizontally, improved menu list item spacing and height (spacious vertically centered items), and set up message container alignments to float user messages right and agent messages left.
+- Decisions: Accepted - Morph TUI should strictly use unicode/ASCII terminal indicators instead of standard emojis. Accepted - TUI queries block on background workers to prevent console rendering lockups. Accepted - Unified nested window card designs for all major screens. Accepted - Converted official mascot SVG asset to ASCII for the TUI header.
+
+
+
+
+- Follow-ups: None.
+- Blockers: None.
+- Verification: Verified file imports, syntax correctness, and runtime app instantiation using automated tests. Fixed a naming conflict in `WelcomeScreen` where overriding the read-only `log` property crashed initialization. Fixed a `MountError` in `ChatScreen` where appending dynamic widgets called `.mount()` on an unattached container; resolved by passing child elements directly to the constructor at instantiation.
+
+
+

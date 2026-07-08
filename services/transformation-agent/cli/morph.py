@@ -45,6 +45,14 @@ def exec(
 
 
 @app.command()
+def tui():
+    """Launch the interactive TUI (terminal UI)."""
+    from tui import main as tui_main
+
+    tui_main()
+
+
+@app.command()
 def memory(
     user: str = typer.Option("default", help="User ID to query memory for"),
     key: str = typer.Option(None, help="Specific memory key to retrieve"),
