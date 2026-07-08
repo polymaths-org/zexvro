@@ -175,14 +175,12 @@ Use `None` for empty fields. Do not delete fields.
 | Blocker | Owner needed | Impact |
 | --- | --- | --- |
 | De-pin scope is undefined | Nabil / `n4bi10p` | De-pin should not be implemented yet |
-| OpenAI API key not wired | Paris | Morph agent loop needs real LLM |
-| Web panel not started | Paris | Morph needs web UI for full vision |
 
 ## Active Handoffs
 
 - Handoff:
-  - Current state: Morph CLI skeleton built. First service scaffolded in repo. Frontend exists as prototype.
-  - Next step: Wire OpenAI API into Morph agent loop, then build web panel.
+  - Current state: Morph CLI redesigned. Frontend settings panel, mock server authentication flow, CLI login/logout/status, and Stellar RAG knowledge base fully implemented and tested.
+  - Next step: Wire real LLM provider (using credentials retrieved from local settings or auth sessions) into the agent chat flow.
   - Files to inspect: `services/transformation-agent/cli/`, `context.md`, `memory.md`, `frontend/`.
   - Do not touch: De-pin, other developers' services.
   - Owner needed: Paris for Morph next steps; Nabil for De-pin context.
@@ -320,6 +318,16 @@ Use `None` for empty fields. Do not delete fields.
 - Follow-ups: None.
 - Blockers: None.
 - Verification: Verified file imports, syntax correctness, and runtime app instantiation using automated tests. Fixed a naming conflict in `WelcomeScreen` where overriding the read-only `log` property crashed initialization. Fixed a `MountError` in `ChatScreen` where appending dynamic widgets called `.mount()` on an unattached container; resolved by passing child elements directly to the constructor at instantiation.
+
+## 2026-07-08 - Antigravity - Morph CLI Auth, Settings & Stellar RAG Integrations
+
+- Service or area: Transformation Agent (Morph) Core MVP
+- Files changed: `frontend/src/components/dashboard/Settings.tsx`, `services/transformation-agent/cli/morph.py`, `services/transformation-agent/cli/tools.py`, `services/transformation-agent/cli/auth.py`, `services/transformation-agent/cli/mock_server.py`, `services/transformation-agent/data/stellar_kb/soroban_contracts.md`, `services/transformation-agent/data/stellar_kb/zk_poseidon_bn254.md`, `memory.md`
+- Summary: Implemented the first set of functional MVP deliverables for Morph: an Agent Settings panel in the React frontend (with provider select and local storage mapping), a local Python mock server simulating AWS auth/DB APIs, Typer authentication commands (`login`, `logout`, `status`) using OAuth2 device code polling, and a Soroban/ZK-cryptography knowledge base RAG tool query search.
+- Decisions: Accepted - CLI and frontend settings use matching provider configurations. Accepted - Device authorization polling is standard OAuth2 client flow. Accepted - Local RAG uses text heading split and scoring instead of thick vector DBs for CLI portability.
+- Follow-ups: None.
+- Blockers: None.
+- Verification: Built React frontend production code successfully. Executed E2E backend mock API validation, CLI commands (`status`, `login`, `logout`), and RAG keyword query searches successfully.
 
 
 
