@@ -183,6 +183,9 @@ export default function SettingsView({
               {[
                 { name: 'STELLAR_NETWORK', value: 'testnet', type: 'Config' },
                 { name: 'PRIVACY_PROOF_MODE', value: 'draft', type: 'Config' },
+                { name: 'AWS_REGION', value: import.meta.env.VITE_AWS_REGION || 'us-east-1', type: 'Cloud Provision' },
+                { name: 'COGNITO_USER_POOL_ID', value: import.meta.env.VITE_COGNITO_USER_POOL_ID || 'us-east-1_vyONcitBD', type: 'Cloud Provision' },
+                { name: 'COGNITO_CLIENT_ID', value: import.meta.env.VITE_COGNITO_CLIENT_ID || '7qmkq33si9qk8pgo6ebi3qantm', type: 'Cloud Provision' },
                 { name: 'GEMINI_API_KEY', value: '••••••••••••••••••••••••••••••••', type: 'Secret Proxy' }
               ].map((env) => (
                 <div key={env.name} className="flex items-center justify-between p-2.5 rounded bg-zinc-50/50 dark:bg-zinc-900/30 border border-zinc-100 dark:border-zinc-800">
