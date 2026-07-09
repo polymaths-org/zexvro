@@ -592,7 +592,7 @@ export default function App() {
     setWidgetThinking(true);
 
     try {
-      const response = await fetch('/api/agent/chat', {
+      const response = await fetch(`${API_BASE_URL}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(buildAgentChatPayload(
@@ -607,12 +607,12 @@ export default function App() {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data.error || `Agent request failed with ${response.status}`);
+        throw new Error(data.error?.message || data.error || `Agent request failed with ${response.status}`);
       }
       setWidgetMessages(prev => [...prev, {
         id: Date.now() + 1,
         sender: 'agent',
-        text: data.text || 'No response returned.',
+        text: data.choices?.[0]?.message?.content || data.text || 'No response returned.',
         time: 'Just now'
       }]);
     } catch (err) {
