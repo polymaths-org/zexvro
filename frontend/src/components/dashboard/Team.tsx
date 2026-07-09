@@ -118,6 +118,22 @@ export default function Team({
           {/* Members Registry table */}
           <div className="p-4 rounded-lg border border-zinc-200 dark:border-[#27272A] bg-white dark:bg-[#0A0A0B]">
             <span className="text-xs font-mono font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider block mb-4">Workspace Registry</span>
+            {teamMembers.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 text-center">
+                <div className="p-3 rounded-full border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-400 mb-3">
+                  <Users className="h-5 w-5" />
+                </div>
+                <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">No team members yet</p>
+                <p className="text-[11px] text-zinc-400 mt-1">Invite your first teammate to start collaborating.</p>
+                <button
+                  onClick={() => setOpenInviteModal(true)}
+                  className="mt-4 flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-zinc-900 text-white dark:bg-white dark:text-zinc-950 text-xs font-medium cursor-pointer hover:bg-zinc-800 dark:hover:bg-zinc-100"
+                >
+                  <Plus className="h-3 w-3" />
+                  Invite Member
+                </button>
+              </div>
+            ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead>
@@ -170,6 +186,7 @@ export default function Team({
                 </tbody>
               </table>
             </div>
+            )}
           </div>
 
           {/* Active Collaboration Feed */}

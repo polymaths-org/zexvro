@@ -5,8 +5,14 @@ import os
 from datetime import datetime
 from typing import Any
 
-from memory import MemoryStore
-from tools import ToolRegistry
+try:
+    from .memory import MemoryStore
+    from .tools import ToolRegistry
+    from .stellar_kb import SYSTEM_PROMPT
+except ImportError:
+    from memory import MemoryStore
+    from tools import ToolRegistry
+    from stellar_kb import SYSTEM_PROMPT
 
 
 class Agent:
@@ -88,17 +94,79 @@ class Agent:
         return self._llm_response(prompt)
 
     def _llm_response(self, prompt: str) -> str:
-        """Generate a response using LLM (simulated for MVP — will wire OpenAI API)."""
-        # Check if it's about transformation
-        lower = prompt.lower()
-        if "transform" in lower or "migrate" in lower or "web3" in lower:
-            return (
-                "I can help transform your codebase for Web3. "
-                "Try: `analyze` to scan the codebase, or tell me what you want to migrate."
-            )
-        if "hello" in lower or "hi" in lower:
-            return f"Hello! I'm Morph, your transformation agent. Working in {self.workspace}. How can I help?"
-        return (
-            f"I understand your request. I have {len(self.tools.list_tools())} tools available. "
-            f"Type `tools` to see them, or describe what you'd like to transform."
+        """Generate a response using LLM (OpenCode AI API with big-pickle auth)."""
+        import urllib.request
+        import urllib.error
+        import json
+
+        api_url = os.environ.get("OPENCODE_API_URL", "https://opencode.ai/zen/v1/chat/completions")
+        api_key = os.environ.get("OPENCODE_API_KEY", "REDACTED_OPENCODE_API_KEY")
+        provider = os.environ.get("OPENCODE_PROVIDER", "opencode zen")
+        model = os.environ.get("OPENCODE_MODEL", "big-pickle")
+
+        # Prepare messages in chat completions format
+        api_messages = []
+        api_messages.append({
+            "role": "system",
+            "content": SYSTEM_PROMPT
+        })
+        # Add history messages
+        for msg in self.history[-10:]:
+            api_messages.append({
+                "role": msg["role"],
+                "content": msg["content"]
+            })
+
+        payload = {
+            "provider": provider,
+            "model": model,
+            "messages": api_messages,
+            "metadata": {
+                "workspace": self.workspace
+            }
+        }
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+            "User-Agent": "MorphTUI/0.1.0"
+        }
+
+        req = urllib.request.Request(
+            api_url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers=headers,
+            method="POST"
         )
+
+        try:
+            with urllib.request.urlopen(req, timeout=30) as response:
+                body = response.read().decode("utf-8")
+                res_json = json.loads(body)
+                choices = res_json.get("choices", [])
+                if choices:
+                    content = choices[0].get("message", {}).get("content", "")
+                    if content:
+                        return content
+                content = (
+                    res_json.get("output_text")
+                    or res_json.get("message")
+                    or res_json.get("text")
+                )
+                if content:
+                    return str(content)
+                return "Received empty response from the AI model."
+        except Exception as e:
+            lower = prompt.lower()
+            err_msg = f"[dim](Fallback active — AI API Offline: {e})[/dim]\n\n"
+            if "transform" in lower or "migrate" in lower or "web3" in lower:
+                return err_msg + (
+                    "I can help transform your codebase for Web3. "
+                    "Try: `analyze` to scan the codebase, or tell me what you want to migrate."
+                )
+            if "hello" in lower or "hi" in lower:
+                return err_msg + f"Hello! I'm Morph, your transformation agent. Working in {self.workspace}. How can I help?"
+            return err_msg + (
+                f"I understand your request. I have {len(self.tools.list_tools())} tools available. "
+                f"Type `tools` to see them, or describe what you'd like to transform."
+            )

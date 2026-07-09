@@ -328,6 +328,12 @@ Use `None` for empty fields. Do not delete fields.
 - Follow-ups: None.
 - Blockers: None.
 - Verification: Built React frontend production code successfully. Executed E2E backend mock API validation, CLI commands (`status`, `login`, `logout`), and RAG keyword query searches successfully.
+## 2026-07-09 - Antigravity - Morph TUI Logo Alignment, Menu Sizing & Chat Error Fixes
 
-
-
+- Service or area: Transformation Agent (Morph) CLI TUI
+- Files changed: `services/transformation-agent/cli/agent.py`, `services/transformation-agent/cli/tui/screens/main.py`, `services/transformation-agent/cli/tui/styles/theme.py`, `memory.md`
+- Summary: Corrected the ASCII logo misalignment on the bootloader and main menu screen by defining a fixed width of 30 and height of 14, and removing `text-align: center` to allow natural left-alignment of ASCII characters within a centered container. Resized the main menu button box `#menu-actions` from width 54 to 38 for a cleaner, more proportional layout. Resolved HTTP 403 Forbidden errors from the completions API by adding a custom `User-Agent: MorphTUI/0.1.0` header. Prevented markup crash errors in the chat UI when users input brackets by dynamically validating and escaping content using `rich.markup.escape`.
+- Decisions: Accepted - Mascot ASCII art requires fixed dimensions and left-alignment of lines within its boundary to prevent distortion. Accepted - Safe markup-escape validation for chat static widgets to prevent runtime MarkupErrors.
+- Follow-ups: None.
+- Blockers: None.
+- Verification: Executed integration test script demonstrating successful bootloader initialization, screen transition, input parsing, and clean exit.

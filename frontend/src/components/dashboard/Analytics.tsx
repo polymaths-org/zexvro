@@ -109,10 +109,10 @@ export default function Analytics({ isDark }: AnalyticsProps) {
       {/* Overview stats strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-zinc-50/50 dark:bg-zinc-900/30 p-4 rounded-lg border border-zinc-200/50 dark:border-zinc-800/80">
         {[
-          { label: 'Avg Latency', val: '54.2 ms', sub: '95th percentile', icon: Clock, color: 'text-brand-blue' },
-          { label: 'Sovereign Error Rate', val: '0.42%', sub: 'Healthy limits', icon: Flame, color: 'text-red-500' },
-          { label: 'Daily Gas Swaps', val: '4,102 STLR', sub: '+18.4% usage', icon: TrendingUp, color: 'text-emerald-500' },
-          { label: 'Total API Calls', val: '1.24 Million', sub: 'Across 6 services', icon: Layers, color: 'text-brand-purple' }
+          { label: 'Avg Latency', val: '—', sub: 'No data yet', icon: Clock, color: 'text-brand-blue' },
+          { label: 'Error Rate', val: '—', sub: 'No data yet', icon: Flame, color: 'text-red-500' },
+          { label: 'Operations', val: '0', sub: 'Connect a service', icon: TrendingUp, color: 'text-emerald-500' },
+          { label: 'Total API Calls', val: '0', sub: 'No services active', icon: Layers, color: 'text-brand-purple' }
         ].map((stat) => (
           <div key={stat.label} className="space-y-1">
             <span className="text-[11px] font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider block font-sans">{stat.label}</span>

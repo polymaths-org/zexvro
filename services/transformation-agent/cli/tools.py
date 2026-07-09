@@ -9,6 +9,18 @@ from typing import Any
 class ToolRegistry:
     """Registry of tools Morph can use."""
 
+    IGNORED_DIRS = {
+        ".git",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        "__pycache__",
+        "build",
+        "dist",
+        "node_modules",
+    }
+    VENV_CHILD_DIRS = {"bin", "include", "lib", "lib64", "Scripts", "share"}
+
     def __init__(self, workspace: str = "."):
         self.workspace = Path(workspace).resolve()
         self._tools: dict[str, dict] = {}
@@ -62,7 +74,9 @@ class ToolRegistry:
 
     def _safe_path(self, path: str) -> Path:
         p = (self.workspace / path).resolve()
-        if not str(p).startswith(str(self.workspace)):
+        try:
+            p.relative_to(self.workspace)
+        except ValueError:
             raise PermissionError(f"Path outside workspace: {path}")
         return p
 
@@ -105,7 +119,15 @@ class ToolRegistry:
         langs = set()
         file_count = 0
         for root, dirs, files in os.walk(self.workspace):
-            dirs[:] = [d for d in dirs if not d.startswith(".") and d != "node_modules" and d != "__pycache__"]
+            root_path = Path(root)
+            in_venv_root = (root_path / "pyvenv.cfg").exists()
+            dirs[:] = [
+                d
+                for d in dirs
+                if not d.startswith(".")
+                and d not in self.IGNORED_DIRS
+                and not (in_venv_root and d in self.VENV_CHILD_DIRS)
+            ]
             for f in files:
                 file_count += 1
                 ext = Path(f).suffix

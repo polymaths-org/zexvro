@@ -22,13 +22,21 @@ class MockServerHandler(http.server.BaseHTTPRequestHandler):
         # Clean up output printing
         sys.stderr.write("%s - - [%s] %s\n" % (self.address_string(), self.log_date_time_string(), format%args))
 
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type,Authorization")
+        self.send_header("Access-Control-Allow-Methods", "POST,GET,OPTIONS")
+        self.end_headers()
+
     def do_GET(self):
         parsed_path = urllib.parse.urlparse(self.path)
         
-        # 1. Activate Portal Page (Web Browser)
+        # 1. Activate Portal Page (Fallback Web Browser view if directly opened)
         if parsed_path.path == "/activate":
             self.send_response(200)
             self.send_header("Content-type", "text/html")
+            self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
             
             # Serve a premium dark-themed activation page
@@ -130,6 +138,7 @@ class MockServerHandler(http.server.BaseHTTPRequestHandler):
                             <label for="user_code">Device User Code</label>
                             <input type="text" id="user_code" name="user_code" placeholder="ABCD-1234" maxlength="9" required autocomplete="off">
                         </div>
+                        <input type="hidden" name="action" value="approve">
                         <button type="submit">Authorize Device</button>
                     </form>
                     <div class="footer">ZEXVRO Unified Web3 Platform</div>
@@ -183,7 +192,8 @@ class MockServerHandler(http.server.BaseHTTPRequestHandler):
             self.send_json_response(200, {
                 "device_code": device_code,
                 "user_code": user_code,
-                "verification_uri": f"http://localhost:{PORT}/activate",
+                "verification_uri": "http://localhost:3000",
+                "verification_uri_complete": f"http://localhost:3000/?code={user_code}",
                 "interval": 2
             })
             return
@@ -205,6 +215,10 @@ class MockServerHandler(http.server.BaseHTTPRequestHandler):
             if device_state["status"] == "pending":
                 self.send_error_json(400, "authorization_pending", "User has not approved the device yet")
                 return
+            elif device_state["status"] == "rejected":
+                del pending_devices[device_code]
+                self.send_error_json(400, "access_denied", "User rejected the authorization request")
+                return
             elif device_state["status"] == "authorized":
                 # Generate user token
                 token = "mock_jwt_token_" + str(uuid.uuid4())[:8]
@@ -223,8 +237,14 @@ class MockServerHandler(http.server.BaseHTTPRequestHandler):
 
         # 3. Web portal submission to authorize code
         if parsed_path.path == "/auth/activate":
-            params = urllib.parse.parse_qs(post_data.decode("utf-8"))
-            user_code = params.get("user_code", [""])[0].strip().upper()
+            try:
+                params = json.loads(post_data.decode("utf-8"))
+            except Exception:
+                params = urllib.parse.parse_qs(post_data.decode("utf-8"))
+                params = {k: v[0] for k, v in params.items()}
+
+            user_code = params.get("user_code", [""])[0].strip().upper() if isinstance(params.get("user_code"), list) else params.get("user_code", "").strip().upper()
+            action = params.get("action", ["approve"])[0].strip().lower() if isinstance(params.get("action"), list) else params.get("action", "approve").strip().lower()
             
             # Find the pending device code matching this user code
             target_device_code = None
@@ -233,39 +253,27 @@ class MockServerHandler(http.server.BaseHTTPRequestHandler):
                     target_device_code = d_code
                     break
             
-            self.send_response(200)
-            self.send_header("Content-type", "text/html")
-            self.end_headers()
-
             if target_device_code:
-                pending_devices[target_device_code]["status"] = "authorized"
-                msg = f"<h3>Success!</h3><p>Device has been linked to <strong>{pending_devices[target_device_code]['username']}</strong>. You may close this tab.</p>"
+                if action == "approve":
+                    auth_header = self.headers.get("Authorization")
+                    username = "stellar_dev"
+                    if auth_header and auth_header.startswith("Bearer "):
+                        # In production, we'd decode JWT. In mock, we can inspect payload if we want
+                        pass
+                    pending_devices[target_device_code]["status"] = "authorized"
+                    pending_devices[target_device_code]["username"] = username
+                    self.send_json_response(200, {
+                        "status": "success",
+                        "message": f"Successfully authorized device for {username}"
+                    })
+                else:
+                    pending_devices[target_device_code]["status"] = "rejected"
+                    self.send_json_response(200, {
+                        "status": "success",
+                        "message": "Successfully rejected device authorization"
+                    })
             else:
-                msg = "<h3>Error!</h3><p style='color:#ef4444;'>Invalid or expired user authorization code.</p>"
-
-            html = f"""
-            <!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <title>Device Activation Status</title>
-                <style>
-                    body {{ background-color: #050505; color: #f4f4f5; font-family: sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }}
-                    .card {{ background: #0a0a0b; border: 1px solid #27272a; padding: 32px; border-radius: 12px; text-align: center; width: 340px; }}
-                    h3 {{ margin-top: 0; }}
-                    a {{ color: #3b82f6; text-decoration: none; font-size: 13px; }}
-                </style>
-            </head>
-            <body>
-                <div class="card">
-                    {msg}
-                    <br>
-                    <a href="/activate">Go Back</a>
-                </div>
-            </body>
-            </html>
-            """
-            self.wfile.write(html.encode("utf-8"))
+                self.send_error_json(404, "not_found", "Invalid or expired user authorization code")
             return
 
         # 4. Write Memory Endpoint
@@ -296,6 +304,47 @@ class MockServerHandler(http.server.BaseHTTPRequestHandler):
                 self.send_error_json(400, "invalid_json", str(e))
             return
 
+        # 5. Chat Completions Proxy Endpoint (For CORS bypass)
+        if parsed_path.path == "/api/chat":
+            import urllib.request
+            import urllib.error
+            
+            try:
+                data = json.loads(post_data.decode("utf-8"))
+                api_url = "https://opencode.ai/zen/v1/chat/completions"
+                api_key = "REDACTED_OPENCODE_API_KEY"
+                
+                payload = {
+                    "model": data.get("model", "big-pickle"),
+                    "provider": data.get("provider", "opencode zen"),
+                    "messages": data.get("messages", []),
+                    "metadata": data.get("metadata", {})
+                }
+                
+                req = urllib.request.Request(
+                    api_url,
+                    data=json.dumps(payload).encode("utf-8"),
+                    headers={
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {api_key}",
+                        "User-Agent": "ZexvroProxy/1.0"
+                    },
+                    method="POST"
+                )
+                
+                with urllib.request.urlopen(req, timeout=20) as res:
+                    response_data = json.loads(res.read().decode("utf-8"))
+                    self.send_json_response(200, response_data)
+            except urllib.error.HTTPError as e:
+                try:
+                    error_data = json.loads(e.read().decode("utf-8"))
+                except Exception:
+                    error_data = {"error": f"HTTP {e.code}"}
+                self.send_json_response(e.code, error_data)
+            except Exception as e:
+                self.send_error_json(500, "proxy_error", str(e))
+            return
+
         self.send_response(404)
         self.end_headers()
 
@@ -303,6 +352,8 @@ class MockServerHandler(http.server.BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-type", "application/json")
         self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type,Authorization")
+        self.send_header("Access-Control-Allow-Methods", "POST,GET,OPTIONS")
         self.end_headers()
         self.wfile.write(json.dumps(payload).encode("utf-8"))
 

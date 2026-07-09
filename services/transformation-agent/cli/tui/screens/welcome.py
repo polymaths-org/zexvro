@@ -14,12 +14,13 @@ class WelcomeScreen(Screen):
     """Sleek system bootloader screen with typing animations."""
 
     def compose(self):
-        with Container(id="welcome-container"):
-            yield Static(LOGO, id="logo")
-            yield Label("MORPH SYSTEM INITIALIZATION", id="boot-title")
-            yield RichLog(id="boot-log", highlight=True, markup=True)
-            yield Label("", id="boot-progress-bar")
-            yield Label("Press ANY KEY to skip boot sequence", id="boot-skip")
+        with Container(id="welcome-screen-container"):
+            with Container(id="welcome-outer"):
+                yield Static(LOGO, id="logo")
+                yield Label("MORPH SYSTEM INITIALIZATION", id="boot-title")
+                yield RichLog(id="boot-log", highlight=True, markup=True)
+                yield Label("", id="boot-progress-bar")
+                yield Label("Press ANY KEY to skip boot sequence", id="boot-skip")
 
     def on_mount(self) -> None:
         self.progress = 0
@@ -44,7 +45,7 @@ class WelcomeScreen(Screen):
         self.progress_bar = self.query_one("#boot-progress-bar", Label)
         
         # Start typing animation interval
-        self.timer = self.set_interval(0.08, self.tick_boot)
+        self.timer = self.set_interval(0.04, self.tick_boot)
 
     def tick_boot(self) -> None:
         if self.progress < 100:
@@ -68,7 +69,20 @@ class WelcomeScreen(Screen):
     def go_to_main(self) -> None:
         if hasattr(self, "timer"):
             self.timer.stop()
-        self.app.switch_screen("main")
+            
+        try:
+            from ...auth import load_auth
+        except ImportError:
+            try:
+                from ..auth import load_auth
+            except ImportError:
+                from auth import load_auth
+                
+        auth_data = load_auth()
+        if auth_data:
+            self.app.switch_screen("menu")
+        else:
+            self.app.switch_screen("login")
 
     def on_key(self, event) -> None:
         """Skip boot sequence on any key press."""

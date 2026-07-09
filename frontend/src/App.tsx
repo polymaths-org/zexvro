@@ -18,8 +18,14 @@ import Memory from './components/dashboard/Memory';
 import Security from './components/dashboard/Security';
 import SettingsView from './components/dashboard/Settings';
 import AuthOverlay from './components/auth/AuthOverlay';
+import CliActivation from './components/auth/CliActivation';
 import { globalSignOut, type UserSession } from './auth/cognito';
 import { buildAgentChatPayload } from './agent/settings';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL ||
+  ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? 'http://localhost:8080'
+    : 'https://qkuostruh3.execute-api.us-east-1.amazonaws.com');
 
 // Mock Lists initial data
 import {
@@ -390,13 +396,22 @@ export default function App() {
 
   const [cliConnected, setCliConnected] = useState<boolean>(false);
   const [cliLastActive, setCliLastActive] = useState<number | null>(null);
+  const [activationCode, setActivationCode] = useState<string | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code') || params.get('activate');
+    if (code) {
+      setActivationCode(code.toUpperCase());
+    }
+  }, []);
 
   useEffect(() => {
     if (!userSession) return;
 
     const checkCliStatus = async () => {
       try {
-        const response = await fetch('https://qkuostruh3.execute-api.us-east-1.amazonaws.com/api/memory', {
+        const response = await fetch(`${API_BASE_URL}/api/memory`, {
           headers: {
             'Authorization': `Bearer ${userSession.token}`
           }
@@ -723,6 +738,23 @@ export default function App() {
 
   if (!userSession) {
     return <AuthOverlay onSuccess={setUserSession} />;
+  }
+
+  if (activationCode) {
+    return (
+      <CliActivation
+        code={activationCode}
+        token={userSession.idToken || userSession.token}
+        apiBaseUrl={API_BASE_URL}
+        onClose={() => {
+          setActivationCode(null);
+          const url = new URL(window.location.href);
+          url.searchParams.delete('code');
+          url.searchParams.delete('activate');
+          window.history.replaceState({}, '', url.toString());
+        }}
+      />
+    );
   }
 
   return (

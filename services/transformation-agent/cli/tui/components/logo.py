@@ -19,14 +19,15 @@ BANNER = r"""
 
 
 def get_banner() -> str:
-    """Return banner with trailing whitespace and outer blank lines stripped."""
+    """Return banner with trailing whitespace and outer blank lines stripped, padded to max length."""
     lines = BANNER.splitlines()
     lines = [l.rstrip() for l in lines]
     while lines and not lines[0].strip():
         lines.pop(0)
     while lines and not lines[-1].strip():
         lines.pop()
-    return "\n".join(lines)
+    max_len = max(len(l) for l in lines) if lines else 0
+    return "\n".join(l.ljust(max_len) for l in lines)
 
 
 SMALL_LOGO = r"""
@@ -38,12 +39,13 @@ SMALL_LOGO = r"""
 
 
 def get_small_logo() -> str:
-    """Return the compact small logo mascot."""
+    """Return the compact small logo mascot, padded to max length."""
     lines = SMALL_LOGO.splitlines()
     lines = [l.rstrip() for l in lines]
     while lines and not lines[0].strip():
         lines.pop(0)
     while lines and not lines[-1].strip():
         lines.pop()
-    return "\n".join(lines)
+    max_len = max(len(l) for l in lines) if lines else 0
+    return "\n".join(l.ljust(max_len) for l in lines)
 
