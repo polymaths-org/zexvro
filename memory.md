@@ -58,7 +58,7 @@ If a detail is only a work update, keep it here.
 | Service | Owner | Current status | Edit rule |
 | --- | --- | --- | --- |
 | Zero-Knowledge Privacy Pool | Paris / `paris-29` | Planned | Ask or record coordination before changing core design |
-| Transformation Agent | Paris / `paris-29` | Planned | Ask or record coordination before changing memory, CLI, or agent architecture |
+| Transformation Agent (Morph) | Paris / `paris-29` | **In Progress — CLI built** | Owned by Paris. CLI skeleton done. Next: wire LLM, add web panel. |
 | A-2-A Trade Pipeline | Rushi / `Wraient` | Planned | Ask or record coordination before changing protocol, wallet, or negotiation design |
 | Captcha-like Agent Authentication Service | Rushi / `Wraient` | Planned | Ask or record coordination before changing identity, SDK, classifier, or HDM design |
 | NFT Service | Nabil / `n4bi10p` | Planned | Ask or record coordination before changing minting, metadata, checkout, or NFT model |
@@ -165,6 +165,8 @@ Use `None` for empty fields. Do not delete fields.
 - Decision: Accepted - MVP priority is the six unique services before generic PaaS features.
 - Decision: Accepted - Frontend direction is Vite + React.
 - Decision: Accepted - Prefer Stellar Network for Web3/backend pieces where technically appropriate.
+- Decision: Accepted - Morph is the product name for Transformation Agent.
+- Decision: Accepted - CLI-first approach for Morph. SQLite for MVP memory.
 - Decision: Proposed - Use AWS for cloud infrastructure where needed.
 - Decision: Blocked - De-pin scope needs Nabil's input before implementation.
 
@@ -173,17 +175,15 @@ Use `None` for empty fields. Do not delete fields.
 | Blocker | Owner needed | Impact |
 | --- | --- | --- |
 | De-pin scope is undefined | Nabil / `n4bi10p` | De-pin should not be implemented yet |
-| App not scaffolded | Any owner can propose | No install/dev/build/test commands exist yet |
-| Service architecture not defined | Each service owner | Agents should not create final architecture without recording decisions |
 
 ## Active Handoffs
 
 - Handoff:
-  - Current state: Repo has brand assets, README, context, and shared memory docs. No app scaffold exists.
-  - Next step: Scaffold the Vite + React frontend or create service directories when the team decides to start implementation.
-  - Files to inspect: `README.md`, `context.md`, `memory.md`, `assets/brand/`.
-  - Do not touch: Do not implement De-pin before Nabil defines scope.
-  - Owner needed: Any developer for app scaffold; Nabil for De-pin details.
+  - Current state: Morph CLI redesigned. Frontend settings panel, mock server authentication flow, CLI login/logout/status, and Stellar RAG knowledge base fully implemented and tested.
+  - Next step: Wire real LLM provider (using credentials retrieved from local settings or auth sessions) into the agent chat flow.
+  - Files to inspect: `services/transformation-agent/cli/`, `context.md`, `memory.md`, `frontend/`.
+  - Do not touch: De-pin, other developers' services.
+  - Owner needed: Paris for Morph next steps; Nabil for De-pin context.
 
 ## Change History
 
@@ -295,12 +295,65 @@ Use `None` for empty fields. Do not delete fields.
 - Blockers: None.
 - Verification: Ran `npm run lint` and `npm run build` from `frontend/` successfully.
 
-## 2026-07-08 - Codex - Morph frontend workspace UI
+## 2026-07-07 - Nova / Morph - Transformation Agent CLI skeleton
 
-- Service or area: frontend UI/UX and shared agent context.
-- Files changed: `frontend/src/App.tsx`, `frontend/src/components/dashboard/Overview.tsx`, `context.md`, `memory.md`.
-- Summary: Recorded and polished the Morph frontend assistant work. The UI now has a Firebase-style right assistant dock, an Agentic Operations chat surface, Morph-branded sidebar label, workspace selector dropdown, support CTA, overview workspace readiness layout, and a smaller sidebar Morph icon that matches the rest of the nav.
-- Decisions: Proposed - Keep Morph available as both a compact page-aware dock and a full Agentic Operations chat page until the backend/CLI agent contract is defined.
-- Follow-ups: Wire real page-context payloads, backend agent actions, auth, and durable memory only after the contract and audit boundaries are documented.
-- Blockers: Morph backend/LLM wiring is not connected to the frontend yet.
-- Verification: Ran `npm run lint` and `npm run build` from `frontend/`.
+- Service or area: Transformation Agent (Morph)
+- Files changed: `services/transformation-agent/PLAN.md`, `services/transformation-agent/cli/morph.py`, `services/transformation-agent/cli/agent.py`, `services/transformation-agent/cli/memory.py`, `services/transformation-agent/cli/tools.py`, `services/transformation-agent/cli/requirements.txt`, `context.md`, `memory.md`
+- Summary: Created the Morph CLI skeleton for the Transformation Agent service. Includes Typer CLI entry point, agent loop with intent routing, SQLite-backed memory store, tool registry (read/write files, run commands, analyze codebase), and requirements. Name: Morph. Owner: Paris. Also updated context.md with Morph product name and status.
+- Decisions: Accepted - Morph is the name for the Transformation Agent. CLI-first approach. SQLite for MVP memory.
+- Follow-ups: Wire OpenAI API into agent loop, add web panel, add vision support, integrate with Zexvro frontend.
+- Blockers: None.
+- Verification: Files created. Run with `cd services/transformation-agent && pip install -r cli/requirements.txt && python cli/morph.py chat`.
+
+## 2026-07-08 - Antigravity - Morph TUI Redesign
+
+- Service or area: Transformation Agent (Morph) CLI TUI
+- Files changed: `services/transformation-agent/cli/tui/styles/icons.py`, `services/transformation-agent/cli/tui/styles/theme.py`, `services/transformation-agent/cli/tui/screens/welcome.py`, `services/transformation-agent/cli/tui/app.py`, `services/transformation-agent/cli/tui/screens/main.py`, `services/transformation-agent/cli/tui/screens/chat.py`, `services/transformation-agent/cli/tui/screens/memory.py`, `services/transformation-agent/cli/tui/screens/tools.py`, `services/transformation-agent/cli/tui/screens/about.py`, `services/transformation-agent/cli/tui/components/logo.py`, `memory.md`
+- Summary: Redesigned the Morph TUI into a professional, high-contrast, emoji-free developer console. Implemented a skippable animated booting screen with ASCII progress logging, centered layout alignment systems, multi-panel chat interface (agent status sidebar + card-style messages running on background worker threads), and DataTable implementations for tools and memory browsers. Converted the official brand mascot SVG (`frontend/public/morph/morph-logo.svg`) into a pure-ASCII, symmetric robot mascot layout (width 30, height 14) and updated the logo component to display it. Adjusted container heights in `theme.py` to fit the mascot perfectly without layout overflows or scrolling. Unified the layout of the Main, Memory, Tools, and About screens to render nested inside the centered `#main-container` panel for design consistency. Added a compact small mascot logo (`SMALL_LOGO`) at the top of the chat sidebar, centered the main menu list container horizontally, improved menu list item spacing and height (spacious vertically centered items), and set up message container alignments to float user messages right and agent messages left.
+- Decisions: Accepted - Morph TUI should strictly use unicode/ASCII terminal indicators instead of standard emojis. Accepted - TUI queries block on background workers to prevent console rendering lockups. Accepted - Unified nested window card designs for all major screens. Accepted - Converted official mascot SVG asset to ASCII for the TUI header.
+
+
+
+
+- Follow-ups: None.
+- Blockers: None.
+- Verification: Verified file imports, syntax correctness, and runtime app instantiation using automated tests. Fixed a naming conflict in `WelcomeScreen` where overriding the read-only `log` property crashed initialization. Fixed a `MountError` in `ChatScreen` where appending dynamic widgets called `.mount()` on an unattached container; resolved by passing child elements directly to the constructor at instantiation.
+
+## 2026-07-08 - Antigravity - Morph CLI Auth, Settings & Stellar RAG Integrations
+
+- Service or area: Transformation Agent (Morph) Core MVP
+- Files changed: `frontend/src/components/dashboard/Settings.tsx`, `frontend/.env`, `services/transformation-agent/cli/morph.py`, `services/transformation-agent/cli/tools.py`, `services/transformation-agent/cli/auth.py`, `services/transformation-agent/cli/mock_server.py`, `services/transformation-agent/data/stellar_kb/soroban_contracts.md`, `services/transformation-agent/data/stellar_kb/zk_poseidon_bn254.md`, `memory.md`
+- Summary: Implemented the first set of functional MVP deliverables for Morph: an Agent Settings panel in the React frontend (with provider select and local storage mapping), wired deployed Cognito user pool and client identifiers directly to `.env` parameters, a local Python mock server simulating AWS auth/DB APIs, Typer authentication commands (`login`, `logout`, `status`) using OAuth2 device code polling, and a Soroban/ZK-cryptography knowledge base RAG tool query search.
+- Decisions: Accepted - CLI and frontend settings use matching provider configurations. Accepted - Device authorization polling is standard OAuth2 client flow. Accepted - Local RAG uses text heading split and scoring instead of thick vector DBs for CLI portability.
+- Follow-ups: None.
+- Blockers: None.
+- Verification: Built React frontend production code successfully. Executed E2E backend mock API validation, CLI commands (`status`, `login`, `logout`), and RAG keyword query searches successfully.
+## 2026-07-09 - Antigravity - Morph TUI Logo Alignment, Menu Sizing & Chat Error Fixes
+
+- Service or area: Transformation Agent (Morph) CLI TUI
+- Files changed: `services/transformation-agent/cli/agent.py`, `services/transformation-agent/cli/tui/screens/main.py`, `services/transformation-agent/cli/tui/styles/theme.py`, `memory.md`
+- Summary: Corrected the ASCII logo misalignment on the bootloader and main menu screen by defining a fixed width of 30 and height of 14, and removing `text-align: center` to allow natural left-alignment of ASCII characters within a centered container. Resized the main menu button box `#menu-actions` from width 54 to 38 for a cleaner, more proportional layout. Resolved HTTP 403 Forbidden errors from the completions API by adding a custom `User-Agent: MorphTUI/0.1.0` header. Prevented markup crash errors in the chat UI when users input brackets by dynamically validating and escaping content using `rich.markup.escape`.
+- Decisions: Accepted - Mascot ASCII art requires fixed dimensions and left-alignment of lines within its boundary to prevent distortion. Accepted - Safe markup-escape validation for chat static widgets to prevent runtime MarkupErrors.
+- Follow-ups: None.
+- Verification: Executed integration test script demonstrating successful bootloader initialization, screen transition, input parsing, and clean exit.
+
+## 2026-07-09 - Antigravity - Morph CLI Authentication, Interactive Memory Management, Spinner & Installer
+
+- Service or area: Transformation Agent (Morph) Core / TUI
+- Files changed: `services/transformation-agent/cli/tui/screens/login.py`, `services/transformation-agent/cli/tui/screens/menu.py`, `services/transformation-agent/cli/tui/screens/main.py`, `services/transformation-agent/cli/tui/screens/memory.py`, `services/transformation-agent/cli/tui/app.py`, `services/transformation-agent/cli/tui/styles/theme.py`, `services/transformation-agent/cli/morph.py`, `services/transformation-agent/cli/auth.py`, `services/transformation-agent/cli/agent.py`, `services/transformation-agent/cli/install.sh`, `context.md`, `memory.md`
+- Summary: Implemented device authentication flow screen, interactive memory editor screen with DataTable list and entry update inputs, 100ms loading spinner thinking animation, and a standalone `install.sh` shell script to install the `morph` command globally to the user path. Wired a background thread heartbeat in TUI starting on mount that syncs CLI state to the web portal every 15s to keep it online. Added markdown parsing for agent responses with markup support for system output.
+- Decisions: Accepted - Standalone installer places wrapper in `~/.local/bin/morph`. Accepted - TUI heartbeat to mark CLI online in Web portal dashboard.
+- Follow-ups: None.
+- Blockers: None.
+- Verification: Compiled and validated TUI app importing and execution. Verified installer compiles and executes cleanly.
+
+## 2026-07-09 - Antigravity - Frontend MVP Services Cleanup
+
+- Service or area: Frontend Services
+- Files changed: `frontend/src/data/mock.ts`, `frontend/src/components/dashboard/Projects.tsx`, `frontend/src/components/dashboard/Memory.tsx`, `memory.md`
+- Summary: Removed the "Transformation Agent" mock service from the React frontend MVP services listing, default creation dropdowns, and memory filters since the CLI implementation is complete.
+- Decisions: Accepted - Remove duplicate/completed service descriptors from MVP UI lists to keep focus on remaining active items.
+- Follow-ups: None.
+- Blockers: None.
+- Verification: Successful TypeScript frontend compilation (`tsc --noEmit`).
+

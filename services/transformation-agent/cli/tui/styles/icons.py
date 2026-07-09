@@ -1,0 +1,11 @@
+"""Icon constants used across the TUI."""
+
+CHAT = "❯"
+LIGHTNING = "▲"
+BRAIN = "⬡"
+TOOLS = "✦"
+INFO = "ℹ"
+CROSS = "✖"
+BULLET = "▪"
+ARROW_UP = "↑"
+ARROW_DOWN = "↓"

@@ -101,6 +101,20 @@ export default function Deployments({ deployments, setDeployments }: Deployments
         </div>
       </div>
 
+      {deployments.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 px-4 rounded-lg border border-dashed border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/5 text-center">
+          <div className="relative mb-4">
+            <div className="relative p-3 rounded-full border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-400">
+              <Rocket className="h-6 w-6" />
+            </div>
+          </div>
+          <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">No deployments yet</h3>
+          <p className="text-xs text-zinc-400 dark:text-zinc-500 max-w-sm mt-1">
+            Create a project and trigger your first build to see the deployment pipeline in action.
+          </p>
+        </div>
+      ) : (<>
+
       {/* Pipeline Diagram */}
       <div className="p-4 rounded-lg border border-zinc-200 dark:border-[#27272A] bg-white dark:bg-[#0A0A0B] overflow-x-auto">
         <div className="flex items-center justify-between min-w-[640px] gap-2">
@@ -276,6 +290,7 @@ export default function Deployments({ deployments, setDeployments }: Deployments
           </div>
         </div>
       </div>
+      </>)}
     </div>
   );
 }

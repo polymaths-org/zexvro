@@ -146,7 +146,6 @@ export default function Memory({
           >
             <option value="all">Service: All</option>
             <option value="Zero-Knowledge Privacy Pool">ZK Privacy Pool</option>
-            <option value="Transformation Agent">Transformation Agent</option>
             <option value="A-2-A Trade Pipeline">A-2-A Trade Pipeline</option>
             <option value="De-pin">De-pin</option>
           </select>
@@ -286,7 +285,6 @@ export default function Memory({
                     className="w-full px-2.5 py-2 rounded border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#0A0A0B] text-zinc-800 dark:text-zinc-200 focus:outline-none"
                   >
                     <option value="Zero-Knowledge Privacy Pool">Zero-Knowledge Privacy Pool</option>
-                    <option value="Transformation Agent">Transformation Agent</option>
                     <option value="A-2-A Trade Pipeline">A-2-A Trade Pipeline</option>
                     <option value="Captcha-like Agent Authentication Service">Captcha-like Agent Auth</option>
                     <option value="De-pin">De-pin</option>
