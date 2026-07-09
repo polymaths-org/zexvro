@@ -23,6 +23,8 @@ interface OverviewProps {
   setOpenNewMemoryModal: (open: boolean) => void;
   isDark: boolean;
   services: Service[];
+  cliConnected?: boolean;
+  cliLastActive?: number | null;
 }
 
 function Card({
@@ -45,6 +47,8 @@ export default function Overview({
   setOpenNewProjectModal,
   setOpenInviteTeammateModal,
   services,
+  cliConnected = false,
+  cliLastActive = null,
 }: OverviewProps) {
   const configuringServices = useMemo(() => services.filter((service) => service.status === 'configuring').length, [services]);
   const activeServices = useMemo(() => services.filter((service) => service.status === 'active').length, [services]);
@@ -69,11 +73,11 @@ export default function Overview({
       dot: 'bg-amber-500',
     },
     {
-      label: 'Memory',
-      value: 'Ready',
-      meta: 'Workspace context',
+      label: 'CLI Agent',
+      value: cliConnected ? 'Online' : 'Offline',
+      meta: cliConnected ? 'Synchronized' : 'Not connected',
       icon: Database,
-      dot: 'bg-emerald-500',
+      dot: cliConnected ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500',
     },
     {
       label: 'Projects',

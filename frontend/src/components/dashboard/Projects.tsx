@@ -68,7 +68,7 @@ export default function Projects({
       id: `proj-${Date.now()}`,
       name: newProjName,
       status: 'active',
-      serviceUsage: newProjServices.length > 0 ? newProjServices : ['Transformation Agent'],
+      serviceUsage: newProjServices.length > 0 ? newProjServices : ['Zero-Knowledge Privacy Pool'],
       region: 'Local prototype',
       network: newProjNetwork,
       lastDeployment: 'Just now',
