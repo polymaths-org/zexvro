@@ -136,7 +136,7 @@ Unknowns:
 
 Owner: Paris / `paris-29`
 Product name: **Morph**
-Status: CLI skeleton built
+Status: CLI fully implemented & packaged
 
 Problem:
 
