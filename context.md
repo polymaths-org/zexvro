@@ -171,9 +171,7 @@ Current implementation:
 
 Unknowns:
 
-- Auth model between web agent and CLI agent.
 - Repository ingestion strategy.
-- Web panel design.
 
 ### 3. A-2-A Trade Pipeline
 
