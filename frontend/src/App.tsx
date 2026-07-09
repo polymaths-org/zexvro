@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Search, Menu, X, ChevronRight, User, 
-  HelpCircle, Sun, Moon, Settings, Send, ArrowUpRight, Sparkles
+import {
+  Search, Menu, X, ChevronRight, User,
+  HelpCircle, Sun, Moon, Settings, Send, ArrowUpRight, Sparkles, LogOut,
+  Plus, Mail, Users
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -16,14 +17,23 @@ import Team from './components/dashboard/Team';
 import Memory from './components/dashboard/Memory';
 import Security from './components/dashboard/Security';
 import SettingsView from './components/dashboard/Settings';
+import AuthOverlay from './components/auth/AuthOverlay';
+import CliActivation from './components/auth/CliActivation';
+import { globalSignOut, type UserSession } from './auth/cognito';
+import { buildAgentChatPayload } from './agent/settings';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL ||
+  ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? 'http://localhost:8080'
+    : 'https://qkuostruh3.execute-api.us-east-1.amazonaws.com');
 
 // Mock Lists initial data
-import { 
-  mockProjects, 
-  mockDeployments, 
-  mockServices, 
-  mockTeamMembers, 
-  mockMemoryEntries 
+import {
+  mockProjects,
+  mockDeployments,
+  mockServices,
+  mockTeamMembers,
+  mockMemoryEntries
 } from './data/mock';
 import { Project, Deployment, Service, TeamMember, MemoryEntry, ThemeType, DensityType } from './types';
 
@@ -32,11 +42,144 @@ const BRAND_WORDMARK = '/brand/wordmark-transparent.png';
 const MORPH_LOGO = '/morph/morph-logo.svg';
 const MORPH_ILLUSTRATION = '/morph/morph-illustration-transparent.png';
 
-const WORKSPACES = [
-  { id: 'zexvro', name: 'ZEXVRO Workspace', plan: 'Free Prototype', initials: 'ZX' },
-  { id: 'morph', name: 'Morph Lab', plan: 'Agent workspace', initials: 'ML' },
-  { id: 'frontend', name: 'Frontend Review', plan: 'Design pass', initials: 'FR' },
-];
+const WORKSPACE_STORAGE_PREFIX = 'zexvro_workspaces_';
+const WORKSPACE_ROLES = ['Admin', 'Developer', 'Viewer'] as const;
+
+type WorkspaceRole = typeof WORKSPACE_ROLES[number];
+
+type WorkspaceInvite = {
+  id: string;
+  email: string;
+  role: WorkspaceRole;
+  status: 'Pending';
+  createdAt: number;
+};
+
+type Workspace = {
+  id: string;
+  name: string;
+  plan: string;
+  initials: string;
+  status: string;
+  detail: string;
+  owner: string;
+  invites: WorkspaceInvite[];
+};
+
+function titleCaseName(value: string) {
+  return value
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function getWorkspaceOwnerName(session: UserSession | null) {
+  const source = session?.email || session?.username || 'Your';
+  const handle = source.includes('@') ? source.split('@')[0] : source;
+  const normalized = handle.replace(/[._-]+/g, ' ').trim();
+  return normalized ? titleCaseName(normalized) : 'Your';
+}
+
+function makeWorkspaceInitials(name: string) {
+  const parts = name.replace(/'s\b/gi, '').split(/[\s._-]+/).filter(Boolean);
+  const letters = parts.slice(0, 2).map(part => part.charAt(0).toUpperCase()).join('');
+  return letters || 'ZX';
+}
+
+function createWorkspaceId(name: string) {
+  const slug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 36) || 'workspace';
+  return `${slug}-${Date.now().toString(36)}`;
+}
+
+function createDefaultWorkspace(session: UserSession | null): Workspace {
+  const ownerName = getWorkspaceOwnerName(session);
+  const name = `${ownerName}'s Workspace`;
+  return {
+    id: 'default',
+    name,
+    plan: 'Personal workspace',
+    initials: makeWorkspaceInitials(name),
+    status: 'Owner',
+    detail: 'Agents, services, memory, and team invites',
+    owner: ownerName,
+    invites: [],
+  };
+}
+
+function getWorkspaceStorageKey(session: UserSession) {
+  const ownerKey = session.username || session.email || 'user';
+  return `${WORKSPACE_STORAGE_PREFIX}${encodeURIComponent(ownerKey)}`;
+}
+
+function normalizeWorkspaceRole(value: unknown): WorkspaceRole {
+  return WORKSPACE_ROLES.includes(value as WorkspaceRole) ? value as WorkspaceRole : 'Developer';
+}
+
+function normalizeStoredWorkspaces(value: unknown, fallback: Workspace[]): Workspace[] {
+  if (!Array.isArray(value)) return fallback;
+
+  const workspaces = value
+    .filter(item => item && typeof item === 'object')
+    .map((item, index) => {
+      const workspace = item as Partial<Workspace>;
+      const name = typeof workspace.name === 'string' && workspace.name.trim()
+        ? workspace.name.trim()
+        : `Workspace ${index + 1}`;
+      const invites = Array.isArray(workspace.invites)
+        ? workspace.invites
+            .filter(invite => invite && typeof invite === 'object' && typeof (invite as Partial<WorkspaceInvite>).email === 'string')
+            .map(invite => {
+              const storedInvite = invite as Partial<WorkspaceInvite>;
+              return {
+                id: typeof storedInvite.id === 'string' ? storedInvite.id : createWorkspaceId(storedInvite.email || 'invite'),
+                email: String(storedInvite.email).trim().toLowerCase(),
+                role: normalizeWorkspaceRole(storedInvite.role),
+                status: 'Pending' as const,
+                createdAt: typeof storedInvite.createdAt === 'number' ? storedInvite.createdAt : Date.now(),
+              };
+            })
+        : [];
+
+      return {
+        id: typeof workspace.id === 'string' ? workspace.id : createWorkspaceId(name),
+        name,
+        plan: typeof workspace.plan === 'string' ? workspace.plan : 'Team workspace',
+        initials: typeof workspace.initials === 'string' ? workspace.initials : makeWorkspaceInitials(name),
+        status: typeof workspace.status === 'string' ? workspace.status : 'Active',
+        detail: typeof workspace.detail === 'string' ? workspace.detail : 'Team members, agents, and service operations',
+        owner: typeof workspace.owner === 'string' ? workspace.owner : 'Current user',
+        invites,
+      };
+    });
+
+  return workspaces.length > 0 ? workspaces : fallback;
+}
+
+function loadStoredWorkspaces(storageKey: string, fallback: Workspace[]) {
+  const saved = localStorage.getItem(storageKey);
+  if (!saved) return fallback;
+  try {
+    return normalizeStoredWorkspaces(JSON.parse(saved), fallback);
+  } catch {
+    return fallback;
+  }
+}
+
+function isUsableSession(value: unknown): value is UserSession {
+  if (!value || typeof value !== 'object') return false;
+  const session = value as Partial<UserSession>;
+  return (
+    typeof session.username === 'string' &&
+    typeof session.token === 'string' &&
+    session.token.split('.').length === 3 &&
+    !session.token.startsWith('prod_jwt_token_')
+  );
+}
 
 const SECTION_LABELS: Record<string, string> = {
   overview: 'Overview',
@@ -237,6 +380,61 @@ function ScreenSkeleton() {
 }
 
 export default function App() {
+  const [userSession, setUserSession] = useState<UserSession | null>(() => {
+    const saved = localStorage.getItem('zexvro_user_session');
+    if (!saved) return null;
+    try {
+      const parsed = JSON.parse(saved);
+      if (isUsableSession(parsed)) return parsed;
+      localStorage.removeItem('zexvro_user_session');
+      return null;
+    } catch {
+      localStorage.removeItem('zexvro_user_session');
+      return null;
+    }
+  });
+
+  const [cliConnected, setCliConnected] = useState<boolean>(false);
+  const [cliLastActive, setCliLastActive] = useState<number | null>(null);
+  const [activationCode, setActivationCode] = useState<string | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code') || params.get('activate');
+    if (code) {
+      setActivationCode(code.toUpperCase());
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!userSession) return;
+
+    const checkCliStatus = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/memory`, {
+          headers: {
+            'Authorization': `Bearer ${userSession.token}`
+          }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data.memory && data.memory.cli_connected) {
+            setCliConnected(true);
+            setCliLastActive(data.memory.cli_last_active);
+          } else {
+            setCliConnected(false);
+          }
+        }
+      } catch (err) {
+        console.error("Error checking CLI status:", err);
+      }
+    };
+
+    checkCliStatus();
+    const interval = setInterval(checkCliStatus, 5000);
+    return () => clearInterval(interval);
+  }, [userSession]);
+
   // Navigation & Shell states
   const [activeTab, setActiveTab] = useState<string>('overview');
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
@@ -251,7 +449,13 @@ export default function App() {
   const [reducedMotion, setReducedMotion] = useState<boolean>(false);
   const [userMenuOpen, setUserMenuOpen] = useState<boolean>(false);
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState<boolean>(false);
-  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>(WORKSPACES[0].id);
+  const [workspaceOwnerKey, setWorkspaceOwnerKey] = useState<string>('');
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>('');
+  const [newWorkspaceName, setNewWorkspaceName] = useState<string>('');
+  const [inviteEmail, setInviteEmail] = useState<string>('');
+  const [inviteRole, setInviteRole] = useState<WorkspaceRole>('Developer');
+  const [workspaceNotice, setWorkspaceNotice] = useState<string>('');
   const [screenLoading, setScreenLoading] = useState<boolean>(false);
 
   // Sharing states so actions propagate across tabs
@@ -281,9 +485,97 @@ export default function App() {
   const [widgetThinking, setWidgetThinking] = useState(false);
   const currentSectionLabel = SECTION_LABELS[activeTab] || activeTab;
   const assistantDockOpen = agentWidgetOpen && activeTab !== 'agent';
-  const selectedWorkspace = WORKSPACES.find(workspace => workspace.id === selectedWorkspaceId) || WORKSPACES[0];
+  const selectedWorkspace =
+    workspaces.find(workspace => workspace.id === selectedWorkspaceId) ||
+    workspaces[0] ||
+    createDefaultWorkspace(userSession);
+  const selectedWorkspaceInvites = selectedWorkspace.invites || [];
 
-  const handleSendWidgetMessage = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (!userSession) {
+      setWorkspaceOwnerKey('');
+      setWorkspaces([]);
+      setSelectedWorkspaceId('');
+      return;
+    }
+
+    const storageKey = getWorkspaceStorageKey(userSession);
+    const fallback = [createDefaultWorkspace(userSession)];
+    const savedWorkspaces = loadStoredWorkspaces(storageKey, fallback);
+
+    setWorkspaceOwnerKey(storageKey);
+    setWorkspaces(savedWorkspaces);
+    setSelectedWorkspaceId(previousId => (
+      savedWorkspaces.some(workspace => workspace.id === previousId)
+        ? previousId
+        : savedWorkspaces[0].id
+    ));
+  }, [userSession?.username, userSession?.email]);
+
+  useEffect(() => {
+    if (!workspaceOwnerKey || workspaces.length === 0) return;
+    localStorage.setItem(workspaceOwnerKey, JSON.stringify(workspaces));
+  }, [workspaceOwnerKey, workspaces]);
+
+  const handleCreateWorkspace = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const name = newWorkspaceName.trim();
+
+    if (!name) {
+      setWorkspaceNotice('Add a workspace name first.');
+      return;
+    }
+
+    const workspace: Workspace = {
+      id: createWorkspaceId(name),
+      name,
+      plan: 'Team workspace',
+      initials: makeWorkspaceInitials(name),
+      status: 'Active',
+      detail: 'Team members, agents, and service operations',
+      owner: getWorkspaceOwnerName(userSession),
+      invites: [],
+    };
+
+    setWorkspaces(previous => [...previous, workspace]);
+    setSelectedWorkspaceId(workspace.id);
+    setNewWorkspaceName('');
+    setWorkspaceNotice(`Created ${workspace.name}.`);
+  };
+
+  const handleInviteToWorkspace = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const email = inviteEmail.trim().toLowerCase();
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setWorkspaceNotice('Enter a valid email invite.');
+      return;
+    }
+
+    const invite: WorkspaceInvite = {
+      id: createWorkspaceId(email),
+      email,
+      role: inviteRole,
+      status: 'Pending',
+      createdAt: Date.now(),
+    };
+
+    setWorkspaces(previous => previous.map(workspace => {
+      if (workspace.id !== selectedWorkspace.id) return workspace;
+      return {
+        ...workspace,
+        invites: [
+          invite,
+          ...workspace.invites.filter(existingInvite => existingInvite.email !== email),
+        ],
+      };
+    }));
+
+    setInviteEmail('');
+    setWorkspaceNotice(`Invite added for ${email}.`);
+  };
+
+  const handleSendWidgetMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!widgetInput.trim()) return;
 
@@ -299,24 +591,40 @@ export default function App() {
     setWidgetInput('');
     setWidgetThinking(true);
 
-    setTimeout(() => {
-      let reply = `I am using your current page context: ${currentSectionLabel}. I can draft the next setup step, summarize the visible workspace state, or prepare an approval card without running backend actions.`;
-      if (prompt.toLowerCase().includes('audit') || prompt.toLowerCase().includes('log')) {
-        reply = `For ${currentSectionLabel}, I would review memory entries, blockers, and security notes first. Current rule: do not paste raw logs into memory; summarize decisions and handoffs.`;
-      } else if (prompt.toLowerCase().includes('transform') || prompt.toLowerCase().includes('trigger')) {
-        reply = `Transformation is not connected to a backend yet. From ${currentSectionLabel}, I can prepare a migration checklist and mark the action as needing approval.`;
-      } else if (prompt.toLowerCase().includes('help') || prompt.toLowerCase().includes('hello')) {
-        reply = "Useful commands for this prototype: review this page, create a service checklist, prepare a memory note, open Agentic Operations, or draft a security policy.";
+    try {
+      const response = await fetch('/api/agent/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildAgentChatPayload(
+          currentSectionLabel,
+          [
+            {
+              role: 'user',
+              content: `Current screen: ${currentSectionLabel}\n\n${prompt}`,
+            },
+          ],
+        )),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || `Agent request failed with ${response.status}`);
       }
-
       setWidgetMessages(prev => [...prev, {
         id: Date.now() + 1,
         sender: 'agent',
-        text: reply,
+        text: data.text || 'No response returned.',
         time: 'Just now'
       }]);
+    } catch (err) {
+      setWidgetMessages(prev => [...prev, {
+        id: Date.now() + 1,
+        sender: 'agent',
+        text: err instanceof Error ? err.message : 'Agent request failed.',
+        time: 'Just now'
+      }]);
+    } finally {
       setWidgetThinking(false);
-    }, 1200);
+    }
   };
 
   const toggleCat = (catId: string) => {
@@ -376,7 +684,7 @@ export default function App() {
     { id: 'settings', label: 'Settings', icon: 'settings' }
   ];
 
-  const filteredSearchItems = navigationItems.filter(item => 
+  const filteredSearchItems = navigationItems.filter(item =>
     item.label.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -428,6 +736,27 @@ export default function App() {
     },
   ];
 
+  if (!userSession) {
+    return <AuthOverlay onSuccess={setUserSession} />;
+  }
+
+  if (activationCode) {
+    return (
+      <CliActivation
+        code={activationCode}
+        token={userSession.idToken || userSession.token}
+        apiBaseUrl={API_BASE_URL}
+        onClose={() => {
+          setActivationCode(null);
+          const url = new URL(window.location.href);
+          url.searchParams.delete('code');
+          url.searchParams.delete('activate');
+          window.history.replaceState({}, '', url.toString());
+        }}
+      />
+    );
+  }
+
   return (
     <div className={`min-h-screen font-sans antialiased text-zinc-900 dark:text-zinc-100 bg-zinc-50 dark:bg-[#050505] transition-colors duration-200 ${
       density === 'compact' ? 'text-xs' : 'text-sm'
@@ -435,7 +764,7 @@ export default function App() {
       {/* AI NOTE: This is the logged-in platform shell. Keep it practical: workspace setup, service readiness, memory, approvals, and security placeholders. */}
       {/* Platform Layout Grid */}
       <div className="flex min-h-screen">
-        
+
         {/* 1. Persistent Left Sidebar (Desktop) */}
         <div className={`hidden md:block relative shrink-0 z-30 transition-[width] ${reducedMotion ? 'duration-0' : 'duration-300'} ease-[cubic-bezier(0.22,1,0.36,1)] h-screen sticky top-0 ${
           sidebarCollapsed ? 'w-[52px]' : 'w-[252px]'
@@ -445,22 +774,22 @@ export default function App() {
             <div className={`h-14 shrink-0 border-b border-zinc-200 dark:border-zinc-900 flex items-center ${sidebarCollapsed ? 'justify-center px-0' : 'justify-start pl-5 pr-4'}`}>
               {sidebarCollapsed ? (
                 <div className="flex h-full w-full items-center justify-center">
-                  <img 
-                    src={BRAND_MARK} 
-                    alt="ZEXVRO Logo" 
+                  <img
+                    src={BRAND_MARK}
+                    alt="ZEXVRO Logo"
                     className="h-[34px] w-[34px] object-contain shrink-0 invert dark:invert-0"
                   />
                 </div>
               ) : (
                 <div className="flex h-full min-w-0 w-full items-center justify-start gap-2.5 pl-1">
-                  <img 
-                    src={BRAND_MARK} 
-                    alt="ZEXVRO Logo" 
+                  <img
+                    src={BRAND_MARK}
+                    alt="ZEXVRO Logo"
                     className="h-[34px] w-[34px] object-contain shrink-0 invert dark:invert-0"
                   />
-                  <img 
-                    src={BRAND_WORDMARK} 
-                    alt="ZEXVRO" 
+                  <img
+                    src={BRAND_WORDMARK}
+                    alt="ZEXVRO"
                     className="h-[18px] max-w-[148px] shrink-0 translate-y-[1px] object-contain object-left invert dark:invert-0"
                   />
                 </div>
@@ -482,7 +811,11 @@ export default function App() {
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-xs font-semibold text-zinc-800 dark:text-zinc-200">{selectedWorkspace.name}</span>
-                        <span className="mt-0.5 block truncate text-[10px] text-zinc-400">{selectedWorkspace.plan}</span>
+                        <span className="mt-0.5 flex items-center gap-1.5 truncate text-[10px] text-zinc-400">
+                          <span>{selectedWorkspace.plan}</span>
+                          <span className="h-1 w-1 rounded-full bg-zinc-500" />
+                          <span>{selectedWorkspace.status}</span>
+                        </span>
                       </span>
                       <ChevronRight className={`h-3.5 w-3.5 shrink-0 text-zinc-400 transition-transform ${workspaceMenuOpen ? 'rotate-90' : ''}`} />
                     </span>
@@ -497,32 +830,122 @@ export default function App() {
                         transition={{ duration: 0.12 }}
                         className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-xl shadow-zinc-950/10 dark:border-zinc-800 dark:bg-[#0A0A0B] dark:shadow-black/30"
                       >
-                        {WORKSPACES.map(workspace => {
-                          const isCurrent = workspace.id === selectedWorkspaceId;
-                          return (
+                        <div className="max-h-[72vh] overflow-y-auto">
+                          <div className="border-b border-zinc-100 p-2 dark:border-zinc-900">
+                            <div className="mb-1 flex items-center justify-between px-1">
+                              <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Workspaces</span>
+                              <span className="text-[10px] text-zinc-400">{workspaces.length}</span>
+                            </div>
+                            {workspaces.map(workspace => {
+                              const isCurrent = workspace.id === selectedWorkspaceId;
+                              return (
+                                <button
+                                  key={workspace.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedWorkspaceId(workspace.id);
+                                    setWorkspaceNotice('');
+                                    setWorkspaceMenuOpen(false);
+                                  }}
+                                  className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left transition ${
+                                    isCurrent
+                                      ? 'bg-brand-blue/10 text-zinc-950 dark:text-white'
+                                      : 'text-zinc-600 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-900'
+                                  }`}
+                                >
+                                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-brand-blue/10 text-[10px] font-semibold text-brand-blue">
+                                    {workspace.initials}
+                                  </span>
+                                  <span className="min-w-0 flex-1">
+                                    <span className="flex items-center gap-2">
+                                      <span className="block truncate text-xs font-semibold">{workspace.name}</span>
+                                      <span className="shrink-0 rounded border border-current/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-zinc-400">
+                                        {workspace.status}
+                                      </span>
+                                    </span>
+                                    <span className="mt-0.5 block truncate text-[10px] text-zinc-400">{workspace.detail}</span>
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          <form onSubmit={handleCreateWorkspace} className="space-y-2 border-b border-zinc-100 p-3 dark:border-zinc-900">
+                            <div className="flex items-center gap-2 text-xs font-semibold text-zinc-800 dark:text-zinc-100">
+                              <Plus className="h-3.5 w-3.5 text-brand-blue" />
+                              <span>Create workspace</span>
+                            </div>
+                            <div className="flex gap-2">
+                              <input
+                                value={newWorkspaceName}
+                                onChange={(event) => setNewWorkspaceName(event.target.value)}
+                                placeholder="Workspace name"
+                                className="h-9 min-w-0 flex-1 rounded-md border border-zinc-200 bg-white px-2.5 text-xs text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-brand-blue dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
+                              />
+                              <button
+                                type="submit"
+                                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-brand-blue text-white transition hover:bg-brand-blue/90"
+                                title="Create workspace"
+                              >
+                                <Plus className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </form>
+
+                          <form onSubmit={handleInviteToWorkspace} className="space-y-2 p-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex min-w-0 items-center gap-2 text-xs font-semibold text-zinc-800 dark:text-zinc-100">
+                                <Mail className="h-3.5 w-3.5 text-brand-blue" />
+                                <span className="truncate">Invite to {selectedWorkspace.name}</span>
+                              </div>
+                              <span className="inline-flex items-center gap-1 rounded border border-zinc-200 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+                                <Users className="h-3 w-3" />
+                                {selectedWorkspaceInvites.length}
+                              </span>
+                            </div>
+                            <div className="space-y-2">
+                              <input
+                                value={inviteEmail}
+                                onChange={(event) => setInviteEmail(event.target.value)}
+                                placeholder="teammate@email.com"
+                                className="h-9 w-full rounded-md border border-zinc-200 bg-white px-2.5 text-xs text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-brand-blue dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
+                              />
+                              <select
+                                value={inviteRole}
+                                onChange={(event) => setInviteRole(event.target.value as WorkspaceRole)}
+                                className="h-9 w-full rounded-md border border-zinc-200 bg-white px-2 text-xs text-zinc-800 outline-none transition focus:border-brand-blue dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
+                              >
+                                {WORKSPACE_ROLES.map(role => (
+                                  <option key={role} value={role}>{role}</option>
+                                ))}
+                              </select>
+                            </div>
                             <button
-                              key={workspace.id}
-                              type="button"
-                              onClick={() => {
-                                setSelectedWorkspaceId(workspace.id);
-                                setWorkspaceMenuOpen(false);
-                              }}
-                              className={`flex w-full items-center gap-2.5 px-3 py-2 text-left transition ${
-                                isCurrent
-                                  ? 'bg-brand-blue/10 text-zinc-950 dark:text-white'
-                                  : 'text-zinc-600 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-900'
-                              }`}
+                              type="submit"
+                              className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md border border-zinc-200 bg-zinc-50 text-xs font-semibold text-zinc-800 transition hover:border-brand-blue/50 hover:bg-brand-blue/10 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
                             >
-                              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-brand-blue/10 text-[10px] font-semibold text-brand-blue">
-                                {workspace.initials}
-                              </span>
-                              <span className="min-w-0">
-                                <span className="block truncate text-xs font-semibold">{workspace.name}</span>
-                                <span className="mt-0.5 block truncate text-[10px] text-zinc-400">{workspace.plan}</span>
-                              </span>
+                              <Mail className="h-3.5 w-3.5" />
+                              Add invite
                             </button>
-                          );
-                        })}
+
+                            {workspaceNotice && (
+                              <p className="rounded-md bg-zinc-50 px-2.5 py-2 text-[10px] text-zinc-500 dark:bg-zinc-950 dark:text-zinc-400">
+                                {workspaceNotice}
+                              </p>
+                            )}
+
+                            {selectedWorkspaceInvites.length > 0 && (
+                              <div className="space-y-1 border-t border-zinc-100 pt-2 dark:border-zinc-900">
+                                {selectedWorkspaceInvites.slice(0, 4).map(invite => (
+                                  <div key={invite.id} className="flex items-center justify-between gap-2 rounded-md bg-zinc-50 px-2.5 py-2 text-[10px] dark:bg-zinc-950">
+                                    <span className="min-w-0 truncate text-zinc-700 dark:text-zinc-200">{invite.email}</span>
+                                    <span className="shrink-0 text-zinc-400">{invite.role}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </form>
+                        </div>
                       </motion.div>
                     )}
                   </AnimatePresence>
@@ -530,7 +953,7 @@ export default function App() {
 
                 {/* Global Search shortcut block */}
                 <div className="px-3 py-1.5 shrink-0">
-                  <button 
+                  <button
                     onClick={() => setSearchOpen(true)}
                     className="w-full flex items-center justify-between px-3 py-1.5 rounded-md border border-zinc-200 dark:border-zinc-800 bg-zinc-50/30 dark:bg-zinc-900/10 text-xs text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors cursor-pointer text-left font-sans"
                   >
@@ -545,7 +968,7 @@ export default function App() {
             ) : (
               <div className="flex flex-col items-center gap-3.5 py-4 border-b border-zinc-100 dark:border-zinc-800 shrink-0">
                 {/* Search Button for collapsed view */}
-                <button 
+                <button
                   onClick={() => setSearchOpen(true)}
                   className="p-2 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50/30 dark:bg-zinc-900/10 text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-700 hover:text-zinc-800 dark:hover:text-zinc-200 transition-all cursor-pointer flex items-center justify-center shadow-sm"
                   title="Search Workspace (⌘K)"
@@ -572,7 +995,7 @@ export default function App() {
                   Overview
                 </div>
               </button>
-              
+
               <div className="w-8 h-px bg-zinc-100 dark:bg-zinc-800 my-1" />
 
               {compactNavigationItems.map((item, idx) => {
@@ -698,7 +1121,7 @@ export default function App() {
         </aside>
 
         {/* Floating Collapse Trigger 50-50 on the right border of sidebar, placed aligned with the workspace owner/switcher section level */}
-        <button 
+        <button
           onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
           className="hidden md:flex absolute top-[112px] -right-3 h-6 w-6 rounded-full border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#0A0A0B] text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200 items-center justify-center cursor-pointer shadow-md hover:scale-105 transition-all duration-200 z-50"
           title={sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
@@ -715,7 +1138,7 @@ export default function App() {
 
         {/* 2. Main content container + Top command bar */}
         <div className={`flex-1 flex flex-col min-w-0 transition-[padding] duration-200 ${assistantDockOpen ? 'lg:pr-[430px]' : ''}`}>
-          
+
           {/* Top header bar */}
           <header className="h-14 border-b border-zinc-200 dark:border-zinc-900 bg-white dark:bg-black flex items-center justify-between px-4 sticky top-0 z-40 shrink-0">
             {/* Left side mobile menu trigger & title */}
@@ -726,18 +1149,18 @@ export default function App() {
               >
                 <Menu className="h-4.5 w-4.5" />
               </button>
-              
+
               <div className="flex items-center gap-2.5">
                 {/* Mobile-only Logo */}
-                <img 
-                  src={BRAND_MARK} 
-                  alt="ZEXVRO Logo" 
+                <img
+                  src={BRAND_MARK}
+                  alt="ZEXVRO Logo"
                   className="md:hidden h-6 w-6 object-contain shrink-0 invert dark:invert-0"
                 />
-                
+
                 {/* Workspace breadcrumb with current section name */}
                 <div className="flex items-center gap-1.5 text-xs sm:text-sm">
-                  <span className="font-semibold text-zinc-500 dark:text-zinc-400 hidden sm:inline">ZEXVRO</span>
+                  <span className="font-semibold text-zinc-500 dark:text-zinc-400 hidden sm:inline">{selectedWorkspace.name}</span>
                   <span className="text-zinc-300 dark:text-zinc-700 hidden sm:inline">/</span>
                   <span className="font-semibold text-zinc-900 dark:text-white capitalize tracking-tight px-2 py-0.5 rounded bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-150 dark:border-zinc-800">
                     {currentSectionLabel}
@@ -755,9 +1178,9 @@ export default function App() {
                 <HelpCircle className="h-3.5 w-3.5 text-zinc-400" />
                 Support
               </button>
-              
+
               {/* Search toggle for tablets/mobile */}
-              <button 
+              <button
                 onClick={() => setSearchOpen(true)}
                 className="md:hidden p-1.5 rounded text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-900 cursor-pointer"
               >
@@ -777,16 +1200,16 @@ export default function App() {
 
                 {userMenuOpen && (
                   <>
-                    <div 
-                      className="fixed inset-0 z-40" 
+                    <div
+                      className="fixed inset-0 z-40"
                       onClick={() => setUserMenuOpen(false)}
                     />
                     <div className="absolute right-0 mt-2 w-56 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#0A0A0B] shadow-lg z-50 py-1 text-xs">
                       {/* User Info Section */}
                       <div className="px-3.5 py-2.5 border-b border-zinc-100 dark:border-zinc-900">
                         <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Current User</p>
-                        <p className="font-semibold text-zinc-900 dark:text-white truncate mt-0.5">Workspace user</p>
-                        <p className="text-[10px] text-zinc-400 mt-0.5">Workspace: {selectedWorkspace.name}</p>
+                        <p className="font-semibold text-zinc-900 dark:text-white truncate mt-0.5">{userSession?.username || 'Workspace user'}</p>
+                        <p className="text-[10px] text-zinc-400 truncate mt-0.5">{userSession?.email || 'dev@zexvro.local'}</p>
                       </div>
 
                       {/* Menu Options */}
@@ -814,6 +1237,20 @@ export default function App() {
                           <Settings className="h-3.5 w-3.5 text-zinc-500" />
                           <span>Settings</span>
                         </button>
+
+                        <button
+                          onClick={() => {
+                            setUserMenuOpen(false);
+                            globalSignOut(userSession?.token).finally(() => {
+                              localStorage.removeItem('zexvro_user_session');
+                              setUserSession(null);
+                            });
+                          }}
+                          className="w-full text-left px-3.5 py-2 hover:bg-rose-50 dark:hover:bg-rose-950/20 text-rose-600 dark:text-rose-400 flex items-center gap-2 cursor-pointer transition-colors border-t border-zinc-100 dark:border-zinc-900 mt-1 pt-2"
+                        >
+                          <LogOut className="h-3.5 w-3.5" />
+                          <span>Sign Out</span>
+                        </button>
                       </div>
                     </div>
                   </>
@@ -825,7 +1262,7 @@ export default function App() {
           {/* Main Content Arena with full width to cover screens beautifully */}
           <main className="flex-1 p-4 sm:p-6 overflow-y-auto w-full">
             <div className="space-y-6">
-              
+
               {/* Screen Tab Router Container with Motion transitions */}
               <div className="space-y-6">
                 <AnimatePresence mode="wait">
@@ -839,18 +1276,20 @@ export default function App() {
                     {screenLoading ? (
                       <ScreenSkeleton />
                     ) : activeTab === 'overview' && (
-                      <Overview 
-                        setActiveTab={setActiveTab} 
+                      <Overview
+                        setActiveTab={setActiveTab}
                         setOpenNewProjectModal={setOpenNewProjectModal}
                         setOpenInviteTeammateModal={setOpenInviteTeammateModal}
                         setOpenNewMemoryModal={setOpenNewMemoryModal}
                         isDark={isDarkActive}
                         services={services}
+                        cliConnected={cliConnected}
+                        cliLastActive={cliLastActive}
                       />
                     )}
                     {!screenLoading && activeTab === 'projects' && (
-                      <Projects 
-                        projects={projects} 
+                      <Projects
+                        projects={projects}
                         setProjects={setProjects}
                         openNewModal={openNewProjectModal}
                         setOpenNewModal={setOpenNewProjectModal}
@@ -858,36 +1297,39 @@ export default function App() {
                       />
                     )}
                     {!screenLoading && activeTab === 'deployments' && (
-                      <Deployments 
-                        deployments={deployments} 
-                        setDeployments={setDeployments} 
+                      <Deployments
+                        deployments={deployments}
+                        setDeployments={setDeployments}
                       />
                     )}
                     {!screenLoading && activeTab === 'services' && (
-                      <Services 
-                        services={services} 
-                        setServices={setServices} 
+                      <Services
+                        services={services}
+                        setServices={setServices}
                       />
                     )}
                     {!screenLoading && activeTab === 'agent' && (
-                      <AgentStudio />
+                      <AgentStudio
+                        cliConnected={cliConnected}
+                        cliLastActive={cliLastActive}
+                      />
                     )}
                     {!screenLoading && activeTab === 'analytics' && (
-                      <Analytics 
-                        isDark={isDarkActive} 
+                      <Analytics
+                        isDark={isDarkActive}
                       />
                     )}
                     {!screenLoading && activeTab === 'team' && (
-                      <Team 
-                        teamMembers={teamMembers} 
+                      <Team
+                        teamMembers={teamMembers}
                         setTeamMembers={setTeamMembers}
                         openInviteModal={openInviteTeammateModal}
                         setOpenInviteModal={setOpenInviteTeammateModal}
                       />
                     )}
                     {!screenLoading && activeTab === 'memory' && (
-                      <Memory 
-                        memoryEntries={memoryEntries} 
+                      <Memory
+                        memoryEntries={memoryEntries}
                         setMemoryEntries={setMemoryEntries}
                         openNewMemoryModal={openNewMemoryModal}
                         setOpenNewMemoryModal={setOpenNewMemoryModal}
@@ -897,7 +1339,7 @@ export default function App() {
                       <Security />
                     )}
                     {!screenLoading && activeTab === 'settings' && (
-                      <SettingsView 
+                      <SettingsView
                         theme={theme}
                         setTheme={setTheme}
                         density={density}
@@ -941,16 +1383,16 @@ export default function App() {
                 {/* Brand close bar */}
                 <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
                   <div className="flex items-center gap-2">
-                    <img 
-                      src={BRAND_MARK} 
-                      alt="ZEXVRO Logo" 
-                      className="h-8 w-8 object-contain shrink-0 invert dark:invert-0"
-                    />
-                    <img 
-                      src={BRAND_WORDMARK} 
-                      alt="ZEXVRO" 
-                      className="h-4.5 object-contain max-w-[130px] invert dark:invert-0"
-                    />
+                    <img
+                    src={BRAND_MARK}
+                    alt="ZEXVRO Logo"
+                    className="h-8 w-8 object-contain shrink-0 invert dark:invert-0"
+                  />
+                  <img
+                    src={BRAND_WORDMARK}
+                    alt="ZEXVRO"
+                    className="h-4.5 object-contain max-w-[130px] invert dark:invert-0"
+                  />
                   </div>
                   <button onClick={() => setMobileMenuOpen(false)} className="p-1 text-zinc-400 hover:text-zinc-650 dark:hover:text-zinc-200" title="Close menu">
                     <X className="h-5 w-5" />
@@ -1038,7 +1480,7 @@ export default function App() {
                   className="flex-1 bg-transparent text-xs text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none"
                   autoFocus
                 />
-                <button 
+                <button
                   onClick={() => setSearchOpen(false)}
                   className="text-[10px] border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded text-zinc-400 hover:text-zinc-600"
                 >
@@ -1133,24 +1575,12 @@ export default function App() {
                           Hello, workspace
                         </h4>
                         <p className="text-xl font-semibold text-zinc-400">
-                          How can Morph help?
+                          Ask Morph anything.
                         </p>
                       </div>
-                      <div className="mt-7 space-y-3">
-                        {[
-                          { label: 'Review this page', text: `Review the current ${currentSectionLabel} screen` },
-                          { label: 'Create a setup checklist', text: 'Create a service setup checklist' },
-                          { label: 'Draft an approval card', text: 'Draft an approval card for a transformation action' },
-                        ].map((chip) => (
-                          <button
-                            key={chip.label}
-                            onClick={() => setWidgetInput(chip.text)}
-                            className="block w-fit max-w-full rounded-full border border-white/15 bg-white/[0.03] px-4 py-2 text-left text-sm font-medium text-blue-300 transition hover:border-violet-400/50 hover:bg-violet-500/10 hover:text-violet-100"
-                          >
-                            {chip.label}
-                          </button>
-                        ))}
-                      </div>
+                      <p className="mt-5 max-w-sm text-sm leading-6 text-zinc-500">
+                        Messages are sent to the same opencode proxy as Agentic Operations.
+                      </p>
                     </div>
                   ) : (
                     <div className="space-y-4 text-sm">
