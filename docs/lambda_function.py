@@ -108,7 +108,7 @@ def lambda_handler(event, context):
             }
         )
 
-        frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+        frontend_url = os.environ.get("FRONTEND_URL", "https://zexvro.pages.dev")
         
         return respond(
             200,

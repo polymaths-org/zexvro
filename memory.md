@@ -179,11 +179,11 @@ Use `None` for empty fields. Do not delete fields.
 ## Active Handoffs
 
 - Handoff:
-  - Current state: Morph CLI redesigned. Frontend settings panel, mock server authentication flow, CLI login/logout/status, and Stellar RAG knowledge base fully implemented and tested.
-  - Next step: Wire real LLM provider (using credentials retrieved from local settings or auth sessions) into the agent chat flow.
+  - Current state: Morph CLI/TUI fully implemented, integrated with remote completions API, and deployed.
+  - Next step: Wait for Nabil's feedback on De-pin scope.
   - Files to inspect: `services/transformation-agent/cli/`, `context.md`, `memory.md`, `frontend/`.
   - Do not touch: De-pin, other developers' services.
-  - Owner needed: Paris for Morph next steps; Nabil for De-pin context.
+  - Owner needed: Nabil for De-pin context.
 
 ## Change History
 
@@ -356,4 +356,14 @@ Use `None` for empty fields. Do not delete fields.
 - Follow-ups: None.
 - Blockers: None.
 - Verification: Successful TypeScript frontend compilation (`tsc --noEmit`).
+
+## 2026-07-09 - Antigravity - Production Deployment Mappings & API Bug Fixes
+
+- Service or area: Frontend / Morph CLI Auth
+- Files changed: `frontend/src/App.tsx`, `frontend/src/components/dashboard/Settings.tsx`, `docs/lambda_function.py`, `scratch_lambda/lambda_function.py`, `services/transformation-agent/cli/tui/screens/login.py`, `context.md`, `memory.md`
+- Summary: Resolved 405 Method Not Allowed and API integration errors on production pages deployment by replacing local dev proxy `/api/agent/chat` routes with direct CORS-enabled requests to remote AWS API Gateway completions (`${API_BASE_URL}/api/chat`). Set default TUI device activation fallback URLs to production `https://zexvro.pages.dev` to ensure correct device authentication redirection links are presented.
+- Decisions: Accepted - All frontend client integrations point to global API Gateway endpoints rather than relative dev paths.
+- Follow-ups: None.
+- Blockers: None.
+- Verification: Completed successful Vite build. Checked git status.
 
