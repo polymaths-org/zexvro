@@ -68,6 +68,7 @@ The repository currently contains:
 - Brand assets.
 - Shared memory workflow.
 - `frontend/`, the Vite + React frontend workspace.
+- `services/transformation-agent/` (Morph CLI skeleton) — first service scaffolded.
 
 The frontend application is scaffolded in `frontend/`. Run frontend commands from that folder.
 
@@ -84,7 +85,6 @@ Frontend workspace notes:
 - Run locally: `cd frontend && npm run dev`.
 - Validate before handoff: `cd frontend && npm run lint && npm run build`.
 - The UI is still prototype/frontend-only. Do not claim live backend, auth, wallet, blockchain, deployment provider, or secrets-manager integrations until those are implemented.
-- Morph frontend surfaces are currently prototype UI only: a right-side assistant dock, an Agentic Operations chat page, a Morph logo sidebar label, a workspace selector, a support CTA, and an overview layout focused on workspace readiness. Future page-aware assistance should pass current route/page context through a documented backend contract before real actions are enabled.
 
 ## Team Ownership
 
@@ -92,7 +92,7 @@ There are three developers. Each developer owns two MVP services.
 
 | Developer | Alias | Owns |
 | --- | --- | --- |
-| Paris | `paris-29` | Zero-Knowledge Privacy Pool, Transformation Agent |
+| Paris | `paris-29` | Zero-Knowledge Privacy Pool, Transformation Agent (Morph) |
 | Rushi | `Wraient` | A-2-A Trade Pipeline, Captcha-like Agent Authentication Service |
 | Nabil | `n4bi10p` | NFT Service, De-pin |
 
@@ -132,9 +132,11 @@ Unknowns:
 - Which data must be hidden versus verifiable.
 - Whether this is a protocol, API, dashboard feature, or all three.
 
-### 2. Transformation Agent
+### 2. Transformation Agent — Morph
 
 Owner: Paris / `paris-29`
+Product name: **Morph**
+Status: CLI fully implemented & packaged
 
 Problem:
 
@@ -150,21 +152,28 @@ Inspiration:
 
 - Workspace-level assistant placement like Gemini in Google Workspace.
 - Platform intelligence direction similar to Snowflake Cortex-style assistants.
+- OpenAI Codex CLI for agent UX patterns.
 
 Agent boundaries:
 
-- Do not invent the final product name yet.
 - Do not add broad autonomous actions without permission and audit trail design.
 - All agent memory behavior must separate durable user memory, temporary task context, secrets, and logs.
 - Repository inspection must avoid leaking private code across accounts.
 
+Current implementation:
+
+- CLI built with Python + Typer.
+- SQLite-backed persistent memory (per-user key-value + session store).
+- Tool registry: read/write files, run commands, analyze codebase.
+- Agent loop with intent routing.
+- Ready to wire to OpenAI API.
+- Path: `services/transformation-agent/cli/`
+
 Unknowns:
 
-- Agent runtime.
-- Memory storage model.
-- CLI architecture.
 - Auth model between web agent and CLI agent.
 - Repository ingestion strategy.
+- Web panel design.
 
 ### 3. A-2-A Trade Pipeline
 
@@ -346,10 +355,10 @@ When code is scaffolded, prefer a structure that helps agents navigate quickly. 
 ```text
 apps/
   web/                 # Vite + React platform UI
-  cli/                 # Future CLI agent or developer CLI
+  cli/                 # Future standalone CLI (Morph currently in services/)
 services/
   privacy-pool/
-  transformation-agent/
+  transformation-agent/   # Morph lives here
   a2a-trade-pipeline/
   agent-auth/
   nft-service/

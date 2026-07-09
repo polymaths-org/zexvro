@@ -205,6 +205,15 @@ export default function Security() {
           </AnimatePresence>
 
           {/* Keys Table list */}
+          {keys.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <div className="p-2.5 rounded-full border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-400 mb-3">
+                <KeyRound className="h-5 w-5" />
+              </div>
+              <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">No API keys created</p>
+              <p className="text-[11px] text-zinc-400 mt-1">Generate your first key to authenticate workspace operations.</p>
+            </div>
+          ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
@@ -266,6 +275,7 @@ export default function Security() {
               </tbody>
             </table>
           </div>
+          )}
         </div>
 
         {/* Right Column: Security Policy Guidelines */}
