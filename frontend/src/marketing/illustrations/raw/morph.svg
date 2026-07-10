@@ -1,0 +1,29 @@
+<svg width="640" height="460" viewBox="0 0 640 460" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="morph-title morph-desc">
+  <title id="morph-title">Morph transformation agent illustration</title>
+  <desc id="morph-desc">A repository graph enters a terminal where Morph writes a migration plan.</desc>
+  <rect x="1" y="1" width="638" height="458" rx="8" fill="#050505" stroke="#27272A" stroke-width="2"/>
+  <g id="repo-graph" stroke="#FAFAFA" stroke-width="2">
+    <path d="M92 122l72 62M164 184l-48 88M164 184l90 12M254 196l-34 94" stroke="#3B82F6"/>
+    <rect x="68" y="98" width="48" height="48" rx="6" fill="#111113"/>
+    <rect x="140" y="160" width="48" height="48" rx="6" fill="#111113"/>
+    <rect x="92" y="248" width="48" height="48" rx="6" fill="#111113"/>
+    <rect x="230" y="172" width="48" height="48" rx="6" fill="#111113"/>
+    <rect x="196" y="266" width="48" height="48" rx="6" fill="#111113"/>
+  </g>
+  <g id="terminal-window">
+    <rect x="306" y="78" width="272" height="304" rx="8" fill="#0A0A0B" stroke="#FAFAFA" stroke-width="2"/>
+    <path d="M306 122h272" stroke="#27272A" stroke-width="2"/>
+    <circle cx="332" cy="101" r="5" fill="#3B82F6"/>
+    <circle cx="354" cy="101" r="5" fill="#3F3F46"/>
+    <circle cx="376" cy="101" r="5" fill="#3F3F46"/>
+    <g id="terminal-copy" fill="#FAFAFA" font-family="JetBrains Mono, monospace" font-size="18">
+      <text class="terminal-line" x="332" y="164">&gt; morph inspect repo</text>
+      <text class="terminal-line" x="332" y="202">read: deployment files</text>
+      <text class="terminal-line" x="332" y="240">map: web2 services</text>
+      <text class="terminal-line" x="332" y="278">plan: web3-ready path</text>
+      <text class="terminal-line" x="332" y="316">status: human approval</text>
+    </g>
+    <path id="terminal-cursor" d="M332 340h28" stroke="#3B82F6" stroke-width="4"/>
+  </g>
+  <path id="morph-transfer" d="M278 196C308 196 294 230 324 230" stroke="#3B82F6" stroke-width="3" stroke-dasharray="7 11"/>
+</svg>

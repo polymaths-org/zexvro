@@ -1,0 +1,136 @@
+import * as React from "react";
+import type { SVGProps } from "react";
+const SvgDepin = (props: SVGProps<SVGSVGElement>) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    fill="none"
+    aria-labelledby="depin-title depin-desc"
+    viewBox="0 0 640 460"
+    {...props}
+  >
+    <desc>
+      {
+        "A muted network slowly comes into focus while the scope remains marked as coming soon."
+      }
+    </desc>
+    <rect
+      width={638}
+      height={458}
+      x={1}
+      y={1}
+      fill="#050505"
+      stroke="#27272a"
+      strokeWidth={2}
+      rx={8}
+    />
+    <g stroke="#fafafa" strokeWidth={2} opacity={0.2}>
+      <path
+        d="m106 312 116-116 98 52 112-114 104 178M222 196l-42 148m140-96 16 98m96-212-84-48m84 48 82 16"
+        className="depin_svg__depin-line"
+      />
+      <rect
+        width={48}
+        height={48}
+        x={82}
+        y={288}
+        fill="#111113"
+        className="depin_svg__depin-node"
+        rx={6}
+      />
+      <rect
+        width={48}
+        height={48}
+        x={198}
+        y={172}
+        fill="#111113"
+        className="depin_svg__depin-node"
+        rx={6}
+      />
+      <rect
+        width={48}
+        height={48}
+        x={296}
+        y={224}
+        fill="#111113"
+        className="depin_svg__depin-node"
+        rx={6}
+      />
+      <rect
+        width={48}
+        height={48}
+        x={408}
+        y={110}
+        fill="#111113"
+        className="depin_svg__depin-node"
+        rx={6}
+      />
+      <rect
+        width={48}
+        height={48}
+        x={512}
+        y={288}
+        fill="#111113"
+        className="depin_svg__depin-node"
+        rx={6}
+      />
+      <rect
+        width={48}
+        height={48}
+        x={156}
+        y={320}
+        fill="#111113"
+        className="depin_svg__depin-node"
+        rx={6}
+      />
+      <rect
+        width={48}
+        height={48}
+        x={312}
+        y={322}
+        fill="#111113"
+        className="depin_svg__depin-node"
+        rx={6}
+      />
+      <rect
+        width={48}
+        height={48}
+        x={324}
+        y={62}
+        fill="#111113"
+        className="depin_svg__depin-node"
+        rx={6}
+      />
+      <rect
+        width={48}
+        height={48}
+        x={490}
+        y={126}
+        fill="#111113"
+        className="depin_svg__depin-node"
+        rx={6}
+      />
+    </g>
+    <g opacity={0.85}>
+      <rect
+        width={228}
+        height={80}
+        x={206}
+        y={190}
+        fill="#0a0a0b"
+        stroke="#3f3f46"
+        strokeWidth={2}
+        rx={8}
+      />
+      <text
+        x={248}
+        y={238}
+        fill="#fafafa"
+        fontFamily="JetBrains Mono, monospace"
+        fontSize={22}
+      >
+        {"COMING INTO FOCUS"}
+      </text>
+    </g>
+  </svg>
+);
+export default SvgDepin;

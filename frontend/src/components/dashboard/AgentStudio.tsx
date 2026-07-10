@@ -127,10 +127,12 @@ function renderMessageContent(text: string) {
   return <>{parts}</>;
 }
 
+const IS_LOCAL_HOST = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 const API_BASE_URL = import.meta.env.VITE_API_URL ||
-  ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  (IS_LOCAL_HOST
     ? 'http://localhost:8080'
     : 'https://qkuostruh3.execute-api.us-east-1.amazonaws.com');
+const AGENT_CHAT_URL = IS_LOCAL_HOST ? '/api/agent/chat' : `${API_BASE_URL}/api/chat`;
 
 export default function AgentStudio({ cliConnected = false, cliLastActive = null }: AgentStudioProps) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -173,24 +175,22 @@ export default function AgentStudio({ cliConnected = false, cliLastActive = null
     const systemPrompt = STELLAR_SYSTEM_PROMPT;
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/chat`, {
+      const response = await fetch(AGENT_CHAT_URL, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          model: 'big-pickle',
-          messages: [
+        body: JSON.stringify(buildAgentChatPayload(
+          'Agentic Operations',
+          [
             { role: 'system', content: systemPrompt },
             ...nextMessages.map((m) => ({
-              role: m.sender === 'user' ? 'user' : 'assistant',
+              role: (m.sender === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
               content: m.text,
             }))
           ],
-          metadata: {
-            workspace: 'ZEXVRO',
-          }
-        }),
+          agentSettings,
+        )),
       });
 
       const data = await response.json().catch(() => ({}));
