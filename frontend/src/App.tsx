@@ -5,6 +5,7 @@ import {
   Plus, Mail, Users
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 
 // Subcomponents
 import Overview from './components/dashboard/Overview';
@@ -17,15 +18,11 @@ import Team from './components/dashboard/Team';
 import Memory from './components/dashboard/Memory';
 import Security from './components/dashboard/Security';
 import SettingsView from './components/dashboard/Settings';
-import AuthOverlay from './components/auth/AuthOverlay';
-import CliActivation from './components/auth/CliActivation';
-import { globalSignOut, type UserSession } from './auth/cognito';
+import CollectionCreate from './services/nft/CollectionCreate';
+import CollectionDashboard from './services/nft/CollectionDashboard';
+import { useAuthSession } from './auth/AuthSessionProvider';
+import type { UserSession } from './auth/cognito';
 import { buildAgentChatPayload } from './agent/settings';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL ||
-  ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-    ? 'http://localhost:8080'
-    : 'https://qkuostruh3.execute-api.us-east-1.amazonaws.com');
 
 // Mock Lists initial data
 import {
@@ -170,17 +167,6 @@ function loadStoredWorkspaces(storageKey: string, fallback: Workspace[]) {
   }
 }
 
-function isUsableSession(value: unknown): value is UserSession {
-  if (!value || typeof value !== 'object') return false;
-  const session = value as Partial<UserSession>;
-  return (
-    typeof session.username === 'string' &&
-    typeof session.token === 'string' &&
-    session.token.split('.').length === 3 &&
-    !session.token.startsWith('prod_jwt_token_')
-  );
-}
-
 const SECTION_LABELS: Record<string, string> = {
   overview: 'Overview',
   projects: 'Projects',
@@ -191,8 +177,31 @@ const SECTION_LABELS: Record<string, string> = {
   team: 'Team',
   memory: 'Memory',
   security: 'Security',
-  settings: 'Settings'
+  settings: 'Settings',
+  nft: 'NFT Collections',
+  'nft-create': 'Create NFT Collection',
 };
+
+const TAB_PATHS: Record<string, string> = {
+  overview: '/overview',
+  projects: '/projects',
+  deployments: '/deployments',
+  services: '/services',
+  nft: '/services/nft',
+  agent: '/agent',
+  analytics: '/analytics',
+  team: '/team',
+  memory: '/memory',
+  security: '/security',
+  settings: '/settings',
+};
+
+function tabForPath(pathname: string) {
+  if (pathname === '/services/nft/collections/new') return 'nft-create';
+  if (pathname.startsWith('/services/nft')) return 'nft';
+  const segment = pathname.split('/').filter(Boolean)[0];
+  return segment && TAB_PATHS[segment] ? segment : 'overview';
+}
 
 type WidgetMessage = {
   id: number;
@@ -223,6 +232,7 @@ type NavItem = {
   id: string;
   label: string;
   icon: CustomIconName;
+  path?: string;
 };
 
 function MorphIcon({ className = '' }: { className?: string }) {
@@ -380,63 +390,26 @@ function ScreenSkeleton() {
 }
 
 export default function App() {
-  const [userSession, setUserSession] = useState<UserSession | null>(() => {
-    const saved = localStorage.getItem('zexvro_user_session');
-    if (!saved) return null;
-    try {
-      const parsed = JSON.parse(saved);
-      if (isUsableSession(parsed)) return parsed;
-      localStorage.removeItem('zexvro_user_session');
-      return null;
-    } catch {
-      localStorage.removeItem('zexvro_user_session');
-      return null;
-    }
-  });
+  const { userSession, cliConnected, cliLastActive, signOut } = useAuthSession();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const activeTab = tabForPath(location.pathname);
 
-  const [cliConnected, setCliConnected] = useState<boolean>(false);
-  const [cliLastActive, setCliLastActive] = useState<number | null>(null);
-  const [activationCode, setActivationCode] = useState<string | null>(null);
+  const setActiveTab = (tab: string) => {
+    navigate(TAB_PATHS[tab] || '/overview');
+  };
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get('code') || params.get('activate');
-    if (code) {
-      setActivationCode(code.toUpperCase());
-    }
-  }, []);
+  const navigateToItem = (item: NavItem) => {
+    navigate(item.path || TAB_PATHS[item.id] || '/overview');
+  };
 
-  useEffect(() => {
-    if (!userSession) return;
-
-    const checkCliStatus = async () => {
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/memory`, {
-          headers: {
-            'Authorization': `Bearer ${userSession.token}`
-          }
-        });
-        if (response.ok) {
-          const data = await response.json();
-          if (data.memory && data.memory.cli_connected) {
-            setCliConnected(true);
-            setCliLastActive(data.memory.cli_last_active);
-          } else {
-            setCliConnected(false);
-          }
-        }
-      } catch (err) {
-        console.error("Error checking CLI status:", err);
-      }
-    };
-
-    checkCliStatus();
-    const interval = setInterval(checkCliStatus, 5000);
-    return () => clearInterval(interval);
-  }, [userSession]);
+  const isNavItemSelected = (item: NavItem) => {
+    if (item.path === '/services/nft') return location.pathname.startsWith('/services/nft');
+    if (item.path) return `${location.pathname}${location.search}` === item.path;
+    return activeTab === item.id;
+  };
 
   // Navigation & Shell states
-  const [activeTab, setActiveTab] = useState<string>('overview');
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
   const [searchOpen, setSearchOpen] = useState<boolean>(false);
@@ -483,7 +456,7 @@ export default function App() {
   const [widgetMessages, setWidgetMessages] = useState<WidgetMessage[]>([]);
   const [widgetInput, setWidgetInput] = useState('');
   const [widgetThinking, setWidgetThinking] = useState(false);
-  const currentSectionLabel = SECTION_LABELS[activeTab] || activeTab;
+  const currentSectionLabel = SECTION_LABELS[activeTab] || 'Overview';
   const assistantDockOpen = agentWidgetOpen && activeTab !== 'agent';
   const selectedWorkspace =
     workspaces.find(workspace => workspace.id === selectedWorkspaceId) ||
@@ -664,7 +637,7 @@ export default function App() {
     setScreenLoading(true);
     const timer = window.setTimeout(() => setScreenLoading(false), reducedMotion ? 0 : 180);
     return () => window.clearTimeout(timer);
-  }, [activeTab, reducedMotion]);
+  }, [location.pathname, location.search, reducedMotion]);
 
   useEffect(() => {
     if (sidebarCollapsed) setWorkspaceMenuOpen(false);
@@ -676,6 +649,7 @@ export default function App() {
     { id: 'projects', label: 'Projects', icon: 'projects' },
     { id: 'deployments', label: 'Deployments', icon: 'deployments' },
     { id: 'services', label: 'Services', icon: 'services' },
+    { id: 'nft', label: 'NFT Service', icon: 'nft', path: '/services/nft' },
     { id: 'agent', label: 'Agentic Operations', icon: 'agent' },
     { id: 'analytics', label: 'Analytics', icon: 'analytics' },
     { id: 'team', label: 'Team', icon: 'team' },
@@ -702,12 +676,12 @@ export default function App() {
       id: 'services',
       label: 'MVP Services',
       subItems: [
-        { id: 'services', label: 'Privacy Pool', icon: 'privacy' },
-        { id: 'services', label: 'Transformation', icon: 'transform' },
-        { id: 'services', label: 'Trade Pipeline', icon: 'trade' },
-        { id: 'services', label: 'Agent Auth', icon: 'auth' },
-        { id: 'services', label: 'NFT Service', icon: 'nft' },
-        { id: 'services', label: 'De-pin', icon: 'depin' },
+        { id: 'services', label: 'Privacy Pool', icon: 'privacy', path: '/services?service=privacy' },
+        { id: 'agent', label: 'Transformation', icon: 'transform', path: '/agent' },
+        { id: 'services', label: 'Trade Pipeline', icon: 'trade', path: '/services?service=trade' },
+        { id: 'services', label: 'Agent Auth', icon: 'auth', path: '/services?service=auth' },
+        { id: 'nft', label: 'NFT Service', icon: 'nft', path: '/services/nft' },
+        { id: 'services', label: 'De-pin', icon: 'depin', path: '/services?service=depin' },
       ],
     },
     {
@@ -735,27 +709,6 @@ export default function App() {
       ],
     },
   ];
-
-  if (!userSession) {
-    return <AuthOverlay onSuccess={setUserSession} />;
-  }
-
-  if (activationCode) {
-    return (
-      <CliActivation
-        code={activationCode}
-        token={userSession.idToken || userSession.token}
-        apiBaseUrl={API_BASE_URL}
-        onClose={() => {
-          setActivationCode(null);
-          const url = new URL(window.location.href);
-          url.searchParams.delete('code');
-          url.searchParams.delete('activate');
-          window.history.replaceState({}, '', url.toString());
-        }}
-      />
-    );
-  }
 
   return (
     <div className={`min-h-screen font-sans antialiased text-zinc-900 dark:text-zinc-100 bg-zinc-50 dark:bg-[#050505] transition-colors duration-200 ${
@@ -999,11 +952,11 @@ export default function App() {
               <div className="w-8 h-px bg-zinc-100 dark:bg-zinc-800 my-1" />
 
               {compactNavigationItems.map((item, idx) => {
-                const isSelected = activeTab === item.id;
+                const isSelected = isNavItemSelected(item);
                 return (
                   <button
                     key={`${item.id}-${idx}`}
-                    onClick={() => setActiveTab(item.id)}
+                    onClick={() => navigateToItem(item)}
                     className={`p-2.5 rounded-lg transition-all cursor-pointer relative group ${
                       isSelected
                         ? 'bg-zinc-150/70 dark:bg-zinc-900 text-brand-blue'
@@ -1059,13 +1012,11 @@ export default function App() {
                           className="overflow-hidden space-y-0.5 pl-3 border-l border-zinc-100 dark:border-zinc-800 ml-3.5"
                         >
                           {cat.subItems.map((sub, sIdx) => {
-                            // MVP services map to the shared Services screen until service-local routes exist.
-                            // Other direct tabs highlight if tab matches.
-                            const isSelected = activeTab === sub.id;
+                            const isSelected = isNavItemSelected(sub);
                             return (
                               <button
                                 key={`${sub.label}-${sIdx}`}
-                                onClick={() => setActiveTab(sub.id)}
+                                onClick={() => navigateToItem(sub)}
                                 className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded text-xs font-medium transition-all cursor-pointer ${
                                   isSelected
                                     ? 'bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-white font-semibold'
@@ -1241,10 +1192,7 @@ export default function App() {
                         <button
                           onClick={() => {
                             setUserMenuOpen(false);
-                            globalSignOut(userSession?.token).finally(() => {
-                              localStorage.removeItem('zexvro_user_session');
-                              setUserSession(null);
-                            });
+                            void signOut();
                           }}
                           className="w-full text-left px-3.5 py-2 hover:bg-rose-50 dark:hover:bg-rose-950/20 text-rose-600 dark:text-rose-400 flex items-center gap-2 cursor-pointer transition-colors border-t border-zinc-100 dark:border-zinc-900 mt-1 pt-2"
                         >
@@ -1267,7 +1215,7 @@ export default function App() {
               <div className="space-y-6">
                 <AnimatePresence mode="wait">
                   <motion.div
-                    key={activeTab}
+                    key={`${location.pathname}${location.search}`}
                     initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -6 }}
@@ -1275,78 +1223,65 @@ export default function App() {
                   >
                     {screenLoading ? (
                       <ScreenSkeleton />
-                    ) : activeTab === 'overview' && (
-                      <Overview
-                        setActiveTab={setActiveTab}
-                        setOpenNewProjectModal={setOpenNewProjectModal}
-                        setOpenInviteTeammateModal={setOpenInviteTeammateModal}
-                        setOpenNewMemoryModal={setOpenNewMemoryModal}
-                        isDark={isDarkActive}
-                        services={services}
-                        cliConnected={cliConnected}
-                        cliLastActive={cliLastActive}
-                      />
-                    )}
-                    {!screenLoading && activeTab === 'projects' && (
-                      <Projects
-                        projects={projects}
-                        setProjects={setProjects}
-                        openNewModal={openNewProjectModal}
-                        setOpenNewModal={setOpenNewProjectModal}
-                        setActiveTab={setActiveTab}
-                      />
-                    )}
-                    {!screenLoading && activeTab === 'deployments' && (
-                      <Deployments
-                        deployments={deployments}
-                        setDeployments={setDeployments}
-                      />
-                    )}
-                    {!screenLoading && activeTab === 'services' && (
-                      <Services
-                        services={services}
-                        setServices={setServices}
-                      />
-                    )}
-                    {!screenLoading && activeTab === 'agent' && (
-                      <AgentStudio
-                        cliConnected={cliConnected}
-                        cliLastActive={cliLastActive}
-                      />
-                    )}
-                    {!screenLoading && activeTab === 'analytics' && (
-                      <Analytics
-                        isDark={isDarkActive}
-                      />
-                    )}
-                    {!screenLoading && activeTab === 'team' && (
-                      <Team
-                        teamMembers={teamMembers}
-                        setTeamMembers={setTeamMembers}
-                        openInviteModal={openInviteTeammateModal}
-                        setOpenInviteModal={setOpenInviteTeammateModal}
-                      />
-                    )}
-                    {!screenLoading && activeTab === 'memory' && (
-                      <Memory
-                        memoryEntries={memoryEntries}
-                        setMemoryEntries={setMemoryEntries}
-                        openNewMemoryModal={openNewMemoryModal}
-                        setOpenNewMemoryModal={setOpenNewMemoryModal}
-                      />
-                    )}
-                    {!screenLoading && activeTab === 'security' && (
-                      <Security />
-                    )}
-                    {!screenLoading && activeTab === 'settings' && (
-                      <SettingsView
-                        theme={theme}
-                        setTheme={setTheme}
-                        density={density}
-                        setDensity={setDensity}
-                        reducedMotion={reducedMotion}
-                        setReducedMotion={setReducedMotion}
-                      />
+                    ) : (
+                      <Routes>
+                        <Route path="/" element={<Navigate to="/overview" replace />} />
+                        <Route path="/overview" element={(
+                          <Overview
+                            setActiveTab={setActiveTab}
+                            setOpenNewProjectModal={setOpenNewProjectModal}
+                            setOpenInviteTeammateModal={setOpenInviteTeammateModal}
+                            setOpenNewMemoryModal={setOpenNewMemoryModal}
+                            isDark={isDarkActive}
+                            services={services}
+                            cliConnected={cliConnected}
+                            cliLastActive={cliLastActive}
+                          />
+                        )} />
+                        <Route path="/projects" element={(
+                          <Projects
+                            projects={projects}
+                            setProjects={setProjects}
+                            openNewModal={openNewProjectModal}
+                            setOpenNewModal={setOpenNewProjectModal}
+                            setActiveTab={setActiveTab}
+                          />
+                        )} />
+                        <Route path="/deployments" element={<Deployments deployments={deployments} setDeployments={setDeployments} />} />
+                        <Route path="/services" element={<Services services={services} setServices={setServices} />} />
+                        <Route path="/services/nft" element={<CollectionDashboard workspaceId={selectedWorkspace.id} />} />
+                        <Route path="/services/nft/collections/new" element={<CollectionCreate workspaceId={selectedWorkspace.id} />} />
+                        <Route path="/agent" element={<AgentStudio cliConnected={cliConnected} cliLastActive={cliLastActive} />} />
+                        <Route path="/analytics" element={<Analytics isDark={isDarkActive} />} />
+                        <Route path="/team" element={(
+                          <Team
+                            teamMembers={teamMembers}
+                            setTeamMembers={setTeamMembers}
+                            openInviteModal={openInviteTeammateModal}
+                            setOpenInviteModal={setOpenInviteTeammateModal}
+                          />
+                        )} />
+                        <Route path="/memory" element={(
+                          <Memory
+                            memoryEntries={memoryEntries}
+                            setMemoryEntries={setMemoryEntries}
+                            openNewMemoryModal={openNewMemoryModal}
+                            setOpenNewMemoryModal={setOpenNewMemoryModal}
+                          />
+                        )} />
+                        <Route path="/security" element={<Security />} />
+                        <Route path="/settings" element={(
+                          <SettingsView
+                            theme={theme}
+                            setTheme={setTheme}
+                            density={density}
+                            setDensity={setDensity}
+                            reducedMotion={reducedMotion}
+                            setReducedMotion={setReducedMotion}
+                          />
+                        )} />
+                        <Route path="*" element={<Navigate to="/overview" replace />} />
+                      </Routes>
                     )}
                   </motion.div>
                 </AnimatePresence>
@@ -1402,12 +1337,12 @@ export default function App() {
                 {/* Navigation links list */}
                 <div className="space-y-1 text-xs">
                   {navigationItems.map((item) => {
-                    const isSelected = activeTab === item.id;
+                    const isSelected = isNavItemSelected(item);
                     return (
                       <button
                         key={item.id}
                         onClick={() => {
-                          setActiveTab(item.id);
+                          navigateToItem(item);
                           setMobileMenuOpen(false);
                         }}
                         className={`w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-lg font-semibold transition-all ${
@@ -1497,7 +1432,7 @@ export default function App() {
                     <button
                       key={item.id}
                       onClick={() => {
-                        setActiveTab(item.id);
+                        navigateToItem(item);
                         setSearchOpen(false);
                         setSearchQuery('');
                       }}
@@ -1639,7 +1574,7 @@ export default function App() {
           {!agentWidgetOpen && (
             <button
               onClick={() => setAgentWidgetOpen(true)}
-              className="fixed right-0 top-1/2 z-40 flex -translate-y-1/2 items-center justify-center rounded-l-lg border-y border-l border-zinc-200 bg-white/85 px-2.5 py-3 shadow-lg shadow-zinc-950/10 backdrop-blur-md transition hover:pl-4 dark:border-white/10 dark:bg-black/70"
+              className="fixed right-0 top-1/2 z-40 hidden -translate-y-1/2 items-center justify-center rounded-l-lg border-y border-l border-zinc-200 bg-white/85 px-2.5 py-3 shadow-lg shadow-zinc-950/10 backdrop-blur-md transition hover:pl-4 sm:flex dark:border-white/10 dark:bg-black/70"
               title="Open Morph Assistant"
             >
               <img src={MORPH_LOGO} alt="Morph Assistant" className="h-6 w-6 shrink-0 object-contain invert dark:invert-0" />

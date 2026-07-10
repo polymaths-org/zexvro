@@ -1,0 +1,23 @@
+{
+  "port": 4102,
+  "facilitatorUrl": "https://x402.org/facilitator",
+  "maxUpstreamResponseBytes": 10485760,
+  "replayTtlMs": 600000,
+  "unpaidRateLimit": {
+    "maxRequests": 30,
+    "windowMs": 60000
+  },
+  "providers": [
+    {
+      "route": "/v1/weather",
+      "method": "GET",
+      "upstreamUrl": "https://api.example.com/weather",
+      "description": "Current weather data",
+      "price": "$0.001",
+      "recipient": "REPLACE_WITH_STELLAR_G_ADDRESS",
+      "network": "stellar:testnet",
+      "timeoutMs": 5000,
+      "upstreamSecretRef": "WEATHER_API_TOKEN"
+    }
+  ]
+}
