@@ -1,0 +1,16 @@
+[package]
+name = "zexvro-nft-collection"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+soroban-sdk = "26.1.0"
+stellar-tokens = "0.7.2"
+
+[dev-dependencies]
+soroban-sdk = { version = "26.1.0", features = ["testutils"] }

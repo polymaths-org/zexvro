@@ -61,8 +61,8 @@ If a detail is only a work update, keep it here.
 | Transformation Agent (Morph) | Paris / `paris-29` | **In Progress — CLI built** | Owned by Paris. CLI skeleton done. Next: wire LLM, add web panel. |
 | A-2-A Trade Pipeline | Rushi / `Wraient` | Planned | Ask or record coordination before changing protocol, wallet, or negotiation design |
 | Captcha-like Agent Authentication Service | Rushi / `Wraient` | Planned | Ask or record coordination before changing identity, SDK, classifier, or HDM design |
-| NFT Service | Nabil / `n4bi10p` | Planned | Ask or record coordination before changing minting, metadata, checkout, or NFT model |
-| De-pin | Nabil / `n4bi10p` | Needs Nabil context | Do not implement until scope is documented |
+| NFT Service | Nabil / `n4bi10p` | Local prototype implemented; testnet integration pending | Ask or record coordination before changing minting, metadata, checkout, or NFT model |
+| De-pin | Nabil / `n4bi10p` | Local gateway implemented; provider/testnet integration pending | Follow the accepted exact per-request x402 scope |
 
 Shared areas that need extra care:
 
@@ -84,8 +84,8 @@ Shared areas that need extra care:
 3. Do not silently change shared contracts.
 4. Do not introduce secrets or credentials.
 5. Do not commit `.env` files.
-6. Do not invent De-pin scope.
-7. Do not treat planned stack choices as fully designed architecture.
+6. Keep De-pin v1 on standard x402 exact per-request payments; streaming and sessions are deferred.
+7. Do not treat locally tested code as a deployed integration.
 8. Update this file after meaningful changes.
 9. Commit the code/docs change and memory update together.
 10. If a decision is uncertain, mark it as `Draft` or `Proposed`, not `Accepted`.
@@ -167,23 +167,32 @@ Use `None` for empty fields. Do not delete fields.
 - Decision: Accepted - Prefer Stellar Network for Web3/backend pieces where technically appropriate.
 - Decision: Accepted - Morph is the product name for Transformation Agent.
 - Decision: Accepted - CLI-first approach for Morph. SQLite for MVP memory.
+- Decision: Accepted - NFT Service uses one Soroban contract per collection with OpenZeppelin Stellar `NonFungibleToken` Base. SEP-41 is used for the USDC payment token, not as the NFT standard. No multi-chain in v1.
+- Decision: Accepted - NFT metadata uses Pinata-backed public IPFS; gameplay API attributes must be identified as mutable.
+- Decision: Accepted - NFT minting is studio-owner or delegated-minter controlled. Royalty data is informational and must not be described as enforcement on arbitrary transfers.
+- Decision: Accepted - Primary NFT checkout atomically transfers USDC and mints. Buyers sign Soroban auth entries; the platform sponsor signs/pays the envelope without custodying buyer funds.
+- Decision: Accepted - De-pin uses the official x402 v2 `exact` scheme on Stellar testnet USDC with standard payment headers and facilitator-sponsored fees.
+- Decision: Accepted - De-pin v1 protects concrete idempotent HTTP `GET`/`HEAD` resources. Streaming, sessions, custom facilitators, and physical-device adapters are deferred.
+- Decision: Accepted - Frontend uses React Router for URL-based routing.
 - Decision: Proposed - Use AWS for cloud infrastructure where needed.
-- Decision: Blocked - De-pin scope needs Nabil's input before implementation.
 
 ## Active Blockers
 
 | Blocker | Owner needed | Impact |
 | --- | --- | --- |
-| De-pin scope is undefined | Nabil / `n4bi10p` | De-pin should not be implemented yet |
+| Pinata and Stellar sponsor credentials are not configured | Nabil / `n4bi10p` | NFT API cannot perform a live testnet upload/deployment/checkout run |
+| NFT frontend is not connected to the authenticated API | Nabil plus shared-auth owner | Browser flow remains an honest local draft prototype |
+| No real De-pin provider/recipient test configuration exists | Nabil / `n4bi10p` | Gateway is tested with adapters but has not settled a live Stellar testnet payment |
+| Replay and unpaid-rate-limit state is in memory | Nabil / `n4bi10p` | Do not run multiple production gateway instances until shared persistence is added |
 
 ## Active Handoffs
 
 - Handoff:
-  - Current state: Morph CLI redesigned. Frontend settings panel, mock server authentication flow, CLI login/logout/status, and Stellar RAG knowledge base fully implemented and tested.
-  - Next step: Wire real LLM provider (using credentials retrieved from local settings or auth sessions) into the agent chat flow.
-  - Files to inspect: `services/transformation-agent/cli/`, `context.md`, `memory.md`, `frontend/`.
-  - Do not touch: De-pin, other developers' services.
-  - Owner needed: Paris for Morph next steps; Nabil for De-pin context.
+  - Current state: URL routing and workspace-local NFT screens are implemented. The tested Soroban collection contract, typed NFT API, and x402 De-pin proxy are scaffolded locally but not deployed or wired together.
+  - Next step: Configure testnet/Pinata credentials, deploy the WASM, connect authenticated frontend API calls, and exercise one real NFT checkout and one real x402 request.
+  - Files to inspect: `frontend/src/services/nft/`, `services/nft-service/`, `services/depin/`, `context.md`, `memory.md`.
+  - Do not touch: Paris's Morph/Transformation Agent, Rushi's Trade Pipeline and Agent Auth.
+  - Owner needed: Nabil for credentials/provider configuration; coordinate with the shared-auth owner before adding API authorization.
 
 ## Change History
 
@@ -357,3 +366,22 @@ Use `None` for empty fields. Do not delete fields.
 - Blockers: None.
 - Verification: Successful TypeScript frontend compilation (`tsc --noEmit`).
 
+## 2026-07-09 - Nabil - NFT Service and De-pin scope decisions
+
+- Service or area: NFT Service, De-pin (x402 Agentic Resource Gateway), frontend routing.
+- Files changed: `context.md`, `memory.md`, `frontend/package.json`, `frontend/package-lock.json`.
+- Summary: Nabil scoped both owned services and accepted React Router as the frontend direction. At this point routing and NFT screens were still pending; no NFT frontend, contract, API, or De-pin implementation had been verified yet.
+- Decisions: Accepted - Stellar/Soroban-only NFT v1 with primary USDC sales. Accepted - De-pin is an x402 gateway using exact per-request payments for HTTP APIs, while streaming remains later work. Accepted - React Router for frontend routing.
+- Follow-ups: Implement URL routes and local NFT drafts first, then the Soroban contract/API and standard x402 gateway.
+- Blockers: None at the architecture level; implementation and testnet configuration remained.
+- Verification: Existing frontend TypeScript check passed before implementation.
+
+## 2026-07-10 - Codex with Nabil - Nabil services implementation
+
+- Service or area: Frontend routing and NFT UX, NFT Service, De-pin gateway, documentation.
+- Files changed: `frontend/src/App.tsx`, `frontend/src/main.tsx`, `frontend/src/auth/`, `frontend/src/services/nft/`, frontend test/config/package files, `services/nft-service/`, `services/depin/`, `context.md`, `memory.md`.
+- Summary: Replaced state-only navigation with React Router while preserving Cognito, workspace persistence, CLI activation, and Morph polling. Added workspace-isolated local NFT drafts, a validated three-step collection wizard, dashboard empty/table states, and direct NFT routes. Added a one-contract-per-collection OpenZeppelin Stellar NFT contract, typed Express API with Pinata and sponsored Soroban auth-entry adapters, owner-signed sale configuration, atomic fixed-USDC purchase/mint, and exact x402 Stellar reverse proxy with verify/fulfill/settle ordering, canonical replay protection, unpaid rate limits, timeouts, response withholding, and redacted audit logs. No live credentials or deployment claims were added.
+- Decisions: Accepted - Contract/API and gateway boundaries listed in Active Decisions. Accepted - NFT files/previews stay session-only while text drafts and records are workspace-local/versioned. Accepted - De-pin v1 limits providers to configured `GET`/`HEAD` resources.
+- Follow-ups: Deploy the NFT WASM on Stellar testnet, configure Pinata/sponsor keys, connect frontend auth/workspaces to the API, configure a real De-pin provider, and perform live testnet payment runs.
+- Blockers: Credentials/provider setup and shared API authorization decisions listed in Active Blockers.
+- Verification: Frontend TypeScript, 14 Vitest tests, production build, and 3 Chrome Playwright tests passed, including desktop/mobile screenshots and direct NFT search navigation. NFT contract formatting, clippy with warnings denied, 10 tests, and Stellar WASM build passed; WASM is 16,212 bytes with hash `a8a5f637131c4f5db91d682008b68f21ab2f4f87e0844866ac80fad9faab6bad`. NFT API lint/build and 13 tests passed. De-pin lint/build and 25 tests passed, including the official x402 Stellar requirement builder. All three npm audits found zero vulnerabilities. `cargo audit` found no vulnerabilities and one transitive unmaintained warning for `paste 1.0.15` through Soroban's host test dependencies.

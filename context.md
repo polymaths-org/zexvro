@@ -69,6 +69,8 @@ The repository currently contains:
 - Shared memory workflow.
 - `frontend/`, the Vite + React frontend workspace.
 - `services/transformation-agent/` (Morph CLI skeleton) — first service scaffolded.
+- `services/nft-service/`, containing the Soroban NFT collection contract and its TypeScript API.
+- `services/depin/`, containing the TypeScript/Express x402 reverse proxy.
 
 The frontend application is scaffolded in `frontend/`. Run frontend commands from that folder.
 
@@ -84,7 +86,9 @@ Frontend workspace notes:
 - Path: `frontend/`.
 - Run locally: `cd frontend && npm run dev`.
 - Validate before handoff: `cd frontend && npm run lint && npm run build`.
-- The UI is still prototype/frontend-only. Do not claim live backend, auth, wallet, blockchain, deployment provider, or secrets-manager integrations until those are implemented.
+- NFT collection creation in the UI is still a browser-local prototype and is not wired to the NFT API.
+- Cognito/session and Morph polling behavior predate Nabil's services and must be preserved when changing the shell.
+- Do not claim live wallet, contract deployment, Pinata upload, payment, or De-pin provider integrations until credentials are configured and an end-to-end testnet run is recorded.
 
 ## Team Ownership
 
@@ -256,34 +260,68 @@ MVP intent:
 - Support checkout or purchase flows from the platform.
 - Hide wallet, metadata, and chain complexity behind clear UI and APIs.
 
+Architecture decisions:
+
+- Chain: Stellar Network with Soroban smart contracts. No multi-chain in v1.
+- NFT contract: one Soroban contract per collection using OpenZeppelin Stellar's `NonFungibleToken` Base implementation. There is no on-chain factory in v1.
+- Collection configuration: studio owner, name, symbol, immutable base metadata URI, royalty recipient, and royalty basis points capped at 10%.
+- Minting: creator-controlled through the studio owner or an explicitly delegated minter role.
+- Metadata: immutable collection identity and media use Pinata-backed public IPFS. A versioned ZEXVRO `external_url` may point to clearly mutable gameplay attributes.
+- Royalties: expose marketplace-compatible royalty information, but never claim arbitrary transfers enforce payment.
+- Primary checkout: fixed-price SEP-41 USDC transfer and NFT mint happen atomically in the collection contract. The buyer signs Soroban authorization entries while a ZEXVRO sponsor signs and pays the transaction envelope fee.
+- Secondary sales, auctions, fiat checkout, and multi-chain support are outside v1.
+
 Agent boundaries:
 
-- Do not assume a final NFT standard, storage provider, marketplace model, or checkout provider without a recorded decision.
+- Do not change the chain decision (Stellar + Soroban) without team coordination.
 - Keep the user experience non-Web3 friendly.
-- Any metadata, royalty, minting, or ownership assumptions must be documented.
+- Any metadata schema, royalty logic, minting permission, or storage provider must be documented before implementation.
+- Do not build multi-chain support in v1.
 
-Unknowns:
+Remaining integration work:
 
-- Target chain or Stellar asset model.
-- Metadata storage.
-- Payment and checkout flow.
-- Minting permissions.
-- Game/studio workflow requirements.
+- Connect the browser-local collection wizard to authenticated API calls.
+- Choose production persistence and authorization for workspace-scoped API records.
+- Configure Pinata and Stellar testnet sponsor credentials, install the verified WASM, and record a live testnet deployment.
+- Define the studio wallet signing UX for creator mint and buyer checkout intents.
+- Finalize game/studio onboarding details and operational status reconciliation.
 
-### 6. De-pin
+### 6. De-pin (x402 Agentic Resource Gateway)
 
 Owner: Nabil / `n4bi10p`
 
-Status:
+Problem:
 
-- Scope not defined yet.
-- Needs brainstorming and written context from Nabil.
+- Physical hardware networks and API compute nodes cannot easily conduct commerce with autonomous AI agents because traditional Web2 billing platforms require human identity verification and credit cards.
 
-Rules:
+MVP intent:
 
-- Do not invent final De-pin scope.
-- Do not build De-pin code before scope is recorded.
-- When Nabil provides the idea, update this section and add a memory entry.
+- Provide a lightweight proxy layer sitting in front of idempotent HTTP APIs and compute resources.
+- Intercept agent requests and issue an HTTP 402 "Payment Required" challenge.
+- Verify signed Soroban authorization entries and settle an exact USDC payment per successful request.
+
+Architecture decisions:
+
+- Protocol: official x402 v2 flow and payloads, using `PAYMENT-REQUIRED`, `PAYMENT-SIGNATURE`, and `PAYMENT-RESPONSE`; do not introduce a parallel 402 schema.
+- Payment rail: `exact` scheme with SEP-41 USDC on `stellar:testnet` in v1, using the official `@x402/stellar` implementation and facilitator-sponsored fees.
+- Proxy order: verify payment, fulfill and buffer a successful upstream result, settle, then release the result. Upstream or settlement failures withhold the resource.
+- Provider model: validated local configuration for concrete `GET`/`HEAD` routes, upstream URL, description, price, recipient, network, timeout, and optional environment-secret reference.
+- Abuse controls: request IDs, authorization replay protection, unpaid-request rate limits, bounded response buffering, structured redacted audit logs, and upstream timeouts.
+- Streaming payments, time-based sessions, custom facilitators, provider marketplace UI, and physical-device adapters are deferred.
+
+Agent boundaries:
+
+- Do not implement payment flows without documenting the 402 challenge/response contract.
+- Do not handle custody of user funds without explicit authorization design.
+- Do not build the proxy without defining the resource provider registration model.
+- Keep the gateway lightweight and composable.
+
+Remaining integration work:
+
+- Configure a real provider, recipient, and facilitator for an end-to-end Stellar testnet payment.
+- Replace the in-memory replay/rate-limit stores before running multiple gateway instances.
+- Define provider onboarding UI and persistent provider configuration ownership.
+- Add an agent client SDK only after the standard x402 client path is exercised.
 
 ## Shared Platform Areas
 
@@ -291,9 +329,9 @@ These are not primary MVP services yet, but they will likely become shared modul
 
 | Area | Current status | Agent rule |
 | --- | --- | --- |
-| Auth | Not designed | Do not create permanent auth architecture without documenting the flow |
-| Accounts/workspaces | Not designed | Keep future multi-user needs in mind |
-| Billing | Not designed | Do not add payment logic until product scope requires it |
+| Auth | Cognito frontend flow exists; shared architecture is not finalized | Preserve the current flow and document cross-service changes |
+| Accounts/workspaces | Browser-local prototype | Keep future multi-user and server authorization needs in mind |
+| Billing | Service-specific prototypes | Keep NFT checkout and De-pin payments inside their documented trust boundaries |
 | Deployment | Not designed | Prefer service-driven needs over generic deploy features |
 | Database | Not designed | Choose storage after data models are clearer |
 | Connectors | Not designed | Add only when a service needs one |
@@ -394,16 +432,10 @@ cat context.md
 cat memory.md
 ```
 
-Current verification:
+Current verification entry points:
 
-- There are no app tests yet because no application has been scaffolded.
-- Documentation changes should be reviewed by reading the rendered Markdown.
-
-Future setup instructions should be added when the app is scaffolded:
-
-- Install command.
-- Dev command.
-- Build command.
-- Test command.
-- Required environment variables, without secrets.
-- Local service dependencies.
+- Frontend: `cd frontend && npm run lint && npm test && npm run build && npm run test:e2e`.
+- NFT contract: commands in `services/nft-service/README.md`.
+- NFT API: `cd services/nft-service/api && npm run lint && npm test && npm run build`.
+- De-pin: `cd services/depin && npm run lint && npm test && npm run build`.
+- Required environment variables are documented only in service `.env.example` files; never commit their values.
