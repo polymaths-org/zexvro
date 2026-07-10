@@ -20,6 +20,16 @@ export const mockServices: Service[] = [
     category: 'privacy'
   },
   {
+    id: 'srv-transformation',
+    name: 'Transformation Agent',
+    owner: 'Unassigned',
+    status: 'configuring',
+    description: 'Repository inspection and Web2-to-Web3 migration planning with human approval before any code-changing action.',
+    progress: 10,
+    lastActivity: 'Read-only planning available',
+    category: 'transformation'
+  },
+  {
     id: 'srv-trade',
     name: 'A-2-A Trade Pipeline',
     owner: 'Unassigned',

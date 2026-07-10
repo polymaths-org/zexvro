@@ -13,10 +13,12 @@ import {
   type AgentSettings,
 } from '../../agent/settings';
 
+const IS_LOCAL_HOST = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 const API_BASE_URL = import.meta.env.VITE_API_URL ||
-  ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  (IS_LOCAL_HOST
     ? 'http://localhost:8080'
     : 'https://qkuostruh3.execute-api.us-east-1.amazonaws.com');
+const AGENT_CHAT_URL = IS_LOCAL_HOST ? '/api/agent/chat' : `${API_BASE_URL}/api/chat`;
 
 interface SettingsProps {
   theme: ThemeType;
@@ -71,7 +73,7 @@ export default function SettingsView({
   const testConnection = async () => {
     setTestStatus('testing');
     try {
-      const response = await fetch(`${API_BASE_URL}/api/chat`, {
+      const response = await fetch(AGENT_CHAT_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(buildAgentChatPayload(

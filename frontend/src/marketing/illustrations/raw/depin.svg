@@ -1,0 +1,22 @@
+<svg width="640" height="460" viewBox="0 0 640 460" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="depin-title depin-desc">
+  <title id="depin-title">De-Pin service illustration</title>
+  <desc id="depin-desc">A muted network slowly comes into focus while the scope remains marked as coming soon.</desc>
+  <rect x="1" y="1" width="638" height="458" rx="8" fill="#050505" stroke="#27272A" stroke-width="2"/>
+  <g id="depin-network" opacity=".2" stroke="#FAFAFA" stroke-width="2">
+    <path class="depin-line" d="M106 312l116-116 98 52 112-114 104 178"/>
+    <path class="depin-line" d="M222 196l-42 148M320 248l16 98M432 134l-84-48M432 134l82 16"/>
+    <rect class="depin-node" x="82" y="288" width="48" height="48" rx="6" fill="#111113"/>
+    <rect class="depin-node" x="198" y="172" width="48" height="48" rx="6" fill="#111113"/>
+    <rect class="depin-node" x="296" y="224" width="48" height="48" rx="6" fill="#111113"/>
+    <rect class="depin-node" x="408" y="110" width="48" height="48" rx="6" fill="#111113"/>
+    <rect class="depin-node" x="512" y="288" width="48" height="48" rx="6" fill="#111113"/>
+    <rect class="depin-node" x="156" y="320" width="48" height="48" rx="6" fill="#111113"/>
+    <rect class="depin-node" x="312" y="322" width="48" height="48" rx="6" fill="#111113"/>
+    <rect class="depin-node" x="324" y="62" width="48" height="48" rx="6" fill="#111113"/>
+    <rect class="depin-node" x="490" y="126" width="48" height="48" rx="6" fill="#111113"/>
+  </g>
+  <g id="coming-soon" opacity=".85">
+    <rect x="206" y="190" width="228" height="80" rx="8" fill="#0A0A0B" stroke="#3F3F46" stroke-width="2"/>
+    <text x="248" y="238" fill="#FAFAFA" font-family="JetBrains Mono, monospace" font-size="22">COMING INTO FOCUS</text>
+  </g>
+</svg>

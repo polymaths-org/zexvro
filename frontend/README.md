@@ -29,6 +29,10 @@ npm run build
 - Keep light and dark themes usable.
 - Keep the overview clean: no default AI Studio labels, no fake network badges, and no live-data claims.
 
+## Branch Caveat
+
+The `updates-routing-and-zer0` branch is not a finished or fully polished frontend. It includes routing and Zer0 prototype work, but still contains dummy data, placeholder flows, unfinished screens, and UI areas that need refinement before production use.
+
 ## Important Files
 
 - `index.html` - browser title and app metadata.
