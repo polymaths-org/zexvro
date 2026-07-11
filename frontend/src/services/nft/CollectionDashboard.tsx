@@ -15,7 +15,6 @@ import {
   RefreshCw,
   ShieldCheck,
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import type { NftCollection } from '../../types';
 import { loadCollections } from './collectionStore';
 import {
@@ -28,6 +27,7 @@ import {
 interface CollectionDashboardProps {
   workspaceId: string;
   accessToken: string;
+  onCreate: () => void;
 }
 
 function formatDate(value: string) {
@@ -53,8 +53,7 @@ const STATUS_STYLE = {
   failed: 'border-red-500/20 bg-red-500/10 text-red-600 dark:text-red-400',
 };
 
-export default function CollectionDashboard({ workspaceId, accessToken }: CollectionDashboardProps) {
-  const navigate = useNavigate();
+export default function CollectionDashboard({ workspaceId, accessToken, onCreate }: CollectionDashboardProps) {
   const [collections, setCollections] = useState<ApiNftCollection[]>([]);
   const [browserDrafts, setBrowserDrafts] = useState<NftCollection[]>([]);
   const [health, setHealth] = useState<NftServiceHealth | null>(null);
@@ -124,7 +123,7 @@ export default function CollectionDashboard({ workspaceId, accessToken }: Collec
           </button>
           <button
             type="button"
-            onClick={() => navigate('/services/nft/collections/new')}
+            onClick={onCreate}
             className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-zinc-950 px-4 text-sm font-medium text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
           >
             <Plus className="h-4 w-4" />
@@ -180,7 +179,7 @@ export default function CollectionDashboard({ workspaceId, accessToken }: Collec
           </p>
           <button
             type="button"
-            onClick={() => navigate('/services/nft/collections/new')}
+            onClick={onCreate}
             className="mt-6 inline-flex items-center gap-2 rounded-md border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-[#0A0A0B] dark:text-zinc-200 dark:hover:border-zinc-700 dark:hover:bg-zinc-900"
           >
             Create collection

@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import CollectionCreate from './CollectionCreate';
 import CollectionDashboard from './CollectionDashboard';
@@ -35,13 +35,24 @@ const liveCollection = {
   updatedAt: '2026-07-11T00:00:00.000Z',
 };
 
+function FlowRoutes() {
+  const navigate = useNavigate();
+  return (
+      <Routes>
+        <Route path="/services/nft/collections/new" element={(
+          <CollectionCreate workspaceId="studio-a" accessToken="access-token" onClose={() => navigate('/services/nft')} />
+        )} />
+        <Route path="/services/nft" element={(
+          <CollectionDashboard workspaceId="studio-a" accessToken="access-token" onCreate={() => navigate('/services/nft/collections/new')} />
+        )} />
+      </Routes>
+  );
+}
+
 function renderFlow() {
   return render(
     <MemoryRouter initialEntries={['/services/nft/collections/new']}>
-      <Routes>
-        <Route path="/services/nft/collections/new" element={<CollectionCreate workspaceId="studio-a" accessToken="access-token" />} />
-        <Route path="/services/nft" element={<CollectionDashboard workspaceId="studio-a" accessToken="access-token" />} />
-      </Routes>
+      <FlowRoutes />
     </MemoryRouter>,
   );
 }
@@ -135,7 +146,7 @@ describe('CollectionCreate', () => {
     const user = userEvent.setup();
     const view = render(
       <MemoryRouter>
-        <CollectionCreate workspaceId="studio-a" accessToken="access-token" />
+        <CollectionCreate workspaceId="studio-a" accessToken="access-token" onClose={() => undefined} />
       </MemoryRouter>,
     );
 
@@ -144,7 +155,7 @@ describe('CollectionCreate', () => {
 
     view.rerender(
       <MemoryRouter>
-        <CollectionCreate workspaceId="studio-b" accessToken="access-token" />
+        <CollectionCreate workspaceId="studio-b" accessToken="access-token" onClose={() => undefined} />
       </MemoryRouter>,
     );
     await waitFor(() => expect(screen.getByLabelText('Name')).toHaveValue(''));
@@ -152,7 +163,7 @@ describe('CollectionCreate', () => {
 
     view.rerender(
       <MemoryRouter>
-        <CollectionCreate workspaceId="studio-a" accessToken="access-token" />
+        <CollectionCreate workspaceId="studio-a" accessToken="access-token" onClose={() => undefined} />
       </MemoryRouter>,
     );
     await waitFor(() =>
