@@ -325,7 +325,8 @@ export default function DashboardLayout() {
   });
   const [expandedCats, setExpandedCats] = useState<Record<string, boolean>>({
     'workspace-management': true, 'zer0-service': true, services: true, 'agentic-operation': true, 'security-section': true,
-    'project-core': true, 'project-services': true, 'project-agentic': true, 'project-security': true, 'project-admin': true,
+    'project-core': true, 'project-services': true, 'project-digital-assets': true, 'project-resource-gateway': true,
+    'project-agentic': true, 'project-security': true, 'project-admin': true,
   });
   const [agentWidgetOpen, setAgentWidgetOpen] = useState(false);
   const [widgetMessages, setWidgetMessages] = useState<WidgetMessage[]>([]);
@@ -345,12 +346,21 @@ export default function DashboardLayout() {
   const pathParts = currentPath.split('/').filter(Boolean);
   const isProjectRoute = pathParts.includes('p');
   const projectId = isProjectRoute ? pathParts[pathParts.indexOf('p') + 1] : null;
+  const isNftProjectRoute = isProjectRoute && /\/nft(?:\/|$)/.test(currentPath);
+  const isDepinProjectRoute = isProjectRoute && /\/depin(?:\/|$)/.test(currentPath);
 
   const projectStore = useProjectStore();
   const currentProject = projectStore.projects.find(p => p.id === projectId);
 
   const dynamicProjectCategories = React.useMemo(() => {
     if (!currentProject) {
+      const fallbackDigitalAssetItems = isNftProjectRoute
+        ? [{ to: 'nft', label: 'NFT Collections', icon: 'nft' as const }]
+        : [];
+      const fallbackResourceGatewayItems = isDepinProjectRoute
+        ? [{ to: 'depin', label: 'De-pin x402 Gateway', icon: 'depin' as const }]
+        : [];
+
       return [
         {
           id: 'project-core',
@@ -367,6 +377,20 @@ export default function DashboardLayout() {
             { to: 'services', label: 'Services Manager', icon: 'services' as const },
           ],
         },
+        ...(fallbackDigitalAssetItems.length > 0
+          ? [{
+              id: 'project-digital-assets',
+              label: 'Digital Assets',
+              items: fallbackDigitalAssetItems,
+            }]
+          : []),
+        ...(fallbackResourceGatewayItems.length > 0
+          ? [{
+              id: 'project-resource-gateway',
+              label: 'Resource Gateway',
+              items: fallbackResourceGatewayItems,
+            }]
+          : []),
         {
           id: 'project-agentic',
           label: 'Agentic Operation',
@@ -397,6 +421,8 @@ export default function DashboardLayout() {
 
     const enabled = currentProject.enabledServices || [];
     const serviceItems: Array<{ to: string; label: string; icon: CustomIconName }> = [];
+    const digitalAssetItems: Array<{ to: string; label: string; icon: CustomIconName }> = [];
+    const resourceGatewayItems: Array<{ to: string; label: string; icon: CustomIconName }> = [];
     if (enabled.includes('srv-privacy')) {
       serviceItems.push({ to: 'zer0', label: 'Zer0 Privacy Pool', icon: 'privacy' as const });
     }
@@ -409,11 +435,11 @@ export default function DashboardLayout() {
     if (enabled.includes('srv-agent-auth')) {
       serviceItems.push({ to: 'agent-auth', label: 'Agent Authentication', icon: 'auth' as const });
     }
-    if (enabled.includes('srv-nft')) {
-      serviceItems.push({ to: 'nft', label: 'NFT Service', icon: 'nft' as const });
+    if (enabled.includes('srv-nft') || isNftProjectRoute) {
+      digitalAssetItems.push({ to: 'nft', label: 'NFT Collections', icon: 'nft' as const });
     }
-    if (enabled.includes('srv-depin')) {
-      serviceItems.push({ to: 'depin', label: 'De-pin Service', icon: 'depin' as const });
+    if (enabled.includes('srv-depin') || isDepinProjectRoute) {
+      resourceGatewayItems.push({ to: 'depin', label: 'De-pin x402 Gateway', icon: 'depin' as const });
     }
     serviceItems.push({ to: 'services', label: 'Services Manager', icon: 'services' as const });
 
@@ -431,6 +457,20 @@ export default function DashboardLayout() {
         label: 'Services',
         items: serviceItems,
       },
+      ...(digitalAssetItems.length > 0
+        ? [{
+            id: 'project-digital-assets',
+            label: 'Digital Assets',
+            items: digitalAssetItems,
+          }]
+        : []),
+      ...(resourceGatewayItems.length > 0
+        ? [{
+            id: 'project-resource-gateway',
+            label: 'Resource Gateway',
+            items: resourceGatewayItems,
+          }]
+        : []),
       {
         id: 'project-agentic',
         label: 'Agentic Operation',
@@ -457,7 +497,7 @@ export default function DashboardLayout() {
         ],
       },
     ];
-  }, [currentProject]);
+  }, [currentProject, isDepinProjectRoute, isNftProjectRoute]);
 
   let activeSection = 'overview';
   if (isProjectRoute) {

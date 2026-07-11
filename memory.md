@@ -543,3 +543,13 @@ Use `None` for empty fields. Do not delete fields.
 - Follow-ups: Move provider configuration, replay state, and unpaid-rate-limit state into managed infrastructure before multi-instance or hosted use. Add provider onboarding UI only after persistent ownership/configuration is designed.
 - Blockers: De-pin still uses machine-local `depin.config.json` and in-memory replay/rate-limit state.
 - Verification: Frontend `npm test` passed 25/25 tests, `npm run lint` passed, `npm run build` passed with the known large dashboard chunk warning, and `npm run test:e2e` passed 4/4 Chrome journeys including the new De-pin x402 probe. De-pin `npm test` passed 26/26 when run outside the sandbox because Supertest needs to bind a local server; `npm run lint` and `npm run build` passed.
+
+## 2026-07-12 - Codex with Nabil - Project sidebar service regrouping
+
+- Service or area: Frontend project navigation.
+- Files changed: `frontend/src/components/layout/DashboardLayout.tsx`, `memory.md`.
+- Summary: Moved Nabil-owned project links out of the generic `Services` sidebar group. NFT now appears under `Digital Assets` as `NFT Collections`; De-pin now appears under `Resource Gateway` as `De-pin x402 Gateway`. Direct deep links still show the relevant category even before project service state hydrates.
+- Decisions: Accepted - Keep `Services` for the generic service catalog/manager and shared MVP service links, while Nabil's NFT and De-pin pages use domain-specific project sidebar categories.
+- Follow-ups: None.
+- Blockers: None.
+- Verification: Frontend `npm run lint`, `npm run build`, and `npm run test:e2e` passed. Desktop Playwright screenshots confirmed the new `Digital Assets` and `Resource Gateway` sections.
