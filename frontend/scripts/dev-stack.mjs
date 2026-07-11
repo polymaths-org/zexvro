@@ -1,12 +1,16 @@
 import { spawn, spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const frontendDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const apiDirectory = path.resolve(frontendDirectory, '../services/nft-service/api');
+const depinDirectory = path.resolve(frontendDirectory, '../services/depin');
+const depinConfigPath = process.env.DEPIN_CONFIG_PATH || path.resolve(depinDirectory, 'depin.config.json');
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const identity = process.env.ZEXVRO_STELLAR_IDENTITY || 'zexvro-provider';
 const apiHealthUrl = 'http://127.0.0.1:4101/health';
+const depinHealthUrl = 'http://127.0.0.1:4102/health';
 const wasmHash = process.env.NFT_COLLECTION_WASM_HASH
   || 'a8a5f637131c4f5db91d682008b68f21ab2f4f87e0844866ac80fad9faab6bad';
 
@@ -55,8 +59,16 @@ function readSponsorSecret() {
 }
 
 async function apiIsReady() {
+  return healthIsReady(apiHealthUrl);
+}
+
+async function depinIsReady() {
+  return healthIsReady(depinHealthUrl);
+}
+
+async function healthIsReady(url) {
   try {
-    const response = await fetch(apiHealthUrl, { signal: AbortSignal.timeout(1_000) });
+    const response = await fetch(url, { signal: AbortSignal.timeout(1_000) });
     return response.ok;
   } catch {
     return false;
@@ -71,6 +83,16 @@ async function waitForApi(api) {
     await new Promise(resolve => setTimeout(resolve, 250));
   }
   throw new Error(`NFT API did not become ready at ${apiHealthUrl}.`);
+}
+
+async function waitForDepin(gateway) {
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    if (await depinIsReady()) return;
+    if (stopping || gateway.exitCode !== null) throw new Error('De-pin gateway stopped before becoming ready.');
+    await new Promise(resolve => setTimeout(resolve, 250));
+  }
+  throw new Error(`De-pin gateway did not become ready at ${depinHealthUrl}.`);
 }
 
 process.once('SIGINT', () => stop(0));
@@ -94,6 +116,23 @@ try {
     }), 'NFT API');
     await waitForApi(api);
     console.log(`NFT API ready at ${apiHealthUrl}`);
+  }
+
+  if (await depinIsReady()) {
+    console.log(`Using the De-pin gateway already running at ${depinHealthUrl}`);
+  } else if (existsSync(depinConfigPath)) {
+    const depin = track(spawn(npmCommand, ['run', 'dev'], {
+      cwd: depinDirectory,
+      env: {
+        ...process.env,
+        DEPIN_CONFIG_PATH: depinConfigPath,
+      },
+      stdio: 'inherit',
+    }), 'De-pin gateway');
+    await waitForDepin(depin);
+    console.log(`De-pin gateway ready at ${depinHealthUrl}`);
+  } else {
+    console.warn(`Skipping De-pin gateway; config not found at ${depinConfigPath}`);
   }
 
   if (!stopping) {

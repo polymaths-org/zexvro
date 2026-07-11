@@ -76,6 +76,36 @@ export function createDepinApp(options: DepinAppOptions) {
     response.json({ status: 'ok', service: 'depin' })
   })
 
+  app.get('/status', (_request, response) => {
+    response.json({
+      status: 'ok',
+      service: 'depin',
+      capabilities: {
+        scheme: 'exact',
+        network: 'stellar:testnet',
+        facilitatorUrl: config.facilitatorUrl,
+        settlement: 'after_upstream_success',
+        fees: 'sponsored',
+        replayTtlMs: config.replayTtlMs,
+        unpaidRateLimit: config.unpaidRateLimit,
+      },
+      providers: config.providers.map(provider => {
+        const upstream = new URL(provider.upstreamUrl)
+        return {
+          route: provider.route,
+          method: provider.method,
+          description: provider.description,
+          price: provider.price,
+          recipient: provider.recipient,
+          network: provider.network,
+          timeoutMs: provider.timeoutMs,
+          upstreamOrigin: upstream.origin,
+          upstreamSecretRequired: provider.upstreamSecretRef !== undefined,
+        }
+      }),
+    })
+  })
+
   for (const provider of config.providers) {
     const handler = async (request: Request, response: Response): Promise<void> => {
       const requestId = String(response.locals.requestId)

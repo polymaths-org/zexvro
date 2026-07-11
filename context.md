@@ -101,11 +101,13 @@ Current and expected stack:
 Frontend workspace notes:
 
 - Path: `frontend/`.
-- Run locally: `cd frontend && npm run dev`.
+- Run frontend only: `cd frontend && npm run dev`.
+- Run Nabil's local NFT API, optional De-pin gateway, and frontend together: `cd frontend && npm run dev:stack`.
 - Validate before handoff: `cd frontend && npm run lint && npm run build`.
-- NFT collection creation in the UI is still a browser-local prototype and is not wired to the NFT API.
+- NFT collection creation is wired to the Cognito-protected NFT API for local Stellar testnet runs; browser-local drafts remain only for migration and fallback visibility.
+- The project De-pin screen reads the local gateway health/status manifest and can probe an unpaid x402 `402` challenge through the Vite proxy.
 - Cognito/session and Morph polling behavior predate Nabil's services and must be preserved when changing the shell.
-- Do not claim live wallet, contract deployment, Pinata upload, payment, or De-pin provider integrations until credentials are configured and an end-to-end testnet run is recorded.
+- Do not claim production Pinata upload, managed persistence, multi-instance De-pin safety, live wallet UX, or hosted deployment until credentials and infrastructure are configured and a managed end-to-end run is recorded.
 
 ## Team Ownership
 
@@ -295,9 +297,8 @@ Agent boundaries:
 
 Remaining integration work:
 
-- Connect the browser-local collection wizard to authenticated API calls.
-- Choose production persistence and authorization for workspace-scoped API records.
-- Configure Pinata and Stellar testnet sponsor credentials, install the verified WASM, and record a live testnet deployment.
+- Choose production persistence for workspace-scoped API records.
+- Configure Pinata, managed Stellar sponsor secret injection, and hosted NFT API infrastructure.
 - Define the studio wallet signing UX for creator mint and buyer checkout intents.
 - Finalize game/studio onboarding details and operational status reconciliation.
 
@@ -333,7 +334,7 @@ Agent boundaries:
 
 Remaining integration work:
 
-- Configure a real provider, recipient, and facilitator for an end-to-end Stellar testnet payment.
+- Move provider configuration into managed infrastructure instead of machine-local `depin.config.json`.
 - Replace the in-memory replay/rate-limit stores before running multiple gateway instances.
 - Define provider onboarding UI and persistent provider configuration ownership.
 - Add an agent client SDK only after the standard x402 client path is exercised.

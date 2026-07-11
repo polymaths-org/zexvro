@@ -1,5 +1,11 @@
 import { expect, test } from '@playwright/test';
 
+const depinRecipient = 'GCD4SBBOLPUM7UYWLPRKOP6IYKOZ6FX5YQOJHVVE7RKC2QGZYNUHKRCZ';
+
+function encoded(value: unknown) {
+  return Buffer.from(JSON.stringify(value)).toString('base64');
+}
+
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.setItem(
@@ -35,6 +41,65 @@ test.beforeEach(async ({ page }) => {
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ collections: [] }),
+    });
+  });
+  await page.route('**/api/depin/health', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'ok', service: 'depin' }),
+    });
+  });
+  await page.route('**/api/depin/status', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        status: 'ok',
+        service: 'depin',
+        capabilities: {
+          scheme: 'exact',
+          network: 'stellar:testnet',
+          facilitatorUrl: 'https://x402.org/facilitator',
+          settlement: 'after_upstream_success',
+          fees: 'sponsored',
+          replayTtlMs: 600000,
+          unpaidRateLimit: { maxRequests: 30, windowMs: 60000 },
+        },
+        providers: [
+          {
+            route: '/v1/nft-health',
+            method: 'GET',
+            description: 'ZEXVRO NFT service health response',
+            price: '$0.001',
+            recipient: depinRecipient,
+            network: 'stellar:testnet',
+            timeoutMs: 5000,
+            upstreamOrigin: 'http://127.0.0.1:4101',
+            upstreamSecretRequired: false,
+          },
+        ],
+      }),
+    });
+  });
+  await page.route('**/api/depin/v1/nft-health', async (route) => {
+    await route.fulfill({
+      status: 402,
+      contentType: 'application/json',
+      headers: {
+        'PAYMENT-REQUIRED': encoded({
+          x402Version: 2,
+          accepts: [
+            {
+              scheme: 'exact',
+              network: 'stellar:testnet',
+              amount: '10000',
+              payTo: depinRecipient,
+            },
+          ],
+        }),
+      },
+      body: JSON.stringify({}),
     });
   });
 });
@@ -86,4 +151,25 @@ test('new collection action routes to the project wizard', async ({ page }) => {
   await expect(
     page.getByRole('heading', { name: 'Deploy a Stellar collection', exact: true }),
   ).toBeVisible();
+});
+
+test('De-pin gateway route shows a standard x402 challenge probe', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/dashboard/w/ws-test/p/project-test/depin');
+
+  await expect(page.getByRole('heading', { name: 'x402 Gateway' })).toBeVisible();
+  await expect(page.getByText('GET /v1/nft-health')).toBeVisible();
+  await page.getByRole('button', { name: 'Probe 402' }).click();
+
+  await expect(page.getByText('PAYMENT-REQUIRED')).toBeVisible();
+  await expect(page.getByText('0.001 USDC')).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth + 1,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: testInfo.outputPath('depin-gateway-desktop.png'),
+    fullPage: true,
+  });
 });
