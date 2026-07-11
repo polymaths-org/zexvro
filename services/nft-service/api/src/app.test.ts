@@ -1,4 +1,5 @@
 import request from 'supertest'
+import type { RequestHandler } from 'express'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { Keypair } from './index.js'
 import { createApp } from './app.js'
@@ -109,6 +110,13 @@ class FakeChain implements NftChainGateway {
 const ownerAddress = Keypair.random().publicKey()
 const buyerAddress = Keypair.random().publicKey()
 
+const testAuth: RequestHandler = (request, response, next) => {
+  response.locals.nftIdentity = {
+    subject: request.header('X-Test-Subject') ?? 'user-a',
+  }
+  next()
+}
+
 const validCollection = {
   workspaceId: 'workspace-a',
   name: 'Sky Forge',
@@ -135,6 +143,16 @@ describe('NFT service API', () => {
     now = new Date('2026-07-10T10:00:00.000Z')
     app = createApp(
       new NftService(repository, pinning, chain, 60, () => new Date(now)),
+      {
+        authenticate: testAuth,
+        capabilities: {
+          network: 'stellar:testnet',
+          pinningConfigured: true,
+          stellarConfigured: true,
+          storageMode: 'pinata',
+        },
+        allowedOrigins: ['http://127.0.0.1:3000'],
+      },
     )
   })
 
@@ -153,6 +171,27 @@ describe('NFT service API', () => {
       .expect(400)
 
     expect(response.body.error.code).toBe('invalid_request')
+
+    await request(app)
+      .post('/v1/collections')
+      .send({ ...validCollection, externalUrl: 'ftp://studio.example/game' })
+      .expect(400)
+    expect(pinning.lastJson).toBeUndefined()
+  })
+
+  it('reports non-secret service capabilities from the public health route', async () => {
+    const response = await request(app).get('/health').expect(200)
+
+    expect(response.body).toEqual({
+      status: 'ok',
+      service: 'nft-service',
+      capabilities: {
+        network: 'stellar:testnet',
+        pinningConfigured: true,
+        stellarConfigured: true,
+        storageMode: 'pinata',
+      },
+    })
   })
 
   it('uploads supported media and surfaces upload failures', async () => {
@@ -209,6 +248,43 @@ describe('NFT service API', () => {
     })
   })
 
+  it('scopes workspace records to the authenticated subject', async () => {
+    const created = await request(app)
+      .post('/v1/collections')
+      .set('X-Test-Subject', 'user-a')
+      .send(validCollection)
+      .expect(201)
+
+    const otherUserList = await request(app)
+      .get('/v1/collections')
+      .set('X-Test-Subject', 'user-b')
+      .query({ workspaceId: validCollection.workspaceId })
+      .expect(200)
+    expect(otherUserList.body.collections).toEqual([])
+
+    await request(app)
+      .get(`/v1/collections/${String(created.body.collection.id)}`)
+      .set('X-Test-Subject', 'user-b')
+      .expect(404)
+  })
+
+  it('serves public token metadata without exposing workspace ownership', async () => {
+    const created = await createCollection()
+
+    const metadata = await request(app)
+      .get(`/v1/public/collections/${created.id}/tokens/7`)
+      .expect(200)
+
+    expect(metadata.body).toMatchObject({
+      name: 'Sky Forge #7',
+      description: validCollection.description,
+      image: validCollection.coverImageUri,
+      collection: { name: 'Sky Forge', symbol: 'SKY' },
+    })
+    expect(metadata.body).not.toHaveProperty('workspaceId')
+    expect(metadata.body).not.toHaveProperty('ownerAddress')
+  })
+
   it('marks external gameplay attributes as mutable in pinned metadata', async () => {
     await request(app)
       .post('/v1/collections')
@@ -256,6 +332,27 @@ describe('NFT service API', () => {
       .send({ collectionId: collection.id, buyerAddress, tokenId: 7 })
       .expect(502)
     expect(response.body.error.code).toBe('stellar_simulation_failed')
+  })
+
+  it('allows buyers to create checkout intents and isolates them by buyer identity', async () => {
+    const { id } = await createCollection()
+    const created = await request(app)
+      .post('/v1/checkout/intents')
+      .set('X-Test-Subject', 'buyer-user')
+      .set('Idempotency-Key', 'buyer-checkout')
+      .send({ collectionId: id, buyerAddress, tokenId: 7 })
+      .expect(201)
+
+    const intentId = created.body.intent.id as string
+    await request(app)
+      .get(`/v1/checkout/intents/${intentId}`)
+      .set('X-Test-Subject', 'another-buyer')
+      .expect(404)
+    const visible = await request(app)
+      .get(`/v1/checkout/intents/${intentId}`)
+      .set('X-Test-Subject', 'buyer-user')
+      .expect(200)
+    expect(visible.body.intent.idempotencyKey).toBe('buyer-checkout')
   })
 
   it('prepares and submits an owner-authorized USDC sale configuration', async () => {

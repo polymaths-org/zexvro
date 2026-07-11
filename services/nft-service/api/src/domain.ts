@@ -12,6 +12,7 @@ export interface CollectionRecord {
   coverImageUri: string
   royaltyRecipient: string
   royaltyBps: number
+  externalUrl?: string
   status: CollectionStatus
   contractId?: string
   deploymentTxHash?: string

@@ -25,3 +25,26 @@ npm test
 npm run build
 DEPIN_CONFIG_PATH=depin.config.json npm start
 ```
+
+## Local testnet smoke test
+
+The machine-local `depin.config.json` is ignored by Git. With the gateway and
+its configured upstream running, an unpaid request should return HTTP `402`:
+
+```bash
+curl -i http://127.0.0.1:4102/v1/nft-health
+```
+
+For a paid smoke test, fund the buyer identity with Stellar testnet USDC and
+run the bounded demo client. The command substitution keeps the secret out of
+the repository and shell history:
+
+```bash
+STELLAR_PRIVATE_KEY="$(stellar keys secret zexvro-buyer)" \
+DEPIN_EXPECTED_RECIPIENT="$(stellar keys address zexvro-provider)" \
+npm run demo:client
+```
+
+The demo refuses a recipient mismatch or a payment above `10000` atomic USDC
+(`0.001 USDC`). Override `DEPIN_URL`, `DEPIN_EXPECTED_RECIPIENT`, or
+`DEPIN_MAX_PAYMENT_ATOMIC` only when deliberately testing another route.

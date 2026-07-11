@@ -64,6 +64,10 @@ export function loadCollectionDraft(workspaceId: string): NftCollectionDraft | n
       description: typeof value.description === 'string' ? value.description : '',
       coverName: '',
       royaltyBps: typeof value.royaltyBps === 'number' ? value.royaltyBps : 0,
+      ...(typeof value.ownerAddress === 'string' ? { ownerAddress: value.ownerAddress } : {}),
+      ...(typeof value.royaltyRecipient === 'string' ? { royaltyRecipient: value.royaltyRecipient } : {}),
+      ...(typeof value.baseMetadataUri === 'string' ? { baseMetadataUri: value.baseMetadataUri } : {}),
+      ...(typeof value.externalUrl === 'string' ? { externalUrl: value.externalUrl } : {}),
     };
   } catch {
     return null;

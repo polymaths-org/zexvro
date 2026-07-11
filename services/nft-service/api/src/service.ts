@@ -15,7 +15,7 @@ export interface CreateCollectionInput {
   symbol: string
   description: string
   ownerAddress: string
-  baseMetadataUri: string
+  baseMetadataUri?: string | undefined
   coverImageUri: string
   royaltyRecipient: string
   royaltyBps: number
@@ -33,6 +33,7 @@ export class NftService {
     private readonly checkoutTtlSeconds: number,
     private readonly now: () => Date = () => new Date(),
     private readonly paymentTokenAddress: string = DEFAULT_TESTNET_USDC_CONTRACT,
+    private readonly localMetadataBaseUrl?: string,
   ) {}
 
   async uploadMedia(input: {
@@ -45,6 +46,18 @@ export class NftService {
 
   async createCollection(input: CreateCollectionInput): Promise<CollectionRecord> {
     const id = randomUUID()
+    const baseMetadataUri =
+      input.baseMetadataUri ??
+      (this.localMetadataBaseUrl === undefined
+        ? undefined
+        : `${this.localMetadataBaseUrl.replace(/\/$/, '')}/v1/public/collections/${id}/tokens/`)
+    if (baseMetadataUri === undefined) {
+      throw new ApiError(
+        400,
+        'base_metadata_uri_required',
+        'An IPFS token metadata directory is required for Pinata storage',
+      )
+    }
     const pinnedMetadata = await this.pinning.pinJson({
       filename: `${input.symbol.toLowerCase()}-collection.json`,
       value: {
@@ -53,7 +66,7 @@ export class NftService {
         symbol: input.symbol,
         description: input.description,
         image: input.coverImageUri,
-        base_metadata_uri: input.baseMetadataUri,
+        base_metadata_uri: baseMetadataUri,
         royalty: {
           recipient: input.royaltyRecipient,
           basis_points: input.royaltyBps,
@@ -84,11 +97,12 @@ export class NftService {
       symbol: input.symbol,
       description: input.description,
       ownerAddress: input.ownerAddress,
-      baseMetadataUri: input.baseMetadataUri,
+      baseMetadataUri,
       collectionMetadataUri: pinnedMetadata.uri,
       coverImageUri: input.coverImageUri,
       royaltyRecipient: input.royaltyRecipient,
       royaltyBps: input.royaltyBps,
+      ...(input.externalUrl === undefined ? {} : { externalUrl: input.externalUrl }),
       status: 'deploying',
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -100,7 +114,7 @@ export class NftService {
         ownerAddress: input.ownerAddress,
         name: input.name,
         symbol: input.symbol,
-        baseMetadataUri: input.baseMetadataUri,
+        baseMetadataUri,
         royaltyRecipient: input.royaltyRecipient,
         royaltyBps: input.royaltyBps,
       })
@@ -141,6 +155,29 @@ export class NftService {
       throw new ApiError(404, 'collection_not_found', 'Collection not found')
     }
     return collection
+  }
+
+  async getPublicTokenMetadata(id: string, tokenId: number) {
+    const collection = await this.getCollection(id)
+    if (collection.status !== 'live') {
+      throw new ApiError(404, 'collection_not_found', 'Collection not found')
+    }
+    return {
+      name: `${collection.name} #${String(tokenId)}`,
+      description: collection.description,
+      image: collection.coverImageUri,
+      ...(collection.externalUrl === undefined
+        ? {}
+        : { external_url: collection.externalUrl }),
+      collection: {
+        name: collection.name,
+        symbol: collection.symbol,
+      },
+      attributes: [
+        { trait_type: 'Collection', value: collection.name },
+        { trait_type: 'Token ID', value: tokenId },
+      ],
+    }
   }
 
   async prepareMint(input: {

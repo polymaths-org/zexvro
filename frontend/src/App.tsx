@@ -1249,8 +1249,8 @@ export default function App() {
                         )} />
                         <Route path="/deployments" element={<Deployments deployments={deployments} setDeployments={setDeployments} />} />
                         <Route path="/services" element={<Services services={services} setServices={setServices} />} />
-                        <Route path="/services/nft" element={<CollectionDashboard workspaceId={selectedWorkspace.id} />} />
-                        <Route path="/services/nft/collections/new" element={<CollectionCreate workspaceId={selectedWorkspace.id} />} />
+                        <Route path="/services/nft" element={<CollectionDashboard workspaceId={selectedWorkspace.id} accessToken={userSession.token} />} />
+                        <Route path="/services/nft/collections/new" element={<CollectionCreate workspaceId={selectedWorkspace.id} accessToken={userSession.token} />} />
                         <Route path="/agent" element={<AgentStudio cliConnected={cliConnected} cliLastActive={cliLastActive} />} />
                         <Route path="/analytics" element={<Analytics isDark={isDarkActive} />} />
                         <Route path="/team" element={(
