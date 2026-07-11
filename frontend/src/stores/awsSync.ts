@@ -1,11 +1,7 @@
+import { api, employeeApi, projectApi, workspaceApi } from '../api/api';
 import { useWorkspaceStore } from './workspace';
 import { useProjectStore } from './project';
 import { useZer0Store } from './zer0';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL ||
-  ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-    ? 'http://localhost:8080'
-    : 'https://qkuostruh3.execute-api.us-east-1.amazonaws.com');
 
 let isHydrating = false;
 let syncTimeout: number | null = null;
@@ -20,49 +16,91 @@ function getUserSession() {
   }
 }
 
+function idFromRemote<T extends Record<string, any>>(item: T, fallbackKey: string): T {
+  return {
+    ...item,
+    id: item.id || item[fallbackKey],
+  };
+}
+
+async function pullMemoryFallback() {
+  try {
+    const data = await api.get<{ memory?: Record<string, any> }>('/api/memory');
+    return data.memory || {};
+  } catch (err) {
+    console.error('Failed to pull fallback memory from AWS:', err);
+    return {};
+  }
+}
+
 export async function pullFromAWS() {
   const session = getUserSession();
-  if (!session || !session.token) return;
+  if (!session?.token) return;
 
   isHydrating = true;
   try {
-    const response = await fetch(`${API_BASE_URL}/api/memory`, {
-      headers: {
-        'Authorization': `Bearer ${session.token}`
-      }
-    });
+    const fallback = await pullMemoryFallback();
 
-    if (response.ok) {
-      const data = await response.json();
-      const mem = data.memory || {};
+    const wsData = await workspaceApi.list();
+    const workspaces = (wsData.workspaces || []).map(workspace => idFromRemote(workspace, 'workspaceId'));
 
-      // Hydrate stores if remote data exists
-      if (mem.workspaces) {
-        useWorkspaceStore.setState({ workspaces: mem.workspaces });
-      }
-      if (mem.currentWorkspaceId) {
-        useWorkspaceStore.setState({ currentWorkspaceId: mem.currentWorkspaceId });
-      }
+    if (workspaces.length) {
+      const fallbackWorkspaceId = fallback.currentWorkspaceId;
+      const currentWorkspaceId =
+        workspaces.some(workspace => workspace.id === fallbackWorkspaceId)
+          ? fallbackWorkspaceId
+          : workspaces[0].id;
 
-      if (mem.projects) {
-        useProjectStore.setState({
-          projects: mem.projects,
-          environments: mem.environments || [],
-          serviceInstances: mem.serviceInstances || [],
-          deployments: mem.deployments || [],
-          currentProjectId: mem.currentProjectId || null
-        });
-      }
+      useWorkspaceStore.setState({ workspaces, currentWorkspaceId });
+    } else if (fallback.workspaces) {
+      useWorkspaceStore.setState({
+        workspaces: fallback.workspaces,
+        currentWorkspaceId: fallback.currentWorkspaceId || fallback.workspaces[0]?.id || null,
+      });
+    } else if (fallback.currentWorkspaceId) {
+      useWorkspaceStore.setState({ currentWorkspaceId: fallback.currentWorkspaceId });
+    }
 
-      if (mem.employees || mem.payments || mem.pool || mem.settings) {
-        useZer0Store.setState({
-          employees: mem.employees || [],
-          payments: mem.payments || [],
-          proofs: mem.proofs || [],
-          pool: mem.pool || { balances: { USDC: 0, XLM: 0, EURC: 0 }, totalDeposited: 0, totalWithdrawn: 0, totalPaymentsProcessed: 0, lastUpdated: Date.now() },
-          settings: mem.settings || {}
-        });
-      }
+    const currentWorkspaceId = useWorkspaceStore.getState().currentWorkspaceId;
+    if (currentWorkspaceId) {
+      const projData = await projectApi.list(currentWorkspaceId);
+      const projects = (projData.projects || []).map(project => idFromRemote(project, 'projectId'));
+      const environments = projects.flatMap(project => project.environments || []);
+      const serviceInstances = projects.flatMap(project => project.serviceInstances || []);
+
+      useProjectStore.setState({
+        projects,
+        environments: environments.length ? environments : fallback.environments || [],
+        serviceInstances: serviceInstances.length ? serviceInstances : fallback.serviceInstances || [],
+        deployments: fallback.deployments || [],
+        currentProjectId: fallback.currentProjectId || projects[0]?.id || null,
+      });
+
+      const empData = await employeeApi.list(currentWorkspaceId);
+      const employees = (empData.employees || []).map(employee => idFromRemote(employee, 'employeeId'));
+      useZer0Store.setState({
+        employees,
+        payments: fallback.payments || [],
+        proofs: fallback.proofs || [],
+        pool: useZer0Store.getState().pool,
+        settings: { ...useZer0Store.getState().settings, ...(fallback.settings || {}) },
+      });
+    } else if (fallback.projects || fallback.employees || fallback.payments || fallback.pool || fallback.settings) {
+      useProjectStore.setState({
+        projects: fallback.projects || [],
+        environments: fallback.environments || [],
+        serviceInstances: fallback.serviceInstances || [],
+        deployments: fallback.deployments || [],
+        currentProjectId: fallback.currentProjectId || null,
+      });
+
+      useZer0Store.setState({
+        employees: fallback.employees || [],
+        payments: fallback.payments || [],
+        proofs: fallback.proofs || [],
+        pool: useZer0Store.getState().pool,
+        settings: { ...useZer0Store.getState().settings, ...(fallback.settings || {}) },
+      });
     }
   } catch (err) {
     console.error('Failed to pull ZEXVRO state from AWS DynamoDB:', err);
@@ -75,7 +113,7 @@ export function pushToAWS() {
   if (isHydrating) return;
 
   const session = getUserSession();
-  if (!session || !session.token) return;
+  if (!session?.token) return;
 
   if (syncTimeout) {
     window.clearTimeout(syncTimeout);
@@ -87,14 +125,11 @@ export function pushToAWS() {
     const zState = useZer0Store.getState();
 
     const memoryPayload = {
-      workspaces: wState.workspaces,
       currentWorkspaceId: wState.currentWorkspaceId,
-      projects: pState.projects,
       environments: pState.environments,
       serviceInstances: pState.serviceInstances,
       deployments: pState.deployments,
       currentProjectId: pState.currentProjectId,
-      employees: zState.employees,
       payments: zState.payments,
       proofs: zState.proofs,
       pool: zState.pool,
@@ -102,21 +137,13 @@ export function pushToAWS() {
     };
 
     try {
-      await fetch(`${API_BASE_URL}/api/memory`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.token}`
-        },
-        body: JSON.stringify({ memory: memoryPayload })
-      });
+      await api.post('/api/memory', { memory: memoryPayload });
     } catch (err) {
-      console.error('Failed to push ZEXVRO state to AWS DynamoDB:', err);
+      console.error('Failed to push fallback ZEXVRO state to AWS DynamoDB:', err);
     }
   }, 1000);
 }
 
-// Initialize subscriptions to trigger push on any state mutation
 export function initializeAWSSync() {
   useWorkspaceStore.subscribe(() => pushToAWS());
   useProjectStore.subscribe(() => pushToAWS());

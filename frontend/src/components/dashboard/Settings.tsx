@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Settings, ShieldAlert, CheckCircle2, ToggleLeft, ToggleRight, Sparkles, Save
 } from 'lucide-react';
@@ -9,6 +9,7 @@ import {
   buildAgentChatPayload,
   defaultAgentSettings,
   loadAgentSettings,
+  loadAgentSettingsFromAWS,
   saveAgentSettings,
   type AgentSettings,
 } from '../../agent/settings';
@@ -54,9 +55,20 @@ export default function SettingsView({
   };
 
   const [agentSettings, setAgentSettings] = useState<AgentSettings>(() => loadAgentSettings());
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'dirty' | 'saved'>('idle');
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'dirty' | 'saving' | 'saved' | 'error'>('idle');
 
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+
+  useEffect(() => {
+    let mounted = true;
+    loadAgentSettingsFromAWS().then(settings => {
+      if (!mounted) return;
+      setAgentSettings(settings);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const updateAgentSetting = (key: keyof AgentSettings, value: string) => {
     const updated = { ...agentSettings, [key]: value };
@@ -65,9 +77,15 @@ export default function SettingsView({
     setTestStatus('idle');
   };
 
-  const saveAgentProviderSettings = () => {
-    saveAgentSettings(agentSettings);
-    setSaveStatus('saved');
+  const saveAgentProviderSettings = async () => {
+    setSaveStatus('saving');
+    try {
+      await saveAgentSettings(agentSettings);
+      setSaveStatus('saved');
+    } catch (err) {
+      console.error('Failed to save agent settings to AWS:', err);
+      setSaveStatus('error');
+    }
   };
 
   const testConnection = async () => {
@@ -211,7 +229,7 @@ export default function SettingsView({
                 { name: 'COGNITO_CLIENT_ID', value: import.meta.env.VITE_COGNITO_CLIENT_ID || '7qmkq33si9qk8pgo6ebi3qantm', type: 'Cloud Provision' },
                 { name: 'OPENCODE_PROVIDER', value: agentSettings.provider, type: 'Agent Chat' },
                 { name: 'OPENCODE_MODEL', value: agentSettings.model, type: 'Agent Chat' },
-                { name: 'OPENCODE_API_KEY', value: agentSettings.apiKey ? 'saved locally' : 'not saved', type: 'Secret Proxy' }
+                { name: 'OPENCODE_API_KEY', value: agentSettings.apiKey ? 'stored in AWS memory' : 'not stored', type: 'Secret Proxy' }
               ].map((env) => (
                 <div key={env.name} className="flex items-center justify-between p-2.5 rounded bg-zinc-50/50 dark:bg-zinc-900/30 border border-zinc-100 dark:border-zinc-800">
                   <div className="min-w-0">
@@ -236,7 +254,7 @@ export default function SettingsView({
             </div>
 
             <p className="text-xs text-zinc-550 dark:text-zinc-400 font-sans leading-normal">
-              Provider defaults are pinned for the prototype. In local dev, this key is saved in your browser and forwarded only to the Vite proxy.
+              Provider defaults are pinned for the prototype. Saved provider settings are written through the AWS memory API for the signed-in user.
             </p>
 
             <div className="space-y-4 font-sans text-xs">
@@ -286,7 +304,7 @@ export default function SettingsView({
                   className="w-full rounded border border-zinc-200 bg-zinc-55/30 px-3 py-2 text-xs text-zinc-850 dark:border-zinc-800 dark:bg-zinc-950/50 dark:text-zinc-200 focus:outline-none focus:border-brand-blue transition-colors font-mono disabled:opacity-50"
                 />
                 <p className="mt-1.5 text-[10px] leading-normal text-zinc-400">
-                  Save it here for this browser, or set OPENCODE_API_KEY in the dev server env.
+                  Save it to AWS memory for this signed-in user, or set OPENCODE_API_KEY in the dev server env.
                 </p>
               </div>
 
@@ -309,10 +327,11 @@ export default function SettingsView({
                 <button
                   type="button"
                   onClick={saveAgentProviderSettings}
+                  disabled={saveStatus === 'saving'}
                   className="inline-flex items-center gap-2 px-4 py-2 rounded bg-brand-blue text-white font-semibold cursor-pointer hover:bg-brand-blue/90 transition-colors"
                 >
                   <Save className="h-4 w-4" />
-                  Save settings
+                  {saveStatus === 'saving' ? 'Saving...' : 'Save settings'}
                 </button>
 
                 <button
@@ -327,6 +346,11 @@ export default function SettingsView({
                 {saveStatus === 'saved' && (
                   <span className="text-emerald-500 font-semibold flex items-center gap-1">
                     <CheckCircle2 className="h-4 w-4" /> saved
+                  </span>
+                )}
+                {saveStatus === 'error' && (
+                  <span className="text-rose-500 font-semibold flex items-center gap-1">
+                    <ShieldAlert className="h-4 w-4" /> AWS save failed
                   </span>
                 )}
                 {saveStatus === 'dirty' && (

@@ -4,6 +4,7 @@ import {
   Search, Plus, X, Users, Mail, Wallet, Briefcase,
   MoreHorizontal, Edit3, UserX, ChevronDown
 } from 'lucide-react';
+import { employeeApi } from '../../api/api';
 import { useZer0Store } from '../../stores/zer0';
 import type { Zer0Employee, Zer0Currency, Zer0PayFrequency, Zer0EmployeeStatus } from '../../stores/types';
 
@@ -11,13 +12,12 @@ const DEPARTMENTS = ['Engineering', 'Design', 'Operations', 'Finance', 'Marketin
 const ROLES = ['Employee', 'Contractor', 'Manager', 'Director', 'VP', 'C-Suite'];
 
 export default function Zer0People() {
-  const { projectId } = useParams({ strict: false });
-  const pid = projectId || '';
+  const { workspaceId, projectId } = useParams({ strict: false });
+  const pid = projectId || workspaceId || '';
+  const scopeWorkspaceId = workspaceId || pid;
 
   const allEmployees = useZer0Store(s => s.employees);
-  const addEmployee = useZer0Store(s => s.addEmployee);
   const updateEmployee = useZer0Store(s => s.updateEmployee);
-  const removeEmployee = useZer0Store(s => s.removeEmployee);
 
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<Zer0EmployeeStatus | 'all'>('all');
@@ -25,6 +25,8 @@ export default function Zer0People() {
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState('');
 
   // Form state
   const [form, setForm] = useState({
@@ -52,26 +54,72 @@ export default function Zer0People() {
     setEditingId(null);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const normalizeEmployee = (raw: any): Zer0Employee => ({
+    id: raw.id || raw.employeeId,
+    projectId: raw.projectId || pid,
+    name: raw.name || '',
+    email: raw.email || '',
+    role: raw.role || '',
+    department: raw.department || '',
+    walletAddress: raw.walletAddress || '',
+    salary: Number(raw.salary || 0),
+    currency: (raw.currency || 'USDC') as Zer0Currency,
+    frequency: (raw.frequency || 'monthly') as Zer0PayFrequency,
+    status: (raw.status || 'active') as Zer0EmployeeStatus,
+    startDate: Number(raw.startDate || Date.now()),
+    createdAt: Number(raw.createdAt || Date.now()),
+    updatedAt: Number(raw.updatedAt || Date.now()),
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const salary = parseFloat(form.salary);
     if (isNaN(salary) || salary < 0) return;
 
-    if (editingId) {
-      updateEmployee(editingId, {
-        name: form.name, email: form.email, role: form.role, department: form.department,
-        walletAddress: form.walletAddress, salary, currency: form.currency, frequency: form.frequency,
-      });
-    } else {
-      addEmployee({
-        projectId: pid, name: form.name, email: form.email, role: form.role,
-        department: form.department, walletAddress: form.walletAddress, salary,
-        currency: form.currency, frequency: form.frequency, status: 'active',
-        startDate: Date.now(),
-      });
+    setIsSaving(true);
+    setError('');
+    const payload = {
+      workspaceId: scopeWorkspaceId,
+      projectId: pid,
+      name: form.name,
+      email: form.email,
+      role: form.role,
+      department: form.department,
+      walletAddress: form.walletAddress,
+      salary,
+      currency: form.currency,
+      frequency: form.frequency,
+      status: 'active' as Zer0EmployeeStatus,
+      startDate: Date.now(),
+    };
+
+    try {
+      if (editingId) {
+        const res = await employeeApi.update(editingId, payload);
+        updateEmployee(editingId, normalizeEmployee(res.employee || { ...payload, id: editingId }));
+      } else {
+        const res = await employeeApi.create(payload);
+        const employee = normalizeEmployee(res.employee || payload);
+        useZer0Store.setState(state => ({ employees: [...state.employees, employee] }));
+      }
+      setShowModal(false);
+      resetForm();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save employee.');
+    } finally {
+      setIsSaving(false);
     }
-    setShowModal(false);
-    resetForm();
+  };
+
+  const terminateEmployee = async (id: string) => {
+    setError('');
+    try {
+      const res = await employeeApi.delete(id);
+      updateEmployee(id, normalizeEmployee(res.employee || { id, projectId: pid, status: 'terminated' }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to terminate employee.');
+    }
+    setOpenMenu(null);
   };
 
   const startEdit = (emp: Zer0Employee) => {
@@ -93,7 +141,7 @@ export default function Zer0People() {
   };
 
   return (
-    <div className="space-y-5 max-w-6xl">
+    <div className="space-y-5">
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -141,6 +189,12 @@ export default function Zer0People() {
           {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
         </select>
       </div>
+
+      {error && (
+        <div className="rounded-md border border-red-500/20 bg-red-500/5 px-3 py-2 text-xs text-red-600 dark:text-red-400">
+          {error}
+        </div>
+      )}
 
       {/* Table */}
       <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-[#0A0A0B] overflow-hidden">
@@ -198,7 +252,7 @@ export default function Zer0People() {
                             <Edit3 className="h-3 w-3" /> Edit
                           </button>
                           <button
-                            onClick={() => { removeEmployee(emp.id); setOpenMenu(null); }}
+                            onClick={() => terminateEmployee(emp.id)}
                             className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20"
                           >
                             <UserX className="h-3 w-3" /> Deactivate
@@ -290,8 +344,9 @@ export default function Zer0People() {
                   Cancel
                 </button>
                 <button type="submit"
-                  className="h-9 px-5 rounded-lg bg-zinc-900 text-white text-xs font-semibold hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200 transition">
-                  {editingId ? 'Save Changes' : 'Add Employee'}
+                  disabled={isSaving}
+                  className="h-9 px-5 rounded-lg bg-zinc-900 text-white text-xs font-semibold hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200 transition">
+                  {isSaving ? 'Saving...' : editingId ? 'Save Changes' : 'Add Employee'}
                 </button>
               </div>
             </form>

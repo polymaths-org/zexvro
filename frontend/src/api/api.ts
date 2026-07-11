@@ -44,6 +44,52 @@ export const api = {
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
 };
 
+export const workspaceApi = {
+  list: () => api.get<{ workspaces: any[] }>('/api/workspaces'),
+  create: (data: any) => api.post<any>('/api/workspaces', data),
+  update: (id: string, data: any) => api.put<any>(`/api/workspaces/${id}`, data),
+  delete: (id: string) => api.delete<any>(`/api/workspaces/${id}`),
+  invite: (id: string, member: any) => api.post<any>(`/api/workspaces/${id}/invite`, member),
+};
+
+export const projectApi = {
+  list: (workspaceId: string) => api.get<{ projects: any[] }>(`/api/projects?workspaceId=${encodeURIComponent(workspaceId)}`),
+  create: (data: any) => api.post<any>('/api/projects', data),
+  update: (id: string, data: any) => api.put<any>(`/api/projects/${id}`, data),
+  delete: (id: string) => api.delete<any>(`/api/projects/${id}`),
+};
+
+export const employeeApi = {
+  list: (workspaceId: string) => api.get<{ employees: any[] }>(`/api/employees?workspaceId=${encodeURIComponent(workspaceId)}`),
+  create: (data: any) => api.post<any>('/api/employees', data),
+  bulkCreate: (data: any) => api.post<any>('/api/employees/bulk', data),
+  update: (id: string, data: any) => api.put<any>(`/api/employees/${id}`, data),
+  delete: (id: string) => api.delete<any>(`/api/employees/${id}`),
+};
+
+export const payrollApi = {
+  listRuns: (workspaceId: string) => api.get<{ runs: any[] }>(`/api/payroll/runs?workspaceId=${encodeURIComponent(workspaceId)}`),
+  createRun: (data: any) => api.post<any>('/api/payroll/runs', data),
+  updateRun: (id: string, data: any) => api.put<any>(`/api/payroll/runs/${id}`, data),
+};
+
+export const payrollTaxonomyApi = {
+  list: (workspaceId: string) => api.get<{ items: any[]; roles: any[]; departments: any[] }>(`/api/payroll/taxonomy?workspaceId=${encodeURIComponent(workspaceId)}`),
+  create: (data: any) => api.post<any>('/api/payroll/taxonomy', data),
+  update: (id: string, data: any) => api.put<any>(`/api/payroll/taxonomy/${encodeURIComponent(id)}`, data),
+  delete: (id: string, workspaceId: string) => api.delete<any>(`/api/payroll/taxonomy/${encodeURIComponent(id)}?workspaceId=${encodeURIComponent(workspaceId)}`),
+};
+
+export const memoryApi = {
+  get: () => api.get<{ username: string; memory?: Record<string, unknown> }>('/api/memory'),
+  update: (memory: Record<string, unknown>) => api.post<{ status: string; memory: Record<string, unknown> }>('/api/memory', { memory }),
+};
+
+export const inviteApi = {
+  send: (data: { email: string; workspaceId: string; workspaceName: string; inviterName: string; role: string }) =>
+    api.post<any>('/api/invite/send', data),
+};
+
 /* ─── Stellar SDK Stubs ─── */
 // TODO: Replace with actual Stellar SDK calls when credentials are provided
 

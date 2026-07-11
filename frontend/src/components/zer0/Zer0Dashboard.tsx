@@ -2,27 +2,24 @@ import { useMemo, useState } from 'react';
 import { useParams, Link } from '@tanstack/react-router';
 import {
   DollarSign, Users, ArrowUpRight, TrendingUp, Plus,
-  Send, Loader2, Wallet, ArrowDownToLine, ArrowUpFromLine
+  Send, Wallet, RefreshCw
 } from 'lucide-react';
+import { stellar } from '../../api/api';
 import { useZer0Store } from '../../stores/zer0';
-import type { Zer0Currency } from '../../stores/types';
 
 export default function Zer0Dashboard() {
   const { workspaceId, projectId } = useParams({ strict: false });
-  const pid = projectId || '';
+  const pid = projectId || workspaceId || '';
 
   const allEmployees = useZer0Store(s => s.employees);
   const allPayments = useZer0Store(s => s.payments);
   const pool = useZer0Store(s => s.pool);
   const settings = useZer0Store(s => s.settings);
-  const depositToPool = useZer0Store(s => s.depositToPool);
-  const withdrawFromPool = useZer0Store(s => s.withdrawFromPool);
 
-  const [depositAmount, setDepositAmount] = useState('');
-  const [depositCurrency, setDepositCurrency] = useState<Zer0Currency>('USDC');
-  const [isDepositing, setIsDepositing] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [balanceError, setBalanceError] = useState('');
 
-  const basePath = `/dashboard/w/${workspaceId}/p/${projectId}`;
+  const basePath = projectId ? `/dashboard/w/${workspaceId}/p/${projectId}` : `/dashboard/w/${workspaceId}`;
 
   const employees = useMemo(() => allEmployees.filter(e => e.projectId === pid), [allEmployees, pid]);
   const payments = useMemo(() => allPayments.filter(p => p.projectId === pid), [allPayments, pid]);
@@ -39,17 +36,31 @@ export default function Zer0Dashboard() {
   const totalDisbursedThisMonth = completedThisMonth.reduce((sum, p) => sum + p.amount, 0);
   const recentPayments = payments.slice(0, 8);
 
-  const handleDeposit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const amt = parseFloat(depositAmount);
-    if (isNaN(amt) || amt <= 0) return;
-    setIsDepositing(true);
-    // Simulate network delay
-    setTimeout(() => {
-      depositToPool(depositCurrency, amt);
-      setDepositAmount('');
-      setIsDepositing(false);
-    }, 800);
+  const refreshBalance = async () => {
+    if (!settings.walletAddress.trim()) {
+      setBalanceError('Add a pool wallet address in Zer0 Settings before refreshing balances.');
+      return;
+    }
+    setIsRefreshing(true);
+    setBalanceError('');
+    try {
+      const balances = await stellar.getPoolBalance(settings.walletAddress.trim());
+      useZer0Store.setState(state => ({
+        pool: {
+          ...state.pool,
+          balances: {
+            USDC: Number(balances.USDC || 0),
+            XLM: Number(balances.XLM || 0),
+            EURC: Number(balances.EURC || 0),
+          },
+          lastUpdated: Date.now(),
+        },
+      }));
+    } catch (err) {
+      setBalanceError(err instanceof Error ? err.message : 'Could not refresh wallet balances.');
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   const statusColors: Record<string, string> = {
@@ -63,7 +74,7 @@ export default function Zer0Dashboard() {
   };
 
   return (
-    <div className="space-y-6 max-w-6xl">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -177,50 +188,33 @@ export default function Zer0Dashboard() {
           )}
         </div>
 
-        {/* Quick Deposit */}
+        {/* Pool Balance Source */}
         <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-[#0A0A0B]">
           <h3 className="text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-wider mb-4 flex items-center gap-1.5">
-            <ArrowDownToLine className="h-3.5 w-3.5 text-blue-500" /> Fund Pool
+            <Wallet className="h-3.5 w-3.5 text-blue-500" /> Pool Balance
           </h3>
 
-          <form onSubmit={handleDeposit} className="space-y-3">
-            <div>
-              <label className="text-[10px] font-semibold text-zinc-400 uppercase block mb-1">Currency</label>
-              <select
-                value={depositCurrency}
-                onChange={e => setDepositCurrency(e.target.value as Zer0Currency)}
-                className="h-9 w-full rounded-lg border border-zinc-200 bg-white px-2.5 text-xs outline-none dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
-              >
-                <option value="USDC">USDC</option>
-                <option value="XLM">XLM</option>
-                <option value="EURC">EURC</option>
-              </select>
-            </div>
+          <button
+            type="button"
+            onClick={refreshBalance}
+            disabled={isRefreshing}
+            className="mb-4 inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-zinc-200 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800/50"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+            Refresh from Wallet
+          </button>
 
-            <div>
-              <label className="text-[10px] font-semibold text-zinc-400 uppercase block mb-1">Amount</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="0.00"
-                value={depositAmount}
-                onChange={e => setDepositAmount(e.target.value)}
-                className="h-9 w-full rounded-lg border border-zinc-200 bg-white px-3 text-xs outline-none focus:border-blue-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
-                required
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={isDepositing}
-              className="w-full h-9 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition disabled:opacity-50 flex items-center justify-center gap-1.5"
-            >
-              {isDepositing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Deposit to Pool'}
-            </button>
-          </form>
+          {balanceError && (
+            <p className="mb-3 rounded-md border border-amber-500/20 bg-amber-500/5 px-2.5 py-2 text-[10px] text-amber-600 dark:text-amber-400">
+              {balanceError}
+            </p>
+          )}
 
           <div className="mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-800 space-y-1.5">
+            <div className="flex justify-between gap-3 text-[10px]">
+              <span className="text-zinc-400">Wallet</span>
+              <span className="truncate font-mono font-semibold text-zinc-700 dark:text-zinc-300">{settings.walletAddress || 'Not configured'}</span>
+            </div>
             <div className="flex justify-between text-[10px]">
               <span className="text-zinc-400">USDC Balance</span>
               <span className="font-semibold text-zinc-700 dark:text-zinc-300">{pool.balances.USDC.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>

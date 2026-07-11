@@ -32,18 +32,15 @@ export default function Zer0Proofs() {
   }), [proofs]);
 
   const handleRetry = (proofId: string) => {
-    updateProofStatus(proofId, 'generating');
-    setTimeout(() => {
-      updateProofStatus(proofId, 'verified', {
-        generationTimeMs: 900 + Math.round(Math.random() * 800),
-        proofData: `0xretry_${Math.random().toString(16).slice(2, 18)}`,
-        verifiedAt: Date.now(),
-      });
-    }, 1500);
+    updateProofStatus(proofId, 'queued', {
+      generationTimeMs: null,
+      proofData: null,
+      verifiedAt: null,
+    });
   };
 
   return (
-    <div className="space-y-6 max-w-5xl">
+    <div className="space-y-6">
       <div>
         <h1 className="text-lg font-bold text-zinc-900 dark:text-white">Proof Manager</h1>
         <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">

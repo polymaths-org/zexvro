@@ -1,20 +1,45 @@
 import { useState } from 'react';
-import { KeyRound, ShieldAlert, Plus, Trash2, Copy, Check } from 'lucide-react';
+import { ShieldCheck, Plus, Trash2, Copy, Check } from 'lucide-react';
 
 type ApiKey = {
   id: string;
   name: string;
   key: string;
-  created: string;
-  lastUsed: string;
+  createdAt: number;
+  lastUsedAt: number | null;
 };
 
-export default function WorkspaceSecurity() {
-  const [keys, setKeys] = useState<ApiKey[]>([
-    { id: 'key-1', name: 'CLI Agent Deployment Token', key: 'zx_live_a928...3b1d', created: '10 days ago', lastUsed: '3 hours ago' },
-    { id: 'key-2', name: 'GitHub Action Builder Sync', key: 'zx_live_f891...f3b5', created: '1 month ago', lastUsed: '5 days ago' }
-  ]);
+type SecuritySettings = {
+  requireMfaForAdmins: boolean;
+  ownerOnlyTokens: boolean;
+  requireDeploymentApproval: boolean;
+  ipAllowlist: string;
+};
 
+function createTokenSecret() {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function formatDate(timestamp: number) {
+  return new Date(timestamp).toLocaleString([], {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+export default function WorkspaceSecurity() {
+  const [keys, setKeys] = useState<ApiKey[]>([]);
+  const [securitySettings, setSecuritySettings] = useState<SecuritySettings>({
+    requireMfaForAdmins: false,
+    ownerOnlyTokens: true,
+    requireDeploymentApproval: false,
+    ipAllowlist: '',
+  });
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [newKeyName, setNewKeyName] = useState('');
   const [generatedKey, setGeneratedKey] = useState<string | null>(null);
@@ -23,16 +48,16 @@ export default function WorkspaceSecurity() {
     e.preventDefault();
     if (!newKeyName.trim()) return;
 
-    const randomHex = Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
-    const fullKey = `zx_live_${randomHex}`;
-    const obfuscated = `zx_live_${randomHex.slice(0, 4)}...${randomHex.slice(-4)}`;
+    const secret = createTokenSecret();
+    const fullKey = `zx_live_${secret}`;
+    const obfuscated = `zx_live_${secret.slice(0, 4)}...${secret.slice(-4)}`;
 
     const newKey: ApiKey = {
       id: `key-${Date.now()}`,
       name: newKeyName.trim(),
       key: obfuscated,
-      created: 'Just now',
-      lastUsed: 'Never'
+      createdAt: Date.now(),
+      lastUsedAt: null,
     };
 
     setKeys(prev => [...prev, newKey]);
@@ -50,8 +75,12 @@ export default function WorkspaceSecurity() {
     setTimeout(() => setCopiedId(null), 1500);
   };
 
+  const toggleSetting = (key: keyof Omit<SecuritySettings, 'ipAllowlist'>) => {
+    setSecuritySettings(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6">
       <div>
         <h1 className="text-lg font-semibold text-zinc-900 dark:text-white">Workspace Security</h1>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
@@ -99,15 +128,21 @@ export default function WorkspaceSecurity() {
             )}
 
             <div className="space-y-3">
+              {keys.length === 0 && (
+                <div className="rounded-lg border border-dashed border-zinc-200 bg-zinc-50 p-6 text-center text-xs text-zinc-500 dark:border-zinc-800 dark:bg-zinc-950">
+                  No API or deploy tokens have been created for this workspace.
+                </div>
+              )}
+
               {keys.map(k => (
                 <div key={k.id} className="flex items-center justify-between rounded-lg border border-zinc-100 bg-zinc-50 p-3.5 dark:border-zinc-850/60 dark:bg-zinc-900/10">
                   <div className="min-w-0">
                     <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 block">{k.name}</span>
                     <span className="text-[10px] font-mono text-zinc-500 mt-1 block tracking-wider">{k.key}</span>
                     <div className="flex items-center gap-2 mt-1 text-[10px] text-zinc-400">
-                      <span>Created {k.created}</span>
+                      <span>Created {formatDate(k.createdAt)}</span>
                       <span>•</span>
-                      <span>Last used {k.lastUsed}</span>
+                      <span>Last used {k.lastUsedAt ? formatDate(k.lastUsedAt) : 'Never'}</span>
                     </div>
                   </div>
                   
@@ -127,30 +162,42 @@ export default function WorkspaceSecurity() {
         <div className="space-y-6">
           <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-[#080809]">
             <h2 className="text-sm font-semibold text-zinc-900 dark:text-white mb-3">Security Checklist</h2>
-            <div className="space-y-3 mt-4">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-zinc-650 dark:text-zinc-400">Multi-Factor Auth (MFA)</span>
-                <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase">
-                  Enabled
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-zinc-650 dark:text-zinc-400">Single Sign-On (SSO)</span>
-                <span className="text-zinc-400">Disabled</span>
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-zinc-650 dark:text-zinc-400">IP Safeguard Whitelist</span>
-                <span className="text-zinc-400">0 active hosts</span>
-              </div>
+            <div className="space-y-3 mt-4 text-xs">
+              {[
+                ['requireMfaForAdmins', 'Require MFA for admins'],
+                ['ownerOnlyTokens', 'Only owners can create tokens'],
+                ['requireDeploymentApproval', 'Require deployment approval'],
+              ].map(([key, label]) => (
+                <label key={key} className="flex items-center justify-between gap-3">
+                  <span className="text-zinc-650 dark:text-zinc-400">{label}</span>
+                  <input
+                    type="checkbox"
+                    checked={securitySettings[key as keyof Omit<SecuritySettings, 'ipAllowlist'>]}
+                    onChange={() => toggleSetting(key as keyof Omit<SecuritySettings, 'ipAllowlist'>)}
+                    className="h-4 w-4 rounded border-zinc-300 text-zinc-900"
+                  />
+                </label>
+              ))}
+
+              <label className="block">
+                <span className="mb-1.5 block text-zinc-650 dark:text-zinc-400">Allowed IP ranges</span>
+                <textarea
+                  value={securitySettings.ipAllowlist}
+                  onChange={e => setSecuritySettings(prev => ({ ...prev, ipAllowlist: e.target.value }))}
+                  placeholder="One CIDR range per line"
+                  rows={4}
+                  className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs outline-none dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
+                />
+              </label>
             </div>
           </div>
 
-          <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 flex gap-3">
-            <ShieldAlert className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+          <div className="rounded-xl border border-zinc-200 bg-white p-4 flex gap-3 dark:border-zinc-800 dark:bg-[#080809]">
+            <ShieldCheck className="h-5 w-5 text-zinc-500 shrink-0 mt-0.5" />
             <div className="text-xs">
-              <span className="font-semibold text-amber-800 dark:text-amber-400 block">Security Alert</span>
+              <span className="font-semibold text-zinc-900 dark:text-white block">Security Events</span>
               <span className="text-zinc-555 dark:text-zinc-350 mt-1 block">
-                Two API deployments were initiated from unverified IPv6 addresses. Verify your active runners in logs.
+                No security events have been recorded for this workspace.
               </span>
             </div>
           </div>

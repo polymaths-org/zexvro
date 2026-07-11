@@ -5,7 +5,7 @@ export interface WorkspaceMember {
   email: string;
   name: string;
   role: WorkspaceRole;
-  status: 'active' | 'invited' | 'inactive';
+  status: 'active' | 'invited' | 'inactive' | 'pending' | 'accepted' | 'expired' | 'revoked';
   joinedAt: number;
 }
 
@@ -17,6 +17,15 @@ export interface Workspace {
   ownerId: string;
   createdAt: number;
   members: WorkspaceMember[];
+  settings?: {
+    billingEmail?: string;
+    region?: string;
+    defaultNetwork?: string;
+    defaultBranch?: string;
+    requireInviteApproval?: boolean;
+    allowMemberProjectCreation?: boolean;
+    auditRetentionDays?: number;
+  };
 }
 
 export type ProjectLifecycle = 'draft' | 'active' | 'paused' | 'archived';
@@ -172,6 +181,12 @@ export interface Zer0Settings {
   merkleDepth: number;
   requireValidatorSig: boolean;
   paymentApprovalRequired: boolean;
+  paymentWorkflow: 'manual' | 'approval' | 'auto';
+  settlementMode: 'stellar' | 'manual_review';
+  allowTransparentPayments: boolean;
+  exportFormat: 'csv' | 'json';
+  proofRetryLimit: number;
+  webhookUrl: string;
   defaultCurrency: Zer0Currency;
   timezone: string;
   walletAddress: string;

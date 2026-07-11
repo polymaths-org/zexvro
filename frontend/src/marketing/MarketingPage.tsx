@@ -10,11 +10,11 @@ export default function MarketingPage() {
 
       <section className="welcome-panel" aria-labelledby="welcome-title">
         <img className="welcome-logo" src="/brand/logo-transparent.png" alt="" />
-        <span className="welcome-kicker">Unified Web3 Platform</span>
-        <h1 id="welcome-title">Welcome to ZEXVRO</h1>
-        <p>Private, verifiable, agent-ready infrastructure.</p>
+        <span className="welcome-kicker">Web2 to Web3 Service Platform</span>
+        <h1 id="welcome-title">ZEXVRO</h1>
+        <p>Private, verifiable services for teams moving real products onto Web3 rails.</p>
         <a className="welcome-action" href="/dashboard">
-          Step into Web3
+          Open Service Console
           <ArrowRight size={18} aria-hidden="true" />
         </a>
       </section>

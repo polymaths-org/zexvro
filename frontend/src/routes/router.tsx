@@ -11,9 +11,9 @@ import {
 import DashboardLayout from '../components/layout/DashboardLayout';
 import WorkspaceOverview from '../components/workspace/WorkspaceOverview';
 import ProjectsIndex from '../components/workspace/ProjectsIndex';
-import Transactions from '../components/workspace/Transactions';
 import Payroll from '../components/workspace/Payroll';
 import ProjectOverview from '../components/project/ProjectOverview';
+import ProjectExecutions from '../components/project/ProjectExecutions';
 import Zer0Layout from '../components/zer0/Zer0Layout';
 import Zer0Dashboard from '../components/zer0/Zer0Dashboard';
 import Zer0People from '../components/zer0/Zer0People';
@@ -27,12 +27,8 @@ import AgentStudio from '../components/dashboard/AgentStudio';
 import Memory from '../components/dashboard/Memory';
 import { useWorkspaceStore } from '../stores/workspace';
 import { useProjectStore } from '../stores/project';
-import { mockMemoryEntries, mockServices } from '../data/mock';
+import { serviceCatalog } from '../data/serviceCatalog';
 
-// Newly added workspace/project components
-import ProjectEnvironments from '../components/project/ProjectEnvironments';
-import ProjectDeployments from '../components/project/ProjectDeployments';
-import ProjectLogs from '../components/project/ProjectLogs';
 import ProjectMembers from '../components/project/ProjectMembers';
 import ProjectAudit from '../components/project/ProjectAudit';
 import ProjectSettings from '../components/project/ProjectSettings';
@@ -41,9 +37,9 @@ import WorkspaceTeam from '../components/workspace/WorkspaceTeam';
 import WorkspaceSecurity from '../components/workspace/WorkspaceSecurity';
 import WorkspaceAnalytics from '../components/workspace/WorkspaceAnalytics';
 import WorkspaceSettings from '../components/workspace/WorkspaceSettings';
-import WorkspaceDeployments from '../components/workspace/WorkspaceDeployments';
 import WorkspaceActivity from '../components/workspace/WorkspaceActivity';
-import WorkspaceInstances from '../components/workspace/WorkspaceInstances';
+import { memoryApi } from '../api/api';
+import type { MemoryEntry } from '../types';
 
 // Service components
 import TransformationAgent from '../components/services/TransformationAgent';
@@ -75,7 +71,7 @@ function WorkspaceServicesScreen() {
   const { projectId } = useParams({ strict: false });
   const projectStore = useProjectStore();
   const currentProject = projectStore.projects.find(p => p.id === projectId);
-  const [services, setServices] = React.useState(mockServices);
+  const [services, setServices] = React.useState(serviceCatalog);
 
   const projectServices = React.useMemo(() => {
     if (!currentProject) return services;
@@ -94,23 +90,54 @@ function WorkspaceAgentScreen() {
 }
 
 function WorkspaceMemoryScreen() {
-  const { projectId } = useParams({ strict: false });
+  const { workspaceId, projectId } = useParams({ strict: false });
   const [openNewMemoryModal, setOpenNewMemoryModal] = React.useState(false);
-  const storageKey = projectId ? `zexvro_project_memory_${projectId}` : `zexvro_workspace_memory`;
+  const memoryKey = projectId
+    ? `projectMemory:${projectId}`
+    : `workspaceMemory:${workspaceId || 'default'}`;
+  const saveTimerRef = React.useRef<number | null>(null);
 
-  const [memoryEntries, setMemoryEntries] = React.useState<any[]>(() => {
-    const saved = localStorage.getItem(storageKey);
-    return saved ? JSON.parse(saved) : (projectId ? [] : mockMemoryEntries);
-  });
-
-  React.useEffect(() => {
-    localStorage.setItem(storageKey, JSON.stringify(memoryEntries));
-  }, [memoryEntries, storageKey]);
+  const [memoryEntries, setMemoryEntries] = React.useState<MemoryEntry[]>([]);
+  const [memoryLoaded, setMemoryLoaded] = React.useState(false);
 
   React.useEffect(() => {
-    const saved = localStorage.getItem(storageKey);
-    setMemoryEntries(saved ? JSON.parse(saved) : (projectId ? [] : mockMemoryEntries));
-  }, [storageKey, projectId]);
+    let cancelled = false;
+    setMemoryLoaded(false);
+    memoryApi.get()
+      .then(response => {
+        if (cancelled) return;
+        const savedEntries = response.memory?.[memoryKey];
+        setMemoryEntries(Array.isArray(savedEntries) ? savedEntries as MemoryEntry[] : []);
+        setMemoryLoaded(true);
+      })
+      .catch(err => {
+        if (cancelled) return;
+        console.error('Failed to load shared memory from AWS:', err);
+        setMemoryEntries([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [memoryKey]);
+
+  React.useEffect(() => {
+    if (!memoryLoaded) return;
+    if (saveTimerRef.current) {
+      window.clearTimeout(saveTimerRef.current);
+    }
+    saveTimerRef.current = window.setTimeout(() => {
+      memoryApi.update({ [memoryKey]: memoryEntries }).catch(err => {
+        console.error('Failed to save shared memory to AWS:', err);
+      });
+    }, 500);
+
+    return () => {
+      if (saveTimerRef.current) {
+        window.clearTimeout(saveTimerRef.current);
+      }
+    };
+  }, [memoryEntries, memoryKey, memoryLoaded]);
 
   return (
     <Memory
@@ -129,7 +156,7 @@ function DashboardShortcutRedirect({ section }: { section: 'agent' | 'services' 
   React.useEffect(() => {
     const workspace = workspaces[0];
     if (workspace) {
-      navigate({ to: `/dashboard/w/${workspace.id}/${section}` });
+      navigate({ to: section === 'services' ? `/dashboard/w/${workspace.id}/projects` : `/dashboard/w/${workspace.id}/overview` });
       return;
     }
     navigate({ to: '/dashboard' });
@@ -219,33 +246,57 @@ const wsProjectsNewRoute = createRoute({
   component: () => <ProjectsIndex initialShowWizard />,
 });
 
-const wsTransactionsRoute = createRoute({
+const wsZer0LayoutRoute = createRoute({
   getParentRoute: () => dashboardLayoutRoute,
-  path: '/dashboard/w/$workspaceId/transactions',
-  component: Transactions,
+  path: '/dashboard/w/$workspaceId/zer0',
+  component: Zer0Layout,
 });
 
-const wsPayrollRoute = createRoute({
-  getParentRoute: () => dashboardLayoutRoute,
-  path: '/dashboard/w/$workspaceId/payroll',
+const wsZer0DashboardRoute = createRoute({
+  getParentRoute: () => wsZer0LayoutRoute,
+  path: '/',
+  component: Zer0Dashboard,
+});
+
+const wsZer0PeopleRoute = createRoute({
+  getParentRoute: () => wsZer0LayoutRoute,
+  path: 'people',
+  component: Zer0People,
+});
+
+const wsZer0PayRoute = createRoute({
+  getParentRoute: () => wsZer0LayoutRoute,
+  path: 'pay',
+  component: Zer0PayParty,
+});
+
+const wsZer0HistoryRoute = createRoute({
+  getParentRoute: () => wsZer0LayoutRoute,
+  path: 'history',
+  component: Zer0History,
+});
+
+const wsZer0PayrollRoute = createRoute({
+  getParentRoute: () => wsZer0LayoutRoute,
+  path: 'payroll',
   component: Payroll,
 });
 
-const wsInstancesRoute = createRoute({
-  getParentRoute: () => dashboardLayoutRoute,
-  path: '/dashboard/w/$workspaceId/instances',
-  component: WorkspaceInstances,
+const wsZer0ProofsRoute = createRoute({
+  getParentRoute: () => wsZer0LayoutRoute,
+  path: 'proofs',
+  component: Zer0Proofs,
 });
 
-const wsDeploymentsRoute = createRoute({
-  getParentRoute: () => dashboardLayoutRoute,
-  path: '/dashboard/w/$workspaceId/deployments',
-  component: WorkspaceDeployments,
+const wsZer0SettingsRoute = createRoute({
+  getParentRoute: () => wsZer0LayoutRoute,
+  path: 'settings',
+  component: Zer0Settings,
 });
 
-const wsActivityRoute = createRoute({
+const wsAuditRoute = createRoute({
   getParentRoute: () => dashboardLayoutRoute,
-  path: '/dashboard/w/$workspaceId/activity',
+  path: '/dashboard/w/$workspaceId/audit',
   component: WorkspaceActivity,
 });
 
@@ -309,36 +360,18 @@ const projectOverviewRoute = createRoute({
   component: ProjectOverview,
 });
 
+const projectExecutionsRoute = createRoute({
+  getParentRoute: () => dashboardLayoutRoute,
+  path: '/dashboard/w/$workspaceId/p/$projectId/executions',
+  component: ProjectExecutions,
+});
+
 const projectProjectsRoute = createRoute({
   getParentRoute: () => dashboardLayoutRoute,
   path: '/dashboard/w/$workspaceId/p/$projectId/projects',
   beforeLoad: ({ params }) => {
     throw redirect({ to: '/dashboard/w/$workspaceId/projects', params: { workspaceId: params.workspaceId } });
   },
-});
-
-const projectEnvsRoute = createRoute({
-  getParentRoute: () => dashboardLayoutRoute,
-  path: '/dashboard/w/$workspaceId/p/$projectId/environments',
-  component: ProjectEnvironments,
-});
-
-const projectInstancesRoute = createRoute({
-  getParentRoute: () => dashboardLayoutRoute,
-  path: '/dashboard/w/$workspaceId/p/$projectId/instances',
-  component: WorkspaceInstances,
-});
-
-const projectDeploymentsRoute = createRoute({
-  getParentRoute: () => dashboardLayoutRoute,
-  path: '/dashboard/w/$workspaceId/p/$projectId/deployments',
-  component: ProjectDeployments,
-});
-
-const projectLogsRoute = createRoute({
-  getParentRoute: () => dashboardLayoutRoute,
-  path: '/dashboard/w/$workspaceId/p/$projectId/logs',
-  component: ProjectLogs,
 });
 
 const projectServicesRoute = createRoute({
@@ -375,6 +408,12 @@ const projectZer0HistoryRoute = createRoute({
   getParentRoute: () => projectZer0LayoutRoute,
   path: 'history',
   component: Zer0History,
+});
+
+const projectZer0PayrollRoute = createRoute({
+  getParentRoute: () => projectZer0LayoutRoute,
+  path: 'payroll',
+  component: Payroll,
 });
 
 const projectZer0ProofsRoute = createRoute({
@@ -520,11 +559,16 @@ const routeTree = rootRoute.addChildren([
     wsOverviewRoute,
     wsProjectsRoute,
     wsProjectsNewRoute,
-    wsTransactionsRoute,
-    wsPayrollRoute,
-    wsInstancesRoute,
-    wsDeploymentsRoute,
-    wsActivityRoute,
+    wsZer0LayoutRoute.addChildren([
+      wsZer0DashboardRoute,
+      wsZer0PeopleRoute,
+      wsZer0PayRoute,
+      wsZer0HistoryRoute,
+      wsZer0PayrollRoute,
+      wsZer0ProofsRoute,
+      wsZer0SettingsRoute,
+    ]),
+    wsAuditRoute,
     wsServicesRoute,
     wsAgentRoute,
     wsMemoryRoute,
@@ -534,17 +578,15 @@ const routeTree = rootRoute.addChildren([
     wsSettingsRoute,
     projectRootRoute,
     projectOverviewRoute,
+    projectExecutionsRoute,
     projectProjectsRoute,
-    projectEnvsRoute,
-    projectInstancesRoute,
-    projectDeploymentsRoute,
-    projectLogsRoute,
     projectServicesRoute,
     projectZer0LayoutRoute.addChildren([
       projectZer0DashboardRoute,
       projectZer0PeopleRoute,
       projectZer0PayRoute,
       projectZer0HistoryRoute,
+      projectZer0PayrollRoute,
       projectZer0ProofsRoute,
       projectZer0SettingsRoute,
     ]),

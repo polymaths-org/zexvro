@@ -20,6 +20,7 @@ import {
 import {
   buildAgentChatPayload,
   loadAgentSettings,
+  loadAgentSettingsFromAWS,
 } from '../../agent/settings';
 import { SYSTEM_PROMPT as STELLAR_SYSTEM_PROMPT } from '../../agent/stellarKb';
 
@@ -140,10 +141,21 @@ export default function AgentStudio({ cliConnected = false, cliLastActive = null
   const [isThinking, setIsThinking] = useState(false);
   const [error, setError] = useState('');
   const [contextOpen, setContextOpen] = useState(false);
+  const [agentSettings, setAgentSettings] = useState(() => loadAgentSettings());
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const agentSettings = loadAgentSettings();
   const hasMessages = messages.length > 0 || isThinking;
+
+  useEffect(() => {
+    let mounted = true;
+    loadAgentSettingsFromAWS().then(settings => {
+      if (!mounted) return;
+      setAgentSettings(settings);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });

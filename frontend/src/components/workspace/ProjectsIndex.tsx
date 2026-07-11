@@ -46,9 +46,9 @@ export default function ProjectsIndex({ initialShowWizard = false }: { initialSh
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold text-zinc-900 dark:text-white">Projects</h1>
+          <h1 className="text-lg font-semibold text-zinc-900 dark:text-white">Customer Projects</h1>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            {projects.length} project{projects.length !== 1 ? 's' : ''} in this workspace
+            {projects.length} Web3 migration environment{projects.length !== 1 ? 's' : ''} in this workspace
           </p>
         </div>
         <button
@@ -56,7 +56,7 @@ export default function ProjectsIndex({ initialShowWizard = false }: { initialSh
           className="inline-flex items-center gap-2 rounded-md bg-zinc-900 px-3 py-2 text-xs font-medium text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
         >
           <Plus className="h-3.5 w-3.5" />
-          New Project
+          New Customer Project
         </button>
       </div>
 
@@ -113,15 +113,15 @@ export default function ProjectsIndex({ initialShowWizard = false }: { initialSh
       ) : projects.length === 0 ? (
         <div className="rounded-xl border border-dashed border-zinc-300 bg-white p-10 text-center dark:border-zinc-700 dark:bg-[#080809]">
           <FolderKanban className="mx-auto h-10 w-10 text-zinc-300 dark:text-zinc-600" />
-          <h3 className="mt-3 text-sm font-semibold text-zinc-900 dark:text-white">No projects yet</h3>
-          <p className="mt-1 text-xs text-zinc-500">Create your first project or import an existing repository.</p>
+          <h3 className="mt-3 text-sm font-semibold text-zinc-900 dark:text-white">No customer projects yet</h3>
+          <p className="mt-1 text-xs text-zinc-500">Create a migration environment for a client moving from Web2 to Web3 services.</p>
           <div className="mt-4 flex items-center justify-center gap-3">
             <button
               onClick={() => setShowWizard(true)}
               className="inline-flex items-center gap-2 rounded-md bg-zinc-900 px-3 py-2 text-xs font-medium text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-900"
             >
               <Plus className="h-3.5 w-3.5" />
-              Create Project
+              Create Customer Project
             </button>
             <button className="inline-flex items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800">
               Import Repository
@@ -168,13 +168,13 @@ function CreateProjectWizard({ onClose, onCreate, existingProjectNames }: {
   const [framework, setFramework] = useState('Vite + React');
   const [branch, setBranch] = useState('main');
   const [network, setNetwork] = useState('Stellar Testnet');
-  const [enabledServices, setEnabledServices] = useState<string[]>(['srv-privacy', 'srv-transformation']);
+  const [enabledServices, setEnabledServices] = useState<string[]>([]);
 
   const steps = [
-    { label: 'Basics', description: 'Name and describe your project' },
-    { label: 'Type', description: 'Choose your project type' },
-    { label: 'Config', description: 'Environment defaults' },
-    { label: 'Services', description: 'Select services to pre-install' },
+    { label: 'Basics', description: 'Name and describe the customer migration' },
+    { label: 'Type', description: 'Choose the delivery model' },
+    { label: 'Config', description: 'Default network and repository context' },
+    { label: 'Services', description: 'Select services to enable' },
     { label: 'Review', description: 'Confirm and create' },
   ];
 
@@ -210,7 +210,7 @@ function CreateProjectWizard({ onClose, onCreate, existingProjectNames }: {
       >
         <div className="flex items-center justify-between border-b border-zinc-100 px-5 py-4 dark:border-zinc-800">
           <div>
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Create Project</h2>
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Create Customer Project</h2>
             <p className="mt-0.5 text-xs text-zinc-500">{steps[step].description}</p>
           </div>
           <button onClick={onClose} className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">
@@ -238,12 +238,12 @@ function CreateProjectWizard({ onClose, onCreate, existingProjectNames }: {
           {step === 0 && (
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">Project name *</label>
+                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">Customer project name *</label>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="my-project"
+                  placeholder="customer-migration"
                   autoFocus
                   className={`h-10 w-full rounded-lg border px-3 text-sm text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:outline-none ${
                     nameExists
@@ -252,7 +252,7 @@ function CreateProjectWizard({ onClose, onCreate, existingProjectNames }: {
                   }`}
                 />
                 {nameExists && (
-                  <p className="mt-1 text-xs text-rose-500 font-medium">A project with this name already exists in this workspace.</p>
+                  <p className="mt-1 text-xs text-rose-500 font-medium">A customer project with this name already exists in this workspace.</p>
                 )}
               </div>
               <div>
@@ -260,7 +260,7 @@ function CreateProjectWizard({ onClose, onCreate, existingProjectNames }: {
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="What is this project for?"
+                  placeholder="What customer workflow is moving to Web3?"
                   rows={2}
                   className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:border-zinc-500 resize-none"
                 />
@@ -271,7 +271,7 @@ function CreateProjectWizard({ onClose, onCreate, existingProjectNames }: {
                   type="text"
                   value={purpose}
                   onChange={(e) => setPurpose(e.target.value)}
-                  placeholder="e.g., Privacy-preserving payment service"
+                  placeholder="e.g., Move payroll settlement and agent auth to Web3 rails"
                   className="h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:border-zinc-500"
                 />
               </div>
