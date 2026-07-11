@@ -14,6 +14,14 @@ Upstream errors are not settled. Settlement failures never expose the buffered r
 
 ## Configuration
 
+For local development, keep environment variables in the repository-root
+`.env` and start all services from the root when needed:
+
+```bash
+cp .env.example .env
+npm run dev:all
+```
+
 Copy `depin.config.example.json` to `depin.config.json`, replace the recipient with the provider's Stellar G-address, and set any referenced secrets in the environment. Secret values are injected as `Authorization: Bearer ...` upstream and are never accepted from or returned to clients.
 
 V1 accepts concrete `GET` and `HEAD` routes only. Streaming, sessions, mutable POST compute, custom facilitators, physical-device adapters, and a provider marketplace remain outside this version.

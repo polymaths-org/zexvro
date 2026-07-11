@@ -101,9 +101,10 @@ Current and expected stack:
 Frontend workspace notes:
 
 - Path: `frontend/`.
-- Run frontend only: `cd frontend && npm run dev`.
-- Run Nabil's local NFT API, optional De-pin gateway, and frontend together: `cd frontend && npm run dev:stack`.
-- Validate before handoff: `cd frontend && npm run lint && npm run build`.
+- Preferred local stack: from the repository root, `cp .env.example .env` then `npm run dev` (NFT API + frontend) or `npm run dev:all` (also De-pin).
+- Run frontend only: `cd frontend && npm run dev` or root `npm run dev:frontend`.
+- Legacy combined launcher from the frontend folder: `cd frontend && npm run dev:stack`.
+- Validate before handoff: `cd frontend && npm run lint && npm run build`, or root `npm run lint:frontend` / `npm run build:frontend`.
 - NFT collection creation is wired to the Cognito-protected NFT API for local Stellar testnet runs; browser-local drafts remain only for migration and fallback visibility.
 - The project De-pin screen reads the local gateway health/status manifest and can probe an unpaid x402 `402` challenge through the Vite proxy.
 - Cognito/session and Morph polling behavior predate Nabil's services and must be preserved when changing the shell.
@@ -454,4 +455,4 @@ Current verification entry points:
 - NFT contract: commands in `services/nft-service/README.md`.
 - NFT API: `cd services/nft-service/api && npm run lint && npm test && npm run build`.
 - De-pin: `cd services/depin && npm run lint && npm test && npm run build`.
-- Required environment variables are documented only in service `.env.example` files; never commit their values.
+- Required environment variables are documented in the repository-root `.env.example`. Folder-level `.env.example` files are pointers only. Never commit real `.env` values.

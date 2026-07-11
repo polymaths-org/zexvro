@@ -44,3 +44,25 @@ This repository currently holds the project foundation:
 - `assets/brand/` - logo, typo logo, and brand design assets.
 
 Before starting work, read `context.md` and `memory.md`. After meaningful changes, update `memory.md` and commit the memory update with the code.
+
+## Local Development
+
+Use the repository root as the control point for local config and servers:
+
+```bash
+cp .env.example .env
+npm run dev
+```
+
+`npm run dev` starts the NFT API and frontend together. The root dev script loads
+`.env` and `.env.local`, injects the same environment into both processes, and
+uses the local Stellar CLI identity in `ZEXVRO_STELLAR_IDENTITY` when
+`STELLAR_SPONSOR_SECRET` is empty.
+
+```bash
+npm run dev:all
+```
+
+Use `dev:all` when you also want the De-pin gateway. Keep real secrets only in
+root `.env` or your shell; folder-level `.env.example` files are compatibility
+pointers to the root template.
