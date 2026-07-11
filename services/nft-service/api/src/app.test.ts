@@ -62,9 +62,11 @@ class FakeChain implements NftChainGateway {
     }
   }
 
-  async prepareMint(): Promise<PreparedContractCall> {
+  async prepareMint(input: {
+    operatorAddress: string
+  }): Promise<PreparedContractCall> {
     if (this.prepareFailure !== undefined) throw this.prepareFailure
-    return { serializedTransaction: 'prepared-mint', requiredSigners: [] }
+    return { serializedTransaction: 'prepared-mint', requiredSigners: [input.operatorAddress] }
   }
 
   async submitMint(): Promise<SubmissionResult> {
@@ -120,6 +122,7 @@ class FakeChain implements NftChainGateway {
 
 const ownerAddress = Keypair.random().publicKey()
 const buyerAddress = Keypair.random().publicKey()
+const testAssetId = 'a'.repeat(64)
 
 const testAuth: RequestHandler = (request, response, next) => {
   response.locals.nftIdentity = {
@@ -163,6 +166,16 @@ describe('NFT service API', () => {
           storageMode: 'pinata',
         },
         allowedOrigins: ['http://127.0.0.1:3000'],
+        assetReader: {
+          async readAsset(assetId: string) {
+            if (assetId !== testAssetId) return undefined
+            return {
+              bytes: new Uint8Array([1, 2, 3, 4]),
+              filename: 'cover.png',
+              mimeType: 'image/png',
+            }
+          },
+        },
       },
     )
   })
@@ -232,6 +245,24 @@ describe('NFT service API', () => {
         contentType: 'image/svg+xml',
       })
       .expect(415)
+  })
+
+  it('serves local content-addressed assets without accepting bad identifiers', async () => {
+    const asset = await request(app)
+      .get(`/v1/assets/${testAssetId}`)
+      .expect(200)
+
+    expect(asset.headers['content-type']).toContain('image/png')
+    expect(asset.headers.etag).toBe(`"${testAssetId}"`)
+    expect(Array.from(asset.body as Buffer)).toEqual([1, 2, 3, 4])
+
+    await request(app)
+      .get(`/v1/assets/${'b'.repeat(64)}`)
+      .expect(404)
+
+    await request(app)
+      .get('/v1/assets/not-a-valid-asset-id')
+      .expect(400)
   })
 
   it('lists collections by workspace and reports deployment status', async () => {
@@ -490,6 +521,34 @@ describe('NFT service API', () => {
       .post(`/v1/collections/${collection.id}/sale-config/intent`)
       .send({ ownerAddress: buyerAddress, priceAtomic: '250000' })
       .expect(403)
+  })
+
+  it('prepares and submits creator mint transactions', async () => {
+    const collection = await createCollection()
+    const prepared = await request(app)
+      .post(`/v1/collections/${collection.id}/mints/intent`)
+      .send({
+        operatorAddress: ownerAddress,
+        recipientAddress: buyerAddress,
+        tokenId: 42,
+      })
+      .expect(201)
+    expect(prepared.body.intent).toMatchObject({
+      serializedTransaction: 'prepared-mint',
+      requiredSigners: [ownerAddress],
+    })
+
+    const submitted = await request(app)
+      .post(`/v1/collections/${collection.id}/mints/submit`)
+      .send({
+        preparedTransaction: 'prepared-mint',
+        signedTransaction: 'signed-mint',
+      })
+      .expect(201)
+    expect(submitted.body.transaction).toMatchObject({
+      transactionHash: 'mint-hash',
+      status: 'confirmed',
+    })
   })
 
   it('accepts local sponsor-owned sale configuration that is auto-submitted', async () => {
