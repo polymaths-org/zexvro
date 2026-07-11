@@ -48,6 +48,7 @@ import AgentAuth from '../components/services/AgentAuth';
 import NftService, { NftCollectionCreate } from '../components/services/NftService';
 import DepinService from '../components/services/DepinService';
 import DocsLibrary from '../components/docs/DocsLibrary';
+import PublicCollection from '../services/nft/PublicCollection';
 
 const MarketingPage = React.lazy(() => import('../marketing/MarketingPage'));
 
@@ -552,6 +553,12 @@ const docsRoute = createRoute({
   component: DocsLibrary,
 });
 
+const publicNftCollectionRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/nft/collections/$collectionId',
+  component: PublicCollection,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   agentShortcutRoute,
@@ -560,6 +567,7 @@ const routeTree = rootRoute.addChildren([
   dashboardAgentShortcutRoute,
   dashboardServicesShortcutRoute,
   docsRoute,
+  publicNftCollectionRoute,
   dashboardLayoutRoute.addChildren([
     dashboardIndexRoute,
     wsOverviewRoute,

@@ -6,22 +6,34 @@ import {
   CircleAlert,
   CircleDollarSign,
   CloudUpload,
+  Copy,
+  Edit3,
   ExternalLink,
+  Eye,
   Gamepad2,
   Image,
   LoaderCircle,
   Plus,
   RadioTower,
   RefreshCw,
+  RotateCcw,
   ShieldCheck,
+  ShoppingCart,
+  Trash2,
+  X,
 } from 'lucide-react';
 import type { NftCollection } from '../../types';
 import { loadCollections } from './collectionStore';
 import {
+  deleteNftCollection,
   getNftServiceHealth,
   listNftCollections,
+  prepareNftSaleConfig,
+  retryNftCollectionDeployment,
+  updateNftCollection,
   type ApiNftCollection,
   type NftServiceHealth,
+  type PreparedNftTransaction,
 } from './nftApi';
 
 interface CollectionDashboardProps {
@@ -47,6 +59,23 @@ function errorMessage(error: unknown) {
   return 'NFT API unavailable';
 }
 
+function collectionPublicPath(collectionId: string) {
+  return `/nft/collections/${collectionId}`;
+}
+
+function collectionPublicUrl(collectionId: string) {
+  if (typeof window === 'undefined') return collectionPublicPath(collectionId);
+  return `${window.location.origin}${collectionPublicPath(collectionId)}`;
+}
+
+function usdcToAtomic(value: string) {
+  const trimmed = value.trim();
+  if (!/^\d+(?:\.\d{1,7})?$/.test(trimmed)) return undefined;
+  const [whole, fraction = ''] = trimmed.split('.');
+  const atomic = BigInt(whole) * 10_000_000n + BigInt((fraction + '0000000').slice(0, 7));
+  return atomic > 0n ? atomic.toString() : undefined;
+}
+
 const STATUS_STYLE = {
   deploying: 'border-blue-500/20 bg-blue-500/10 text-blue-600 dark:text-blue-400',
   live: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
@@ -60,11 +89,25 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [apiError, setApiError] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [actionMessage, setActionMessage] = useState('');
+  const [busyCollectionId, setBusyCollectionId] = useState('');
+  const [editingCollection, setEditingCollection] = useState<ApiNftCollection | null>(null);
+  const [editDraft, setEditDraft] = useState({
+    name: '',
+    symbol: '',
+    description: '',
+    royaltyBps: 0,
+  });
+  const [saleCollection, setSaleCollection] = useState<ApiNftCollection | null>(null);
+  const [salePrice, setSalePrice] = useState('0.25');
+  const [saleIntent, setSaleIntent] = useState<PreparedNftTransaction | null>(null);
 
   const loadRemoteData = useCallback(async (signal?: AbortSignal, isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
     setApiError('');
+    setActionError('');
 
     const [healthResult, collectionResult] = await Promise.allSettled([
       getNftServiceHealth(signal),
@@ -94,6 +137,122 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
 
   const hasAnyCollections = collections.length > 0 || browserDrafts.length > 0;
 
+  const refreshCollections = () => {
+    setBrowserDrafts(loadCollections(workspaceId));
+    void loadRemoteData(undefined, true);
+  };
+
+  const retryCollection = async (collection: ApiNftCollection) => {
+    setBusyCollectionId(collection.id);
+    setActionError('');
+    setActionMessage('');
+    try {
+      await retryNftCollectionDeployment(collection.id, accessToken);
+      setActionMessage(`${collection.name} deployment was retried.`);
+      await loadRemoteData(undefined, true);
+    } catch (error) {
+      setActionError(errorMessage(error));
+    } finally {
+      setBusyCollectionId('');
+    }
+  };
+
+  const deleteCollection = async (collection: ApiNftCollection) => {
+    const confirmed = window.confirm(`Delete the failed API record for ${collection.name}? Live contracts cannot be deleted from Stellar.`);
+    if (!confirmed) return;
+    setBusyCollectionId(collection.id);
+    setActionError('');
+    setActionMessage('');
+    try {
+      await deleteNftCollection(collection.id, accessToken);
+      setCollections(previous => previous.filter(item => item.id !== collection.id));
+      setActionMessage(`${collection.name} was removed.`);
+    } catch (error) {
+      setActionError(errorMessage(error));
+    } finally {
+      setBusyCollectionId('');
+    }
+  };
+
+  const copyPublicUrl = async (collection: ApiNftCollection) => {
+    const url = collectionPublicUrl(collection.id);
+    try {
+      await navigator.clipboard.writeText(url);
+      setActionMessage('Public collection URL copied.');
+      setActionError('');
+    } catch {
+      setActionError(url);
+    }
+  };
+
+  const openEdit = (collection: ApiNftCollection) => {
+    setEditingCollection(collection);
+    setEditDraft({
+      name: collection.name,
+      symbol: collection.symbol,
+      description: collection.description,
+      royaltyBps: collection.royaltyBps,
+    });
+    setActionError('');
+    setActionMessage('');
+  };
+
+  const openSaleSetup = (collection: ApiNftCollection) => {
+    setSaleCollection(collection);
+    setSalePrice('0.25');
+    setSaleIntent(null);
+    setActionError('');
+    setActionMessage('');
+  };
+
+  const prepareSaleConfig = async () => {
+    if (!saleCollection) return;
+    const priceAtomic = usdcToAtomic(salePrice);
+    if (priceAtomic === undefined) {
+      setActionError('Enter a USDC price greater than 0 with up to 7 decimals.');
+      return;
+    }
+    setBusyCollectionId(saleCollection.id);
+    setActionError('');
+    setActionMessage('');
+    try {
+      const intent = await prepareNftSaleConfig({
+        collectionId: saleCollection.id,
+        ownerAddress: saleCollection.ownerAddress,
+        priceAtomic,
+        accessToken,
+      });
+      setSaleIntent(intent);
+      setActionMessage('Sale configuration transaction prepared.');
+    } catch (error) {
+      setActionError(errorMessage(error));
+    } finally {
+      setBusyCollectionId('');
+    }
+  };
+
+  const saveEdit = async () => {
+    if (!editingCollection) return;
+    setBusyCollectionId(editingCollection.id);
+    setActionError('');
+    setActionMessage('');
+    try {
+      await updateNftCollection(editingCollection.id, {
+        name: editDraft.name.trim(),
+        symbol: editDraft.symbol.trim().toUpperCase(),
+        description: editDraft.description.trim(),
+        royaltyBps: editDraft.royaltyBps,
+      }, accessToken);
+      setEditingCollection(null);
+      setActionMessage('Failed collection record updated.');
+      await loadRemoteData(undefined, true);
+    } catch (error) {
+      setActionError(errorMessage(error));
+    } finally {
+      setBusyCollectionId('');
+    }
+  };
+
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <header className="flex flex-col gap-4 border-b border-zinc-200 pb-5 dark:border-zinc-900 sm:flex-row sm:items-end sm:justify-between">
@@ -114,8 +273,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
             title="Refresh collections"
             disabled={refreshing}
             onClick={() => {
-              setBrowserDrafts(loadCollections(workspaceId));
-              void loadRemoteData(undefined, true);
+              refreshCollections();
             }}
             className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-zinc-200 text-zinc-500 transition hover:bg-zinc-50 hover:text-zinc-950 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-800 dark:hover:bg-zinc-900 dark:hover:text-white"
           >
@@ -164,6 +322,17 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
         </div>
       )}
 
+      {(actionError || actionMessage) && (
+        <div className={`flex items-center gap-2.5 border px-3 py-2.5 text-sm ${
+          actionError
+            ? 'border-red-500/25 bg-red-500/5 text-red-600 dark:text-red-400'
+            : 'border-emerald-500/25 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400'
+        }`} role="status">
+          <CircleAlert className="h-4 w-4 shrink-0" />
+          <span>{actionError || actionMessage}</span>
+        </div>
+      )}
+
       {loading ? (
         <section className="flex min-h-56 items-center justify-center border-y border-zinc-200 dark:border-zinc-900" aria-label="Loading collections">
           <LoaderCircle className="h-5 w-5 animate-spin text-zinc-400" />
@@ -201,7 +370,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
                 </span>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[940px] text-left text-sm">
+                <table className="w-full min-w-[1120px] text-left text-sm">
                   <thead className="border-b border-zinc-200 bg-zinc-50 text-xs text-zinc-500 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-400">
                     <tr>
                       <th className="px-3 py-3 font-medium">Collection</th>
@@ -210,6 +379,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
                       <th className="px-3 py-3 font-medium">Status</th>
                       <th className="px-3 py-3 font-medium">Contract</th>
                       <th className="px-3 py-3 font-medium">Created</th>
+                      <th className="px-3 py-3 font-medium">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-100 dark:divide-zinc-900">
@@ -265,6 +435,78 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
                             {formatDate(collection.createdAt)}
                           </span>
                         </td>
+                        <td className="px-3 py-3.5">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {collection.status === 'live' ? (
+                              <>
+                                <a
+                                  href={collectionPublicPath(collection.id)}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  title="View public page"
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-zinc-200 text-zinc-500 transition hover:border-zinc-300 hover:text-zinc-950 dark:border-zinc-800 dark:hover:border-zinc-700 dark:hover:text-white"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </a>
+                                <a
+                                  href={`${collectionPublicPath(collection.id)}?buy=1`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  title="Open buyer page"
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-zinc-200 text-zinc-500 transition hover:border-zinc-300 hover:text-zinc-950 dark:border-zinc-800 dark:hover:border-zinc-700 dark:hover:text-white"
+                                >
+                                  <ShoppingCart className="h-4 w-4" />
+                                </a>
+                                <button
+                                  type="button"
+                                  onClick={() => void copyPublicUrl(collection)}
+                                  title="Copy public URL"
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-zinc-200 text-zinc-500 transition hover:border-zinc-300 hover:text-zinc-950 dark:border-zinc-800 dark:hover:border-zinc-700 dark:hover:text-white"
+                                >
+                                  <Copy className="h-4 w-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => openSaleSetup(collection)}
+                                  title="Configure primary sale"
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-zinc-200 text-zinc-500 transition hover:border-zinc-300 hover:text-zinc-950 dark:border-zinc-800 dark:hover:border-zinc-700 dark:hover:text-white"
+                                >
+                                  <CircleDollarSign className="h-4 w-4" />
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => void retryCollection(collection)}
+                                  disabled={busyCollectionId === collection.id}
+                                  title="Retry deployment"
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-zinc-200 text-zinc-500 transition hover:border-zinc-300 hover:text-zinc-950 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-800 dark:hover:border-zinc-700 dark:hover:text-white"
+                                >
+                                  <RotateCcw className={`h-4 w-4 ${busyCollectionId === collection.id ? 'animate-spin' : ''}`} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => openEdit(collection)}
+                                  disabled={busyCollectionId === collection.id}
+                                  title="Edit failed record"
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-zinc-200 text-zinc-500 transition hover:border-zinc-300 hover:text-zinc-950 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-800 dark:hover:border-zinc-700 dark:hover:text-white"
+                                >
+                                  <Edit3 className="h-4 w-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void deleteCollection(collection)}
+                                  disabled={busyCollectionId === collection.id}
+                                  title="Delete failed record"
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-red-500/30 text-red-500 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -309,6 +551,180 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
             </section>
           )}
         </>
+      )}
+
+      {editingCollection && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <section className="w-full max-w-lg rounded-lg border border-zinc-200 bg-white p-5 shadow-2xl dark:border-zinc-800 dark:bg-[#0A0A0B]">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-base font-semibold text-zinc-950 dark:text-white">Edit failed collection</h2>
+                <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Changes apply to the next deployment retry.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingCollection(null)}
+                aria-label="Close editor"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-zinc-200 text-zinc-500 transition hover:text-zinc-950 dark:border-zinc-800 dark:hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-5 space-y-4">
+              <label className="block text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                Name
+                <input
+                  value={editDraft.name}
+                  onChange={event => setEditDraft(previous => ({ ...previous, name: event.target.value }))}
+                  className="mt-2 w-full rounded-md border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-950 outline-none transition focus:border-brand-blue dark:border-zinc-800 dark:bg-[#050506] dark:text-white"
+                />
+              </label>
+              <label className="block text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                Symbol
+                <input
+                  value={editDraft.symbol}
+                  onChange={event => setEditDraft(previous => ({
+                    ...previous,
+                    symbol: event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10),
+                  }))}
+                  className="mt-2 w-full rounded-md border border-zinc-200 bg-white px-3 py-2.5 font-mono text-sm text-zinc-950 outline-none transition focus:border-brand-blue dark:border-zinc-800 dark:bg-[#050506] dark:text-white"
+                />
+              </label>
+              <label className="block text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                Description
+                <textarea
+                  value={editDraft.description}
+                  onChange={event => setEditDraft(previous => ({ ...previous, description: event.target.value }))}
+                  rows={4}
+                  className="mt-2 w-full resize-none rounded-md border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-950 outline-none transition focus:border-brand-blue dark:border-zinc-800 dark:bg-[#050506] dark:text-white"
+                />
+              </label>
+              <label className="block text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                Royalty preference
+                <div className="mt-2 flex items-center rounded-md border border-zinc-200 bg-white pr-3 dark:border-zinc-800 dark:bg-[#050506]">
+                  <input
+                    type="number"
+                    min={0}
+                    max={10}
+                    step={0.25}
+                    value={editDraft.royaltyBps / 100}
+                    onChange={event => setEditDraft(previous => ({
+                      ...previous,
+                      royaltyBps: Math.round(Number(event.target.value) * 100),
+                    }))}
+                    className="w-full rounded-md bg-transparent px-3 py-2.5 text-sm text-zinc-950 outline-none dark:text-white"
+                  />
+                  <span className="text-sm text-zinc-500">%</span>
+                </div>
+              </label>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setEditingCollection(null)}
+                className="inline-flex h-10 items-center justify-center rounded-md border border-zinc-200 px-4 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={busyCollectionId === editingCollection.id}
+                onClick={() => void saveEdit()}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-zinc-950 px-4 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
+              >
+                {busyCollectionId === editingCollection.id && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                Save changes
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {saleCollection && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <section className="w-full max-w-xl rounded-lg border border-zinc-200 bg-white p-5 shadow-2xl dark:border-zinc-800 dark:bg-[#0A0A0B]">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-base font-semibold text-zinc-950 dark:text-white">Primary sale setup</h2>
+                <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Prepare the owner-signed USDC sale configuration.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSaleCollection(null)}
+                aria-label="Close sale setup"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-zinc-200 text-zinc-500 transition hover:text-zinc-950 dark:border-zinc-800 dark:hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-5 grid gap-4 sm:grid-cols-[1fr_160px]">
+              <label className="block text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                Owner signer
+                <input
+                  readOnly
+                  value={saleCollection.ownerAddress}
+                  className="mt-2 w-full rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2.5 font-mono text-xs text-zinc-600 outline-none dark:border-zinc-800 dark:bg-[#050506] dark:text-zinc-300"
+                />
+              </label>
+              <label className="block text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                Price
+                <div className="mt-2 flex items-center rounded-md border border-zinc-200 bg-white pr-3 dark:border-zinc-800 dark:bg-[#050506]">
+                  <input
+                    value={salePrice}
+                    onChange={event => setSalePrice(event.target.value)}
+                    className="w-full rounded-md bg-transparent px-3 py-2.5 text-sm text-zinc-950 outline-none dark:text-white"
+                  />
+                  <span className="text-sm text-zinc-500">USDC</span>
+                </div>
+              </label>
+            </div>
+
+            {saleIntent && (
+              <div className="mt-5 space-y-3 border-t border-zinc-200 pt-5 dark:border-zinc-800">
+                <div>
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400">Required signer</span>
+                  <p className="mt-1 font-mono text-xs text-zinc-700 dark:text-zinc-300">{saleIntent.requiredSigners.join(', ')}</p>
+                </div>
+                <textarea
+                  readOnly
+                  value={saleIntent.serializedTransaction}
+                  rows={5}
+                  className="w-full resize-none rounded-md border border-zinc-200 bg-zinc-50 p-3 font-mono text-xs text-zinc-700 outline-none dark:border-zinc-800 dark:bg-[#050506] dark:text-zinc-300"
+                />
+                <button
+                  type="button"
+                  onClick={() => void navigator.clipboard.writeText(saleIntent.serializedTransaction)}
+                  className="inline-flex h-9 items-center gap-2 rounded-md border border-zinc-200 px-3 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                >
+                  <Copy className="h-4 w-4" />
+                  Copy transaction
+                </button>
+              </div>
+            )}
+
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setSaleCollection(null)}
+                className="inline-flex h-10 items-center justify-center rounded-md border border-zinc-200 px-4 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                disabled={busyCollectionId === saleCollection.id}
+                onClick={() => void prepareSaleConfig()}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-zinc-950 px-4 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
+              >
+                {busyCollectionId === saleCollection.id && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                Prepare sale
+              </button>
+            </div>
+          </section>
+        </div>
       )}
     </div>
   );

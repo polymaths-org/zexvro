@@ -22,6 +22,34 @@ export interface CreateCollectionInput {
   externalUrl?: string | undefined
 }
 
+type EditableCollectionFields = Pick<
+  CreateCollectionInput,
+  | 'name'
+  | 'symbol'
+  | 'description'
+  | 'ownerAddress'
+  | 'baseMetadataUri'
+  | 'coverImageUri'
+  | 'royaltyRecipient'
+  | 'royaltyBps'
+  | 'externalUrl'
+>
+
+export type UpdateFailedCollectionInput = {
+  [Key in keyof EditableCollectionFields]?: EditableCollectionFields[Key] | undefined
+}
+
+interface CollectionMetadataInput {
+  name: string
+  symbol: string
+  description: string
+  coverImageUri: string
+  baseMetadataUri: string
+  royaltyRecipient: string
+  royaltyBps: number
+  externalUrl?: string
+}
+
 const DEFAULT_TESTNET_USDC_CONTRACT =
   'CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA'
 
@@ -58,35 +86,15 @@ export class NftService {
         'An IPFS token metadata directory is required for Pinata storage',
       )
     }
-    const pinnedMetadata = await this.pinning.pinJson({
-      filename: `${input.symbol.toLowerCase()}-collection.json`,
-      value: {
-        schema: 'https://zexvro.dev/schemas/nft-collection/v1',
-        name: input.name,
-        symbol: input.symbol,
-        description: input.description,
-        image: input.coverImageUri,
-        base_metadata_uri: baseMetadataUri,
-        royalty: {
-          recipient: input.royaltyRecipient,
-          basis_points: input.royaltyBps,
-          enforcement: 'marketplace-compatible-information',
-        },
-        ...(input.externalUrl === undefined
-          ? {}
-          : {
-              external_url: input.externalUrl,
-              properties: {
-                zexvro: {
-                  schema_version: 1,
-                  gameplay_attributes: {
-                    source: input.externalUrl,
-                    mutable: true,
-                  },
-                },
-              },
-            }),
-      },
+    const pinnedMetadata = await this.pinCollectionMetadata({
+      name: input.name,
+      symbol: input.symbol,
+      description: input.description,
+      coverImageUri: input.coverImageUri,
+      baseMetadataUri,
+      royaltyRecipient: input.royaltyRecipient,
+      royaltyBps: input.royaltyBps,
+      ...(input.externalUrl === undefined ? {} : { externalUrl: input.externalUrl }),
     })
 
     const timestamp = this.now().toISOString()
@@ -178,6 +186,113 @@ export class NftService {
         { trait_type: 'Token ID', value: tokenId },
       ],
     }
+  }
+
+  async updateFailedCollection(
+    id: string,
+    input: UpdateFailedCollectionInput,
+  ): Promise<CollectionRecord> {
+    const collection = await this.getCollection(id)
+    if (collection.status !== 'failed') {
+      throw new ApiError(
+        409,
+        'collection_not_editable',
+        'Only failed collection records can be edited before retry',
+        { status: collection.status },
+      )
+    }
+
+    const nextExternalUrl =
+      Object.hasOwn(input, 'externalUrl') ? input.externalUrl : collection.externalUrl
+    const metadataInput: CollectionMetadataInput = {
+      name: input.name ?? collection.name,
+      symbol: input.symbol ?? collection.symbol,
+      description: input.description ?? collection.description,
+      coverImageUri: input.coverImageUri ?? collection.coverImageUri,
+      baseMetadataUri: input.baseMetadataUri ?? collection.baseMetadataUri,
+      royaltyRecipient: input.royaltyRecipient ?? collection.royaltyRecipient,
+      royaltyBps: input.royaltyBps ?? collection.royaltyBps,
+      ...(nextExternalUrl === undefined ? {} : { externalUrl: nextExternalUrl }),
+    }
+    const pinnedMetadata = await this.pinCollectionMetadata(metadataInput)
+    const updated: CollectionRecord = {
+      ...collection,
+      ...metadataInput,
+      ownerAddress: input.ownerAddress ?? collection.ownerAddress,
+      collectionMetadataUri: pinnedMetadata.uri,
+      updatedAt: this.now().toISOString(),
+    }
+    delete updated.failureReason
+    await this.repository.saveCollection(updated)
+    return updated
+  }
+
+  async retryCollectionDeployment(id: string): Promise<CollectionRecord> {
+    const existing = await this.getCollection(id)
+    if (existing.status !== 'failed') {
+      throw new ApiError(
+        409,
+        'collection_not_retryable',
+        'Only failed collection deployments can be retried',
+        { status: existing.status },
+      )
+    }
+
+    const deploying: CollectionRecord = {
+      ...existing,
+      status: 'deploying',
+      updatedAt: this.now().toISOString(),
+    }
+    delete deploying.failureReason
+    await this.repository.saveCollection(deploying)
+
+    try {
+      const deployment = await this.chain.deployCollection({
+        ownerAddress: deploying.ownerAddress,
+        name: deploying.name,
+        symbol: deploying.symbol,
+        baseMetadataUri: deploying.baseMetadataUri,
+        royaltyRecipient: deploying.royaltyRecipient,
+        royaltyBps: deploying.royaltyBps,
+      })
+      const live: CollectionRecord = {
+        ...deploying,
+        status: 'live',
+        contractId: deployment.contractId,
+        deploymentTxHash: deployment.transactionHash,
+        updatedAt: this.now().toISOString(),
+      }
+      await this.repository.saveCollection(live)
+      return live
+    } catch (error) {
+      const failed: CollectionRecord = {
+        ...deploying,
+        status: 'failed',
+        failureReason: this.safeFailureReason(error),
+        updatedAt: this.now().toISOString(),
+      }
+      await this.repository.saveCollection(failed)
+      if (error instanceof ApiError) throw error
+      throw new ApiError(
+        502,
+        'collection_deployment_failed',
+        'The collection deployment retry failed',
+        { collectionId: id },
+      )
+    }
+  }
+
+  async deleteCollection(id: string): Promise<void> {
+    const collection = await this.getCollection(id)
+    if (collection.status !== 'failed') {
+      throw new ApiError(
+        409,
+        'collection_delete_blocked',
+        'Only failed collection records can be deleted. Live contracts remain on-chain.',
+        { status: collection.status },
+      )
+    }
+    await this.repository.deleteCollection(id)
   }
 
   async prepareMint(input: {
@@ -408,5 +523,38 @@ export class NftService {
   private safeFailureReason(error: unknown): string {
     if (error instanceof ApiError) return error.code
     return error instanceof Error ? error.message.slice(0, 160) : 'unknown_error'
+  }
+
+  private pinCollectionMetadata(input: CollectionMetadataInput) {
+    return this.pinning.pinJson({
+      filename: `${input.symbol.toLowerCase()}-collection.json`,
+      value: {
+        schema: 'https://zexvro.dev/schemas/nft-collection/v1',
+        name: input.name,
+        symbol: input.symbol,
+        description: input.description,
+        image: input.coverImageUri,
+        base_metadata_uri: input.baseMetadataUri,
+        royalty: {
+          recipient: input.royaltyRecipient,
+          basis_points: input.royaltyBps,
+          enforcement: 'marketplace-compatible-information',
+        },
+        ...(input.externalUrl === undefined
+          ? {}
+          : {
+              external_url: input.externalUrl,
+              properties: {
+                zexvro: {
+                  schema_version: 1,
+                  gameplay_attributes: {
+                    source: input.externalUrl,
+                    mutable: true,
+                  },
+                },
+              },
+            }),
+      },
+    })
   }
 }
