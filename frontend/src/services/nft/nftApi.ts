@@ -37,6 +37,12 @@ export interface ApiNftCollection {
   contractId?: string;
   deploymentTxHash?: string;
   failureReason?: string;
+  primarySale?: {
+    paymentTokenAddress: string;
+    priceAtomic: string;
+    transactionHash: string;
+    configuredAt: string;
+  };
   createdAt: string;
   updatedAt: string;
 }

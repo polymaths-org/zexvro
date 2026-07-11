@@ -44,6 +44,17 @@ const failedCollection = {
   failureReason: 'stellar_deployment_incomplete',
 };
 
+const configuredCollection = {
+  ...remoteCollection,
+  id: '6a0dc446-4f57-4cf2-94ec-257b41b786a1',
+  primarySale: {
+    paymentTokenAddress: 'CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA',
+    priceAtomic: '12500000',
+    transactionHash: 'sale-config-auto-hash',
+    configuredAt: '2026-07-12T00:00:00.000Z',
+  },
+};
+
 describe('CollectionDashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -150,6 +161,49 @@ describe('CollectionDashboard', () => {
 
     await user.click(screen.getByTitle('Delete failed record'));
     expect(api.deleteNftCollection).toHaveBeenCalledWith(failedCollection.id, 'access-token');
+  });
+
+  it('shows configured primary sales as updateable instead of unprepared', async () => {
+    const user = userEvent.setup();
+    api.listNftCollections.mockResolvedValue([configuredCollection]);
+
+    render(
+      <MemoryRouter>
+        <CollectionDashboard workspaceId="studio-a" accessToken="access-token" onCreate={() => undefined} />
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByTitle('Update primary sale'));
+    expect(screen.getByRole('heading', { name: 'Primary sale configured' })).toBeInTheDocument();
+    expect(screen.getByText('1.25 USDC')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /update sale/i })).toBeInTheDocument();
+  });
+
+  it('persists auto-submitted sale setup in dashboard state', async () => {
+    const user = userEvent.setup();
+    api.listNftCollections.mockResolvedValue([remoteCollection]);
+    api.prepareNftSaleConfig.mockResolvedValue({
+      serializedTransaction: 'prepared-sale',
+      requiredSigners: [],
+      autoSubmitted: {
+        transactionHash: 'sale-config-auto-hash',
+        status: 'confirmed',
+      },
+    });
+
+    render(
+      <MemoryRouter>
+        <CollectionDashboard workspaceId="studio-a" accessToken="access-token" onCreate={() => undefined} />
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByTitle('Configure primary sale'));
+    await user.clear(screen.getByLabelText(/Price/));
+    await user.type(screen.getByLabelText(/Price/), '1.25');
+    await user.click(screen.getByRole('button', { name: /prepare sale/i }));
+
+    expect(await screen.findByRole('button', { name: /sale configured/i })).toBeDisabled();
+    expect(screen.getByText('Submitted by local sponsor')).toBeInTheDocument();
   });
 
   it('surfaces API failures without hiding browser drafts', async () => {

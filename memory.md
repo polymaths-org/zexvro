@@ -593,3 +593,13 @@ Use `None` for empty fields. Do not delete fields.
 - Follow-ups: Add full wallet signing/submission for non-sponsor creators and public buyers.
 - Blockers: None.
 - Verification: NFT API lint/build passed; NFT API tests passed 31/31 outside the sandbox. Frontend TypeScript lint, production build, 29/29 Vitest tests, and 4/4 Playwright E2E tests passed.
+
+## 2026-07-12 - Codex with Nabil - Persist NFT primary sale state
+
+- Service or area: NFT Service API and frontend.
+- Files changed: `services/nft-service/api/src/domain.ts`, `services/nft-service/api/src/service.ts`, `services/nft-service/api/src/app.ts`, `services/nft-service/api/src/app.test.ts`, `frontend/src/services/nft/nftApi.ts`, `frontend/src/services/nft/CollectionDashboard.tsx`, `frontend/src/services/nft/CollectionDashboard.test.tsx`, `frontend/src/services/nft/PublicCollection.tsx`, `memory.md`.
+- Summary: Fixed the dashboard state after sponsor auto-submits a primary USDC sale configuration. The NFT API now persists `primarySale` with payment token, atomic price, transaction hash, and configured timestamp. The dashboard now shows configured sales as updateable, disables the modal action after auto-submit, and keeps the current sale price visible. Public collection payloads and pages now include the configured primary sale price.
+- Decisions: Accepted - Sponsor auto-submit marks sale configuration live only after Stellar returns a confirmed transaction hash. Accepted - Non-sponsor creators still need the later wallet signing/submission flow before the API can persist their signed sale configuration.
+- Follow-ups: Add browser wallet signing/submission for non-sponsor creators and public buyers, then persist sale state from the explicit sale-config submit endpoint as well.
+- Blockers: None.
+- Verification: Frontend targeted dashboard test passed 6/6, full frontend Vitest passed 31/31, frontend TypeScript lint passed, production build passed with the known large chunk warning, and Playwright E2E passed 4/4. NFT API targeted app test passed 19/19 outside the sandbox because Supertest binds local ports; full NFT API tests passed 31/31 outside the sandbox; NFT API lint/build passed. `git diff --check` passed.

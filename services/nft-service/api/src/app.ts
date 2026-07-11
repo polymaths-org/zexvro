@@ -179,6 +179,7 @@ function presentPublicCollection(collection: CollectionRecord) {
     coverImageUri: collection.coverImageUri,
     royaltyBps: collection.royaltyBps,
     ...(collection.externalUrl === undefined ? {} : { externalUrl: collection.externalUrl }),
+    ...(collection.primarySale === undefined ? {} : { primarySale: collection.primarySale }),
     status: collection.status,
     contractId: collection.contractId,
     deploymentTxHash: collection.deploymentTxHash,

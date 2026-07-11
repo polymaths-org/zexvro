@@ -76,6 +76,13 @@ function usdcToAtomic(value: string) {
   return atomic > 0n ? atomic.toString() : undefined;
 }
 
+function atomicToUsdc(value: string) {
+  const atomic = BigInt(value);
+  const whole = atomic / 10_000_000n;
+  const fraction = (atomic % 10_000_000n).toString().padStart(7, '0').replace(/0+$/, '');
+  return fraction ? `${whole.toString()}.${fraction}` : whole.toString();
+}
+
 const STATUS_STYLE = {
   deploying: 'border-blue-500/20 bg-blue-500/10 text-blue-600 dark:text-blue-400',
   live: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
@@ -199,7 +206,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
 
   const openSaleSetup = (collection: ApiNftCollection) => {
     setSaleCollection(collection);
-    setSalePrice('0.25');
+    setSalePrice(collection.primarySale ? atomicToUsdc(collection.primarySale.priceAtomic) : '0.25');
     setSaleIntent(null);
     setActionError('');
     setActionMessage('');
@@ -223,7 +230,24 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
         accessToken,
       });
       setSaleIntent(intent);
-      setActionMessage('Sale configuration transaction prepared.');
+      if (intent.autoSubmitted) {
+        const configuredSale = {
+          paymentTokenAddress: '',
+          priceAtomic,
+          transactionHash: intent.autoSubmitted.transactionHash,
+          configuredAt: new Date().toISOString(),
+        };
+        setSaleCollection(previous => previous ? { ...previous, primarySale: configuredSale } : previous);
+        setCollections(previous => previous.map(collection =>
+          collection.id === saleCollection.id
+            ? { ...collection, primarySale: configuredSale }
+            : collection,
+        ));
+        setActionMessage('Sale configuration is live on Stellar testnet.');
+        await loadRemoteData(undefined, true);
+      } else {
+        setActionMessage('Sale configuration transaction prepared.');
+      }
     } catch (error) {
       setActionError(errorMessage(error));
     } finally {
@@ -468,8 +492,12 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
                                 <button
                                   type="button"
                                   onClick={() => openSaleSetup(collection)}
-                                  title="Configure primary sale"
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-zinc-200 text-zinc-500 transition hover:border-zinc-300 hover:text-zinc-950 dark:border-zinc-800 dark:hover:border-zinc-700 dark:hover:text-white"
+                                  title={collection.primarySale ? 'Update primary sale' : 'Configure primary sale'}
+                                  className={`inline-flex h-8 w-8 items-center justify-center rounded-md border transition ${
+                                    collection.primarySale
+                                      ? 'border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/10'
+                                      : 'border-zinc-200 text-zinc-500 hover:border-zinc-300 hover:text-zinc-950 dark:border-zinc-800 dark:hover:border-zinc-700 dark:hover:text-white'
+                                  }`}
                                 >
                                   <CircleDollarSign className="h-4 w-4" />
                                 </button>
@@ -647,8 +675,14 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
           <section className="w-full max-w-xl rounded-lg border border-zinc-200 bg-white p-5 shadow-2xl dark:border-zinc-800 dark:bg-[#0A0A0B]">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-base font-semibold text-zinc-950 dark:text-white">Primary sale setup</h2>
-                <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Prepare the owner-signed USDC sale configuration.</p>
+                <h2 className="text-base font-semibold text-zinc-950 dark:text-white">
+                  {saleCollection.primarySale ? 'Primary sale configured' : 'Primary sale setup'}
+                </h2>
+                <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                  {saleCollection.primarySale
+                    ? 'This collection has an active primary USDC sale. Update the price only if you want to change the on-chain sale configuration.'
+                    : 'Prepare the owner-signed USDC sale configuration.'}
+                </p>
               </div>
               <button
                 type="button"
@@ -721,6 +755,24 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
               </div>
             )}
 
+            {saleCollection.primarySale && !saleIntent && (
+              <div className="mt-5 space-y-2 border-t border-zinc-200 pt-5 dark:border-zinc-800">
+                <span className="text-xs text-zinc-500 dark:text-zinc-400">Current sale</span>
+                <p className="text-sm font-medium text-zinc-950 dark:text-white">
+                  {atomicToUsdc(saleCollection.primarySale.priceAtomic)} USDC
+                </p>
+                <a
+                  href={`https://stellar.expert/explorer/testnet/tx/${saleCollection.primarySale.transactionHash}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 font-mono text-xs text-brand-blue hover:underline"
+                >
+                  {shortAddress(saleCollection.primarySale.transactionHash)}
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              </div>
+            )}
+
             <div className="mt-6 flex justify-end gap-2">
               <button
                 type="button"
@@ -731,12 +783,12 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
               </button>
               <button
                 type="button"
-                disabled={busyCollectionId === saleCollection.id}
+                disabled={busyCollectionId === saleCollection.id || Boolean(saleIntent?.autoSubmitted)}
                 onClick={() => void prepareSaleConfig()}
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-zinc-950 px-4 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
               >
                 {busyCollectionId === saleCollection.id && <LoaderCircle className="h-4 w-4 animate-spin" />}
-                Prepare sale
+                {saleIntent?.autoSubmitted ? 'Sale configured' : saleCollection.primarySale ? 'Update sale' : 'Prepare sale'}
               </button>
             </div>
           </section>
