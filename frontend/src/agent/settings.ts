@@ -1,6 +1,8 @@
+import { memoryApi } from '../api/api';
+
 export const OPENCODE_PROVIDER = 'opencode zen';
 export const OPENCODE_MODEL = 'big-opickle';
-export const AGENT_SETTINGS_STORAGE_KEY = 'zexvro_agent_settings';
+const AGENT_SETTINGS_MEMORY_KEY = 'agentSettings';
 
 export type AgentSettings = {
   provider: string;
@@ -21,6 +23,8 @@ export const defaultAgentSettings: AgentSettings = {
   apiKey: '',
 };
 
+let cachedAgentSettings: AgentSettings = defaultAgentSettings;
+
 function normalizeAgentSettings(value: unknown): AgentSettings {
   if (!value || typeof value !== 'object') return defaultAgentSettings;
   const settings = value as Partial<AgentSettings>;
@@ -38,22 +42,24 @@ function normalizeAgentSettings(value: unknown): AgentSettings {
 }
 
 export function loadAgentSettings(): AgentSettings {
-  if (typeof window === 'undefined') return defaultAgentSettings;
-
-  const saved = window.localStorage.getItem(AGENT_SETTINGS_STORAGE_KEY);
-  if (!saved) return defaultAgentSettings;
-
-  try {
-    return normalizeAgentSettings(JSON.parse(saved));
-  } catch {
-    return defaultAgentSettings;
-  }
+  return cachedAgentSettings;
 }
 
-export function saveAgentSettings(settings: AgentSettings) {
-  if (typeof window === 'undefined') return;
+export async function loadAgentSettingsFromAWS(): Promise<AgentSettings> {
+  try {
+    const response = await memoryApi.get();
+    cachedAgentSettings = normalizeAgentSettings(response.memory?.[AGENT_SETTINGS_MEMORY_KEY]);
+  } catch (err) {
+    console.error('Failed to load agent settings from AWS:', err);
+    cachedAgentSettings = defaultAgentSettings;
+  }
+  return cachedAgentSettings;
+}
+
+export async function saveAgentSettings(settings: AgentSettings) {
   const normalized = normalizeAgentSettings(settings);
-  window.localStorage.setItem(AGENT_SETTINGS_STORAGE_KEY, JSON.stringify(normalized));
+  cachedAgentSettings = normalized;
+  await memoryApi.update({ [AGENT_SETTINGS_MEMORY_KEY]: normalized });
 }
 
 export function buildAgentChatPayload(

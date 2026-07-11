@@ -1,55 +1,44 @@
 import { useState } from 'react';
 import { useParams } from '@tanstack/react-router';
-import { Users, UserPlus, Shield, X, Mail } from 'lucide-react';
+import { Users, UserPlus, Shield, X } from 'lucide-react';
 import { useProjectStore } from '../../stores/project';
-
-type Member = {
-  id: string;
-  name: string;
-  email: string;
-  role: 'Project Lead' | 'Developer' | 'Auditor' | 'Viewer';
-  status: 'active' | 'pending';
-};
+import { useWorkspaceStore } from '../../stores/workspace';
+import type { WorkspaceRole } from '../../stores/types';
 
 export default function ProjectMembers() {
-  const { projectId } = useParams({ strict: false });
-  const projectStore = useProjectStore();
-  const currentProject = projectStore.projects.find(p => p.id === projectId);
-
-  const [members, setMembers] = useState<Member[]>([
-    { id: 'mem-1', name: 'Paris (You)', email: 'paris@polymaths.org', role: 'Project Lead', status: 'active' },
-    { id: 'mem-2', name: 'Alex Rivera', email: 'alex@polymaths.org', role: 'Developer', status: 'active' },
-    { id: 'mem-3', name: 'Sophia Chen', email: 'sophia@polymaths.org', role: 'Auditor', status: 'active' },
-    { id: 'mem-4', name: 'Marcus Aurelius', email: 'marcus@rome.net', role: 'Viewer', status: 'pending' },
-  ]);
+  const { workspaceId, projectId } = useParams({ strict: false });
+  const currentProject = useProjectStore(s => s.projects.find(project => project.id === projectId));
+  const workspace = useWorkspaceStore(s => s.workspaces.find(item => item.id === workspaceId));
+  const addMember = useWorkspaceStore(s => s.addMember);
+  const removeMember = useWorkspaceStore(s => s.removeMember);
 
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteName, setInviteName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<'Developer' | 'Auditor' | 'Viewer'>('Developer');
+  const [inviteRole, setInviteRole] = useState<WorkspaceRole>('Developer');
 
-  if (!currentProject) return null;
+  if (!currentProject || !workspace) return null;
 
-  const handleInvite = (e: React.FormEvent) => {
-    e.preventDefault();
+  const members = workspace.members;
+
+  const handleInvite = (event: React.FormEvent) => {
+    event.preventDefault();
     if (!inviteName.trim() || !inviteEmail.trim()) return;
 
-    const newMem: Member = {
-      id: `mem-${Date.now()}`,
+    addMember(workspace.id, {
       name: inviteName.trim(),
       email: inviteEmail.trim(),
       role: inviteRole,
-      status: 'pending',
-    };
-
-    setMembers(prev => [...prev, newMem]);
+      status: 'invited',
+    });
     setInviteName('');
     setInviteEmail('');
+    setInviteRole('Developer');
     setShowInviteModal(false);
   };
 
   const handleRemove = (id: string) => {
-    setMembers(prev => prev.filter(m => m.id !== id));
+    removeMember(workspace.id, id);
   };
 
   return (
@@ -58,7 +47,7 @@ export default function ProjectMembers() {
         <div>
           <h1 className="text-lg font-semibold text-zinc-900 dark:text-white">Project Members</h1>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            Manage access controls and roles for {currentProject.name}
+            Workspace members with access to {currentProject.name}.
           </p>
         </div>
         <button
@@ -66,7 +55,7 @@ export default function ProjectMembers() {
           className="inline-flex items-center gap-2 rounded-md bg-zinc-900 px-3 py-2 text-xs font-medium text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
         >
           <UserPlus className="h-3.5 w-3.5" />
-          Add Member
+          Invite Member
         </button>
       </div>
 
@@ -76,39 +65,46 @@ export default function ProjectMembers() {
           <span className="text-xs text-zinc-450">{members.length} member{members.length !== 1 ? 's' : ''}</span>
         </div>
 
-        <div className="divide-y divide-zinc-100 dark:divide-zinc-800/80">
-          {members.map(member => (
-            <div key={member.id} className="flex items-center justify-between p-4">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-zinc-900 dark:text-white">{member.name}</span>
-                  {member.status === 'pending' && (
-                    <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-amber-500 uppercase">
-                      Pending
+        {members.length === 0 ? (
+          <div className="p-12 text-center">
+            <Users className="mx-auto h-10 w-10 text-zinc-300 dark:text-zinc-600" />
+            <h3 className="mt-3 text-sm font-semibold text-zinc-900 dark:text-white">No members yet</h3>
+            <p className="mt-1 text-xs text-zinc-500">Invite a teammate to grant project access.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-zinc-100 dark:divide-zinc-800/80">
+            {members.map(member => (
+              <div key={member.id} className="flex items-center justify-between gap-4 p-4">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-semibold text-zinc-900 dark:text-white">{member.name}</span>
+                    <span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase ${
+                      member.status === 'active' || member.status === 'accepted'
+                        ? 'bg-green-500/10 text-green-600 dark:text-green-400'
+                        : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                    }`}>
+                      {member.status === 'active' ? 'accepted' : member.status}
                     </span>
+                  </div>
+                  <p className="mt-0.5 font-mono text-xs text-zinc-400">{member.email || 'No email provided'}</p>
+                </div>
+
+                <div className="flex shrink-0 items-center gap-4">
+                  <span className="flex items-center gap-1 text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                    <Shield className="h-3.5 w-3.5 shrink-0 text-blue-500" />
+                    {member.role}
+                  </span>
+
+                  {member.role !== 'Owner' && (
+                    <button onClick={() => handleRemove(member.id)} className="p-1 text-zinc-400 transition-colors hover:text-red-500">
+                      <X className="h-4 w-4" />
+                    </button>
                   )}
                 </div>
-                <p className="text-xs text-zinc-400 font-mono mt-0.5">{member.email}</p>
               </div>
-
-              <div className="flex items-center gap-4 shrink-0">
-                <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400 flex items-center gap-1">
-                  <Shield className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                  {member.role}
-                </span>
-
-                {member.role !== 'Project Lead' && (
-                  <button
-                    onClick={() => handleRemove(member.id)}
-                    className="p-1 text-zinc-400 hover:text-red-500 transition-colors"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {showInviteModal && (
@@ -124,56 +120,26 @@ export default function ProjectMembers() {
 
             <form onSubmit={handleInvite} className="mt-4 space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-zinc-550 mb-1">Name</label>
-                <input
-                  type="text"
-                  required
-                  value={inviteName}
-                  onChange={e => setInviteName(e.target.value)}
-                  placeholder="John Doe"
-                  className="h-9 w-full rounded-lg border border-zinc-200 bg-white px-3 text-xs outline-none focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
-                />
+                <label className="mb-1 block text-xs font-semibold text-zinc-550">Name</label>
+                <input value={inviteName} onChange={event => setInviteName(event.target.value)} required className="h-9 w-full rounded-lg border border-zinc-200 bg-white px-3 text-xs outline-none focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100" />
               </div>
-
               <div>
-                <label className="block text-xs font-semibold text-zinc-550 mb-1">Email Address</label>
-                <input
-                  type="email"
-                  required
-                  value={inviteEmail}
-                  onChange={e => setInviteEmail(e.target.value)}
-                  placeholder="john@polymaths.org"
-                  className="h-9 w-full rounded-lg border border-zinc-200 bg-white px-3 text-xs outline-none focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
-                />
+                <label className="mb-1 block text-xs font-semibold text-zinc-550">Email Address</label>
+                <input type="email" value={inviteEmail} onChange={event => setInviteEmail(event.target.value)} required className="h-9 w-full rounded-lg border border-zinc-200 bg-white px-3 text-xs outline-none focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100" />
               </div>
-
               <div>
-                <label className="block text-xs font-semibold text-zinc-550 mb-1">Role Permissions</label>
-                <select
-                  value={inviteRole}
-                  onChange={e => setInviteRole(e.target.value as any)}
-                  className="h-9 w-full rounded-lg border border-zinc-200 bg-white px-2.5 text-xs outline-none dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
-                >
-                  <option value="Developer">Developer (Deploy & Configure)</option>
-                  <option value="Auditor">Auditor (View Privacy Audits)</option>
-                  <option value="Viewer">Viewer (Read-Only)</option>
+                <label className="mb-1 block text-xs font-semibold text-zinc-550">Role Permissions</label>
+                <select value={inviteRole} onChange={event => setInviteRole(event.target.value as WorkspaceRole)} className="h-9 w-full rounded-lg border border-zinc-200 bg-white px-2.5 text-xs outline-none dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+                  <option value="Admin">Admin</option>
+                  <option value="Developer">Developer</option>
+                  <option value="Finance">Finance</option>
+                  <option value="Viewer">Viewer</option>
                 </select>
               </div>
 
-              <div className="flex justify-end gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-800 mt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowInviteModal(false)}
-                  className="rounded-md px-3 py-1.5 text-xs font-medium text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="rounded-md bg-zinc-900 px-3.5 py-1.5 text-xs font-medium text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-900"
-                >
-                  Send Invite
-                </button>
+              <div className="mt-4 flex justify-end gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+                <button type="button" onClick={() => setShowInviteModal(false)} className="rounded-md px-3 py-1.5 text-xs font-medium text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">Cancel</button>
+                <button type="submit" className="rounded-md bg-zinc-900 px-3.5 py-1.5 text-xs font-medium text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-900">Send Invite</button>
               </div>
             </form>
           </div>

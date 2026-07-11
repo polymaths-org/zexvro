@@ -17,7 +17,7 @@ const PAYMENT_TYPES: { value: Zer0PaymentType; label: string; desc: string }[] =
 export default function Zer0PayParty() {
   const { workspaceId, projectId } = useParams({ strict: false });
   const navigate = useNavigate();
-  const pid = projectId || '';
+  const pid = projectId || workspaceId || '';
 
   const allEmployees = useZer0Store(s => s.employees);
   const pool = useZer0Store(s => s.pool);
@@ -76,10 +76,8 @@ export default function Zer0PayParty() {
 
     setCreatedPaymentId(payment.id);
 
-    setTimeout(() => {
-      setIsProcessing(false);
-      setStep('done');
-    }, shielded ? 2500 : 1000);
+    setIsProcessing(false);
+    setStep('done');
   };
 
   const handleReset = () => {
@@ -93,7 +91,7 @@ export default function Zer0PayParty() {
   };
 
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="space-y-6">
       <div>
         <h1 className="text-lg font-bold text-zinc-900 dark:text-white">Pay a Party</h1>
         <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
@@ -269,7 +267,7 @@ export default function Zer0PayParty() {
             <button onClick={handleSubmit} disabled={isProcessing}
               className="flex-1 h-10 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition disabled:opacity-50 flex items-center justify-center gap-2">
               {isProcessing ? (
-                <><Loader2 className="h-3.5 w-3.5 animate-spin" /> {shielded ? 'Generating ZK Proof…' : 'Processing…'}</>
+                <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Queueing…</>
               ) : (
                 <><Send className="h-3.5 w-3.5" /> Confirm & Send</>
               )}
@@ -284,17 +282,17 @@ export default function Zer0PayParty() {
           <div className="h-12 w-12 mx-auto rounded-full bg-emerald-500/10 flex items-center justify-center">
             <CheckCircle2 className="h-6 w-6 text-emerald-500" />
           </div>
-          <h2 className="text-sm font-bold text-zinc-900 dark:text-white">Payment {settings.paymentApprovalRequired ? 'Submitted for Approval' : 'Sent Successfully'}</h2>
+          <h2 className="text-sm font-bold text-zinc-900 dark:text-white">Payment {settings.paymentApprovalRequired ? 'Submitted for Approval' : 'Queued for Processing'}</h2>
           <p className="text-xs text-zinc-500">
             {parsedAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })} {currency} to {recipientName}
-            {shielded && ' — ZK proof generated and verified.'}
+            {shielded && ' — proof generation is queued.'}
           </p>
           <div className="flex gap-2 justify-center pt-2">
             <button onClick={handleReset}
               className="h-9 px-4 rounded-lg border border-zinc-200 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 transition">
               New Payment
             </button>
-            <button onClick={() => navigate({ to: `/dashboard/w/${workspaceId}/p/${projectId}/zer0/history` as any })}
+            <button onClick={() => navigate({ to: `${projectId ? `/dashboard/w/${workspaceId}/p/${projectId}` : `/dashboard/w/${workspaceId}`}/zer0/history` as any })}
               className="h-9 px-4 rounded-lg bg-zinc-900 text-white text-xs font-semibold hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200 transition">
               View History
             </button>

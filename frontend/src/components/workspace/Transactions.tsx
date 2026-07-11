@@ -4,6 +4,8 @@ import {
   ArrowUpRight, ArrowDownLeft, Search, Filter, Download,
   CircleDollarSign, TrendingUp, TrendingDown, Clock, AlertCircle
 } from 'lucide-react';
+import { useZer0Store } from '../../stores/zer0';
+import type { Zer0Payment } from '../../stores/types';
 
 type TransactionType = 'incoming' | 'outgoing' | 'swap' | 'pending';
 type TransactionStatus = 'confirmed' | 'pending' | 'failed';
@@ -22,16 +24,6 @@ interface Transaction {
   hash: string;
 }
 
-const MOCK_TRANSACTIONS: Transaction[] = [
-  { id: 'tx_1', type: 'incoming', status: 'confirmed', amount: '2,450.00', token: 'USDC', usdValue: '$2,450.00', from: '0x8a3f...2c1d', to: '0x7b2e...9f4a', timestamp: '2 min ago', network: 'Stellar', hash: '0xabc123...' },
-  { id: 'tx_2', type: 'outgoing', status: 'confirmed', amount: '1,200.00', token: 'USDC', usdValue: '$1,200.00', from: '0x7b2e...9f4a', to: '0x3d1c...8e7b', timestamp: '18 min ago', network: 'Stellar', hash: '0xdef456...' },
-  { id: 'tx_3', type: 'swap', status: 'confirmed', amount: '500.00', token: 'XLM → USDC', usdValue: '$500.00', from: '0x7b2e...9f4a', to: '0x7b2e...9f4a', timestamp: '1 hr ago', network: 'Stellar', hash: '0x789abc...' },
-  { id: 'tx_4', type: 'incoming', status: 'confirmed', amount: '8,000.00', token: 'USDC', usdValue: '$8,000.00', from: '0x1a9e...4d3f', to: '0x7b2e...9f4a', timestamp: '3 hr ago', network: 'Stellar', hash: '0x456def...' },
-  { id: 'tx_5', type: 'outgoing', status: 'pending', amount: '350.00', token: 'USDC', usdValue: '$350.00', from: '0x7b2e...9f4a', to: '0x6c8a...1b5e', timestamp: '5 hr ago', network: 'Stellar', hash: '0xghi789...' },
-  { id: 'tx_6', type: 'incoming', status: 'confirmed', amount: '12,000.00', token: 'USDC', usdValue: '$12,000.00', from: '0x2f4b...7c8d', to: '0x7b2e...9f4a', timestamp: '1 day ago', network: 'Stellar', hash: '0xjkl012...' },
-  { id: 'tx_7', type: 'outgoing', status: 'failed', amount: '500.00', token: 'USDC', usdValue: '$500.00', from: '0x7b2e...9f4a', to: '0x9e1d...3a6c', timestamp: '2 days ago', network: 'Stellar', hash: '0xmno345...' },
-];
-
 const TYPE_CONFIG: Record<TransactionType, { icon: React.ReactNode; label: string; color: string }> = {
   incoming: { icon: <ArrowDownLeft className="h-3.5 w-3.5" />, label: 'Received', color: 'text-green-500 bg-green-500/10' },
   outgoing: { icon: <ArrowUpRight className="h-3.5 w-3.5" />, label: 'Sent', color: 'text-red-500 bg-red-500/10' },
@@ -47,11 +39,26 @@ const STATUS_COLORS: Record<TransactionStatus, string> = {
 
 export default function Transactions() {
   const { workspaceId } = useParams({ strict: false });
+  const payments = useZer0Store(s => s.payments);
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<TransactionType | 'all'>('all');
 
+  const paymentTransactions = useMemo<Transaction[]>(() => payments.map((payment: Zer0Payment) => ({
+    id: payment.id,
+    type: payment.status === 'pending_approval' || payment.status === 'processing' || payment.status === 'approved' ? 'pending' : 'outgoing',
+    status: payment.status === 'completed' ? 'confirmed' : payment.status === 'failed' ? 'failed' : 'pending',
+    amount: payment.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    token: payment.currency,
+    usdValue: `${payment.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${payment.currency}`,
+    from: workspaceId || 'workspace',
+    to: payment.recipientWallet || payment.recipientName,
+    timestamp: new Date(payment.createdAt).toLocaleString(),
+    network: 'Stellar',
+    hash: payment.txHash || payment.id,
+  })), [payments, workspaceId]);
+
   const transactions = useMemo(() => {
-    let filtered = MOCK_TRANSACTIONS;
+    let filtered = paymentTransactions;
     if (typeFilter !== 'all') {
       filtered = filtered.filter(tx => tx.type === typeFilter);
     }
@@ -64,13 +71,13 @@ export default function Transactions() {
       );
     }
     return filtered;
-  }, [searchQuery, typeFilter]);
+  }, [paymentTransactions, searchQuery, typeFilter]);
 
-  const totalIn = MOCK_TRANSACTIONS.filter(tx => tx.type === 'incoming' && tx.status === 'confirmed')
+  const totalIn = paymentTransactions.filter(tx => tx.type === 'incoming' && tx.status === 'confirmed')
     .reduce((sum, tx) => sum + parseFloat(tx.amount.replace(/,/g, '')), 0);
-  const totalOut = MOCK_TRANSACTIONS.filter(tx => tx.type === 'outgoing' && tx.status === 'confirmed')
+  const totalOut = paymentTransactions.filter(tx => tx.type === 'outgoing' && tx.status === 'confirmed')
     .reduce((sum, tx) => sum + parseFloat(tx.amount.replace(/,/g, '')), 0);
-  const pendingCount = MOCK_TRANSACTIONS.filter(tx => tx.status === 'pending').length;
+  const pendingCount = paymentTransactions.filter(tx => tx.status === 'pending').length;
 
   return (
     <div className="space-y-6">

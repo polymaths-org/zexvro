@@ -10,7 +10,7 @@ import { useWorkspaceStore } from '../../stores/workspace';
 import { useProjectStore } from '../../stores/project';
 import { useUIStore } from '../../stores/ui';
 import { globalSignOut, type UserSession } from '../../auth/cognito';
-import { buildAgentChatPayload } from '../../agent/settings';
+import { buildAgentChatPayload, loadAgentSettingsFromAWS } from '../../agent/settings';
 import CliActivation from '../auth/CliActivation';
 import { initializeAWSSync, pullFromAWS } from '../../stores/awsSync';
 
@@ -232,39 +232,36 @@ const SIDEBAR_CATEGORIES: Array<{
   items: Array<{ to: string; label: string; icon: CustomIconName }>;
 }> = [
   {
-    id: 'compute',
-    label: 'Compute & Deploy',
+    id: 'workspace-management',
+    label: 'Workspace Management',
     items: [
-      { to: 'projects', label: 'Projects', icon: 'projects' },
-      { to: 'deployments', label: 'Deployments', icon: 'deployments' },
+      { to: 'overview', label: 'Overview', icon: 'overview' },
+      { to: 'projects', label: 'Projects / Environments', icon: 'projects' },
+      { to: 'team', label: 'Team', icon: 'team' },
+      { to: 'audit', label: 'Audit Log', icon: 'security' },
+      { to: 'settings', label: 'Settings', icon: 'settings' },
     ],
   },
   {
-    id: 'transactions-payroll',
-    label: 'Transactions & Payroll',
+    id: 'zer0-service',
+    label: 'Zer0 Privacy Pool',
     items: [
-      { to: 'transactions', label: 'Transactions', icon: 'transactions' },
-      { to: 'payroll', label: 'Payroll', icon: 'payroll' },
+      { to: 'zer0', label: 'Zer0 Dashboard', icon: 'privacy' },
+      { to: 'zer0/people', label: 'Employees / Payees', icon: 'team' },
+      { to: 'zer0/payroll', label: 'Payroll Runs', icon: 'payroll' },
+      { to: 'zer0/pay', label: 'Pay a Party', icon: 'payroll' },
+      { to: 'zer0/history', label: 'Payment History', icon: 'transactions' },
+      { to: 'zer0/proofs', label: 'Proof Management', icon: 'security' },
+      { to: 'zer0/settings', label: 'Zer0 Settings', icon: 'settings' },
     ],
   },
   {
     id: 'services',
-    label: 'MVP Services',
+    label: 'Service Catalog',
     items: [
-      { to: 'services', label: 'Privacy Pool', icon: 'privacy' },
-      { to: 'services', label: 'Transformation', icon: 'transform' },
-      { to: 'services', label: 'Trade Pipeline', icon: 'trade' },
-      { to: 'services', label: 'Agent Auth', icon: 'auth' },
-      { to: 'services', label: 'NFT Service', icon: 'nft' },
-      { to: 'services', label: 'De-pin', icon: 'depin' },
-    ],
-  },
-  {
-    id: 'intelligence',
-    label: 'Intelligence & Memory',
-    items: [
-      { to: 'agent', label: 'Agentic Operations', icon: 'agent' },
-      { to: 'memory', label: 'Memory', icon: 'memory' },
+      { to: 'services', label: 'Services Manager', icon: 'services' },
+      { to: 'agent', label: 'Morph Agent', icon: 'agent' },
+      { to: 'memory', label: 'Shared Memory', icon: 'memory' },
     ],
   },
   {
@@ -273,14 +270,6 @@ const SIDEBAR_CATEGORIES: Array<{
     items: [
       { to: 'security', label: 'Security', icon: 'security' },
       { to: 'analytics', label: 'Analytics', icon: 'analytics' },
-      { to: 'team', label: 'Team', icon: 'team' },
-    ],
-  },
-  {
-    id: 'config',
-    label: 'Config & Support',
-    items: [
-      { to: 'settings', label: 'Settings', icon: 'settings' },
     ],
   },
 ];
@@ -328,8 +317,8 @@ export default function DashboardLayout() {
     return code ? code.toUpperCase() : null;
   });
   const [expandedCats, setExpandedCats] = useState<Record<string, boolean>>({
-    compute: true, 'transactions-payroll': true, services: true, intelligence: true, 'security-section': true, config: true,
-    'project-core': true, 'project-services': true, 'project-intelligence': true, 'project-config': true,
+    'workspace-management': true, 'zer0-service': true, services: true, 'security-section': true,
+    'project-core': true, 'project-services': true, 'project-intelligence': true, 'project-admin': true,
   });
   const [agentWidgetOpen, setAgentWidgetOpen] = useState(false);
   const [widgetMessages, setWidgetMessages] = useState<WidgetMessage[]>([]);
@@ -339,6 +328,11 @@ export default function DashboardLayout() {
   const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
   const currentWorkspace = workspaces.find(w => w.id === workspaceId) || workspaces[0] || null;
   const currentPath = routerState.location.pathname;
+
+  useEffect(() => {
+    if (!userSession) return;
+    loadAgentSettingsFromAWS();
+  }, [userSession]);
 
   // Determine active section from URL
   const pathParts = currentPath.split('/').filter(Boolean);
@@ -356,8 +350,7 @@ export default function DashboardLayout() {
           label: 'Project Core',
           items: [
             { to: 'overview', label: 'Overview', icon: 'overview' as const },
-            { to: 'environments', label: 'Environments', icon: 'overview' as const },
-            { to: 'deployments', label: 'Deployments', icon: 'deployments' as const },
+            { to: 'executions', label: 'Executions & Runs', icon: 'deployments' as const },
           ],
         },
         {
@@ -365,6 +358,25 @@ export default function DashboardLayout() {
           label: 'Services',
           items: [
             { to: 'services', label: 'Services Manager', icon: 'services' as const },
+          ],
+        },
+        {
+          id: 'project-intelligence',
+          label: 'Intelligence & Risk',
+          items: [
+            { to: 'agent', label: 'Morph Agent', icon: 'agent' as const },
+            { to: 'memory', label: 'Shared Memory', icon: 'memory' as const },
+            { to: 'security', label: 'Security', icon: 'security' as const },
+            { to: 'analytics', label: 'Analytics', icon: 'analytics' as const },
+          ],
+        },
+        {
+          id: 'project-admin',
+          label: 'Project Admin',
+          items: [
+            { to: 'members', label: 'Members', icon: 'team' as const },
+            { to: 'audit', label: 'Audit Log', icon: 'security' as const },
+            { to: 'settings', label: 'Settings', icon: 'settings' as const },
           ],
         },
       ];
@@ -398,8 +410,7 @@ export default function DashboardLayout() {
         label: 'Project Core',
         items: [
           { to: 'overview', label: 'Overview', icon: 'overview' as const },
-          { to: 'environments', label: 'Environments', icon: 'overview' as const },
-          { to: 'deployments', label: 'Deployments', icon: 'deployments' as const },
+          { to: 'executions', label: 'Executions & Runs', icon: 'deployments' as const },
         ],
       },
       {
@@ -409,16 +420,20 @@ export default function DashboardLayout() {
       },
       {
         id: 'project-intelligence',
-        label: 'Project AI & Sync',
+        label: 'Intelligence & Risk',
         items: [
-          { to: 'agent', label: 'Agent Workspace', icon: 'agent' as const },
+          { to: 'agent', label: 'Morph Agent', icon: 'agent' as const },
           { to: 'memory', label: 'Shared Memory', icon: 'memory' as const },
+          { to: 'security', label: 'Security', icon: 'security' as const },
+          { to: 'analytics', label: 'Analytics', icon: 'analytics' as const },
         ],
       },
       {
-        id: 'project-config',
-        label: 'Configuration',
+        id: 'project-admin',
+        label: 'Project Admin',
         items: [
+          { to: 'members', label: 'Members', icon: 'team' as const },
+          { to: 'audit', label: 'Audit Log', icon: 'security' as const },
           { to: 'settings', label: 'Settings', icon: 'settings' as const },
         ],
       },
@@ -435,6 +450,12 @@ export default function DashboardLayout() {
   }
 
   const currentSectionLabel = activeSection.charAt(0).toUpperCase() + activeSection.slice(1).replace(/-/g, ' ');
+  const isSectionSelected = (target: string) => {
+    if (target.includes('/')) {
+      return currentPath.endsWith(`/${target}`);
+    }
+    return activeSection === target;
+  };
 
   // Theme effect
   useEffect(() => {
@@ -822,7 +843,7 @@ export default function DashboardLayout() {
                     <>
                       {dynamicProjectCategories.map(cat =>
                         cat.items.map(item => {
-                          const isSelected = activeSection === item.to;
+                          const isSelected = isSectionSelected(item.to);
                           return (
                             <Link
                               key={item.label}
@@ -847,7 +868,7 @@ export default function DashboardLayout() {
                           <Link
                             key={item.label}
                             to={makeNavTo(item.to) as any}
-                            className={`p-2.5 rounded-lg transition-all cursor-pointer relative group ${activeSection === item.to ? 'bg-zinc-900 text-blue-500' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/40'}`}
+                            className={`p-2.5 rounded-lg transition-all cursor-pointer relative group ${isSectionSelected(item.to) ? 'bg-zinc-900 text-blue-500' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/40'}`}
                             title={item.label}
                           >
                             <CustomIcon name={item.icon} className="h-5 w-5 shrink-0" />
@@ -888,7 +909,7 @@ export default function DashboardLayout() {
                                   className="overflow-hidden space-y-0.5 pl-3 border-l border-zinc-100 dark:border-zinc-800 ml-3.5"
                                 >
                                   {cat.items.map(sub => {
-                                    const isSelected = activeSection === sub.to;
+                                    const isSelected = isSectionSelected(sub.to);
                                     const to = makeProjectNavTo(sub.to);
                                     return (
                                       <Link
@@ -943,7 +964,7 @@ export default function DashboardLayout() {
                                   className="overflow-hidden space-y-0.5 pl-3 border-l border-zinc-100 dark:border-zinc-800 ml-3.5"
                                 >
                                   {cat.items.map(sub => {
-                                    const isSelected = activeSection === sub.to;
+                                    const isSelected = isSectionSelected(sub.to);
                                     const to = makeNavTo(sub.to);
                                     return (
                                       <Link
@@ -1162,7 +1183,7 @@ export default function DashboardLayout() {
                         )}
                         {dynamicProjectCategories.map(cat =>
                           cat.items.map(item => {
-                            const isSelected = activeSection === item.to;
+                            const isSelected = isSectionSelected(item.to);
                             return (
                               <Link
                                 key={item.label}
@@ -1189,7 +1210,7 @@ export default function DashboardLayout() {
                               key={item.label}
                               to={makeNavTo(item.to) as any}
                               onClick={() => setMobileMenuOpen(false)}
-                              className={`w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-lg font-semibold transition-all ${activeSection === item.to ? 'bg-zinc-100 dark:bg-zinc-900 text-zinc-950 dark:text-white' : 'text-zinc-400'}`}
+                              className={`w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-lg font-semibold transition-all ${isSectionSelected(item.to) ? 'bg-zinc-100 dark:bg-zinc-900 text-zinc-950 dark:text-white' : 'text-zinc-400'}`}
                             >
                               <CustomIcon name={item.icon} className="h-5 w-5 shrink-0" />
                               <span>{item.label}</span>

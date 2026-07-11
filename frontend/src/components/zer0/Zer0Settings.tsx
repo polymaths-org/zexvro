@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams } from '@tanstack/react-router';
 import {
-  Settings, Shield, Wallet, Eye, AlertTriangle, Save, RotateCcw, CheckCircle2
+  Settings, Shield, Wallet, Eye, AlertTriangle, Save, RotateCcw, CheckCircle2, Workflow
 } from 'lucide-react';
 import { useZer0Store } from '../../stores/zer0';
 import type { Zer0ProofSystem, Zer0Currency } from '../../stores/types';
@@ -14,7 +14,7 @@ export default function Zer0Settings() {
 
   const [local, setLocal] = useState({ ...settings });
   const [saved, setSaved] = useState(false);
-  const [activeTab, setActiveTab] = useState<'general' | 'privacy' | 'wallet' | 'compliance' | 'danger'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'privacy' | 'wallet' | 'workflow' | 'compliance' | 'danger'>('general');
 
   const hasChanges = JSON.stringify(local) !== JSON.stringify(settings);
 
@@ -35,12 +35,13 @@ export default function Zer0Settings() {
     { id: 'general', label: 'General', icon: Settings },
     { id: 'privacy', label: 'Privacy Pool', icon: Shield },
     { id: 'wallet', label: 'Wallet & Network', icon: Wallet },
+    { id: 'workflow', label: 'Workflows', icon: Workflow },
     { id: 'compliance', label: 'Compliance', icon: Eye },
     { id: 'danger', label: 'Danger Zone', icon: AlertTriangle },
   ] as const;
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-bold text-zinc-900 dark:text-white">Settings</h1>
@@ -179,6 +180,62 @@ export default function Zer0Settings() {
               <input value={local.contractAddress} onChange={e => setLocal(l => ({ ...l, contractAddress: e.target.value }))}
                 placeholder="Contract ID on Soroban"
                 className="h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm font-mono outline-none focus:border-blue-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100" />
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'workflow' && (
+          <div className="space-y-6">
+            <div className="grid gap-6 sm:grid-cols-2">
+              <div>
+                <label className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 block mb-1.5">Payment Workflow</label>
+                <select value={local.paymentWorkflow} onChange={e => setLocal(l => ({ ...l, paymentWorkflow: e.target.value as any }))}
+                  className="h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm outline-none dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+                  <option value="manual">Manual review and processing</option>
+                  <option value="approval">Approval gate before processing</option>
+                  <option value="auto">Auto-process eligible payments</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 block mb-1.5">Settlement Mode</label>
+                <select value={local.settlementMode} onChange={e => setLocal(l => ({ ...l, settlementMode: e.target.value as any }))}
+                  className="h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm outline-none dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+                  <option value="stellar">Stellar wallet settlement</option>
+                  <option value="manual_review">Manual settlement review</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 block mb-1.5">History Export Format</label>
+                <select value={local.exportFormat} onChange={e => setLocal(l => ({ ...l, exportFormat: e.target.value as any }))}
+                  className="h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm outline-none dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+                  <option value="csv">CSV</option>
+                  <option value="json">JSON</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 block mb-1.5">Proof Retry Limit</label>
+                <input type="number" min="0" max="10" value={local.proofRetryLimit}
+                  onChange={e => setLocal(l => ({ ...l, proofRetryLimit: parseInt(e.target.value, 10) || 0 }))}
+                  className="h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm outline-none dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100" />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 block mb-1.5">Payment Webhook URL</label>
+              <input value={local.webhookUrl} onChange={e => setLocal(l => ({ ...l, webhookUrl: e.target.value }))}
+                placeholder="https://your-system.example.com/zexvro/webhooks/payments"
+                className="h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm font-mono outline-none dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100" />
+            </div>
+
+            <div className="flex items-center justify-between p-4 rounded-lg border border-zinc-200 dark:border-zinc-700">
+              <div>
+                <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 block">Allow Transparent Payments</span>
+                <span className="text-[10px] text-zinc-400 block mt-0.5">Permit non-shielded payments when a recipient or chain does not support privacy proofs</span>
+              </div>
+              <button type="button" onClick={() => setLocal(l => ({ ...l, allowTransparentPayments: !l.allowTransparentPayments }))}
+                className={`relative h-5 w-9 rounded-full transition-colors ${local.allowTransparentPayments ? 'bg-blue-500' : 'bg-zinc-300 dark:bg-zinc-700'}`}>
+                <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${local.allowTransparentPayments ? 'left-[18px]' : 'left-0.5'}`} />
+              </button>
             </div>
           </div>
         )}

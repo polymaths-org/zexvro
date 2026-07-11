@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from '@tanstack/react-router';
 import { Settings, ShieldAlert, Save } from 'lucide-react';
 import { useProjectStore } from '../../stores/project';
@@ -14,6 +14,20 @@ export default function ProjectSettings() {
   const [framework, setFramework] = useState(currentProject?.framework || '');
   const [branch, setBranch] = useState(currentProject?.branch || 'main');
   const [network, setNetwork] = useState(currentProject?.network || 'Stellar Testnet');
+  const [purpose, setPurpose] = useState(currentProject?.purpose || '');
+  const [lifecycle, setLifecycle] = useState(currentProject?.lifecycle || 'active');
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    if (!currentProject) return;
+    setName(currentProject.name);
+    setDescription(currentProject.description);
+    setFramework(currentProject.framework);
+    setBranch(currentProject.branch || 'main');
+    setNetwork(currentProject.network || 'Stellar Testnet');
+    setPurpose(currentProject.purpose || '');
+    setLifecycle(currentProject.lifecycle);
+  }, [currentProject]);
 
   if (!currentProject) return null;
 
@@ -22,11 +36,14 @@ export default function ProjectSettings() {
     projectStore.updateProject(currentProject.id, {
       name,
       description,
+      purpose,
       framework,
       branch,
-      network
+      network,
+      lifecycle,
     });
-    alert('Project configuration successfully updated!');
+    setSaved(true);
+    window.setTimeout(() => setSaved(false), 1800);
   };
 
   const handleDelete = () => {
@@ -38,7 +55,7 @@ export default function ProjectSettings() {
   };
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6">
       <div>
         <h1 className="text-lg font-semibold text-zinc-900 dark:text-white">Settings</h1>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
@@ -56,6 +73,16 @@ export default function ProjectSettings() {
               value={name}
               onChange={e => setName(e.target.value)}
               className="h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-zinc-550 mb-1.5">Purpose</label>
+            <textarea
+              value={purpose}
+              onChange={e => setPurpose(e.target.value)}
+              rows={3}
+              className="w-full rounded-lg border border-zinc-200 bg-white p-3 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
             />
           </div>
 
@@ -79,6 +106,20 @@ export default function ProjectSettings() {
                 onChange={e => setBranch(e.target.value)}
                 className="h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-900 outline-none dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
               />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-zinc-550 mb-1.5">Lifecycle</label>
+              <select
+                value={lifecycle}
+                onChange={e => setLifecycle(e.target.value as any)}
+                className="h-10 w-full rounded-lg border border-zinc-200 bg-white px-2.5 text-sm text-zinc-900 outline-none dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+              >
+                <option value="draft">Draft</option>
+                <option value="active">Active</option>
+                <option value="paused">Paused</option>
+                <option value="archived">Archived</option>
+              </select>
             </div>
 
             <div>
@@ -113,7 +154,8 @@ export default function ProjectSettings() {
             </div>
           )}
 
-          <div className="flex justify-end pt-2">
+          <div className="flex items-center justify-end gap-3 pt-2">
+            {saved && <span className="text-xs font-medium text-green-600 dark:text-green-400">Configuration saved</span>}
             <button
               type="submit"
               className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 px-4 py-2 text-xs font-medium text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"

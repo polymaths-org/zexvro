@@ -1,9 +1,9 @@
 import { useNavigate, useParams } from '@tanstack/react-router';
 import { useMemo } from 'react';
-import { FolderKanban, Rocket, Blocks, Users, Shield, Plus, ArrowRight, CircleDollarSign, UsersRound } from 'lucide-react';
+import { FolderKanban, Blocks, Users, Shield, Plus, ArrowRight, Activity } from 'lucide-react';
 import { useProjectStore } from '../../stores/project';
 import { useWorkspaceStore } from '../../stores/workspace';
-import { mockServices } from '../../data/mock';
+import { serviceCatalog } from '../../data/serviceCatalog';
 
 export default function WorkspaceOverview() {
   const { workspaceId } = useParams({ strict: false });
@@ -18,10 +18,11 @@ export default function WorkspaceOverview() {
     () => workspaces.find(w => w.id === workspaceId),
     [workspaces, workspaceId],
   );
-  const services = mockServices;
+  const services = serviceCatalog;
 
   const activeProjects = projects.filter(p => p.lifecycle === 'active');
   const draftProjects = projects.filter(p => p.lifecycle === 'draft');
+  const invitedMembers = workspace?.members.filter(member => member.status === 'invited' || member.status === 'pending').length || 0;
 
   const goTo = (path: string) => navigate({ to: path });
 
@@ -33,7 +34,7 @@ export default function WorkspaceOverview() {
           <div>
             <h1 className="text-lg font-semibold text-zinc-900 dark:text-white">Workspace Overview</h1>
             <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-              {workspace?.name || 'Your workspace'} — manage projects, services, and team access.
+              {workspace?.name || 'Customer workspace'} — manage client migration projects, Web3 services, team access, and audit readiness.
             </p>
           </div>
           {workspaceId && (
@@ -42,7 +43,7 @@ export default function WorkspaceOverview() {
               className="inline-flex items-center gap-2 rounded-md bg-zinc-900 px-3 py-2 text-xs font-medium text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
             >
               <Plus className="h-3.5 w-3.5" />
-              New Project
+              New Customer Project
             </button>
           )}
         </div>
@@ -61,14 +62,14 @@ export default function WorkspaceOverview() {
           icon={<Blocks className="h-4 w-4" />}
           label="Services"
           value={services.length}
-          detail="MVP service catalog"
+          detail="Web3 service catalog"
           accent="purple"
         />
         <StatCard
-          icon={<Rocket className="h-4 w-4" />}
-          label="Deployments"
-          value={0}
-          detail="No deployments yet"
+          icon={<Shield className="h-4 w-4" />}
+          label="Invites"
+          value={invitedMembers}
+          detail="Pending team access"
           accent="green"
         />
         <StatCard
@@ -87,20 +88,20 @@ export default function WorkspaceOverview() {
             <QuickAction
               onClick={() => goTo(`/dashboard/w/${workspaceId}/projects`)}
               icon={<FolderKanban className="h-5 w-5" />}
-              title="View Projects"
-              description="Browse and manage all workspace projects"
+              title="Customer Projects"
+              description="Browse migration environments and configured Web3 services"
             />
             <QuickAction
               onClick={() => goTo(`/dashboard/w/${workspaceId}/projects/new`)}
               icon={<Plus className="h-5 w-5" />}
-              title="Create Project"
-              description="Start a new project with the setup wizard"
+              title="Create Customer Project"
+              description="Set up a Web2-to-Web3 migration workspace"
             />
             <QuickAction
               onClick={() => goTo(`/dashboard/w/${workspaceId}/services`)}
               icon={<Blocks className="h-5 w-5" />}
               title="Service Catalog"
-              description="Browse available MVP services"
+              description="Review available privacy, agent, trade, NFT, and De-pin services"
             />
             <QuickAction
               onClick={() => goTo(`/dashboard/w/${workspaceId}/team`)}
@@ -109,22 +110,16 @@ export default function WorkspaceOverview() {
               description="Manage workspace members and roles"
             />
             <QuickAction
-              onClick={() => goTo(`/dashboard/w/${workspaceId}/security`)}
+              onClick={() => goTo(`/dashboard/w/${workspaceId}/audit`)}
               icon={<Shield className="h-5 w-5" />}
-              title="Security"
-              description="Review security settings and audit logs"
+              title="Audit Log"
+              description="Review workspace, wallet, and agent action history"
             />
             <QuickAction
-              onClick={() => goTo(`/dashboard/w/${workspaceId}/transactions`)}
-              icon={<CircleDollarSign className="h-5 w-5" />}
-              title="Transactions"
-              description="View all financial transactions and history"
-            />
-            <QuickAction
-              onClick={() => goTo(`/dashboard/w/${workspaceId}/payroll`)}
-              icon={<UsersRound className="h-5 w-5" />}
-              title="Payroll"
-              description="Manage team payments and compensation"
+              onClick={() => projects[0] && goTo(`/dashboard/w/${workspaceId}/p/${projects[0].id}/executions`)}
+              icon={<Activity className="h-5 w-5" />}
+              title="Executions"
+              description="Run project-level Web3 services and agent pipelines"
             />
           </>
         )}
@@ -134,7 +129,7 @@ export default function WorkspaceOverview() {
       {projects.length > 0 && (
         <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-[#080809]">
           <div className="flex items-center justify-between border-b border-zinc-100 px-5 py-3 dark:border-zinc-800">
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Recent Projects</h2>
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Customer Projects</h2>
             {workspaceId && (
               <button onClick={() => goTo(`/dashboard/w/${workspaceId}/projects`)} className="text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors">
                 View all
@@ -172,15 +167,15 @@ export default function WorkspaceOverview() {
       {projects.length === 0 && (
         <div className="rounded-xl border border-dashed border-zinc-300 bg-white p-10 text-center dark:border-zinc-700 dark:bg-[#080809]">
           <FolderKanban className="mx-auto h-10 w-10 text-zinc-300 dark:text-zinc-600" />
-          <h3 className="mt-3 text-sm font-semibold text-zinc-900 dark:text-white">No projects yet</h3>
-          <p className="mt-1 text-xs text-zinc-500">Create your first project to get started.</p>
+          <h3 className="mt-3 text-sm font-semibold text-zinc-900 dark:text-white">No customer projects yet</h3>
+          <p className="mt-1 text-xs text-zinc-500">Create a customer project to configure Web3 services and agent executions.</p>
           {workspaceId && (
             <button
               onClick={() => goTo(`/dashboard/w/${workspaceId}/projects/new`)}
               className="mt-4 inline-flex items-center gap-2 rounded-md bg-zinc-900 px-3 py-2 text-xs font-medium text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-900"
             >
               <Plus className="h-3.5 w-3.5" />
-              Create Project
+              Create Customer Project
             </button>
           )}
         </div>

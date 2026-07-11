@@ -2,13 +2,14 @@ import { useState } from 'react';
 import { Link, Outlet, useParams, useRouterState } from '@tanstack/react-router';
 import {
   LayoutDashboard, Users, SendHorizontal, History, ShieldCheck,
-  Settings, ChevronLeft, BookOpen
+  Settings, ChevronLeft, BookOpen, Banknote
 } from 'lucide-react';
 
 const ZER0_NAV = [
   { id: 'overview', path: 'zer0', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'people', path: 'zer0/people', label: 'People', icon: Users },
   { id: 'pay', path: 'zer0/pay', label: 'Pay a Party', icon: SendHorizontal },
+  { id: 'payroll', path: 'zer0/payroll', label: 'Payroll Runs', icon: Banknote },
   { id: 'history', path: 'zer0/history', label: 'Payment History', icon: History },
   { id: 'proofs', path: 'zer0/proofs', label: 'Proof Manager', icon: ShieldCheck },
   { id: 'settings', path: 'zer0/settings', label: 'Settings', icon: Settings },
@@ -24,10 +25,12 @@ export default function Zer0Layout() {
   const zer0Idx = pathParts.indexOf('zer0');
   const subSection = zer0Idx >= 0 ? pathParts[zer0Idx + 1] || 'overview' : 'overview';
 
-  const basePath = `/dashboard/w/${workspaceId}/p/${projectId}`;
+  const basePath = projectId
+    ? `/dashboard/w/${workspaceId}/p/${projectId}`
+    : `/dashboard/w/${workspaceId}`;
 
   return (
-    <div className="flex gap-0 min-h-[calc(100vh-4rem)] -m-6">
+    <div className="flex min-h-[calc(100vh-4rem)] gap-0 -m-4 sm:-m-6">
       {/* Zer0 Sub-Sidebar */}
       <div className="w-56 shrink-0 border-r border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-[#070708]/60 p-4 flex flex-col">
         {/* Back to project */}
@@ -36,7 +39,7 @@ export default function Zer0Layout() {
           className="flex items-center gap-1.5 text-[11px] font-medium text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 mb-5 transition-colors"
         >
           <ChevronLeft className="h-3 w-3" />
-          Back to Project
+          Back to {projectId ? 'Project' : 'Workspace'}
         </Link>
 
         {/* Brand */}
@@ -49,10 +52,6 @@ export default function Zer0Layout() {
         <nav className="space-y-0.5 flex-1">
           {ZER0_NAV.map(item => {
             const Icon = item.icon;
-            const isActive = subSection === (item.id === 'overview' ? 'overview' : item.id) &&
-              (item.id === 'overview' ? !pathParts[zer0Idx + 1] : pathParts[zer0Idx + 1] === item.id);
-
-            // Special case: overview is when there's no sub-path after zer0
             const active = item.id === 'overview'
               ? (!pathParts[zer0Idx + 1] || pathParts[zer0Idx + 1] === 'overview')
               : pathParts[zer0Idx + 1] === item.id;

@@ -367,3 +367,91 @@ Use `None` for empty fields. Do not delete fields.
 - Blockers: None.
 - Verification: Completed successful Vite build. Checked git status.
 
+## 2026-07-10 - Codex - Public Marketing Page Build
+
+- Service or area: Frontend marketing site.
+- Files changed: `frontend/package.json`, `frontend/package-lock.json`, `frontend/src/App.tsx`, `frontend/src/DashboardApp.tsx`, `frontend/src/marketing/`, `memory.md`.
+- Summary: Built the public ZEXVRO marketing front door at `/` as a chaptered, scroll-driven site while preserving the existing authenticated dashboard at `/dashboard`. Added Lenis + GSAP ScrollTrigger global scroll sync, a code-split Three/R3F node-network hero substrate with static mobile/reduced-motion fallback, anime.js and split-type text/detail motion, Framer Motion button/nav interactions, optimized SVG chapter illustrations generated through SVGO/SVGR, six MVP service chapters, an agent-first audit-trail close, and a real CTA to GitHub/dashboard prototype.
+- Placeholder vs final: Final for the current marketing-page visual/interaction system and illustration style bible. Product claims remain intentionally MVP-safe: Privacy Pool, A-2-A, Agent Auth, NFT, and De-Pin are presented as Draft/early/coming-soon where context.md says decisions are not finalized. Morph is presented as the furthest along because the CLI is implemented and packaged.
+- Decisions: Accepted - `/` is the public marketing page; `/dashboard` lazy-loads the existing dashboard prototype. Accepted - Marketing page may use cinematic scroll storytelling outside the stricter in-app dashboard layout rules. Accepted - Keep color restrained to black/white/zinc with one narrow accent per chapter.
+- Follow-ups: Replace generated vector placeholders with designer-approved production illustration assets if brand direction changes; decide actual waitlist/docs destination before launch; revisit Three.js chunk budget if production hosting metrics require stricter first-load limits.
+- Blockers: None.
+- Verification: Ran `npm run lint` and `npm run build` from `frontend/` successfully. Captured Chromium desktop, mobile, reduced-motion, and deep-chapter screenshots from the local dev server.
+
+## 2026-07-10 - Codex - Infrastructure Renaissance Landing Page
+
+- Service or area: Frontend marketing site.
+- Files changed: `frontend/index.html`, `frontend/public/fonts/`, `frontend/public/marketing/`, `frontend/src/marketing/`, `memory.md`.
+- Summary: Evolved the public marketing route into an original modern-Renaissance campaign for ZEXVRO. Added a full-bleed generated hero tableau, three-state transformation preview, pointer verification lens, Roman-numeral chapter progress rail, responsive principle strip, alternating service chapters, and a high-contrast closing panel. Kept all product claims aligned with the existing MVP status and preserved `/dashboard`.
+- Decisions: Accepted - Use the optimized WebP hero at `frontend/public/marketing/zexvro-renaissance-hero.webp`; keep the service SVG chapters as the technical product layer; use lime only as a narrow verification/status accent. Removed the runtime Three.js hero path from the rendered page in favor of the lighter interactive image treatment.
+- Follow-ups: Replace the dashboard bundle's broad screen import pattern if its existing production chunk warning becomes a deployment concern.
+- Blockers: None.
+- Verification: Ran `npm run lint` and `npm run build`; production marketing no longer emits the previous 910 kB Three.js chunk. Captured 1440x1000, 1024x768, 390x844, reduced-motion, privacy, Morph, and CTA screenshots. Scripted the transformation-state and chapter-anchor interactions in Chromium.
+
+## 2026-07-10 - Codex - NOVA Template Landing Replacement
+
+- Service or area: Frontend marketing site.
+- Summary: Replaced the rejected Renaissance landing route with a MotionSites NOVA-inspired aerospace layout using ZEXVRO cube assets, an oversized brand hero, continuous scan/media motion, a staggered systems grid, and an interactive six-service index. Preserved `/dashboard` and root device-activation query routing.
+- Verification: `npm run lint` and `npm run build` pass. Marketing JS is 34 kB before gzip; the remaining bundle warning is the existing dashboard chunk.
+
+## 2026-07-10 - Codex - Minimal Welcome Screen
+
+- Service or area: Frontend entry route.
+- Summary: Removed the long-form marketing experience from `/` and replaced it with a single responsive glassmorphic "Welcome to ZEXVRO" screen with one "Step into Web3" action to `/dashboard`.
+- Verification: TypeScript and production build pass; desktop and mobile Chromium screenshots were reviewed.
+
+## 2026-07-10 - Codex - Transactions and Payroll Planning Entry
+
+- Service or area: Dashboard navigation and finance-module planning.
+- Summary: Added a non-interactive `Transactions & Payroll` sidebar category marked `Planned`. No finance screens, routes, payment behavior, or backend claims were added pending product approval.
+- Decision needed: Confirm whether `Zer0` is the branded private-payment mode planned on top of the Zero-Knowledge Privacy Pool.
+
+## 2026-07-10 - Codex - Proof Manager and Recipient Payout Planning
+
+- Service or area: Transactions, payroll, recipient payouts, and finance evidence planning.
+- Requested scope: Add `Proof Manager` to the planned finance module and support two recipient experiences over one canonical payment/proof record: `Web3` for wallet-aware recipients and `Standard payout` for recipients who want a guided withdrawal to supported local currency.
+- Protocol clarification: `SEP-45` authenticates Stellar contract accounts; it is not a fiat withdrawal protocol. A future Stellar off-ramp should evaluate `SEP-24` for provider-hosted withdrawal or `SEP-6` for programmatic withdrawal, with provider-specific identity checks and quotes. Availability depends on the selected anchor, asset, country, and payout rail.
+- Proof scope: Payment confirmations, payroll statements, withdrawal records, accounting exports, approval history, supporting documents, and narrowly defined `Zer0` attestations. Issued records must be versioned and append-only; corrections supersede prior versions.
+- Product boundary: Proof artifacts may be prepared for accounting, tax, or legal review, but must not be described as legal certification, tax compliance, or a filed tax return. Sensitive documents remain encrypted off-chain; no private keys, raw ZK witness data, or fabricated settlement/proof states.
+- Planned navigation: Finance Overview, Transactions, Zer0, Payroll, Proof Manager, Organization. No related screens or integrations are implemented pending explicit approval.
+
+## 2026-07-10 - Codex - Frontend Phase 1: Routing, Stores, and Core Screens
+
+- Service or area: Frontend architecture and dashboard UI.
+- Files changed: `frontend/package.json`, `frontend/tsconfig.json`, `frontend/src/main.tsx`, `frontend/src/stores/types.ts`, `frontend/src/stores/workspace.ts`, `frontend/src/stores/project.ts`, `frontend/src/stores/ui.ts`, `frontend/src/routes/router.tsx`, `frontend/src/components/layout/DashboardLayout.tsx`, `frontend/src/components/workspace/WorkspaceOverview.tsx`, `frontend/src/components/workspace/ProjectsIndex.tsx`, `frontend/src/components/project/ProjectOverview.tsx`, `frontend/src/components/PlaceholderScreen.tsx`, `memory.md`.
+- Summary: Implemented Phase 1 of the planning brief. Added TanStack Router for URL-backed navigation and Zustand for state management. Created canonical types for workspace, project, environment, service instance, deployment, and team membership. Built three Zustand stores (workspace, project, UI) with persist middleware. Created a full route tree with workspace-scoped routes (`/w/:workspaceId/...`) and project-scoped routes (`/w/:workspaceId/p/:projectId/...`). Built a complete DashboardLayout shell with sidebar, workspace switcher, command palette, mobile drawer, and Morph assistant dock. Built WorkspaceOverview with stats, quick actions, and recent projects. Built ProjectsIndex with search, project list, and a multi-step create project wizard. Built ProjectOverview with setup checklist and quick actions. Added placeholder screens for all remaining planned routes.
+- Decisions: Accepted - TanStack Router (without strict typed Register), Zustand with persist, useNavigate for navigation (typed Link caused TS issues without Register), multi-step wizard for project creation, `/w/:workspaceId/p/:projectId/` route convention.
+- Follow-ups: Build remaining workspace screens (Instances, Deployments, Activity, Services, Team, Security, Analytics, Settings). Build remaining project screens (Environments, Instances, Deployments, Logs, Services, Agents, Members, Audit, Settings). Add the old dashboard screens (Overview, AgentStudio, Analytics, Memory, Security, Settings) back as workspace/project-aware screens.
+- Blockers: None.
+- Verification: `npm run lint` and `npm run build` pass. TypeScript clean.
+
+- Service or area: Product planning and frontend architecture.
+- Files changed: `planning.md`, `memory.md`.
+- Summary: Resolved four pending architecture decisions and added a five-phase implementation plan to `planning.md`. Decisions: use TanStack Router for URL-backed navigation, Zustand for workspace/project state management, multi-step wizard for project creation, and `/w/:workspaceId/p/:projectId/...` route convention. Finance screens (Transactions, Payroll, Zer0, Proof Manager) are deferred until the data model is approved. Added a concrete step-by-step plan covering routing foundation, project dashboard, service catalog split, team/invites, approval policies, and backend API boundaries.
+- Decisions: Accepted - TanStack Router, Zustand, multi-step wizard, /w/:wid/p/:pid/ route convention.
+- Follow-ups: Begin Phase 1 implementation — install TanStack Router, create Zustand stores, migrate existing useState navigation to routes.
+- Blockers: Finance screens deferred pending data model approval. De-pin scope still undefined.
+- Verification: Documentation-only change.
+
+## 2026-07-10 - Codex - Planning Brief For Future Models
+
+- Service or area: Product planning and dashboard information architecture.
+- Files changed: `planning.md`, `memory.md`.
+- Summary: Added a root-level planning brief consolidating the current ZEXVRO product context, workspace/project model, project dashboard flows, Transactions & Payroll direction, Zer0 proposal, Proof Manager scope, recipient payout modes, frontend gaps, implementation order, and open decisions for future humans or models.
+- Decisions: Proposed - Use `planning.md` as a planning handoff only; project, finance, payroll, Zer0, and proof-manager screens remain unimplemented pending approval.
+- Follow-ups: Review and approve the proposed screen backlog before frontend implementation.
+- Blockers: De-pin scope remains undefined; finance/proof/off-ramp provider decisions are still open.
+- Verification: Documentation-only change; no build or test run.
+
+## 2026-07-11 - Codex - Web3 Dashboard AWS Wiring And Handoff
+
+- Service or area: Frontend dashboard, Zer0 payroll, AWS Lambda, project documentation.
+- Files changed: `frontend/src/api/api.ts`, `frontend/src/agent/settings.ts`, `frontend/src/components/dashboard/AgentStudio.tsx`, `frontend/src/components/dashboard/Settings.tsx`, `frontend/src/components/layout/DashboardLayout.tsx`, `frontend/src/components/project/ProjectExecutions.tsx`, `frontend/src/components/project/ProjectOverview.tsx`, `frontend/src/components/workspace/Payroll.tsx`, `frontend/src/components/workspace/ProjectsIndex.tsx`, `frontend/src/components/workspace/WorkspaceActivity.tsx`, `frontend/src/components/workspace/WorkspaceOverview.tsx`, `frontend/src/components/workspace/WorkspaceSettings.tsx`, `frontend/src/components/zer0/*`, `frontend/src/routes/router.tsx`, `frontend/src/stores/awsSync.ts`, `frontend/src/stores/project.ts`, `frontend/src/stores/workspace.ts`, `frontend/src/stores/zer0.ts`, `frontend/src/data/serviceCatalog.ts`, `scratch_lambda/lambda_function.py`, `scratch_lambda/lambda.zip`, `context.md`, `pages.md`, `memory.md`.
+- Summary: Reworked the routed dashboard toward a Web2-to-Web3 service platform instead of a personal ZEXVRO/internal dashboard. Restored the full sidebar while adding Zer0 Payroll, Proof Management, and service/admin options. Added Project Executions, removed active navigation reliance on Web2 deployment/instance/log pages, redesigned project/workspace overview language, and kept screens dense and service-oriented. Added AWS DynamoDB-backed payroll taxonomy (`zexvro-payroll-taxonomy`) and Lambda routes for role/department managers. Payroll now loads employees, payroll runs, roles, departments, and payment history filters from AWS APIs, with no dummy payroll history.
+- Data decision: Removed Zustand browser persistence from business stores (`workspace`, `project`, `zer0`). Shared memory, Project Executions, Morph provider settings, and Zer0 fallback state now use the DynamoDB-backed `/api/memory` route. Remaining browser storage is limited to Cognito/session handoff and UI preferences.
+- AWS state: Created DynamoDB table `zexvro-payroll-taxonomy` and deployed updated Lambda `zexvro-agent-backend` with `GET/POST/PUT/DELETE /api/payroll/taxonomy`. Smoke tested create/list/delete through API Gateway with `Authorization: Bearer test`; the test taxonomy item was deleted afterward.
+- Docs: Added `pages.md` with route-by-route status, data source, completion percentage, and next work. Updated `context.md` with the secure Stellar credential request for Nabil/Nambil and clarified that if ZEXVRO does not hold signing credentials, user wallet connection/public wallet address must be supplied by the user and only public wallet metadata should be stored.
+- Decisions: Accepted - `/api/memory` remains a temporary AWS-backed store for areas without dedicated tables. Accepted - Dedicated tables are still needed for audits, executions, service instances, Zer0 payments, proofs, and settings. Accepted - No secret seeds should ever be stored in frontend state or repo files.
+- Follow-ups: Add dedicated DynamoDB/Lambda APIs for audit events, executions, service instances, Zer0 payments/proofs/settings. Replace Stellar stubs after credentials/contract IDs are available. Persist project membership/roles and service instance configuration. Remove legacy `DashboardApp.tsx` and inactive Web2 component files after route stability is confirmed.
+- Blockers: Stellar/Soroban credentials, contract IDs, source account/signing model, and custody/wallet policy are still needed from Nabil/Nambil. Audit/execution live backends are not yet implemented.
+- Verification: `npm run lint` and `npm run build` pass from `frontend/`. `python3 -m py_compile scratch_lambda/lambda_function.py` passes. Vite still reports the existing large dashboard chunk warning.

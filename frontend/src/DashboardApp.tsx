@@ -161,13 +161,8 @@ function normalizeStoredWorkspaces(value: unknown, fallback: Workspace[]): Works
 }
 
 function loadStoredWorkspaces(storageKey: string, fallback: Workspace[]) {
-  const saved = localStorage.getItem(storageKey);
-  if (!saved) return fallback;
-  try {
-    return normalizeStoredWorkspaces(JSON.parse(saved), fallback);
-  } catch {
-    return fallback;
-  }
+  void storageKey;
+  return fallback;
 }
 
 function isUsableSession(value: unknown): value is UserSession {
@@ -513,8 +508,8 @@ export default function DashboardApp() {
   }, [userSession?.username, userSession?.email]);
 
   useEffect(() => {
-    if (!workspaceOwnerKey || workspaces.length === 0) return;
-    localStorage.setItem(workspaceOwnerKey, JSON.stringify(workspaces));
+    void workspaceOwnerKey;
+    void workspaces;
   }, [workspaceOwnerKey, workspaces]);
 
   const handleCreateWorkspace = (event: React.FormEvent<HTMLFormElement>) => {
