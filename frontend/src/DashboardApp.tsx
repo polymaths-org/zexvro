@@ -42,7 +42,6 @@ const BRAND_WORDMARK = '/brand/wordmark-transparent.png';
 const MORPH_LOGO = '/morph/morph-logo.svg';
 const MORPH_ILLUSTRATION = '/morph/morph-illustration-transparent.png';
 
-const WORKSPACE_STORAGE_PREFIX = 'zexvro_workspaces_';
 const WORKSPACE_ROLES = ['Admin', 'Developer', 'Viewer'] as const;
 
 type WorkspaceRole = typeof WORKSPACE_ROLES[number];
@@ -109,60 +108,6 @@ function createDefaultWorkspace(session: UserSession | null): Workspace {
     owner: ownerName,
     invites: [],
   };
-}
-
-function getWorkspaceStorageKey(session: UserSession) {
-  const ownerKey = session.username || session.email || 'user';
-  return `${WORKSPACE_STORAGE_PREFIX}${encodeURIComponent(ownerKey)}`;
-}
-
-function normalizeWorkspaceRole(value: unknown): WorkspaceRole {
-  return WORKSPACE_ROLES.includes(value as WorkspaceRole) ? value as WorkspaceRole : 'Developer';
-}
-
-function normalizeStoredWorkspaces(value: unknown, fallback: Workspace[]): Workspace[] {
-  if (!Array.isArray(value)) return fallback;
-
-  const workspaces = value
-    .filter(item => item && typeof item === 'object')
-    .map((item, index) => {
-      const workspace = item as Partial<Workspace>;
-      const name = typeof workspace.name === 'string' && workspace.name.trim()
-        ? workspace.name.trim()
-        : `Workspace ${index + 1}`;
-      const invites = Array.isArray(workspace.invites)
-        ? workspace.invites
-            .filter(invite => invite && typeof invite === 'object' && typeof (invite as Partial<WorkspaceInvite>).email === 'string')
-            .map(invite => {
-              const storedInvite = invite as Partial<WorkspaceInvite>;
-              return {
-                id: typeof storedInvite.id === 'string' ? storedInvite.id : createWorkspaceId(storedInvite.email || 'invite'),
-                email: String(storedInvite.email).trim().toLowerCase(),
-                role: normalizeWorkspaceRole(storedInvite.role),
-                status: 'Pending' as const,
-                createdAt: typeof storedInvite.createdAt === 'number' ? storedInvite.createdAt : Date.now(),
-              };
-            })
-        : [];
-
-      return {
-        id: typeof workspace.id === 'string' ? workspace.id : createWorkspaceId(name),
-        name,
-        plan: typeof workspace.plan === 'string' ? workspace.plan : 'Team workspace',
-        initials: typeof workspace.initials === 'string' ? workspace.initials : makeWorkspaceInitials(name),
-        status: typeof workspace.status === 'string' ? workspace.status : 'Active',
-        detail: typeof workspace.detail === 'string' ? workspace.detail : 'Team members, agents, and service operations',
-        owner: typeof workspace.owner === 'string' ? workspace.owner : 'Current user',
-        invites,
-      };
-    });
-
-  return workspaces.length > 0 ? workspaces : fallback;
-}
-
-function loadStoredWorkspaces(storageKey: string, fallback: Workspace[]) {
-  void storageKey;
-  return fallback;
 }
 
 function isUsableSession(value: unknown): value is UserSession {
@@ -444,7 +389,6 @@ export default function DashboardApp() {
   const [reducedMotion, setReducedMotion] = useState<boolean>(false);
   const [userMenuOpen, setUserMenuOpen] = useState<boolean>(false);
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState<boolean>(false);
-  const [workspaceOwnerKey, setWorkspaceOwnerKey] = useState<string>('');
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>('');
   const [newWorkspaceName, setNewWorkspaceName] = useState<string>('');
@@ -488,17 +432,13 @@ export default function DashboardApp() {
 
   useEffect(() => {
     if (!userSession) {
-      setWorkspaceOwnerKey('');
       setWorkspaces([]);
       setSelectedWorkspaceId('');
       return;
     }
 
-    const storageKey = getWorkspaceStorageKey(userSession);
-    const fallback = [createDefaultWorkspace(userSession)];
-    const savedWorkspaces = loadStoredWorkspaces(storageKey, fallback);
+    const savedWorkspaces = [createDefaultWorkspace(userSession)];
 
-    setWorkspaceOwnerKey(storageKey);
     setWorkspaces(savedWorkspaces);
     setSelectedWorkspaceId(previousId => (
       savedWorkspaces.some(workspace => workspace.id === previousId)
@@ -506,11 +446,6 @@ export default function DashboardApp() {
         : savedWorkspaces[0].id
     ));
   }, [userSession?.username, userSession?.email]);
-
-  useEffect(() => {
-    void workspaceOwnerKey;
-    void workspaces;
-  }, [workspaceOwnerKey, workspaces]);
 
   const handleCreateWorkspace = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
