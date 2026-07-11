@@ -3,6 +3,7 @@ import {
   BASE_FEE,
   Client,
   Keypair,
+  StrKey,
   TransactionBuilder,
   contract,
   rpc,
@@ -30,6 +31,38 @@ interface ExpectedInvocation {
   contractId: string
   method: 'mint' | 'purchase' | 'set_sale_config'
   arguments: unknown[]
+}
+
+interface DeploymentSentTransaction {
+  sendTransactionResponse?: { hash?: unknown }
+  getTransactionResponse?: { txHash?: unknown }
+  result?: unknown
+}
+
+export function extractDeploymentResult(
+  sent: DeploymentSentTransaction,
+): DeploymentResult | undefined {
+  const transactionHash =
+    typeof sent.sendTransactionResponse?.hash === 'string'
+      ? sent.sendTransactionResponse.hash
+      : typeof sent.getTransactionResponse?.txHash === 'string'
+        ? sent.getTransactionResponse.txHash
+        : undefined
+  const contractId = extractContractId(sent.result)
+
+  if (transactionHash === undefined || contractId === undefined) return undefined
+  return { contractId, transactionHash }
+}
+
+function extractContractId(result: unknown): string | undefined {
+  if (result === null || typeof result !== 'object') return undefined
+  const options = (result as { options?: unknown }).options
+  if (options === null || typeof options !== 'object') return undefined
+  const contractId = (options as { contractId?: unknown }).contractId
+  if (typeof contractId !== 'string' || !StrKey.isValidContract(contractId)) {
+    return undefined
+  }
+  return contractId
 }
 
 export class UnavailableNftChainGateway implements NftChainGateway {
@@ -117,9 +150,8 @@ export class StellarNftChainGateway implements NftChainGateway {
       )
 
       const sent = await transaction.signAndSend()
-      const transactionHash = sent.sendTransactionResponse?.hash
-      const deployedClient = sent.result
-      if (transactionHash === undefined || !(deployedClient instanceof Client)) {
+      const deployment = extractDeploymentResult(sent)
+      if (deployment === undefined) {
         throw new ApiError(
           502,
           'stellar_deployment_incomplete',
@@ -127,10 +159,7 @@ export class StellarNftChainGateway implements NftChainGateway {
         )
       }
 
-      return {
-        contractId: deployedClient.options.contractId,
-        transactionHash,
-      }
+      return deployment
     })
   }
 

@@ -553,3 +553,13 @@ Use `None` for empty fields. Do not delete fields.
 - Follow-ups: None.
 - Blockers: None.
 - Verification: Frontend `npm run lint`, `npm run build`, and `npm run test:e2e` passed. Desktop Playwright screenshots confirmed the new `Digital Assets` and `Resource Gateway` sections.
+
+## 2026-07-12 - Codex with Nabil - Stellar deployment result parsing fix
+
+- Service or area: NFT Service API.
+- Files changed: `services/nft-service/api/src/stellarGateway.ts`, `services/nft-service/api/src/stellarGateway.test.ts`, `memory.md`.
+- Summary: Fixed collection deployment parsing after a live frontend run showed `Stellar accepted the deployment but did not return its final identifiers`. The Stellar JS SDK returns a generic deployed contract client shape with `options.contractId`; the API no longer requires that object to be an instance of the generated collection `Client` class. The parser now validates the returned contract ID with Stellar StrKey rules and accepts either the submit hash or finalized transaction hash.
+- Decisions: Accepted - Treat the SDK's generic deploy result client shape as valid when it includes a valid Stellar contract ID and transaction hash.
+- Follow-ups: Nabil should restart the NFT API/dev stack and retry a signed-in collection deployment. Failed local records from the previous parser error can be ignored or recreated.
+- Blockers: None.
+- Verification: NFT API `npm test` passed 24/24 when run outside the sandbox because Supertest binds local ports; `npm run lint` and `npm run build` passed.
