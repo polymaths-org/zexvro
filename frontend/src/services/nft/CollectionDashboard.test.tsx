@@ -48,7 +48,7 @@ describe('CollectionDashboard', () => {
   it('shows an honest API-backed empty state', async () => {
     render(
       <MemoryRouter>
-        <CollectionDashboard workspaceId="studio-a" accessToken="access-token" />
+        <CollectionDashboard workspaceId="studio-a" accessToken="access-token" onCreate={() => undefined} />
       </MemoryRouter>,
     );
 
@@ -68,7 +68,7 @@ describe('CollectionDashboard', () => {
 
     render(
       <MemoryRouter>
-        <CollectionDashboard workspaceId="studio-a" accessToken="access-token" />
+        <CollectionDashboard workspaceId="studio-a" accessToken="access-token" onCreate={() => undefined} />
       </MemoryRouter>,
     );
 
@@ -90,7 +90,7 @@ describe('CollectionDashboard', () => {
 
     render(
       <MemoryRouter>
-        <CollectionDashboard workspaceId="studio-a" accessToken="access-token" />
+        <CollectionDashboard workspaceId="studio-a" accessToken="access-token" onCreate={() => undefined} />
       </MemoryRouter>,
     );
 

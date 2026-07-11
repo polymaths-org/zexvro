@@ -43,7 +43,7 @@ class LoginScreen(Screen):
                     yield Label("GENERATING CODE...", id="login-code-val")
 
                 yield Label(
-                    "Link: http://localhost:3000",
+                    "Link: https://zexvro.pages.dev",
                     id="login-link-val",
                     classes="login-text"
                 )

@@ -21,6 +21,8 @@ This reads the `zexvro-provider` secret from Stellar CLI at runtime and never wr
 
 The NFT browser client calls `/api/nft`. During development, Vite proxies that path to `http://127.0.0.1:4101`; see [`../services/nft-service/README.md`](../services/nft-service/README.md) for the local testnet backend command. Only public addresses belong in `VITE_*` variables. Stellar secret keys and Pinata credentials remain server-side.
 
+Within the routed dashboard, NFT collections live at `/dashboard/w/:workspaceId/p/:projectId/nft` and collection creation is nested under `/nft/collections/new`.
+
 ## Verify
 
 ```bash
@@ -38,6 +40,10 @@ npm run test:e2e
 - Treat agent actions as approval-first placeholders.
 - Keep light and dark themes usable.
 - Keep the overview clean: no default AI Studio labels, no fake network badges, and no live-data claims.
+
+## Branch Caveat
+
+The `updates-routing-and-zer0` branch is not a finished or fully polished frontend. It includes routing and Zer0 prototype work, but still contains dummy data, placeholder flows, unfinished screens, and UI areas that need refinement before production use.
 
 ## Important Files
 

@@ -1,0 +1,48 @@
+@font-face {
+  font-family: "Geist Pixel";
+  src: url('/fonts/GeistPixel-Square.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+
+:root {
+  --background: #050505;
+  --surface: #0A0A0B;
+  --surface-raised: #111113;
+  --surface-hover: #18181B;
+  --border: #27272A;
+  --border-strong: #3F3F46;
+  --text-primary: #FAFAFA;
+  --text-secondary: #A1A1AA;
+  --text-muted: #71717A;
+  --accent: #FFFFFF;
+  --accent-text: #050505;
+  --brand-purple: #7C3AED;
+  --brand-blue: #3B82F6;
+  --success: #22C55E;
+  --warning: #F59E0B;
+  --danger: #EF4444;
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: "Space Grotesk", "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Pixel", "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+.light {
+  --background: #FAFAFA;
+  --surface: #FFFFFF;
+  --surface-raised: #FFFFFF;
+  --surface-hover: #F4F4F5;
+  --border: #E4E4E7;
+  --border-strong: #A1A1AA;
+  --text-primary: #09090B;
+  --text-secondary: #52525B;
+  --text-muted: #71717A;
+  --accent: #09090B;
+  --accent-text: #FFFFFF;
+  --brand-purple: #6D28D9;
+  --brand-blue: #2563EB;
+  --success: #16A34A;
+  --warning: #D97706;
+  --danger: #DC2626;
+}

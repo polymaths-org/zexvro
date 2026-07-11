@@ -41,13 +41,13 @@ test.beforeEach(async ({ page }) => {
 
 test('NFT dashboard deep link is stable on desktop', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('/services/nft');
+  await page.goto('/dashboard/w/ws-test/p/project-test/nft');
 
   await expect(
     page.getByRole('heading', { name: 'Collections', exact: true }),
   ).toBeVisible();
   await expect(page.getByRole('heading', { name: 'No collections yet' })).toBeVisible();
-  await expect(page).toHaveURL(/\/services\/nft$/);
+  await expect(page).toHaveURL(/\/dashboard\/w\/ws-test\/p\/project-test\/nft$/);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth + 1,
@@ -61,7 +61,7 @@ test('NFT dashboard deep link is stable on desktop', async ({ page }, testInfo) 
 
 test('collection wizard deep link fits a mobile viewport', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/services/nft/collections/new');
+  await page.goto('/dashboard/w/ws-test/p/project-test/nft/collections/new');
 
   await expect(page.getByRole('heading', { name: 'Deploy a Stellar collection' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Collection details' })).toBeVisible();
@@ -77,16 +77,13 @@ test('collection wizard deep link fits a mobile viewport', async ({ page }, test
   });
 });
 
-test('workspace search routes NFT directly to its dashboard', async ({ page }) => {
+test('new collection action routes to the project wizard', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
-  await page.goto('/overview');
+  await page.goto('/dashboard/w/ws-test/p/project-test/nft');
+  await page.getByRole('button', { name: 'New collection' }).click();
 
-  await page.getByRole('button', { name: /Search/ }).first().click();
-  await page.getByPlaceholder('Type a screen or operation command...').fill('NFT');
-  await page.getByRole('button', { name: /Navigate to NFT Service/ }).click();
-
-  await expect(page).toHaveURL(/\/services\/nft$/);
+  await expect(page).toHaveURL(/\/dashboard\/w\/ws-test\/p\/project-test\/nft\/collections\/new$/);
   await expect(
-    page.getByRole('heading', { name: 'Collections', exact: true }),
+    page.getByRole('heading', { name: 'Deploy a Stellar collection', exact: true }),
   ).toBeVisible();
 });

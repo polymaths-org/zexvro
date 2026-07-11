@@ -60,6 +60,23 @@ The platform should not:
 - Add common PaaS features before the MVP services need them.
 - Hide unclear ownership or decisions inside random notes.
 
+## Stellar Integration Credential Request
+
+Ask Nabil / Nambil for the Stellar integration details needed on ZEXVRO's side. Do not commit secrets into the repo; share secrets through AWS Secrets Manager or another agreed secure channel.
+
+Required for backend integration:
+
+- Target network for each environment: Testnet, Futurenet, or Public.
+- Horizon endpoint and Soroban RPC endpoint, including any private RPC authentication.
+- Contract IDs for the Zer0 privacy pool, payroll proof verifier, or related Soroban contracts once they exist.
+- Asset configuration for supported settlement assets such as USDC, XLM, and EURC, including issuer public keys where applicable.
+- Source account public keys, signer policy, multisig thresholds, and whether ZEXVRO is expected to submit transactions or only prepare unsigned payloads.
+- Webhook/signature secrets for transaction callbacks, proof callbacks, or custody provider callbacks.
+- Funded test accounts or sandbox credentials for integration testing.
+- Final custody model: ZEXVRO-held signing via secure backend, user wallet signing, or a hybrid approval flow.
+
+If ZEXVRO does not hold signing credentials, the frontend must connect the user's wallet and the user must provide the wallet address/public key. In that model, store only public wallet addresses and non-secret connection metadata in DynamoDB; never ask users to paste secret seeds into the app.
+
 ## Current Repo State
 
 The repository currently contains:
@@ -175,9 +192,7 @@ Current implementation:
 
 Unknowns:
 
-- Auth model between web agent and CLI agent.
 - Repository ingestion strategy.
-- Web panel design.
 
 ### 3. A-2-A Trade Pipeline
 
