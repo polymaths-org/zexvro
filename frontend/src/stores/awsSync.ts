@@ -2,6 +2,7 @@ import { api, employeeApi, projectApi, workspaceApi } from '../api/api';
 import { useWorkspaceStore } from './workspace';
 import { useProjectStore } from './project';
 import { useZer0Store } from './zer0';
+import type { Workspace } from './types';
 
 let isHydrating = false;
 let syncTimeout: number | null = null;
@@ -23,6 +24,17 @@ function idFromRemote<T extends Record<string, any>>(item: T, fallbackKey: strin
   };
 }
 
+function uniqueByWorkspaceName<T extends { name?: string }>(items: T[]) {
+  const seen = new Set<string>();
+  return items.filter(item => {
+    const key = String(item.name || '').trim().toLowerCase();
+    if (!key) return true;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 async function pullMemoryFallback() {
   try {
     const data = await api.get<{ memory?: Record<string, any> }>('/api/memory');
@@ -42,7 +54,9 @@ export async function pullFromAWS() {
     const fallback = await pullMemoryFallback();
 
     const wsData = await workspaceApi.list();
-    const workspaces = (wsData.workspaces || []).map(workspace => idFromRemote(workspace, 'workspaceId'));
+    const workspaces = uniqueByWorkspaceName(
+      (wsData.workspaces || []).map(workspace => idFromRemote(workspace, 'workspaceId')),
+    );
 
     if (workspaces.length) {
       const fallbackWorkspaceId = fallback.currentWorkspaceId;
@@ -53,9 +67,10 @@ export async function pullFromAWS() {
 
       useWorkspaceStore.setState({ workspaces, currentWorkspaceId });
     } else if (fallback.workspaces) {
+      const fallbackWorkspaces = uniqueByWorkspaceName((fallback.workspaces || []) as Workspace[]);
       useWorkspaceStore.setState({
-        workspaces: fallback.workspaces,
-        currentWorkspaceId: fallback.currentWorkspaceId || fallback.workspaces[0]?.id || null,
+        workspaces: fallbackWorkspaces,
+        currentWorkspaceId: fallback.currentWorkspaceId || fallbackWorkspaces[0]?.id || null,
       });
     } else if (fallback.currentWorkspaceId) {
       useWorkspaceStore.setState({ currentWorkspaceId: fallback.currentWorkspaceId });

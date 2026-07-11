@@ -14,6 +14,10 @@ function createId(prefix: string) {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function namesEqual(left: string, right: string) {
+  return left.trim().toLowerCase() === right.trim().toLowerCase();
+}
+
 interface WorkspaceState {
   workspaces: Workspace[];
   currentWorkspaceId: string | null;
@@ -38,10 +42,17 @@ export const useWorkspaceStore = create<WorkspaceState>()(
     },
 
     createWorkspace: (name, ownerId) => {
+      const workspaceName = name.trim() || 'Workspace';
+      const existing = get().workspaces.find(workspace => namesEqual(workspace.name, workspaceName));
+      if (existing) {
+        set({ currentWorkspaceId: existing.id });
+        return existing;
+      }
+
       const workspace: Workspace = {
         id: createId('ws'),
-        name,
-        slug: slugify(name),
+        name: workspaceName,
+        slug: slugify(workspaceName),
         plan: 'Team workspace',
         ownerId,
         createdAt: Date.now(),
@@ -65,12 +76,18 @@ export const useWorkspaceStore = create<WorkspaceState>()(
     selectWorkspace: (id) => set({ currentWorkspaceId: id }),
 
     updateWorkspace: (id, updates) => {
+      const trimmedName = updates.name?.trim();
+      if (trimmedName && get().workspaces.some(workspace => workspace.id !== id && namesEqual(workspace.name, trimmedName))) {
+        console.warn('Workspace name must be unique.');
+        return;
+      }
+      const safeUpdates = trimmedName ? { ...updates, name: trimmedName } : updates;
       set(state => ({
         workspaces: state.workspaces.map(w =>
-          w.id === id ? { ...w, ...updates, slug: updates.name ? slugify(updates.name) : w.slug } : w
+          w.id === id ? { ...w, ...safeUpdates, slug: safeUpdates.name ? slugify(safeUpdates.name) : w.slug } : w
         ),
       }));
-      workspaceApi.update(id, updates).catch(err => console.error('Failed to update workspace in AWS:', err));
+      workspaceApi.update(id, safeUpdates).catch(err => console.error('Failed to update workspace in AWS:', err));
     },
 
     deleteWorkspace: (id) => {
