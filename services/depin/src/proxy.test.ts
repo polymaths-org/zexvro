@@ -182,6 +182,39 @@ describe('De-pin proxy', () => {
     })
   }
 
+  it('returns a sanitized gateway manifest for frontend setup screens', async () => {
+    const response = await request(app()).get('/status').expect(200)
+
+    expect(response.body).toMatchObject({
+      status: 'ok',
+      service: 'depin',
+      capabilities: {
+        scheme: 'exact',
+        network: 'stellar:testnet',
+        settlement: 'after_upstream_success',
+        fees: 'sponsored',
+      },
+      providers: [
+        {
+          route: '/v1/weather',
+          method: 'GET',
+          description: 'Current weather',
+          price: '$0.001',
+          recipient,
+          network: 'stellar:testnet',
+          timeoutMs: 20,
+          upstreamOrigin: 'https://upstream.example',
+          upstreamSecretRequired: true,
+        },
+      ],
+    })
+
+    const manifest = JSON.stringify(response.body)
+    expect(manifest).not.toContain('WEATHER_TOKEN')
+    expect(manifest).not.toContain('provider-secret')
+    expect(manifest).not.toContain('/weather?units=metric')
+  })
+
   it.each(['', 'malformed-payment', 'invalid-payment', 'insufficient-payment'])(
     'returns the standard 402 contract for unpaid or rejected payment %s',
     async (signature) => {

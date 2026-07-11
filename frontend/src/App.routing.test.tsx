@@ -12,6 +12,10 @@ describe('dashboard routing', () => {
     expect(routePaths).toContain('/dashboard/w/$workspaceId/p/$projectId/nft/collections/new');
   });
 
+  it('registers the project De-pin gateway route', () => {
+    expect(routePaths).toContain('/dashboard/w/$workspaceId/p/$projectId/depin');
+  });
+
   it('keeps the public marketing entry route', () => {
     expect(routePaths).toContain('/');
   });

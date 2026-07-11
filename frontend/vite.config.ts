@@ -160,6 +160,11 @@ export default defineConfig(({ mode }) => {
           changeOrigin: false,
           rewrite: (requestPath) => requestPath.replace(/^\/api\/nft/, ''),
         },
+        '/api/depin': {
+          target: env.DEPIN_API_PROXY_TARGET || 'http://127.0.0.1:4102',
+          changeOrigin: false,
+          rewrite: (requestPath) => requestPath.replace(/^\/api\/depin/, ''),
+        },
       },
     },
   };

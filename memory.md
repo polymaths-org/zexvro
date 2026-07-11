@@ -533,3 +533,13 @@ Use `None` for empty fields. Do not delete fields.
 - Follow-ups: Complete one signed-in collection deployment from a real project route and review the incoming AWS-backed workspace state with the service owners.
 - Blockers: Production Pinata/shared persistence and managed sponsor secret injection remain pending.
 - Verification: Combined dependency install and audit passed with zero vulnerabilities. Frontend TypeScript, 20/20 Vitest tests, production build, and 3/3 Chrome NFT route journeys passed; merged desktop and mobile screenshots were inspected. The known dashboard bundle-size warning remains.
+
+## 2026-07-11 - Codex with Nabil - De-pin gateway frontend wiring
+
+- Service or area: De-pin gateway, frontend service screen, local developer runtime, documentation.
+- Files changed: `services/depin/src/proxy.ts`, `services/depin/src/proxy.test.ts`, `services/depin/README.md`, `frontend/src/components/services/DepinService.tsx`, `frontend/src/services/depin/`, `frontend/src/App.routing.test.tsx`, `frontend/e2e/nft.spec.ts`, `frontend/vite.config.ts`, `frontend/scripts/dev-stack.mjs`, `frontend/.env.example`, `frontend/README.md`, `context.md`, `memory.md`.
+- Summary: Replaced the pulled placeholder De-pin hardware/node UI with an API-backed x402 gateway screen. Added a sanitized `/status` manifest to the gateway, a frontend De-pin API client, a provider table, gateway readiness indicators, and an unpaid probe flow that verifies the standard `PAYMENT-REQUIRED` challenge through `/api/depin`. Extended `npm run dev:stack` to start or reuse the local De-pin gateway when `services/depin/depin.config.json` exists.
+- Decisions: Accepted - The De-pin frontend may show sanitized provider route, price, recipient, timeout, upstream origin, and secret-required status, but must not expose upstream secret values or secret reference names. Accepted - The project De-pin route remains scoped to exact x402 HTTP resources; physical-node registration stays out of v1.
+- Follow-ups: Move provider configuration, replay state, and unpaid-rate-limit state into managed infrastructure before multi-instance or hosted use. Add provider onboarding UI only after persistent ownership/configuration is designed.
+- Blockers: De-pin still uses machine-local `depin.config.json` and in-memory replay/rate-limit state.
+- Verification: Frontend `npm test` passed 25/25 tests, `npm run lint` passed, `npm run build` passed with the known large dashboard chunk warning, and `npm run test:e2e` passed 4/4 Chrome journeys including the new De-pin x402 probe. De-pin `npm test` passed 26/26 when run outside the sandbox because Supertest needs to bind a local server; `npm run lint` and `npm run build` passed.

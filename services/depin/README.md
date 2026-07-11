@@ -26,6 +26,8 @@ npm run build
 DEPIN_CONFIG_PATH=depin.config.json npm start
 ```
 
+The gateway exposes `/health` for readiness and `/status` for the frontend setup screen. `/status` returns sanitized provider routes, prices, recipients, network, timeout policy, and upstream origins; it does not expose upstream secret values or secret reference names.
+
 ## Local testnet smoke test
 
 The machine-local `depin.config.json` is ignored by Git. With the gateway and
@@ -34,6 +36,8 @@ its configured upstream running, an unpaid request should return HTTP `402`:
 ```bash
 curl -i http://127.0.0.1:4102/v1/nft-health
 ```
+
+From the frontend dev server, the same gateway is available through `/api/depin` when Vite is running. The project De-pin screen uses `/api/depin/status` and an unpaid probe request to verify that the standard `PAYMENT-REQUIRED` challenge is returned.
 
 For a paid smoke test, fund the buyer identity with Stellar testnet USDC and
 run the bounded demo client. The command substitution keeps the secret out of
