@@ -686,8 +686,24 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
               <div className="mt-5 space-y-3 border-t border-zinc-200 pt-5 dark:border-zinc-800">
                 <div>
                   <span className="text-xs text-zinc-500 dark:text-zinc-400">Required signer</span>
-                  <p className="mt-1 font-mono text-xs text-zinc-700 dark:text-zinc-300">{saleIntent.requiredSigners.join(', ')}</p>
+                  <p className="mt-1 font-mono text-xs text-zinc-700 dark:text-zinc-300">
+                    {saleIntent.autoSubmitted ? 'Submitted by local sponsor' : saleIntent.requiredSigners.join(', ')}
+                  </p>
                 </div>
+                {saleIntent.autoSubmitted && (
+                  <div>
+                    <span className="text-xs text-zinc-500 dark:text-zinc-400">Transaction</span>
+                    <a
+                      href={`https://stellar.expert/explorer/testnet/tx/${saleIntent.autoSubmitted.transactionHash}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-1 inline-flex items-center gap-1.5 font-mono text-xs text-brand-blue hover:underline"
+                    >
+                      {shortAddress(saleIntent.autoSubmitted.transactionHash)}
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  </div>
+                )}
                 <textarea
                   readOnly
                   value={saleIntent.serializedTransaction}

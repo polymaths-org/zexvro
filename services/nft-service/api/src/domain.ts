@@ -51,6 +51,7 @@ export interface DeploymentResult {
 export interface PreparedContractCall {
   serializedTransaction: string
   requiredSigners: string[]
+  autoSubmitted?: SubmissionResult
 }
 
 export interface SubmissionResult {
