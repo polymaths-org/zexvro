@@ -65,6 +65,45 @@ function extractContractId(result: unknown): string | undefined {
   return contractId
 }
 
+export function simulationFailureToApiError(error: unknown): ApiError | undefined {
+  const message = error instanceof Error ? error.message : ''
+  if (
+    !message.includes('Transaction simulation failed') &&
+    !message.includes('HostError')
+  ) {
+    return undefined
+  }
+
+  const contractError = /Error\(Contract, #(\d+)\)/.exec(message)?.[1]
+  if (contractError === '3') {
+    return new ApiError(
+      409,
+      'token_already_minted',
+      'That token ID is already minted. Choose another token ID.',
+    )
+  }
+  if (contractError === '5') {
+    return new ApiError(
+      400,
+      'invalid_primary_sale_price',
+      'Primary sale price must be greater than zero.',
+    )
+  }
+  if (contractError === '6') {
+    return new ApiError(
+      409,
+      'primary_sale_not_configured',
+      'Primary sale is not configured for this collection yet. The creator must sign and submit sale configuration before buyers can prepare checkout.',
+    )
+  }
+
+  return new ApiError(
+    502,
+    'stellar_simulation_failed',
+    'Stellar simulation failed before producing a signable transaction.',
+  )
+}
+
 export class UnavailableNftChainGateway implements NftChainGateway {
   private unavailable(): never {
     throw new ApiError(
@@ -277,6 +316,13 @@ export class StellarNftChainGateway implements NftChainGateway {
   }
 
   private serializePrepared(transaction: AssembledTransaction<unknown>): PreparedContractCall {
+    let serializedTransaction: string
+    try {
+      serializedTransaction = transaction.toJSON()
+    } catch (error) {
+      throw simulationFailureToApiError(error) ?? error
+    }
+
     const requiredSigners = transaction.needsNonInvokerSigningBy()
     if (requiredSigners.length === 0) {
       throw new ApiError(
@@ -286,7 +332,7 @@ export class StellarNftChainGateway implements NftChainGateway {
       )
     }
     return {
-      serializedTransaction: transaction.toJSON(),
+      serializedTransaction,
       requiredSigners,
     }
   }

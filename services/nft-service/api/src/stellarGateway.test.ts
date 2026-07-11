@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { extractDeploymentResult } from './stellarGateway.js'
+import {
+  extractDeploymentResult,
+  simulationFailureToApiError,
+} from './stellarGateway.js'
 
 const contractId = 'CCJDPP5VB74QI7CO656L7PQGXKOHI7RQ5PGGQXMM2CUWQ3SYEFXF3KRT'
 
@@ -45,5 +48,34 @@ describe('Stellar deployment result parsing', () => {
         result: { options: { contractId } },
       }),
     ).toBeUndefined()
+  })
+})
+
+describe('Stellar simulation failure mapping', () => {
+  it('reports disabled primary sales before falling back to signer errors', () => {
+    const error = simulationFailureToApiError(
+      new Error('Transaction simulation failed: "HostError: Error(Contract, #6)"'),
+    )
+
+    expect(error).toMatchObject({
+      status: 409,
+      code: 'primary_sale_not_configured',
+      message: expect.stringContaining('Primary sale is not configured'),
+    })
+  })
+
+  it('reports duplicate token IDs from contract errors', () => {
+    const error = simulationFailureToApiError(
+      new Error('Transaction simulation failed: "HostError: Error(Contract, #3)"'),
+    )
+
+    expect(error).toMatchObject({
+      status: 409,
+      code: 'token_already_minted',
+    })
+  })
+
+  it('ignores non-simulation errors', () => {
+    expect(simulationFailureToApiError(new Error('network down'))).toBeUndefined()
   })
 })

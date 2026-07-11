@@ -573,3 +573,13 @@ Use `None` for empty fields. Do not delete fields.
 - Follow-ups: Add wallet signing/submission integration for prepared checkout and sale-configuration transactions, minted item inventory/counts, and archive semantics for live collections if studios need to hide a live record without implying on-chain deletion.
 - Blockers: Wallet signing/submission is still not wired in the frontend, so sale setup and public buy prepare Soroban transactions but do not yet complete browser wallet actions.
 - Verification: NFT API lint/build passed; NFT API tests passed 27/27 outside the sandbox because Supertest binds local ports. Frontend TypeScript lint, production build, 29/29 Vitest tests, and 4/4 Playwright E2E tests passed. `git diff --check` passed.
+
+## 2026-07-12 - Codex with Nabil - NFT checkout simulation errors
+
+- Service or area: NFT Service API.
+- Files changed: `services/nft-service/api/src/stellarGateway.ts`, `services/nft-service/api/src/stellarGateway.test.ts`, `memory.md`.
+- Summary: Fixed public checkout error reporting when Soroban simulation fails before producing signer authorization entries. Contract error `#6` now maps to `primary_sale_not_configured`, which explains that the creator must sign and submit sale configuration before buyers can prepare checkout. Duplicate token and invalid price simulation failures also map to explicit API errors instead of the generic authorization fallback.
+- Decisions: Accepted - Failed Soroban simulations should be translated before checking `needsNonInvokerSigningBy()` so product errors are not hidden by signer validation.
+- Follow-ups: Add frontend wallet signing/submission for sale configuration so creators can complete the on-chain prerequisite from the dashboard.
+- Blockers: None.
+- Verification: NFT API lint/build passed; NFT API tests passed 30/30 outside the sandbox because Supertest binds local ports. A live local public checkout request now returns `primary_sale_not_configured` instead of `authorization_not_required`.
