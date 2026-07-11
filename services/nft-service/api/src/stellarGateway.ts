@@ -243,7 +243,12 @@ export class StellarNftChainGateway implements NftChainGateway {
       payment_token: input.paymentTokenAddress,
       price: input.price,
     })
-    return this.serializePrepared(transaction)
+    const prepared = this.serializePrepared(transaction, { allowInvokerAuthorization: true })
+    if (prepared.requiredSigners.length > 0) return prepared
+    return {
+      ...prepared,
+      autoSubmitted: await this.submit(transaction),
+    }
   }
 
   async submitSaleConfig(input: {
@@ -315,7 +320,10 @@ export class StellarNftChainGateway implements NftChainGateway {
     }
   }
 
-  private serializePrepared(transaction: AssembledTransaction<unknown>): PreparedContractCall {
+  private serializePrepared(
+    transaction: AssembledTransaction<unknown>,
+    options: { allowInvokerAuthorization?: boolean } = {},
+  ): PreparedContractCall {
     let serializedTransaction: string
     try {
       serializedTransaction = transaction.toJSON()
@@ -324,7 +332,7 @@ export class StellarNftChainGateway implements NftChainGateway {
     }
 
     const requiredSigners = transaction.needsNonInvokerSigningBy()
-    if (requiredSigners.length === 0) {
+    if (requiredSigners.length === 0 && options.allowInvokerAuthorization !== true) {
       throw new ApiError(
         422,
         'authorization_not_required',

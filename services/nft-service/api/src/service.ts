@@ -337,7 +337,10 @@ export class NftService {
       paymentTokenAddress: this.paymentTokenAddress,
       price: input.price,
     })
-    if (!prepared.requiredSigners.includes(input.ownerAddress)) {
+    if (
+      !prepared.requiredSigners.includes(input.ownerAddress) &&
+      prepared.autoSubmitted === undefined
+    ) {
       throw new ApiError(
         502,
         'owner_authorization_missing',

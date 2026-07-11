@@ -51,6 +51,7 @@ class FakeChain implements NftChainGateway {
   deployFailure?: Error
   prepareFailure?: Error
   submitFailure?: Error
+  autoSubmitSaleConfig = false
   submitCalls = 0
 
   async deployCollection(_input: CollectionDeploymentInput): Promise<DeploymentResult> {
@@ -75,6 +76,16 @@ class FakeChain implements NftChainGateway {
     ownerAddress: string
   }): Promise<PreparedContractCall> {
     if (this.prepareFailure !== undefined) throw this.prepareFailure
+    if (this.autoSubmitSaleConfig) {
+      return {
+        serializedTransaction: 'prepared-sale-config',
+        requiredSigners: [],
+        autoSubmitted: {
+          transactionHash: 'sale-config-auto-hash',
+          status: 'confirmed',
+        },
+      }
+    }
     return {
       serializedTransaction: 'prepared-sale-config',
       requiredSigners: [input.ownerAddress],
@@ -479,6 +490,25 @@ describe('NFT service API', () => {
       .post(`/v1/collections/${collection.id}/sale-config/intent`)
       .send({ ownerAddress: buyerAddress, priceAtomic: '250000' })
       .expect(403)
+  })
+
+  it('accepts local sponsor-owned sale configuration that is auto-submitted', async () => {
+    const collection = await createCollection()
+    chain.autoSubmitSaleConfig = true
+
+    const prepared = await request(app)
+      .post(`/v1/collections/${collection.id}/sale-config/intent`)
+      .send({ ownerAddress, priceAtomic: '250000' })
+      .expect(201)
+
+    expect(prepared.body.intent).toMatchObject({
+      serializedTransaction: 'prepared-sale-config',
+      requiredSigners: [],
+      autoSubmitted: {
+        transactionHash: 'sale-config-auto-hash',
+        status: 'confirmed',
+      },
+    })
   })
 
   it('makes intent creation idempotent and rejects key reuse for another item', async () => {

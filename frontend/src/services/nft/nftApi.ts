@@ -81,6 +81,10 @@ export interface NftCheckoutIntent {
 export interface PreparedNftTransaction {
   serializedTransaction: string;
   requiredSigners: string[];
+  autoSubmitted?: {
+    transactionHash: string;
+    status: 'confirmed';
+  };
 }
 
 interface ApiErrorPayload {

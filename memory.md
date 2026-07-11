@@ -583,3 +583,13 @@ Use `None` for empty fields. Do not delete fields.
 - Follow-ups: Add frontend wallet signing/submission for sale configuration so creators can complete the on-chain prerequisite from the dashboard.
 - Blockers: None.
 - Verification: NFT API lint/build passed; NFT API tests passed 30/30 outside the sandbox because Supertest binds local ports. A live local public checkout request now returns `primary_sale_not_configured` instead of `authorization_not_required`.
+
+## 2026-07-12 - Codex with Nabil - Sponsor-owned sale setup
+
+- Service or area: NFT Service API and frontend.
+- Files changed: `services/nft-service/api/src/domain.ts`, `services/nft-service/api/src/stellarGateway.ts`, `services/nft-service/api/src/service.ts`, `services/nft-service/api/src/app.test.ts`, `frontend/src/services/nft/CollectionDashboard.tsx`, `frontend/src/services/nft/nftApi.ts`, `memory.md`.
+- Summary: Fixed local sponsor-owned sale configuration. When the collection owner is also the local sponsor/transaction invoker, Stellar correctly returns no separate non-invoker authorization entry. The API now treats that as valid for sale configuration and auto-submits the setup transaction, returning the confirmed transaction hash to the dashboard instead of throwing `authorization_not_required`.
+- Decisions: Accepted - Only creator sale configuration may use this local auto-submit path when no non-invoker signer is required. Buyer checkout still requires buyer authorization and is not auto-submitted.
+- Follow-ups: Add full wallet signing/submission for non-sponsor creators and public buyers.
+- Blockers: None.
+- Verification: NFT API lint/build passed; NFT API tests passed 31/31 outside the sandbox. Frontend TypeScript lint, production build, 29/29 Vitest tests, and 4/4 Playwright E2E tests passed.
