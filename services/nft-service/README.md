@@ -64,10 +64,21 @@ The API uses a versioned local JSON repository by default. Production still need
 
 ## Local testnet runtime
 
+Preferred root workflow:
+
+```bash
+cp .env.example .env
+npm run dev
+```
+
+The root command starts the NFT API and frontend together. If
+`STELLAR_SPONSOR_SECRET` is empty, it reads `ZEXVRO_STELLAR_IDENTITY`
+(`zexvro-provider` by default) from Stellar CLI at runtime and passes the secret
+only to the API process.
+
 The testnet collection WASM is installed with hash
 `a8a5f637131c4f5db91d682008b68f21ab2f4f87e0844866ac80fad9faab6bad`.
-Start the API with the local sponsor identity without writing its secret to a
-file:
+The service-local command still works when you need to run only the API:
 
 ```bash
 cd services/nft-service/api
@@ -90,7 +101,7 @@ cd frontend
 npm run dev
 ```
 
-Open `http://127.0.0.1:3000/services/nft`, sign in through the configured
+Open `http://127.0.0.1:3000/dashboard`, sign in through the configured
 Cognito pool, and use **New collection**. The Vite proxy forwards `/api/nft`
 to port `4101`; sponsor credentials never enter the browser.
 
@@ -105,7 +116,10 @@ npm run build
 npm start
 ```
 
-Copy values from `api/.env.example` into the runtime environment. `PINATA_JWT`, `STELLAR_SPONSOR_SECRET`, and `NFT_COLLECTION_WASM_HASH` stay server-side. The service starts without chain credentials but returns an explicit `503` for chain operations.
+Copy values from the repository-root `.env.example` into root `.env` for local
+development. `PINATA_JWT`, `STELLAR_SPONSOR_SECRET`, and
+`NFT_COLLECTION_WASM_HASH` stay server-side. The service starts without chain
+credentials but returns an explicit `503` for chain operations.
 
 The frontend uploads collection media, deploys through the authenticated API,
 and lists live or failed workspace records. Older browser-local drafts remain

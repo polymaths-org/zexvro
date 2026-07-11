@@ -1,0 +1,25 @@
+{
+  "name": "zexvro",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:all": "node scripts/dev.mjs --with-depin",
+    "dev:frontend": "node scripts/dev.mjs --only=frontend",
+    "dev:nft": "node scripts/dev.mjs --only=nft",
+    "dev:depin": "node scripts/dev.mjs --only=depin",
+    "lint:frontend": "npm --prefix frontend run lint",
+    "lint:nft": "npm --prefix services/nft-service/api run lint",
+    "lint:depin": "npm --prefix services/depin run lint",
+    "test:frontend": "npm --prefix frontend test",
+    "test:nft": "npm --prefix services/nft-service/api test",
+    "test:depin": "npm --prefix services/depin test",
+    "build:frontend": "npm --prefix frontend run build",
+    "build:nft": "npm --prefix services/nft-service/api run build",
+    "build:depin": "npm --prefix services/depin run build"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
+

@@ -603,3 +603,23 @@ Use `None` for empty fields. Do not delete fields.
 - Follow-ups: Add browser wallet signing/submission for non-sponsor creators and public buyers, then persist sale state from the explicit sale-config submit endpoint as well.
 - Blockers: None.
 - Verification: Frontend targeted dashboard test passed 6/6, full frontend Vitest passed 31/31, frontend TypeScript lint passed, production build passed with the known large chunk warning, and Playwright E2E passed 4/4. NFT API targeted app test passed 19/19 outside the sandbox because Supertest binds local ports; full NFT API tests passed 31/31 outside the sandbox; NFT API lint/build passed. `git diff --check` passed.
+
+## 2026-07-12 - Codex with Nabil - Root env and dev runner
+
+- Service or area: Developer runtime, frontend, NFT API, De-pin docs.
+- Files changed: `.env.example`, `.gitignore`, `package.json`, `scripts/dev.mjs`, `frontend/vite.config.ts`, folder `.env.example` files, root/frontend/NFT/De-pin READMEs, `memory.md`.
+- Summary: Added a root-level environment template and root npm scripts so local development can start the NFT API and frontend from the repository root with one `.env`. The root dev runner loads `.env` and `.env.local`, injects the same configuration into child processes, fills safe local defaults, and reads the configured Stellar CLI identity at runtime when the sponsor secret is not set. De-pin can join the same flow with `npm run dev:all`.
+- Decisions: Accepted - Keep real secrets out of `VITE_*` variables and out of committed files. Accepted - Do not migrate package-locks or package ownership into a root workspace yet; root scripts orchestrate the existing package folders.
+- Follow-ups: Consider a full npm workspace migration only when the team wants centralized dependency installation and lockfile ownership.
+- Blockers: None.
+- Verification: `node --check scripts/dev.mjs`, `npm --prefix frontend run lint`, `npm --prefix frontend run build`, `npm --prefix services/nft-service/api run lint`, `npm --prefix services/nft-service/api run build`, `npm --prefix services/depin run lint`, and `git diff --check` passed. A short root `npm run dev` smoke test passed outside the sandbox: the NFT API started on `4101`, and Vite started the frontend on the next free port because `3000` was already occupied.
+
+## 2026-07-12 - Codex with Nabil - Finish root env and dev runner
+
+- Service or area: Developer runtime, frontend env loading, docs.
+- Files changed: `scripts/dev.mjs`, `frontend/vite.config.ts`, `context.md`, root/package env docs already present, `memory.md`.
+- Summary: Finished the unfinished unified root env task. Root `npm run dev` / `npm run dev:all` remains the preferred way to run NFT API + frontend (+ optional De-pin) from one `.env`. Hardened the runner with a startup banner, absolute De-pin config resolution and missing-config warning, and taught Vite to load repository-root env when the frontend is started alone. Updated `context.md` so agents stop sending people only to per-folder env files and legacy `dev:stack`.
+- Decisions: Accepted - Root `.env` is the single local configuration source for Nabil-service development. Accepted - Folder `.env.example` files stay as compatibility pointers, not second sources of truth.
+- Follow-ups: Optional npm workspaces migration later; signed-in frontend collection deploy smoke remains Nabil's next product step.
+- Blockers: None for the root runner itself. Production Pinata, managed sponsor secrets, shared NFT persistence, and multi-instance De-pin stores remain open.
+- Verification: `node --check scripts/dev.mjs`, frontend lint/build, NFT API lint/build, and De-pin lint passed. `git diff --check` clean. Root `npm run dev` smoke started NFT API on `4101` and Vite on `3000` with Stellar identity `zexvro-provider` loaded from CLI without a root `.env` file. Landed on `feature/nft-service` as commit `feat: unify local env and root dev runner`.
