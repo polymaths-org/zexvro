@@ -509,6 +509,13 @@ describe('NFT service API', () => {
         status: 'confirmed',
       },
     })
+    await expect(repository.getCollection(collection.id)).resolves.toMatchObject({
+      primarySale: {
+        paymentTokenAddress: 'CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA',
+        priceAtomic: '250000',
+        transactionHash: 'sale-config-auto-hash',
+      },
+    })
   })
 
   it('makes intent creation idempotent and rejects key reuse for another item', async () => {

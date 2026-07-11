@@ -347,6 +347,13 @@ export class NftService {
         'The simulated sale configuration did not require owner authorization',
       )
     }
+    if (prepared.autoSubmitted !== undefined) {
+      await this.markPrimarySaleConfigured(
+        collection,
+        input.price,
+        prepared.autoSubmitted.transactionHash,
+      )
+    }
     return prepared
   }
 
@@ -526,6 +533,24 @@ export class NftService {
   private safeFailureReason(error: unknown): string {
     if (error instanceof ApiError) return error.code
     return error instanceof Error ? error.message.slice(0, 160) : 'unknown_error'
+  }
+
+  private async markPrimarySaleConfigured(
+    collection: CollectionRecord,
+    price: bigint,
+    transactionHash: string,
+  ): Promise<void> {
+    const timestamp = this.now().toISOString()
+    await this.repository.saveCollection({
+      ...collection,
+      primarySale: {
+        paymentTokenAddress: this.paymentTokenAddress,
+        priceAtomic: price.toString(),
+        transactionHash,
+        configuredAt: timestamp,
+      },
+      updatedAt: timestamp,
+    })
   }
 
   private pinCollectionMetadata(input: CollectionMetadataInput) {

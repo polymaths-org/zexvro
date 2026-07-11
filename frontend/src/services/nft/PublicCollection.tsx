@@ -47,6 +47,13 @@ function formatDateTime(value: string) {
   }).format(new Date(value));
 }
 
+function atomicToUsdc(value: string) {
+  const atomic = BigInt(value);
+  const whole = atomic / 10_000_000n;
+  const fraction = (atomic % 10_000_000n).toString().padStart(7, '0').replace(/0+$/, '');
+  return fraction ? `${whole.toString()}.${fraction}` : whole.toString();
+}
+
 export default function PublicCollection() {
   const { collectionId } = useParams({ strict: false });
   const [collection, setCollection] = useState<PublicNftCollection | null>(null);
@@ -174,6 +181,12 @@ export default function PublicCollection() {
                 <div className="bg-[#080809] p-4">
                   <span className="text-xs text-zinc-500">Created</span>
                   <span className="mt-1 block text-sm font-medium text-white">{formatDate(collection.createdAt)}</span>
+                </div>
+                <div className="bg-[#080809] p-4 sm:col-span-2">
+                  <span className="text-xs text-zinc-500">Primary sale</span>
+                  <span className="mt-1 block text-sm font-medium text-white">
+                    {collection.primarySale ? `${atomicToUsdc(collection.primarySale.priceAtomic)} USDC` : 'Not configured'}
+                  </span>
                 </div>
                 <div className="bg-[#080809] p-4 sm:col-span-2">
                   <span className="text-xs text-zinc-500">Contract</span>
