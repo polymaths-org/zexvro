@@ -135,6 +135,7 @@ export interface NftRepository {
   listCollections(workspaceId: string): Promise<CollectionRecord[]>
   getCollection(id: string): Promise<CollectionRecord | undefined>
   saveCollection(collection: CollectionRecord): Promise<void>
+  deleteCollection(id: string): Promise<boolean>
   getCheckoutIntent(id: string): Promise<CheckoutIntentRecord | undefined>
   findCheckoutIntentByIdempotencyKey(
     idempotencyKey: string,

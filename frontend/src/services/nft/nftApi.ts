@@ -41,6 +41,11 @@ export interface ApiNftCollection {
   updatedAt: string;
 }
 
+export type PublicNftCollection = Omit<
+  ApiNftCollection,
+  'workspaceId' | 'ownerAddress' | 'royaltyRecipient'
+>;
+
 export interface CreateNftCollectionInput {
   workspaceId: string;
   name: string;
@@ -52,6 +57,30 @@ export interface CreateNftCollectionInput {
   royaltyRecipient: string;
   royaltyBps: number;
   externalUrl?: string;
+}
+
+export type UpdateNftCollectionInput = Partial<
+  Omit<CreateNftCollectionInput, 'workspaceId'>
+>;
+
+export interface NftCheckoutIntent {
+  id: string;
+  collectionId: string;
+  tokenId: number;
+  buyerAddress: string;
+  serializedTransaction: string;
+  requiredSigners: string[];
+  status: 'pending_signature' | 'submitting' | 'confirmed' | 'failed';
+  expiresAt: string;
+  createdAt: string;
+  updatedAt: string;
+  transactionHash?: string;
+  failureReason?: string;
+}
+
+export interface PreparedNftTransaction {
+  serializedTransaction: string;
+  requiredSigners: string[];
 }
 
 interface ApiErrorPayload {
@@ -154,4 +183,102 @@ export async function createNftCollection(
     accessToken,
   );
   return result.collection;
+}
+
+export async function updateNftCollection(
+  collectionId: string,
+  input: UpdateNftCollectionInput,
+  accessToken: string,
+) {
+  const result = await requestJson<{ collection: ApiNftCollection }>(
+    `/v1/collections/${encodeURIComponent(collectionId)}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+    accessToken,
+  );
+  return result.collection;
+}
+
+export async function retryNftCollectionDeployment(
+  collectionId: string,
+  accessToken: string,
+) {
+  const result = await requestJson<{ collection: ApiNftCollection }>(
+    `/v1/collections/${encodeURIComponent(collectionId)}/retry`,
+    { method: 'POST' },
+    accessToken,
+  );
+  return result.collection;
+}
+
+export async function deleteNftCollection(
+  collectionId: string,
+  accessToken: string,
+) {
+  await requestJson<void>(
+    `/v1/collections/${encodeURIComponent(collectionId)}`,
+    { method: 'DELETE' },
+    accessToken,
+  );
+}
+
+export async function prepareNftSaleConfig(input: {
+  collectionId: string;
+  ownerAddress: string;
+  priceAtomic: string;
+  accessToken: string;
+}) {
+  const result = await requestJson<{ intent: PreparedNftTransaction }>(
+    `/v1/collections/${encodeURIComponent(input.collectionId)}/sale-config/intent`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ownerAddress: input.ownerAddress,
+        priceAtomic: input.priceAtomic,
+      }),
+    },
+    input.accessToken,
+  );
+  return result.intent;
+}
+
+export async function getPublicNftCollection(
+  collectionId: string,
+  signal?: AbortSignal,
+) {
+  const result = await requestJson<{ collection: PublicNftCollection }>(
+    `/v1/public/collections/${encodeURIComponent(collectionId)}`,
+    { signal },
+  );
+  return result.collection;
+}
+
+export async function createPublicCheckoutIntent(input: {
+  collectionId: string;
+  buyerAddress: string;
+  tokenId: number;
+  idempotencyKey?: string;
+}) {
+  const idempotencyKey =
+    input.idempotencyKey || crypto.randomUUID?.() || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  const result = await requestJson<{ intent: NftCheckoutIntent }>(
+    '/v1/public/checkout/intents',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': idempotencyKey,
+      },
+      body: JSON.stringify({
+        collectionId: input.collectionId,
+        buyerAddress: input.buyerAddress,
+        tokenId: input.tokenId,
+      }),
+    },
+  );
+  return result.intent;
 }

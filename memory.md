@@ -563,3 +563,13 @@ Use `None` for empty fields. Do not delete fields.
 - Follow-ups: Nabil should restart the NFT API/dev stack and retry a signed-in collection deployment. Failed local records from the previous parser error can be ignored or recreated.
 - Blockers: None.
 - Verification: NFT API `npm test` passed 24/24 when run outside the sandbox because Supertest binds local ports; `npm run lint` and `npm run build` passed.
+
+## 2026-07-12 - Codex with Nabil - NFT lifecycle actions and public buyer page
+
+- Service or area: NFT Service API and frontend.
+- Files changed: `services/nft-service/api/src/app.ts`, `services/nft-service/api/src/service.ts`, `services/nft-service/api/src/repository.ts`, `services/nft-service/api/src/domain.ts`, `services/nft-service/api/src/app.test.ts`, `frontend/src/services/nft/`, `frontend/src/routes/router.tsx`, `frontend/src/App.routing.test.tsx`, `memory.md`.
+- Summary: Added creator lifecycle actions for failed collection records: edit metadata before retry, retry deployment, and delete failed API records. Live collections now expose creator table actions to view the public page, open the buyer page, copy the public URL, and prepare an owner-signed primary USDC sale configuration. Added public collection reads at `/v1/public/collections/:collectionId`, public checkout intent preparation/submission endpoints, and a public frontend route at `/nft/collections/:collectionId` where buyers can inspect a live collection and prepare a Stellar checkout transaction for wallet signing.
+- Decisions: Accepted - Failed API records can be edited/retried/deleted; live Soroban contracts are not deleted or edited from the dashboard. Accepted - Public buy v1 prepares the checkout transaction and requires buyer wallet signing; the UI does not claim an item is purchased until a signed transaction is submitted. Accepted - Sale setup v1 prepares the owner authorization transaction and does not claim configuration is active until a signed transaction is submitted.
+- Follow-ups: Add wallet signing/submission integration for prepared checkout and sale-configuration transactions, minted item inventory/counts, and archive semantics for live collections if studios need to hide a live record without implying on-chain deletion.
+- Blockers: Wallet signing/submission is still not wired in the frontend, so sale setup and public buy prepare Soroban transactions but do not yet complete browser wallet actions.
+- Verification: NFT API lint/build passed; NFT API tests passed 27/27 outside the sandbox because Supertest binds local ports. Frontend TypeScript lint, production build, 29/29 Vitest tests, and 4/4 Playwright E2E tests passed. `git diff --check` passed.

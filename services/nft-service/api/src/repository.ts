@@ -42,6 +42,16 @@ export class InMemoryNftRepository implements NftRepository {
     await this.afterMutation()
   }
 
+  async deleteCollection(id: string): Promise<boolean> {
+    const nextCollections = this.state.collections.filter(
+      (collection) => collection.id !== id,
+    )
+    if (nextCollections.length === this.state.collections.length) return false
+    this.state.collections = nextCollections
+    await this.afterMutation()
+    return true
+  }
+
   async getCheckoutIntent(id: string): Promise<CheckoutIntentRecord | undefined> {
     const intent = this.state.checkoutIntents.find((entry) => entry.id === id)
     return intent === undefined ? undefined : structuredClone(intent)

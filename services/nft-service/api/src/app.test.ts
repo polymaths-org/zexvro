@@ -318,6 +318,80 @@ describe('NFT service API', () => {
     expect(stored).toMatchObject({ status: 'failed', failureReason: 'simulation failed' })
   })
 
+  it('edits, retries, and deletes failed collection records', async () => {
+    chain.deployFailure = new Error('simulation failed')
+    const failed = await request(app)
+      .post('/v1/collections')
+      .send(validCollection)
+      .expect(502)
+    const collectionId = failed.body.error.details.collectionId as string
+
+    const edited = await request(app)
+      .patch(`/v1/collections/${collectionId}`)
+      .send({
+        name: 'Sky Forge Retry',
+        description: 'Updated metadata before redeploying the failed collection.',
+        royaltyBps: 250,
+      })
+      .expect(200)
+    expect(edited.body.collection).toMatchObject({
+      name: 'Sky Forge Retry',
+      royaltyBps: 250,
+    })
+    expect(edited.body.collection).not.toHaveProperty('failureReason')
+
+    delete chain.deployFailure
+    const retried = await request(app)
+      .post(`/v1/collections/${collectionId}/retry`)
+      .expect(201)
+    expect(retried.body.collection).toMatchObject({
+      status: 'live',
+      contractId: `C${'A'.repeat(55)}`,
+      deploymentTxHash: 'deployment-hash',
+    })
+
+    await request(app)
+      .delete(`/v1/collections/${collectionId}`)
+      .expect(409)
+
+    chain.deployFailure = new Error('still failed')
+    const nextFailed = await request(app)
+      .post('/v1/collections')
+      .send({ ...validCollection, symbol: 'FAIL' })
+      .expect(502)
+    const failedId = nextFailed.body.error.details.collectionId as string
+    await request(app)
+      .delete(`/v1/collections/${failedId}`)
+      .expect(204)
+    expect(await repository.getCollection(failedId)).toBeUndefined()
+  })
+
+  it('serves a public live collection page payload only after deployment succeeds', async () => {
+    chain.deployFailure = new Error('simulation failed')
+    const failed = await request(app)
+      .post('/v1/collections')
+      .send(validCollection)
+      .expect(502)
+    await request(app)
+      .get(`/v1/public/collections/${String(failed.body.error.details.collectionId)}`)
+      .expect(404)
+
+    delete chain.deployFailure
+    const live = await createCollection()
+    const publicCollection = await request(app)
+      .get(`/v1/public/collections/${live.id}`)
+      .expect(200)
+
+    expect(publicCollection.body.collection).toMatchObject({
+      id: live.id,
+      name: 'Sky Forge',
+      symbol: 'SKY',
+      status: 'live',
+    })
+    expect(publicCollection.body.collection).not.toHaveProperty('workspaceId')
+    expect(publicCollection.body.collection).not.toHaveProperty('ownerAddress')
+  })
+
   it('returns simulation errors when a checkout intent cannot be prepared', async () => {
     const collection = await createCollection()
     chain.prepareFailure = new ApiError(
@@ -332,6 +406,32 @@ describe('NFT service API', () => {
       .send({ collectionId: collection.id, buyerAddress, tokenId: 7 })
       .expect(502)
     expect(response.body.error.code).toBe('stellar_simulation_failed')
+  })
+
+  it('lets public buyers prepare checkout intents without Cognito scope', async () => {
+    const collection = await createCollection()
+
+    const created = await request(app)
+      .post('/v1/public/checkout/intents')
+      .set('Idempotency-Key', 'public-checkout')
+      .send({ collectionId: collection.id, buyerAddress, tokenId: 12 })
+      .expect(201)
+
+    expect(created.body.intent).toMatchObject({
+      collectionId: collection.id,
+      buyerAddress,
+      tokenId: 12,
+      serializedTransaction: 'prepared-checkout',
+      requiredSigners: [buyerAddress],
+      status: 'pending_signature',
+    })
+    expect(created.body.intent).not.toHaveProperty('idempotencyKey')
+
+    const submitted = await request(app)
+      .post(`/v1/public/checkout/intents/${String(created.body.intent.id)}/submit`)
+      .send({ signedTransaction: 'signed' })
+      .expect(201)
+    expect(submitted.body.intent.status).toBe('confirmed')
   })
 
   it('allows buyers to create checkout intents and isolates them by buyer identity', async () => {

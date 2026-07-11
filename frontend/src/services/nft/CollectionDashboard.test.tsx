@@ -1,12 +1,17 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import CollectionDashboard from './CollectionDashboard';
 import { createCollection } from './collectionStore';
 
 const api = vi.hoisted(() => ({
+  deleteNftCollection: vi.fn(),
   getNftServiceHealth: vi.fn(),
   listNftCollections: vi.fn(),
+  prepareNftSaleConfig: vi.fn(),
+  retryNftCollectionDeployment: vi.fn(),
+  updateNftCollection: vi.fn(),
 }));
 
 vi.mock('./nftApi', () => api);
@@ -30,8 +35,18 @@ const remoteCollection = {
   updatedAt: '2026-07-11T00:00:00.000Z',
 };
 
+const failedCollection = {
+  ...remoteCollection,
+  id: '5a0dc446-4f57-4cf2-94ec-257b41b786a1',
+  status: 'failed' as const,
+  contractId: undefined,
+  deploymentTxHash: undefined,
+  failureReason: 'stellar_deployment_incomplete',
+};
+
 describe('CollectionDashboard', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     api.getNftServiceHealth.mockResolvedValue({
       status: 'ok',
       service: 'nft-service',
@@ -43,6 +58,13 @@ describe('CollectionDashboard', () => {
       },
     });
     api.listNftCollections.mockResolvedValue([]);
+    api.prepareNftSaleConfig.mockResolvedValue({
+      serializedTransaction: 'prepared-sale',
+      requiredSigners: [remoteCollection.ownerAddress],
+    });
+    api.retryNftCollectionDeployment.mockResolvedValue(remoteCollection);
+    api.updateNftCollection.mockResolvedValue(failedCollection);
+    api.deleteNftCollection.mockResolvedValue(undefined);
   });
 
   it('shows an honest API-backed empty state', async () => {
@@ -76,6 +98,58 @@ describe('CollectionDashboard', () => {
     expect(screen.getByText('Live')).toBeInTheDocument();
     expect(screen.getByText('Astral Gear')).toBeInTheDocument();
     expect(screen.getByText('Browser draft')).toBeInTheDocument();
+  });
+
+  it('exposes public view, buy, copy, retry, edit, and delete actions', async () => {
+    const user = userEvent.setup();
+    api.listNftCollections.mockResolvedValue([remoteCollection, failedCollection]);
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    render(
+      <MemoryRouter>
+        <CollectionDashboard workspaceId="studio-a" accessToken="access-token" onCreate={() => undefined} />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByTitle('View public page')).toHaveAttribute('href', `/nft/collections/${remoteCollection.id}`);
+    expect(screen.getByTitle('Open buyer page')).toHaveAttribute('href', `/nft/collections/${remoteCollection.id}?buy=1`);
+
+    await user.click(screen.getByTitle('Copy public URL'));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining(`/nft/collections/${remoteCollection.id}`));
+
+    await user.click(screen.getByTitle('Configure primary sale'));
+    expect(await screen.findByRole('heading', { name: 'Primary sale setup' })).toBeInTheDocument();
+    await user.clear(screen.getByLabelText(/Price/));
+    await user.type(screen.getByLabelText(/Price/), '1.25');
+    await user.click(screen.getByRole('button', { name: /prepare sale/i }));
+    expect(api.prepareNftSaleConfig).toHaveBeenCalledWith({
+      collectionId: remoteCollection.id,
+      ownerAddress: remoteCollection.ownerAddress,
+      priceAtomic: '12500000',
+      accessToken: 'access-token',
+    });
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+
+    await user.click(screen.getByTitle('Retry deployment'));
+    expect(api.retryNftCollectionDeployment).toHaveBeenCalledWith(failedCollection.id, 'access-token');
+
+    await user.click(screen.getByTitle('Edit failed record'));
+    await user.clear(screen.getByLabelText('Name'));
+    await user.type(screen.getByLabelText('Name'), 'Sky Forge Retry');
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+    expect(api.updateNftCollection).toHaveBeenCalledWith(
+      failedCollection.id,
+      expect.objectContaining({ name: 'Sky Forge Retry' }),
+      'access-token',
+    );
+
+    await user.click(screen.getByTitle('Delete failed record'));
+    expect(api.deleteNftCollection).toHaveBeenCalledWith(failedCollection.id, 'access-token');
   });
 
   it('surfaces API failures without hiding browser drafts', async () => {

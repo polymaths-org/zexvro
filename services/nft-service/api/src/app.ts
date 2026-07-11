@@ -38,6 +38,13 @@ const createCollectionSchema = z.object({
   externalUrl: httpAssetUri.optional(),
 })
 
+const updateCollectionSchema = createCollectionSchema
+  .omit({ workspaceId: true })
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, {
+    message: 'At least one collection field is required',
+  })
+
 const mintPrepareSchema = z.object({
   operatorAddress: stellarAccount,
   recipientAddress: stellarAccount,
@@ -154,6 +161,49 @@ function presentIntent(
   return { ...intent, idempotencyKey: intent.idempotencyKey.slice(prefix.length) }
 }
 
+function publicCheckoutIdempotencyKey(buyerAddress: string, key: string): string {
+  return `public.${Buffer.from(buyerAddress).toString('base64url')}.${key}`
+}
+
+function presentPublicCollection(collection: CollectionRecord) {
+  if (collection.status !== 'live') {
+    throw new ApiError(404, 'collection_not_found', 'Collection not found')
+  }
+  return {
+    id: collection.id,
+    name: collection.name,
+    symbol: collection.symbol,
+    description: collection.description,
+    baseMetadataUri: collection.baseMetadataUri,
+    collectionMetadataUri: collection.collectionMetadataUri,
+    coverImageUri: collection.coverImageUri,
+    royaltyBps: collection.royaltyBps,
+    ...(collection.externalUrl === undefined ? {} : { externalUrl: collection.externalUrl }),
+    status: collection.status,
+    contractId: collection.contractId,
+    deploymentTxHash: collection.deploymentTxHash,
+    createdAt: collection.createdAt,
+    updatedAt: collection.updatedAt,
+  }
+}
+
+function presentPublicIntent(intent: CheckoutIntentRecord) {
+  return {
+    id: intent.id,
+    collectionId: intent.collectionId,
+    tokenId: intent.tokenId,
+    buyerAddress: intent.buyerAddress,
+    serializedTransaction: intent.serializedTransaction,
+    requiredSigners: intent.requiredSigners,
+    status: intent.status,
+    expiresAt: intent.expiresAt,
+    createdAt: intent.createdAt,
+    updatedAt: intent.updatedAt,
+    ...(intent.transactionHash === undefined ? {} : { transactionHash: intent.transactionHash }),
+    ...(intent.failureReason === undefined ? {} : { failureReason: intent.failureReason }),
+  }
+}
+
 export function createApp(service: NftService, options: CreateAppOptions) {
   const app = express()
   app.disable('x-powered-by')
@@ -165,7 +215,7 @@ export function createApp(service: NftService, options: CreateAppOptions) {
           origin === undefined || options.allowedOrigins.includes(origin),
         )
       },
-      methods: ['GET', 'HEAD', 'POST', 'OPTIONS'],
+      methods: ['GET', 'HEAD', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Authorization', 'Content-Type', 'Idempotency-Key'],
       maxAge: 600,
     }),
@@ -212,6 +262,55 @@ export function createApp(service: NftService, options: CreateAppOptions) {
       const metadata = await service.getPublicTokenMetadata(collectionId, tokenId)
       response.setHeader('Cache-Control', 'public, max-age=60')
       response.json(metadata)
+    }),
+  )
+
+  app.get(
+    '/v1/public/collections/:collectionId',
+    asyncRoute(async (request, response) => {
+      const { collectionId } = z
+        .object({ collectionId: z.uuid() })
+        .parse(request.params)
+      const collection = await service.getCollection(collectionId)
+      response.setHeader('Cache-Control', 'public, max-age=60')
+      response.json({ collection: presentPublicCollection(collection) })
+    }),
+  )
+
+  app.post(
+    '/v1/public/checkout/intents',
+    asyncRoute(async (request, response) => {
+      const idempotencyKey = request.header('Idempotency-Key')
+      if (idempotencyKey === undefined || idempotencyKey.length > 128) {
+        throw new ApiError(
+          400,
+          'idempotency_key_required',
+          'A valid Idempotency-Key header is required',
+        )
+      }
+      const input = checkoutSchema.parse(request.body)
+      const intent = await service.createCheckoutIntent({
+        idempotencyKey: publicCheckoutIdempotencyKey(
+          input.buyerAddress,
+          idempotencyKey,
+        ),
+        ...input,
+      })
+      response.status(201).json({ intent: presentPublicIntent(intent) })
+    }),
+  )
+
+  app.post(
+    '/v1/public/checkout/intents/:intentId/submit',
+    asyncRoute(async (request, response) => {
+      const { intentId } = z.object({ intentId: z.uuid() }).parse(request.params)
+      const input = signedCheckoutSchema.parse(request.body)
+      const current = await service.getCheckoutIntent(intentId)
+      if (!current.idempotencyKey.startsWith('public.')) {
+        throw new ApiError(404, 'checkout_intent_not_found', 'Checkout intent not found')
+      }
+      const intent = await service.submitCheckoutIntent({ intentId, ...input })
+      response.status(201).json({ intent: presentPublicIntent(intent) })
     }),
   )
 
@@ -277,6 +376,65 @@ export function createApp(service: NftService, options: CreateAppOptions) {
         subject,
       )
       response.json({ collection: presentCollection(collection, subject) })
+    }),
+  )
+
+  app.patch(
+    '/v1/collections/:collectionId',
+    asyncRoute(async (request, response) => {
+      const { collectionId } = z
+        .object({ collectionId: z.uuid() })
+        .parse(request.params)
+      const input = updateCollectionSchema.parse(request.body)
+      await requireOwnedCollection(
+        service,
+        collectionId,
+        response.locals.nftIdentity.subject,
+      )
+      const collection = await service.updateFailedCollection(collectionId, input)
+      response.json({
+        collection: presentCollection(
+          collection,
+          response.locals.nftIdentity.subject,
+        ),
+      })
+    }),
+  )
+
+  app.post(
+    '/v1/collections/:collectionId/retry',
+    asyncRoute(async (request, response) => {
+      const { collectionId } = z
+        .object({ collectionId: z.uuid() })
+        .parse(request.params)
+      await requireOwnedCollection(
+        service,
+        collectionId,
+        response.locals.nftIdentity.subject,
+      )
+      const collection = await service.retryCollectionDeployment(collectionId)
+      response.status(201).json({
+        collection: presentCollection(
+          collection,
+          response.locals.nftIdentity.subject,
+        ),
+      })
+    }),
+  )
+
+  app.delete(
+    '/v1/collections/:collectionId',
+    asyncRoute(async (request, response) => {
+      const { collectionId } = z
+        .object({ collectionId: z.uuid() })
+        .parse(request.params)
+      await requireOwnedCollection(
+        service,
+        collectionId,
+        response.locals.nftIdentity.subject,
+      )
+      await service.deleteCollection(collectionId)
+      response.status(204).send()
     }),
   )
 
