@@ -455,3 +455,13 @@ Use `None` for empty fields. Do not delete fields.
 - Follow-ups: Add dedicated DynamoDB/Lambda APIs for audit events, executions, service instances, Zer0 payments/proofs/settings. Replace Stellar stubs after credentials/contract IDs are available. Persist project membership/roles and service instance configuration. Remove legacy `DashboardApp.tsx` and inactive Web2 component files after route stability is confirmed.
 - Blockers: Stellar/Soroban credentials, contract IDs, source account/signing model, and custody/wallet policy are still needed from Nabil/Nambil. Audit/execution live backends are not yet implemented.
 - Verification: `npm run lint` and `npm run build` pass from `frontend/`. `python3 -m py_compile scratch_lambda/lambda_function.py` passes. Vite still reports the existing large dashboard chunk warning.
+
+## 2026-07-11 - Codex - Agentic Operation Sidebar And Workspace Controls
+
+- Service or area: Frontend dashboard navigation and workspace management.
+- Files changed: `frontend/src/components/layout/DashboardLayout.tsx`, `frontend/src/stores/workspace.ts`, `frontend/src/stores/awsSync.ts`, `memory.md`.
+- Summary: Moved Morph Agent and Shared Memory into a dedicated `Agentic Operation` sidebar section for both workspace and project navigation. Added a workspace delete action in the workspace switcher with last-workspace protection and navigation to the next available workspace. Enforced unique workspace names in the workspace store for create and rename paths, and deduped workspace names when hydrating from AWS/fallback memory.
+- Decisions: Accepted - Keep Services Manager under `Service Catalog`; agent and memory operations belong under `Agentic Operation`. Accepted - Do not allow deleting the final workspace from the UI because the dashboard needs an active workspace shell.
+- Follow-ups: Add backend-side uniqueness constraints or conflict responses for workspace names if multiple clients create workspaces concurrently.
+- Blockers: None.
+- Verification: `npm run lint` and `npm run build` pass from `frontend/`. Vite still reports the existing large dashboard chunk warning.

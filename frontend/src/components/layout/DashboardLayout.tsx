@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Search, Menu, X, ChevronRight, User,
   HelpCircle, Sun, Moon, Settings, Send, ArrowUpRight, Sparkles, LogOut,
-  Plus, Mail, Users
+  Plus, Mail, Users, Trash2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Outlet, useNavigate, useParams, Link, useRouterState } from '@tanstack/react-router';
@@ -260,6 +260,12 @@ const SIDEBAR_CATEGORIES: Array<{
     label: 'Service Catalog',
     items: [
       { to: 'services', label: 'Services Manager', icon: 'services' },
+    ],
+  },
+  {
+    id: 'agentic-operation',
+    label: 'Agentic Operation',
+    items: [
       { to: 'agent', label: 'Morph Agent', icon: 'agent' },
       { to: 'memory', label: 'Shared Memory', icon: 'memory' },
     ],
@@ -283,6 +289,7 @@ export default function DashboardLayout() {
   const workspaces = useWorkspaceStore(s => s.workspaces);
   const createWorkspace = useWorkspaceStore(s => s.createWorkspace);
   const selectWorkspace = useWorkspaceStore(s => s.selectWorkspace);
+  const deleteWorkspace = useWorkspaceStore(s => s.deleteWorkspace);
   const addMember = useWorkspaceStore(s => s.addMember);
 
   const [userSession, setUserSession] = useState<UserSession | null>(() => {
@@ -317,8 +324,8 @@ export default function DashboardLayout() {
     return code ? code.toUpperCase() : null;
   });
   const [expandedCats, setExpandedCats] = useState<Record<string, boolean>>({
-    'workspace-management': true, 'zer0-service': true, services: true, 'security-section': true,
-    'project-core': true, 'project-services': true, 'project-intelligence': true, 'project-admin': true,
+    'workspace-management': true, 'zer0-service': true, services: true, 'agentic-operation': true, 'security-section': true,
+    'project-core': true, 'project-services': true, 'project-agentic': true, 'project-security': true, 'project-admin': true,
   });
   const [agentWidgetOpen, setAgentWidgetOpen] = useState(false);
   const [widgetMessages, setWidgetMessages] = useState<WidgetMessage[]>([]);
@@ -361,11 +368,17 @@ export default function DashboardLayout() {
           ],
         },
         {
-          id: 'project-intelligence',
-          label: 'Intelligence & Risk',
+          id: 'project-agentic',
+          label: 'Agentic Operation',
           items: [
             { to: 'agent', label: 'Morph Agent', icon: 'agent' as const },
             { to: 'memory', label: 'Shared Memory', icon: 'memory' as const },
+          ],
+        },
+        {
+          id: 'project-security',
+          label: 'Security & Insights',
+          items: [
             { to: 'security', label: 'Security', icon: 'security' as const },
             { to: 'analytics', label: 'Analytics', icon: 'analytics' as const },
           ],
@@ -419,11 +432,17 @@ export default function DashboardLayout() {
         items: serviceItems,
       },
       {
-        id: 'project-intelligence',
-        label: 'Intelligence & Risk',
+        id: 'project-agentic',
+        label: 'Agentic Operation',
         items: [
           { to: 'agent', label: 'Morph Agent', icon: 'agent' as const },
           { to: 'memory', label: 'Shared Memory', icon: 'memory' as const },
+        ],
+      },
+      {
+        id: 'project-security',
+        label: 'Security & Insights',
+        items: [
           { to: 'security', label: 'Security', icon: 'security' as const },
           { to: 'analytics', label: 'Analytics', icon: 'analytics' as const },
         ],
@@ -582,6 +601,28 @@ export default function DashboardLayout() {
     navigate({ to: '/dashboard/w/$workspaceId/overview', params: { workspaceId: ws.id } });
   };
 
+  const handleDeleteWorkspace = (id: string) => {
+    const workspace = workspaces.find(item => item.id === id);
+    if (!workspace) return;
+    if (workspaces.length <= 1) {
+      setWorkspaceNotice('Create another workspace before deleting this one.');
+      return;
+    }
+    const confirmed = window.confirm(`Delete "${workspace.name}"? This removes it from your workspace list.`);
+    if (!confirmed) return;
+
+    const nextWorkspace = workspaces.find(item => item.id !== id) || null;
+    deleteWorkspace(id);
+    setWorkspaceNotice(`Deleted ${workspace.name}.`);
+    setWorkspaceMenuOpen(false);
+    if (nextWorkspace) {
+      selectWorkspace(nextWorkspace.id);
+      navigate({ to: '/dashboard/w/$workspaceId/overview', params: { workspaceId: nextWorkspace.id } });
+    } else {
+      navigate({ to: '/dashboard' });
+    }
+  };
+
   const handleInviteToWorkspace = (e: React.FormEvent) => {
     e.preventDefault();
     const email = inviteEmail.trim().toLowerCase();
@@ -730,27 +771,43 @@ export default function DashboardLayout() {
                             {workspaces.map(ws => {
                               const isCurrent = ws.id === workspaceId;
                               return (
-                                <button
+                                <div
                                   key={ws.id}
-                                  type="button"
-                                  onClick={() => {
-                                    selectWorkspace(ws.id);
-                                    setWorkspaceMenuOpen(false);
-                                    navigate({ to: '/dashboard/w/$workspaceId/overview', params: { workspaceId: ws.id } });
-                                  }}
                                   className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left transition ${
                                     isCurrent
                                       ? 'bg-blue-500/10 text-zinc-950 dark:text-white'
                                       : 'text-zinc-600 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-900'
                                   }`}
                                 >
-                                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-blue-500/10 text-[10px] font-semibold text-blue-500">
-                                    {makeWorkspaceInitials(ws.name)}
-                                  </span>
-                                  <span className="min-w-0 flex-1">
-                                    <span className="block truncate text-xs font-semibold">{ws.name}</span>
-                                  </span>
-                                </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      selectWorkspace(ws.id);
+                                      setWorkspaceMenuOpen(false);
+                                      navigate({ to: '/dashboard/w/$workspaceId/overview', params: { workspaceId: ws.id } });
+                                    }}
+                                    className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+                                  >
+                                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-blue-500/10 text-[10px] font-semibold text-blue-500">
+                                      {makeWorkspaceInitials(ws.name)}
+                                    </span>
+                                    <span className="min-w-0 flex-1">
+                                      <span className="block truncate text-xs font-semibold">{ws.name}</span>
+                                    </span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      handleDeleteWorkspace(ws.id);
+                                    }}
+                                    disabled={workspaces.length <= 1}
+                                    className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-zinc-350 transition hover:bg-red-500/10 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-zinc-350"
+                                    title={workspaces.length <= 1 ? 'Create another workspace before deleting this one' : `Delete ${ws.name}`}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
                               );
                             })}
                           </div>
