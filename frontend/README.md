@@ -1,8 +1,6 @@
 # ZEXVRO Frontend
 
-This is the Vite + React frontend workspace for the ZEXVRO platform dashboard.
-
-It is a Vite + React + TypeScript app using local mock data. No backend, auth, wallet, blockchain, deployment provider, or secrets manager is connected yet.
+This is the Vite + React + TypeScript workspace for the ZEXVRO platform dashboard. Cognito authentication, Morph CLI status polling, and the NFT collection API are connected; unfinished product areas still use honest placeholders.
 
 ## Run Locally
 
@@ -11,13 +9,25 @@ npm install
 npm run dev
 ```
 
-The dev server runs on `http://127.0.0.1:3000/` by default.
+The dev server prefers `http://127.0.0.1:3000/` and selects the next free port when needed.
+
+For NFT development, start the frontend and the local testnet API together:
+
+```bash
+npm run dev:stack
+```
+
+This reads the `zexvro-provider` secret from Stellar CLI at runtime and never writes it to the frontend or an environment file. `npm run dev` starts only Vite and expects the NFT API to already be listening on port `4101`.
+
+The NFT browser client calls `/api/nft`. During development, Vite proxies that path to `http://127.0.0.1:4101`; see [`../services/nft-service/README.md`](../services/nft-service/README.md) for the local testnet backend command. Only public addresses belong in `VITE_*` variables. Stellar secret keys and Pinata credentials remain server-side.
 
 ## Verify
 
 ```bash
 npm run lint
+npm test
 npm run build
+npm run test:e2e
 ```
 
 ## Current Focus
@@ -35,6 +45,7 @@ npm run build
 - `src/App.tsx` - app shell, sidebar, top bar, command menu, assistant drawer.
 - `src/components/dashboard/Overview.tsx` - main workspace dashboard.
 - `src/components/services/Services.tsx` - service setup and approval-first configuration UI.
+- `src/services/nft/` - authenticated collection upload, deployment, listing, and browser-draft migration UI.
 - `src/data/mock.ts` - product-safe placeholder data.
 - `src/index.css` - base theme, fonts, focus, and utility styling.
 - `public/brand/` - local brand assets used by the app.

@@ -154,6 +154,13 @@ export default defineConfig(({ mode }) => {
     server: {
       hmr: process.env.DISABLE_HMR !== 'true',
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      proxy: {
+        '/api/nft': {
+          target: env.NFT_API_PROXY_TARGET || 'http://127.0.0.1:4101',
+          changeOrigin: false,
+          rewrite: (requestPath) => requestPath.replace(/^\/api\/nft/, ''),
+        },
+      },
     },
   };
 });

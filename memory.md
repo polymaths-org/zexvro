@@ -61,8 +61,8 @@ If a detail is only a work update, keep it here.
 | Transformation Agent (Morph) | Paris / `paris-29` | **In Progress — CLI built** | Owned by Paris. CLI skeleton done. Next: wire LLM, add web panel. |
 | A-2-A Trade Pipeline | Rushi / `Wraient` | Planned | Ask or record coordination before changing protocol, wallet, or negotiation design |
 | Captcha-like Agent Authentication Service | Rushi / `Wraient` | Planned | Ask or record coordination before changing identity, SDK, classifier, or HDM design |
-| NFT Service | Nabil / `n4bi10p` | Local prototype implemented; testnet integration pending | Ask or record coordination before changing minting, metadata, checkout, or NFT model |
-| De-pin | Nabil / `n4bi10p` | Local gateway implemented; provider/testnet integration pending | Follow the accepted exact per-request x402 scope |
+| NFT Service | Nabil / `n4bi10p` | Authenticated API/frontend wired for local-storage testnet runs; production Pinata pending | Ask or record coordination before changing minting, metadata, checkout, or NFT model |
+| De-pin | Nabil / `n4bi10p` | Live Stellar testnet x402 payment verified | Follow the accepted exact per-request x402 scope |
 
 Shared areas that need extra care:
 
@@ -169,6 +169,7 @@ Use `None` for empty fields. Do not delete fields.
 - Decision: Accepted - CLI-first approach for Morph. SQLite for MVP memory.
 - Decision: Accepted - NFT Service uses one Soroban contract per collection with OpenZeppelin Stellar `NonFungibleToken` Base. SEP-41 is used for the USDC payment token, not as the NFT standard. No multi-chain in v1.
 - Decision: Accepted - NFT metadata uses Pinata-backed public IPFS; gameplay API attributes must be identified as mutable.
+- Decision: Accepted - NFT local content-addressed HTTP storage is development-only. Production metadata remains Pinata-backed public IPFS and the UI must label local mode honestly.
 - Decision: Accepted - NFT minting is studio-owner or delegated-minter controlled. Royalty data is informational and must not be described as enforcement on arbitrary transfers.
 - Decision: Accepted - Primary NFT checkout atomically transfers USDC and mints. Buyers sign Soroban auth entries; the platform sponsor signs/pays the envelope without custodying buyer funds.
 - Decision: Accepted - De-pin uses the official x402 v2 `exact` scheme on Stellar testnet USDC with standard payment headers and facilitator-sponsored fees.
@@ -180,19 +181,17 @@ Use `None` for empty fields. Do not delete fields.
 
 | Blocker | Owner needed | Impact |
 | --- | --- | --- |
-| Pinata and Stellar sponsor credentials are not configured | Nabil / `n4bi10p` | NFT API cannot perform a live testnet upload/deployment/checkout run |
-| NFT frontend is not connected to the authenticated API | Nabil plus shared-auth owner | Browser flow remains an honest local draft prototype |
-| No real De-pin provider/recipient test configuration exists | Nabil / `n4bi10p` | Gateway is tested with adapters but has not settled a live Stellar testnet payment |
+| Production Pinata, persistent sponsor secret injection, and shared NFT persistence are not configured | Nabil / `n4bi10p` | Local frontend-to-testnet runs work, but the NFT service is not production deployable |
 | Replay and unpaid-rate-limit state is in memory | Nabil / `n4bi10p` | Do not run multiple production gateway instances until shared persistence is added |
 
 ## Active Handoffs
 
 - Handoff:
-  - Current state: URL routing and workspace-local NFT screens are implemented. The tested Soroban collection contract, typed NFT API, and x402 De-pin proxy are scaffolded locally but not deployed or wired together.
-  - Next step: Configure testnet/Pinata credentials, deploy the WASM, connect authenticated frontend API calls, and exercise one real NFT checkout and one real x402 request.
+  - Current state: The NFT frontend now uploads media and creates/lists collections through the Cognito-protected API. Local content-addressed storage and runtime Stellar sponsorship are ready for frontend testnet runs; production Pinata/shared persistence remain pending. The De-pin gateway has a machine-local provider config, and an exact `0.001 USDC` payment was settled successfully on Stellar testnet before releasing the upstream response.
+  - Next step: Run one signed-in frontend collection deployment, then configure production Pinata, managed sponsor secret injection, shared persistence, and managed De-pin provider configuration.
   - Files to inspect: `frontend/src/services/nft/`, `services/nft-service/`, `services/depin/`, `context.md`, `memory.md`.
   - Do not touch: Paris's Morph/Transformation Agent, Rushi's Trade Pipeline and Agent Auth.
-  - Owner needed: Nabil for credentials/provider configuration; coordinate with the shared-auth owner before adding API authorization.
+  - Owner needed: Nabil for the signed-in smoke run and production credentials/infrastructure.
 
 ## Change History
 
@@ -385,3 +384,33 @@ Use `None` for empty fields. Do not delete fields.
 - Follow-ups: Deploy the NFT WASM on Stellar testnet, configure Pinata/sponsor keys, connect frontend auth/workspaces to the API, configure a real De-pin provider, and perform live testnet payment runs.
 - Blockers: Credentials/provider setup and shared API authorization decisions listed in Active Blockers.
 - Verification: Frontend TypeScript, 14 Vitest tests, production build, and 3 Chrome Playwright tests passed, including desktop/mobile screenshots and direct NFT search navigation. NFT contract formatting, clippy with warnings denied, 10 tests, and Stellar WASM build passed; WASM is 16,212 bytes with hash `a8a5f637131c4f5db91d682008b68f21ab2f4f87e0844866ac80fad9faab6bad`. NFT API lint/build and 13 tests passed. De-pin lint/build and 25 tests passed, including the official x402 Stellar requirement builder. All three npm audits found zero vulnerabilities. `cargo audit` found no vulnerabilities and one transitive unmaintained warning for `paste 1.0.15` through Soroban's host test dependencies.
+
+## 2026-07-11 - Codex with Nabil - Stellar testnet and De-pin smoke setup
+
+- Service or area: NFT Service and De-pin gateway testnet setup.
+- Files changed: `services/nft-service/README.md`, `services/depin/.gitignore`, `services/depin/README.md`, `services/depin/package.json`, `services/depin/package-lock.json`, `services/depin/src/demoClient.ts`, `memory.md`; machine-local ignored `services/depin/depin.config.json`.
+- Summary: Created and Friendbot-funded local CLI identities `zexvro-provider` (`GCD4SBBOLPUM7UYWLPRKOP6IYKOZ6FX5YQOJHVVE7RKC2QGZYNUHKRCZ`) and `zexvro-buyer` (`GDYJ7OV6AIYTNB7J3HRSUMBQE2QIWTTZXGGD5RA6MJFP6YIV3SO6MXJU`), then added verified Circle testnet USDC trustlines. Deployed the NFT WASM to contract `CCJDPP5VB74QI7CO656L7PQGXKOHI7RQ5PGGQXMM2CUWQ3SYEFXF3KRT`, minted token `1`, and verified ownership, test-only URI `ipfs://zexvro-testnet-demo/1`, and a 5% royalty quote. Added a bounded x402 buyer smoke client and a local gateway route protecting the NFT API health endpoint.
+- Decisions: Test identities remain in the local Stellar CLI store; no secrets are written to the repository. The demo client requires an explicit expected recipient and rejects payments above `0.001 USDC`. The deployed collection metadata URI is deliberately test-only and is not a production metadata claim.
+- Follow-ups: Configure Pinata and runtime NFT API sponsorship, connect frontend collection creation to authenticated API endpoints, and move the De-pin provider configuration/replay state into managed deployment infrastructure.
+- Blockers: Pinata/runtime NFT API integration and authenticated frontend wiring remain; no blocker remains for the De-pin testnet payment path.
+- Verification: Stellar testnet health passed. NFT contract tests passed 10/10; WASM hash remained `a8a5f637131c4f5db91d682008b68f21ab2f4f87e0844866ac80fad9faab6bad`. Upload transaction `c5cd64cc73b82f2e0fde7d0cb3044213587b11fc3bb71648d9b9c9811e8c2c87`, deployment transaction `87efedcefbd3215624c809ca28831fc124ca76e036774f81a132394bf32046a4`, and mint transaction `796e46b2283494d5fe43cc199a4268c9bfd5e2d03ac1f418329869ff06691697` succeeded. NFT API and De-pin health endpoints returned `200`; the protected route returned x402 v2 `402` with exact `10000` atomic USDC, the expected recipient, and sponsored fees. Paid request transaction `d29f3454fc600001eb4e95e668a2ad41cc61c4a4fa9fafc9a55c22e698befdba` settled successfully; provider and buyer balances reconciled to `0.0010000` and `19.9990000` USDC, respectively, and the upstream response was released only afterward. De-pin lint/build, 25/25 tests, and production dependency audit passed with zero vulnerabilities.
+
+## 2026-07-11 - Codex with Nabil - Authenticated NFT frontend wiring
+
+- Service or area: NFT frontend, API authentication, local test storage, and developer runtime.
+- Files changed: `frontend/src/App.tsx`, `frontend/src/services/nft/`, `frontend/src/types.ts`, `frontend/vite.config.ts`, frontend tests/environment docs, `services/nft-service/api/src/`, NFT API dependencies/config/docs, `services/nft-service/README.md`, `memory.md`.
+- Summary: Connected the collection wizard to real media upload and Soroban deployment endpoints, connected the dashboard to authenticated workspace listings, and kept older browser drafts in a separate migration section. Added Cognito access-token verification and subject-scoped workspaces to the API, a Vite `/api/nft` proxy, public capability reporting, and explicitly development-only content-addressed local media/token metadata so the full testnet flow can run without falsely claiming IPFS.
+- Decisions: Accepted - Cognito access-token subjects scope NFT workspace records. Accepted - Local HTTP storage is for development only; Pinata IPFS remains the production path. Sponsor secrets remain server-side and are loaded from Stellar CLI at runtime for local testing.
+- Follow-ups: Nabil should complete one signed-in collection deployment from `http://127.0.0.1:3001/services/nft`; then configure Pinata, managed secret injection, and shared persistence before production use.
+- Blockers: Production Pinata/shared persistence and managed runtime secrets remain unconfigured. The code path itself is no longer blocked for local frontend testing.
+- Verification: Frontend TypeScript, production build, 20/20 Vitest tests, and 3/3 Chrome Playwright journeys passed with inspected 1440x900 and 390x844 screenshots. NFT API lint/build and 21/21 tests passed, including buyer/owner authorization boundaries. Contract formatting, clippy with warnings denied, 10/10 tests, and Stellar WASM build passed; hash remained `a8a5f637131c4f5db91d682008b68f21ab2f4f87e0844866ac80fad9faab6bad`. Frontend and NFT API production dependency audits found zero vulnerabilities. Live frontend proxy health reported API, local storage, and Stellar ready; an unauthenticated private request returned the expected safe `401`. Frontend and NFT API dev servers were left running on ports `3001` and `4101`.
+
+## 2026-07-11 - Codex with Nabil - Combined local NFT startup
+
+- Service or area: Frontend and NFT API developer runtime.
+- Files changed: `frontend/scripts/dev-stack.mjs`, `frontend/package.json`, `frontend/README.md`, `memory.md`.
+- Summary: Added `npm run dev:stack` to start or reuse the local NFT API, wait for port `4101` health, and then start Vite. The command reads the testnet sponsor secret from the existing Stellar CLI identity at runtime and does not write it to frontend files.
+- Decisions: Keep `npm run dev` frontend-only for developers working on unrelated services; use `npm run dev:stack` for NFT frontend work.
+- Follow-ups: None.
+- Blockers: None.
+- Verification: Confirmed the original failure was `ECONNREFUSED` because the API was stopped. Started the API, verified direct and Vite-proxied health responses, syntax-checked the runner, exercised `npm run dev:stack`, and passed frontend TypeScript validation.

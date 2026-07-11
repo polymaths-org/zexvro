@@ -101,6 +101,10 @@ export interface NftCollectionDraft {
   description: string;
   coverName: string;
   royaltyBps: number;
+  ownerAddress?: string;
+  royaltyRecipient?: string;
+  baseMetadataUri?: string;
+  externalUrl?: string;
 }
 
 export interface NftCollection extends NftCollectionDraft {

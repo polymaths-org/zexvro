@@ -14,6 +14,29 @@ test.beforeEach(async ({ page }) => {
       body: JSON.stringify({ memory: { cli_connected: false } }),
     });
   });
+  await page.route('**/api/nft/health', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        status: 'ok',
+        service: 'nft-service',
+        capabilities: {
+          network: 'stellar:testnet',
+          pinningConfigured: true,
+          stellarConfigured: true,
+          storageMode: 'local',
+        },
+      }),
+    });
+  });
+  await page.route('**/api/nft/v1/collections?*', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ collections: [] }),
+    });
+  });
 });
 
 test('NFT dashboard deep link is stable on desktop', async ({ page }, testInfo) => {
@@ -40,7 +63,7 @@ test('collection wizard deep link fits a mobile viewport', async ({ page }, test
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/services/nft/collections/new');
 
-  await expect(page.getByRole('heading', { name: 'Create collection' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Deploy a Stellar collection' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Collection details' })).toBeVisible();
   await expect(page.getByLabel('Name')).toBeVisible();
   expect(

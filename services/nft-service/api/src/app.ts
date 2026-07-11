@@ -1,8 +1,11 @@
+import cors from 'cors'
 import express, { type RequestHandler } from 'express'
 import multer, { MulterError } from 'multer'
 import { StrKey } from './index.js'
 import { z } from 'zod'
+import type { CheckoutIntentRecord, CollectionRecord } from './domain.js'
 import { ApiError, errorHandler } from './errors.js'
+import type { PublicAssetReader } from './localPinning.js'
 import { NftService } from './service.js'
 
 const stellarAccount = z.string().refine(StrKey.isValidEd25519PublicKey, {
@@ -16,6 +19,11 @@ const ipfsUri = z
 const baseMetadataUri = ipfsUri.refine((value) => value.endsWith('/'), {
   message: 'Base metadata URI must end with a slash',
 })
+const httpAssetUri = z.url().refine((value) => {
+  const url = new URL(value)
+  return url.protocol === 'http:' || url.protocol === 'https:'
+}, 'Asset URI must use HTTP(S)')
+const assetUri = z.union([ipfsUri, httpAssetUri])
 
 const createCollectionSchema = z.object({
   workspaceId: identifier,
@@ -23,11 +31,11 @@ const createCollectionSchema = z.object({
   symbol: z.string().regex(/^[A-Z0-9]{2,10}$/),
   description: z.string().trim().min(10).max(1_000),
   ownerAddress: stellarAccount,
-  baseMetadataUri,
-  coverImageUri: ipfsUri,
+  baseMetadataUri: baseMetadataUri.optional(),
+  coverImageUri: assetUri,
   royaltyRecipient: stellarAccount,
   royaltyBps: z.number().int().min(0).max(1_000),
-  externalUrl: z.url().optional(),
+  externalUrl: httpAssetUri.optional(),
 })
 
 const mintPrepareSchema = z.object({
@@ -82,14 +90,132 @@ const upload = multer({
 
 const asyncRoute = (handler: RequestHandler): RequestHandler => handler
 
-export function createApp(service: NftService) {
+export interface NftServiceCapabilities {
+  network: 'stellar:testnet'
+  pinningConfigured: boolean
+  stellarConfigured: boolean
+  storageMode: 'pinata' | 'local'
+}
+
+interface CreateAppOptions {
+  authenticate: RequestHandler
+  capabilities: NftServiceCapabilities
+  allowedOrigins: string[]
+  assetReader?: PublicAssetReader
+}
+
+function subjectScope(subject: string): string {
+  return Buffer.from(subject).toString('base64url')
+}
+
+function scopeWorkspace(subject: string, workspaceId: string): string {
+  return `${subjectScope(subject)}.${Buffer.from(workspaceId).toString('base64url')}`
+}
+
+function presentCollection(
+  collection: CollectionRecord,
+  subject: string,
+): CollectionRecord {
+  const prefix = `${subjectScope(subject)}.`
+  if (!collection.workspaceId.startsWith(prefix)) {
+    throw new ApiError(404, 'collection_not_found', 'Collection not found')
+  }
+  return {
+    ...collection,
+    workspaceId: Buffer.from(
+      collection.workspaceId.slice(prefix.length),
+      'base64url',
+    ).toString('utf8'),
+  }
+}
+
+async function requireOwnedCollection(
+  service: NftService,
+  collectionId: string,
+  subject: string,
+): Promise<CollectionRecord> {
+  const collection = await service.getCollection(collectionId)
+  presentCollection(collection, subject)
+  return collection
+}
+
+function scopeIdempotencyKey(subject: string, key: string): string {
+  return `${subjectScope(subject)}.${key}`
+}
+
+function presentIntent(
+  intent: CheckoutIntentRecord,
+  subject: string,
+): CheckoutIntentRecord {
+  const prefix = `${subjectScope(subject)}.`
+  if (!intent.idempotencyKey.startsWith(prefix)) {
+    throw new ApiError(404, 'checkout_intent_not_found', 'Checkout intent not found')
+  }
+  return { ...intent, idempotencyKey: intent.idempotencyKey.slice(prefix.length) }
+}
+
+export function createApp(service: NftService, options: CreateAppOptions) {
   const app = express()
   app.disable('x-powered-by')
+  app.use(
+    cors({
+      origin: (origin, callback) => {
+        callback(
+          null,
+          origin === undefined || options.allowedOrigins.includes(origin),
+        )
+      },
+      methods: ['GET', 'HEAD', 'POST', 'OPTIONS'],
+      allowedHeaders: ['Authorization', 'Content-Type', 'Idempotency-Key'],
+      maxAge: 600,
+    }),
+  )
   app.use(express.json({ limit: '1mb' }))
 
   app.get('/health', (_request, response) => {
-    response.json({ status: 'ok', service: 'nft-service' })
+    response.json({
+      status: 'ok',
+      service: 'nft-service',
+      capabilities: options.capabilities,
+    })
   })
+
+  app.get(
+    '/v1/assets/:assetId',
+    asyncRoute(async (request, response) => {
+      if (options.assetReader === undefined) {
+        throw new ApiError(404, 'asset_not_found', 'Asset not found')
+      }
+      const { assetId } = z
+        .object({ assetId: z.string().regex(/^[a-f0-9]{64}$/) })
+        .parse(request.params)
+      const asset = await options.assetReader.readAsset(assetId)
+      if (asset === undefined) {
+        throw new ApiError(404, 'asset_not_found', 'Asset not found')
+      }
+      response.setHeader('Content-Type', asset.mimeType)
+      response.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
+      response.setHeader('ETag', `"${assetId}"`)
+      response.send(Buffer.from(asset.bytes))
+    }),
+  )
+
+  app.get(
+    '/v1/public/collections/:collectionId/tokens/:tokenId',
+    asyncRoute(async (request, response) => {
+      const { collectionId, tokenId } = z
+        .object({
+          collectionId: z.uuid(),
+          tokenId: z.coerce.number().int().min(0).max(4_294_967_295),
+        })
+        .parse(request.params)
+      const metadata = await service.getPublicTokenMetadata(collectionId, tokenId)
+      response.setHeader('Cache-Control', 'public, max-age=60')
+      response.json(metadata)
+    }),
+  )
+
+  app.use(options.authenticate)
 
   app.post(
     '/v1/media',
@@ -110,10 +236,15 @@ export function createApp(service: NftService) {
   app.post(
     '/v1/collections',
     asyncRoute(async (request, response) => {
-      const collection = await service.createCollection(
-        createCollectionSchema.parse(request.body),
-      )
-      response.status(201).json({ collection })
+      const input = createCollectionSchema.parse(request.body)
+      const subject = response.locals.nftIdentity.subject
+      const collection = await service.createCollection({
+        ...input,
+        workspaceId: scopeWorkspace(subject, input.workspaceId),
+      })
+      response.status(201).json({
+        collection: presentCollection(collection, subject),
+      })
     }),
   )
 
@@ -121,8 +252,15 @@ export function createApp(service: NftService) {
     '/v1/collections',
     asyncRoute(async (request, response) => {
       const { workspaceId } = z.object({ workspaceId: identifier }).parse(request.query)
-      const collections = await service.listCollections(workspaceId)
-      response.json({ collections })
+      const subject = response.locals.nftIdentity.subject
+      const collections = await service.listCollections(
+        scopeWorkspace(subject, workspaceId),
+      )
+      response.json({
+        collections: collections.map((collection) =>
+          presentCollection(collection, subject),
+        ),
+      })
     }),
   )
 
@@ -132,8 +270,13 @@ export function createApp(service: NftService) {
       const { collectionId } = z
         .object({ collectionId: z.uuid() })
         .parse(request.params)
-      const collection = await service.getCollection(collectionId)
-      response.json({ collection })
+      const subject = response.locals.nftIdentity.subject
+      const collection = await requireOwnedCollection(
+        service,
+        collectionId,
+        subject,
+      )
+      response.json({ collection: presentCollection(collection, subject) })
     }),
   )
 
@@ -143,7 +286,11 @@ export function createApp(service: NftService) {
       const { collectionId } = z
         .object({ collectionId: z.uuid() })
         .parse(request.params)
-      const collection = await service.getCollection(collectionId)
+      const collection = await requireOwnedCollection(
+        service,
+        collectionId,
+        response.locals.nftIdentity.subject,
+      )
       response.json({
         collectionId: collection.id,
         status: collection.status,
@@ -161,6 +308,11 @@ export function createApp(service: NftService) {
         .object({ collectionId: z.uuid() })
         .parse(request.params)
       const { ownerAddress, priceAtomic } = salePrepareSchema.parse(request.body)
+      await requireOwnedCollection(
+        service,
+        collectionId,
+        response.locals.nftIdentity.subject,
+      )
       const intent = await service.prepareSaleConfig({
         collectionId,
         ownerAddress,
@@ -177,6 +329,11 @@ export function createApp(service: NftService) {
         .object({ collectionId: z.uuid() })
         .parse(request.params)
       const input = transactionSubmissionSchema.parse(request.body)
+      await requireOwnedCollection(
+        service,
+        collectionId,
+        response.locals.nftIdentity.subject,
+      )
       const transaction = await service.submitSaleConfig({ collectionId, ...input })
       response.status(201).json({ transaction })
     }),
@@ -189,6 +346,11 @@ export function createApp(service: NftService) {
         .object({ collectionId: z.uuid() })
         .parse(request.params)
       const input = mintPrepareSchema.parse(request.body)
+      await requireOwnedCollection(
+        service,
+        collectionId,
+        response.locals.nftIdentity.subject,
+      )
       const intent = await service.prepareMint({ collectionId, ...input })
       response.status(201).json({ intent })
     }),
@@ -201,6 +363,11 @@ export function createApp(service: NftService) {
         .object({ collectionId: z.uuid() })
         .parse(request.params)
       const input = transactionSubmissionSchema.parse(request.body)
+      await requireOwnedCollection(
+        service,
+        collectionId,
+        response.locals.nftIdentity.subject,
+      )
       const transaction = await service.submitMint({ collectionId, ...input })
       response.status(201).json({ transaction })
     }),
@@ -218,11 +385,12 @@ export function createApp(service: NftService) {
         )
       }
       const input = checkoutSchema.parse(request.body)
+      const subject = response.locals.nftIdentity.subject
       const intent = await service.createCheckoutIntent({
-        idempotencyKey,
+        idempotencyKey: scopeIdempotencyKey(subject, idempotencyKey),
         ...input,
       })
-      response.status(201).json({ intent })
+      response.status(201).json({ intent: presentIntent(intent, subject) })
     }),
   )
 
@@ -231,7 +399,8 @@ export function createApp(service: NftService) {
     asyncRoute(async (request, response) => {
       const { intentId } = z.object({ intentId: z.uuid() }).parse(request.params)
       const intent = await service.getCheckoutIntent(intentId)
-      response.json({ intent })
+      const subject = response.locals.nftIdentity.subject
+      response.json({ intent: presentIntent(intent, subject) })
     }),
   )
 
@@ -240,8 +409,11 @@ export function createApp(service: NftService) {
     asyncRoute(async (request, response) => {
       const { intentId } = z.object({ intentId: z.uuid() }).parse(request.params)
       const input = signedCheckoutSchema.parse(request.body)
+      const subject = response.locals.nftIdentity.subject
+      const current = await service.getCheckoutIntent(intentId)
+      presentIntent(current, subject)
       const intent = await service.submitCheckoutIntent({ intentId, ...input })
-      response.status(201).json({ intent })
+      response.status(201).json({ intent: presentIntent(intent, subject) })
     }),
   )
 

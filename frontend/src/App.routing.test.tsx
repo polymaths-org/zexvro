@@ -43,7 +43,7 @@ describe('dashboard routing', () => {
   it('loads the collection wizard from a deep link', async () => {
     renderRoute('/services/nft/collections/new');
 
-    expect(await screen.findByRole('heading', { name: 'Create collection' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Deploy a Stellar collection' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Collection details' })).toBeInTheDocument();
   });
 

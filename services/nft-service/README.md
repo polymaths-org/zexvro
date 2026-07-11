@@ -31,10 +31,14 @@ stellar contract build --manifest-path services/nft-service/Cargo.toml
 - `api/src/app.ts`: media, collection, mint, and checkout HTTP routes.
 - `api/src/stellarGateway.ts`: platform-sponsored envelope submission and signed auth-entry validation.
 - `api/src/pinning.ts`: public-IPFS Pinata adapter.
+- `api/src/localPinning.ts`: content-addressed local media for development only.
 
 ## API
 
 ```text
+GET  /health
+GET  /v1/assets/:assetId
+GET  /v1/public/collections/:collectionId/tokens/:tokenId
 POST /v1/media
 POST /v1/collections
 GET  /v1/collections?workspaceId=...
@@ -49,9 +53,46 @@ GET  /v1/checkout/intents/:intentId
 POST /v1/checkout/intents/:intentId/submit
 ```
 
+`/health`, local assets, and live token metadata are public. All workspace,
+upload, mint, sale, and checkout routes require a Cognito access token. The API
+derives storage scope from the verified token subject; a browser-provided
+workspace ID cannot cross user boundaries.
+
 Checkout intent creation requires `Idempotency-Key`. The returned value is the Stellar SDK's serialized simulated transaction. A buyer signs only the required Soroban authorization entry and returns that serialized transaction. Before submission, the API checks its source, sequence, fee, time bounds, contract, method, and arguments against the stored intent, then rebuilds the envelope with the sponsor's current sequence and signs it server-side. Sale configuration and creator minting use the same owner/minter auth-entry pattern.
 
 The API uses a versioned local JSON repository by default. Production still needs shared persistence and authenticated workspace authorization.
+
+## Local testnet runtime
+
+The testnet collection WASM is installed with hash
+`a8a5f637131c4f5db91d682008b68f21ab2f4f87e0844866ac80fad9faab6bad`.
+Start the API with the local sponsor identity without writing its secret to a
+file:
+
+```bash
+cd services/nft-service/api
+STELLAR_SPONSOR_SECRET="$(stellar keys secret zexvro-provider)" \
+NFT_COLLECTION_WASM_HASH=a8a5f637131c4f5db91d682008b68f21ab2f4f87e0844866ac80fad9faab6bad \
+NFT_STORAGE_MODE=local \
+npm run dev
+```
+
+Local mode lets the frontend exercise real upload and testnet deployment
+without a Pinata credential. Its content-addressed HTTP metadata is only for
+development and must not be described as IPFS. Set `NFT_STORAGE_MODE=pinata`,
+provide `PINATA_JWT`, and provide an `ipfs://.../` token metadata base URI for
+production-style storage.
+
+In another terminal, start the browser application:
+
+```bash
+cd frontend
+npm run dev
+```
+
+Open `http://127.0.0.1:3000/services/nft`, sign in through the configured
+Cognito pool, and use **New collection**. The Vite proxy forwards `/api/nft`
+to port `4101`; sponsor credentials never enter the browser.
 
 ## API commands
 
@@ -66,4 +107,6 @@ npm start
 
 Copy values from `api/.env.example` into the runtime environment. `PINATA_JWT`, `STELLAR_SPONSOR_SECRET`, and `NFT_COLLECTION_WASM_HASH` stay server-side. The service starts without chain credentials but returns an explicit `503` for chain operations.
 
-The frontend currently creates browser-local drafts and is not connected to these endpoints. No live testnet deployment is claimed yet.
+The frontend uploads collection media, deploys through the authenticated API,
+and lists live or failed workspace records. Older browser-local drafts remain
+visible in a separate migration section and are never presented as deployed.
