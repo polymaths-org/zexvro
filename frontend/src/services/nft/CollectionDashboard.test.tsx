@@ -9,8 +9,10 @@ const api = vi.hoisted(() => ({
   deleteNftCollection: vi.fn(),
   getNftServiceHealth: vi.fn(),
   listNftCollections: vi.fn(),
+  prepareNftMint: vi.fn(),
   prepareNftSaleConfig: vi.fn(),
   retryNftCollectionDeployment: vi.fn(),
+  submitNftMint: vi.fn(),
   submitNftSaleConfig: vi.fn(),
   updateNftCollection: vi.fn(),
 }));
@@ -18,6 +20,7 @@ const api = vi.hoisted(() => ({
 const wallet = vi.hoisted(() => ({
   getPublicKey: vi.fn(),
   isWalletAvailable: vi.fn(),
+  formatWalletError: vi.fn((error: unknown) => error instanceof Error ? error.message : 'Wallet action failed.'),
   signTransaction: vi.fn(),
 }));
 
@@ -81,13 +84,21 @@ describe('CollectionDashboard', () => {
       serializedTransaction: 'prepared-sale',
       requiredSigners: [remoteCollection.ownerAddress],
     });
+    api.prepareNftMint.mockResolvedValue({
+      serializedTransaction: 'prepared-mint',
+      requiredSigners: [remoteCollection.ownerAddress],
+    });
     api.retryNftCollectionDeployment.mockResolvedValue(remoteCollection);
     api.updateNftCollection.mockResolvedValue(failedCollection);
     api.deleteNftCollection.mockResolvedValue(undefined);
     api.submitNftSaleConfig.mockResolvedValue({
       transaction: { transactionHash: 'wallet-sale-hash', status: 'confirmed' },
     });
-    wallet.isWalletAvailable.mockReturnValue(false);
+    api.submitNftMint.mockResolvedValue({
+      transactionHash: 'wallet-mint-hash',
+      status: 'confirmed',
+    });
+    wallet.isWalletAvailable.mockResolvedValue(false);
     wallet.getPublicKey.mockResolvedValue(remoteCollection.ownerAddress);
     wallet.signTransaction.mockResolvedValue('signed-sale');
   });
@@ -230,7 +241,7 @@ describe('CollectionDashboard', () => {
     api.submitNftSaleConfig.mockResolvedValue({
       transaction: { transactionHash: 'wallet-sale-hash', status: 'confirmed' },
     });
-    wallet.isWalletAvailable.mockReturnValue(true);
+    wallet.isWalletAvailable.mockResolvedValue(true);
     wallet.getPublicKey.mockResolvedValue(remoteCollection.ownerAddress);
     wallet.signTransaction.mockResolvedValue('signed-sale');
 
@@ -254,6 +265,60 @@ describe('CollectionDashboard', () => {
       accessToken: 'access-token',
     });
     expect(await screen.findByText(/signed and confirmed/i)).toBeInTheDocument();
+  });
+
+  it('prepares and submits creator mint with Freighter', async () => {
+    const user = userEvent.setup();
+    api.listNftCollections.mockResolvedValue([remoteCollection]);
+    wallet.isWalletAvailable.mockResolvedValue(true);
+    wallet.getPublicKey.mockResolvedValue(remoteCollection.ownerAddress);
+    wallet.signTransaction.mockResolvedValue('signed-mint');
+
+    render(
+      <MemoryRouter>
+        <CollectionDashboard workspaceId="studio-a" accessToken="access-token" onCreate={() => undefined} />
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByTitle('Mint token'));
+    expect(await screen.findByRole('heading', { name: 'Mint token' })).toBeInTheDocument();
+    await user.clear(screen.getByLabelText(/Token ID/));
+    await user.type(screen.getByLabelText(/Token ID/), '7');
+    await user.click(screen.getByRole('button', { name: /prepare mint/i }));
+
+    expect(api.prepareNftMint).toHaveBeenCalledWith({
+      collectionId: remoteCollection.id,
+      operatorAddress: remoteCollection.ownerAddress,
+      recipientAddress: remoteCollection.ownerAddress,
+      tokenId: 7,
+      accessToken: 'access-token',
+    });
+
+    await user.click(await screen.findByRole('button', { name: /sign with wallet/i }));
+    expect(wallet.signTransaction).toHaveBeenCalledWith('prepared-mint');
+    expect(api.submitNftMint).toHaveBeenCalledWith({
+      collectionId: remoteCollection.id,
+      preparedTransaction: 'prepared-mint',
+      signedTransaction: 'signed-mint',
+      accessToken: 'access-token',
+    });
+    expect(await screen.findByText(/signed and minted/i)).toBeInTheDocument();
+  });
+
+  it('surfaces mint prepare failures such as token already minted', async () => {
+    const user = userEvent.setup();
+    api.listNftCollections.mockResolvedValue([remoteCollection]);
+    api.prepareNftMint.mockRejectedValue(new Error('Token is already minted'));
+
+    render(
+      <MemoryRouter>
+        <CollectionDashboard workspaceId="studio-a" accessToken="access-token" onCreate={() => undefined} />
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByTitle('Mint token'));
+    await user.click(screen.getByRole('button', { name: /prepare mint/i }));
+    expect(await screen.findByText('Token is already minted')).toBeInTheDocument();
   });
 
   it('surfaces API failures without hiding browser drafts', async () => {
