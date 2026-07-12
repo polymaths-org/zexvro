@@ -69,11 +69,13 @@ export function simulationFailureToApiError(error: unknown): ApiError | undefine
   const message = error instanceof Error ? error.message : ''
   if (
     !message.includes('Transaction simulation failed') &&
-    !message.includes('HostError')
+    !message.includes('HostError') &&
+    !message.includes('simulation failed')
   ) {
     return undefined
   }
 
+  // --- Collection contract errors (#1-#6) ---
   const contractError = /Error\(Contract, #(\d+)\)/.exec(message)?.[1]
   if (contractError === '3') {
     return new ApiError(
@@ -97,10 +99,54 @@ export function simulationFailureToApiError(error: unknown): ApiError | undefine
     )
   }
 
+  // --- SAC / token transfer errors (trustline, balance, authorization) ---
+  // Classic assets via SAC: missing or unauthorized trustline, insufficient balance
+  const lowerMessage = message.toLowerCase()
+  if (
+    lowerMessage.includes('trustline') ||
+    lowerMessage.includes('missing entry') ||
+    /Error\(Storage, #\d+\)/.test(message)
+  ) {
+    return new ApiError(
+      422,
+      'buyer_missing_trustline',
+      'The buyer wallet does not have a trustline for the payment token (e.g. USDC). The buyer must add a trustline before purchasing.',
+      { simulationError: message },
+    )
+  }
+
+  if (
+    lowerMessage.includes('insufficient') ||
+    lowerMessage.includes('balance') ||
+    /Error\(Value, #\d+\)/.test(message)
+  ) {
+    return new ApiError(
+      422,
+      'buyer_insufficient_balance',
+      'The buyer wallet does not have enough of the payment token to cover the sale price. Please fund the wallet and try again.',
+      { simulationError: message },
+    )
+  }
+
+  if (
+    lowerMessage.includes('unauthorized') ||
+    lowerMessage.includes('not authorized') ||
+    lowerMessage.includes('auth_required')
+  ) {
+    return new ApiError(
+      422,
+      'buyer_not_authorized',
+      'The buyer wallet is not authorized to hold or transfer the payment token. This can happen with regulated assets.',
+      { simulationError: message },
+    )
+  }
+
+  // --- Generic fallback with raw details for debugging ---
   return new ApiError(
     502,
     'stellar_simulation_failed',
     'Stellar simulation failed before producing a signable transaction.',
+    { simulationError: message || 'No error details available' },
   )
 }
 
@@ -209,11 +255,16 @@ export class StellarNftChainGateway implements NftChainGateway {
     tokenId: number
   }): Promise<PreparedContractCall> {
     const client = this.client(input.contractId)
-    const transaction = await client.mint({
-      operator: input.operatorAddress,
-      to: input.recipientAddress,
-      token_id: input.tokenId,
-    })
+    let transaction: AssembledTransaction<unknown>
+    try {
+      transaction = await client.mint({
+        operator: input.operatorAddress,
+        to: input.recipientAddress,
+        token_id: input.tokenId,
+      })
+    } catch (error) {
+      throw simulationFailureToApiError(error) ?? error
+    }
     return this.serializePrepared(transaction)
   }
 
@@ -238,11 +289,16 @@ export class StellarNftChainGateway implements NftChainGateway {
     price: bigint
   }): Promise<PreparedContractCall> {
     const client = this.client(input.contractId)
-    const transaction = await client.set_sale_config({
-      operator: input.ownerAddress,
-      payment_token: input.paymentTokenAddress,
-      price: input.price,
-    })
+    let transaction: AssembledTransaction<unknown>
+    try {
+      transaction = await client.set_sale_config({
+        operator: input.ownerAddress,
+        payment_token: input.paymentTokenAddress,
+        price: input.price,
+      })
+    } catch (error) {
+      throw simulationFailureToApiError(error) ?? error
+    }
     const prepared = this.serializePrepared(transaction, { allowInvokerAuthorization: true })
     if (prepared.requiredSigners.length > 0) return prepared
     return {
@@ -273,10 +329,15 @@ export class StellarNftChainGateway implements NftChainGateway {
     tokenId: number
   }): Promise<PreparedContractCall> {
     const client = this.client(input.contractId)
-    const transaction = await client.purchase({
-      buyer: input.buyerAddress,
-      token_id: input.tokenId,
-    })
+    let transaction: AssembledTransaction<unknown>
+    try {
+      transaction = await client.purchase({
+        buyer: input.buyerAddress,
+        token_id: input.tokenId,
+      })
+    } catch (error) {
+      throw simulationFailureToApiError(error) ?? error
+    }
     return this.serializePrepared(transaction)
   }
 

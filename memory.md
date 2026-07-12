@@ -634,3 +634,22 @@ Use `None` for empty fields. Do not delete fields.
 - Blockers: Live Freighter and Cognito browser sessions are manual. `gh auth` still invalid for remote PR automation.
 - Verification: Frontend lint/build passed; frontend Vitest 34/34; NFT API lint passed; NFT API tests 33/33; `node --check scripts/nft-smoke.mjs` passed. Known large frontend chunk warning unchanged.
 
+## 2026-07-12 - Codex with Nabil - Freighter wallet detection fix
+
+- Service or area: NFT frontend wallet adapter (Freighter).
+- Files changed: `frontend/package.json`, `frontend/package-lock.json`, `frontend/src/services/nft/stellarWallet.ts`, `frontend/src/services/nft/stellarWallet.test.ts`, `frontend/src/services/nft/CollectionDashboard.tsx`, `frontend/src/services/nft/CollectionDashboard.test.tsx`, `frontend/src/services/nft/PublicCollection.tsx`, `memory.md`.
+- Summary: Fixed false "Freighter is not installed" by switching from brittle `window.freighterApi` probing to official `@stellar/freighter-api` (postMessage bridge). `isWalletAvailable` is now async via `isConnected()`; connect uses `requestAccess()`; sign uses `networkPassphrase` (Testnet) and clearer permission/network errors. Dashboard + public buy flows await the async availability check.
+- Decisions: Accepted - Freighter v1 integration uses `@stellar/freighter-api@6`. Accepted - Prefer precise errors (unavailable / permission denied / sign failed) over a single "not installed" message.
+- Follow-ups: Manual browser smoke (allow site in Freighter, Testnet network, non-sponsor sale-config + public checkout). Then Phase 4 creator mint UI and remaining plan phases.
+- Blockers: Live Cognito + Freighter browser session still manual. Branch `feature/nft-service` still ahead of origin (unpushed).
+- Verification: `npm --prefix frontend test` (stellarWallet + CollectionDashboard green in targeted run); full suite + lint pending this entry.
+
+## 2026-07-12 - Codex with Nabil - Freighter auth JSON signing + creator mint UI
+
+- Service or area: NFT frontend wallet adapter, creator mint dashboard, NFT API simulation error mapping.
+- Files changed: `frontend/package.json`, `frontend/package-lock.json`, `frontend/src/services/nft/stellarWallet.ts`, `frontend/src/services/nft/stellarWallet.test.ts`, `frontend/src/services/nft/CollectionDashboard.tsx`, `frontend/src/services/nft/CollectionDashboard.test.tsx`, `frontend/src/services/nft/PublicCollection.tsx`, `services/nft-service/api/src/stellarGateway.ts`, `services/nft-service/api/src/stellarGateway.test.ts`, `memory.md`, `agent-convo.md`.
+- Summary: Completed the unfinished Freighter fix and Phase 4 creator mint UI. Wallet adapter now uses `@stellar/freighter-api` for connect/sign, rehydrates AssembledTransaction JSON to sign Soroban auth entries via `signAuthEntry`, and returns updated JSON for API submit. Dashboard live collections gain Mint token modal (operator, recipient, token id → prepare → Sign with wallet → submit). API simulation failures map trustline/balance/auth cases more clearly. No secrets committed.
+- Decisions: Accepted - Creator mint UI is prepare+wallet-sign+submit; sponsor auto-submit remains sale-config only. Accepted - Prepared NFT txs stay as AssembledTransaction JSON; Freighter signs auth entries, not only envelope XDR.
+- Follow-ups: Manual Freighter mint/sale/checkout smoke; Phase 5 Pinata readiness; inventory/archive later.
+- Blockers: Live Cognito + Freighter browser sessions remain manual. Branch still unpushed.
+- Verification: Frontend lint, Vitest 40/40, production build passed (known large chunk warning). NFT API lint and tests 39/39.

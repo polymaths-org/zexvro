@@ -19,6 +19,7 @@ import {
   RotateCcw,
   ShieldCheck,
   ShoppingCart,
+  Sparkles,
   Trash2,
   X,
 } from 'lucide-react';
@@ -28,15 +29,17 @@ import {
   deleteNftCollection,
   getNftServiceHealth,
   listNftCollections,
+  prepareNftMint,
   prepareNftSaleConfig,
   retryNftCollectionDeployment,
+  submitNftMint,
   submitNftSaleConfig,
   updateNftCollection,
   type ApiNftCollection,
   type NftServiceHealth,
   type PreparedNftTransaction,
 } from './nftApi';
-import { getPublicKey, isWalletAvailable, signTransaction } from './stellarWallet';
+import { formatWalletError, getPublicKey, isWalletAvailable, signTransaction } from './stellarWallet';
 
 interface CollectionDashboardProps {
   workspaceId: string;
@@ -57,6 +60,15 @@ function shortAddress(value: string) {
 }
 
 function errorMessage(error: unknown) {
+  const wallet = formatWalletError(error);
+  if (wallet && wallet !== 'Wallet action failed.') return wallet;
+  if (error && typeof error === 'object' && 'code' in error && 'message' in error) {
+    const code = String((error as { code?: unknown }).code || '');
+    const message = String((error as { message?: unknown }).message || '');
+    if (code === 'token_already_minted') return message || 'Token is already minted.';
+    if (code === 'minter_authorization_missing') return message || 'Selected minter authorization is missing.';
+    if (message) return message;
+  }
   if (error instanceof Error && error.message) return error.message;
   return 'NFT API unavailable';
 }
@@ -111,6 +123,12 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
   const [saleCollection, setSaleCollection] = useState<ApiNftCollection | null>(null);
   const [salePrice, setSalePrice] = useState('0.25');
   const [saleIntent, setSaleIntent] = useState<PreparedNftTransaction | null>(null);
+  const [mintCollection, setMintCollection] = useState<ApiNftCollection | null>(null);
+  const [mintRecipient, setMintRecipient] = useState('');
+  const [mintTokenId, setMintTokenId] = useState('1');
+  const [mintOperator, setMintOperator] = useState('');
+  const [mintIntent, setMintIntent] = useState<PreparedNftTransaction | null>(null);
+  const [lastMintTxHash, setLastMintTxHash] = useState('');
 
   const loadRemoteData = useCallback(async (signal?: AbortSignal, isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -214,6 +232,100 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
     setActionMessage('');
   };
 
+  const openMintSetup = (collection: ApiNftCollection) => {
+    setMintCollection(collection);
+    setMintRecipient(collection.ownerAddress);
+    setMintOperator(collection.ownerAddress);
+    setMintTokenId('1');
+    setMintIntent(null);
+    setLastMintTxHash('');
+    setActionError('');
+    setActionMessage('');
+  };
+
+  const prepareMint = async () => {
+    if (!mintCollection) return;
+    const tokenId = Number(mintTokenId);
+    if (!Number.isInteger(tokenId) || tokenId < 0 || tokenId > 4_294_967_295) {
+      setActionError('Token ID must be an integer between 0 and 4294967295.');
+      return;
+    }
+    const recipientAddress = mintRecipient.trim();
+    const operatorAddress = mintOperator.trim() || mintCollection.ownerAddress;
+    if (!/^G[A-Z0-9]{55}$/.test(recipientAddress)) {
+      setActionError('Enter a valid Stellar recipient address (G...).');
+      return;
+    }
+    if (!/^G[A-Z0-9]{55}$/.test(operatorAddress)) {
+      setActionError('Enter a valid Stellar minter/operator address (G...).');
+      return;
+    }
+    setBusyCollectionId(mintCollection.id);
+    setActionError('');
+    setActionMessage('');
+    setLastMintTxHash('');
+    try {
+      const intent = await prepareNftMint({
+        collectionId: mintCollection.id,
+        operatorAddress,
+        recipientAddress,
+        tokenId,
+        accessToken,
+      });
+      setMintIntent(intent);
+      if (intent.autoSubmitted) {
+        setLastMintTxHash(intent.autoSubmitted.transactionHash);
+        setActionMessage(`Token ${tokenId} minted on Stellar testnet.`);
+      } else {
+        setActionMessage('Mint transaction prepared. Sign with the minter wallet to submit.');
+      }
+    } catch (error) {
+      setActionError(errorMessage(error));
+    } finally {
+      setBusyCollectionId('');
+    }
+  };
+
+  const signAndSubmitMint = async () => {
+    if (!mintCollection || !mintIntent || mintIntent.autoSubmitted) return;
+    setBusyCollectionId(mintCollection.id);
+    setActionError('');
+    setActionMessage('');
+    try {
+      if (!(await isWalletAvailable())) {
+        throw new Error('Freighter is not available in this browser. Unlock Freighter, allow this site, and use Testnet.');
+      }
+      const walletAddress = await getPublicKey();
+      const operatorAddress = mintOperator.trim() || mintCollection.ownerAddress;
+      if (
+        walletAddress !== operatorAddress
+        && !mintIntent.requiredSigners.includes(walletAddress)
+      ) {
+        setActionMessage(`Connected wallet ${walletAddress.slice(0, 6)}... differs from required minter. Continue only if this key is authorized.`);
+      }
+      const signedTransaction = await signTransaction(mintIntent.serializedTransaction);
+      const transaction = await submitNftMint({
+        collectionId: mintCollection.id,
+        preparedTransaction: mintIntent.serializedTransaction,
+        signedTransaction,
+        accessToken,
+      });
+      setLastMintTxHash(transaction.transactionHash);
+      setMintIntent({
+        ...mintIntent,
+        autoSubmitted: {
+          transactionHash: transaction.transactionHash,
+          status: 'confirmed',
+        },
+      });
+      setActionMessage(`Token ${mintTokenId} signed and minted on Stellar testnet.`);
+    } catch (error) {
+      setActionError(errorMessage(error));
+    } finally {
+      setBusyCollectionId('');
+    }
+  };
+
   const prepareSaleConfig = async () => {
     if (!saleCollection) return;
     const priceAtomic = usdcToAtomic(salePrice);
@@ -263,8 +375,8 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
     setActionError('');
     setActionMessage('');
     try {
-      if (!isWalletAvailable()) {
-        throw new Error('Freighter is not installed. Install Freighter to sign sale configuration, or use the local sponsor auto-submit path.');
+      if (!(await isWalletAvailable())) {
+        throw new Error('Freighter is not available in this browser. Unlock Freighter, allow this site, use Testnet, or rely on the local sponsor auto-submit path.');
       }
       const walletAddress = await getPublicKey();
       if (
@@ -557,6 +669,14 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
                                   }`}
                                 >
                                   <CircleDollarSign className="h-4 w-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => openMintSetup(collection)}
+                                  title="Mint token"
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-zinc-200 text-zinc-500 transition hover:border-zinc-300 hover:text-zinc-950 dark:border-zinc-800 dark:hover:border-zinc-700 dark:hover:text-white"
+                                >
+                                  <Sparkles className="h-4 w-4" />
                                 </button>
                               </>
                             ) : (
@@ -861,6 +981,124 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
               >
                 {busyCollectionId === saleCollection.id && <LoaderCircle className="h-4 w-4 animate-spin" />}
                 {saleIntent?.autoSubmitted ? 'Sale configured' : saleCollection.primarySale ? 'Update sale' : 'Prepare sale'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {mintCollection && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <section className="w-full max-w-xl rounded-lg border border-zinc-200 bg-white p-5 shadow-2xl dark:border-zinc-800 dark:bg-[#0A0A0B]">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-base font-semibold text-zinc-950 dark:text-white">Mint token</h2>
+                <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                  Prepare a creator mint for {mintCollection.name}. The minter wallet signs authorization; ZEXVRO sponsors the envelope fee.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMintCollection(null)}
+                aria-label="Close mint setup"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-zinc-200 text-zinc-500 transition hover:text-zinc-950 dark:border-zinc-800 dark:hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-5 space-y-4">
+              <label className="block text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                Minter / operator
+                <input
+                  value={mintOperator}
+                  onChange={event => setMintOperator(event.target.value.trim())}
+                  className="mt-2 w-full rounded-md border border-zinc-200 bg-white px-3 py-2.5 font-mono text-xs text-zinc-950 outline-none transition focus:border-brand-blue dark:border-zinc-800 dark:bg-[#050506] dark:text-white"
+                />
+              </label>
+              <label className="block text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                Recipient
+                <input
+                  value={mintRecipient}
+                  onChange={event => setMintRecipient(event.target.value.trim())}
+                  className="mt-2 w-full rounded-md border border-zinc-200 bg-white px-3 py-2.5 font-mono text-xs text-zinc-950 outline-none transition focus:border-brand-blue dark:border-zinc-800 dark:bg-[#050506] dark:text-white"
+                />
+              </label>
+              <label className="block text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                Token ID
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={mintTokenId}
+                  onChange={event => setMintTokenId(event.target.value)}
+                  className="mt-2 w-full rounded-md border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-950 outline-none transition focus:border-brand-blue dark:border-zinc-800 dark:bg-[#050506] dark:text-white"
+                />
+              </label>
+            </div>
+
+            {mintIntent && (
+              <div className="mt-5 space-y-3 border-t border-zinc-200 pt-5 dark:border-zinc-800">
+                <div>
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400">Required signer</span>
+                  <p className="mt-1 font-mono text-xs text-zinc-700 dark:text-zinc-300">
+                    {mintIntent.autoSubmitted ? 'Submitted by local sponsor' : mintIntent.requiredSigners.join(', ')}
+                  </p>
+                </div>
+                {(mintIntent.autoSubmitted || lastMintTxHash) && (
+                  <div>
+                    <span className="text-xs text-zinc-500 dark:text-zinc-400">Transaction</span>
+                    <a
+                      href={`https://stellar.expert/explorer/testnet/tx/${mintIntent.autoSubmitted?.transactionHash || lastMintTxHash}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-1 inline-flex items-center gap-1.5 font-mono text-xs text-brand-blue hover:underline"
+                    >
+                      {shortAddress(mintIntent.autoSubmitted?.transactionHash || lastMintTxHash)}
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  </div>
+                )}
+                <textarea
+                  readOnly
+                  value={mintIntent.serializedTransaction}
+                  rows={5}
+                  className="w-full resize-none rounded-md border border-zinc-200 bg-zinc-50 p-3 font-mono text-xs text-zinc-700 outline-none dark:border-zinc-800 dark:bg-[#050506] dark:text-zinc-300"
+                />
+                {!mintIntent.autoSubmitted && (
+                  <button
+                    type="button"
+                    disabled={busyCollectionId === mintCollection.id}
+                    className="inline-flex h-9 items-center gap-2 rounded-md bg-zinc-900 px-3 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
+                    onClick={() => void signAndSubmitMint()}
+                  >
+                    {busyCollectionId === mintCollection.id ? (
+                      <LoaderCircle className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <ShieldCheck className="h-4 w-4" />
+                    )}
+                    Sign with wallet
+                  </button>
+                )}
+              </div>
+            )}
+
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setMintCollection(null)}
+                className="inline-flex h-10 items-center justify-center rounded-md border border-zinc-200 px-4 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                disabled={busyCollectionId === mintCollection.id || Boolean(mintIntent?.autoSubmitted)}
+                onClick={() => void prepareMint()}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-zinc-950 px-4 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
+              >
+                {busyCollectionId === mintCollection.id && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                {mintIntent?.autoSubmitted ? 'Minted' : 'Prepare mint'}
               </button>
             </div>
           </section>

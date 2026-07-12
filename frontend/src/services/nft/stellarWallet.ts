@@ -1,3 +1,6 @@
+import freighterApi from '@stellar/freighter-api';
+import { AssembledTransaction } from '@stellar/stellar-sdk/contract';
+
 export class StellarWalletError extends Error {
   readonly code: string;
 
@@ -8,105 +11,115 @@ export class StellarWalletError extends Error {
   }
 }
 
-type FreighterApi = {
-  isConnected?: () => Promise<boolean | { isConnected?: boolean }>;
-  isAllowed?: () => Promise<boolean | { isAllowed?: boolean }>;
-  setAllowed?: () => Promise<boolean | { isAllowed?: boolean }>;
-  getAddress?: () => Promise<string | { address?: string; error?: string }>;
-  getPublicKey?: () => Promise<string | { publicKey?: string; error?: string }>;
-  signTransaction?: (
-    xdr: string,
-    options?: { networkPassphrase?: string; network?: string; address?: string },
-  ) => Promise<string | { signedTxXdr?: string; error?: string }>;
+const TESTNET_PASSPHRASE = 'Test SDF Network ; September 2015';
+const FREIGHTER_INSTALL_URL = 'https://www.freighter.app/';
+
+type FreighterErrorLike = {
+  code?: number | string;
+  message?: string;
+  error?: unknown;
 };
 
-declare global {
-  interface Window {
-    freighterApi?: FreighterApi;
-    freighter?: FreighterApi;
-  }
-}
-
-const TESTNET_PASSPHRASE = 'Test SDF Network ; September 2015';
-
-function freighter(): FreighterApi | undefined {
-  if (typeof window === 'undefined') return undefined;
-  return window.freighterApi || window.freighter;
-}
-
-function asBoolean(value: unknown): boolean {
-  if (typeof value === 'boolean') return value;
-  if (value && typeof value === 'object' && 'isConnected' in value) {
-    return Boolean((value as { isConnected?: boolean }).isConnected);
-  }
-  if (value && typeof value === 'object' && 'isAllowed' in value) {
-    return Boolean((value as { isAllowed?: boolean }).isAllowed);
-  }
-  return Boolean(value);
-}
-
-function asString(value: unknown, keys: string[]): string | undefined {
-  if (typeof value === 'string' && value.trim()) return value.trim();
-  if (value && typeof value === 'object') {
-    for (const key of keys) {
-      const candidate = (value as Record<string, unknown>)[key];
-      if (typeof candidate === 'string' && candidate.trim()) return candidate.trim();
-      if (key === 'error' && typeof candidate === 'string' && candidate.trim()) {
-        throw new StellarWalletError('wallet_error', candidate);
-      }
+function freighterErrorMessage(error: unknown): string | undefined {
+  if (!error) return undefined;
+  if (typeof error === 'string' && error.trim()) return error.trim();
+  if (typeof error === 'object') {
+    const record = error as FreighterErrorLike & Record<string, unknown>;
+    if (typeof record.message === 'string' && record.message.trim()) return record.message.trim();
+    if (typeof record.error === 'string' && record.error.trim()) return record.error.trim();
+    if (record.error && typeof record.error === 'object') {
+      const nested = freighterErrorMessage(record.error);
+      if (nested) return nested;
     }
   }
   return undefined;
 }
 
-export function isWalletAvailable(): boolean {
-  const api = freighter();
-  return Boolean(api && (api.getAddress || api.getPublicKey) && api.signTransaction);
+function throwIfFreighterError(result: { error?: unknown } | null | undefined, fallbackCode: string, fallbackMessage: string): void {
+  if (!result?.error) return;
+  const message = freighterErrorMessage(result.error) || fallbackMessage;
+  const lower = message.toLowerCase();
+  if (lower.includes('reject') || lower.includes('denied') || lower.includes('user declined') || lower.includes('cancelled') || lower.includes('canceled')) {
+    throw new StellarWalletError('wallet_permission_denied', message);
+  }
+  if (lower.includes('network')) {
+    throw new StellarWalletError('wallet_network_mismatch', message);
+  }
+  throw new StellarWalletError(fallbackCode, message);
+}
+
+/**
+ * Freighter no longer reliably exposes a rich window.freighterApi object for dapps.
+ * Official integration is via @stellar/freighter-api, which talks to the extension
+ * over postMessage. isConnected() is the supported "is the extension present?" probe.
+ */
+export async function isWalletAvailable(): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+  try {
+    const status = await freighterApi.isConnected();
+    if (status?.error) return false;
+    return Boolean(status?.isConnected);
+  } catch {
+    return false;
+  }
+}
+
+/** @deprecated Prefer await isWalletAvailable(); kept for rare sync UI probes. */
+export function isWalletAvailableSync(): boolean {
+  if (typeof window === 'undefined') return false;
+  // Best-effort only: official package uses async isConnected via postMessage.
+  return Boolean(
+    // legacy inject (older extensions / tests)
+    (window as Window & { freighterApi?: unknown; freighter?: unknown }).freighterApi
+      || (window as Window & { freighter?: unknown }).freighter,
+  );
 }
 
 export async function getPublicKey(): Promise<string> {
-  const api = freighter();
-  if (!api) {
+  if (typeof window === 'undefined') {
+    throw new StellarWalletError('wallet_unavailable', 'Wallet APIs are only available in the browser.');
+  }
+
+  const connected = await freighterApi.isConnected();
+  throwIfFreighterError(
+    connected,
+    'wallet_unavailable',
+    `Freighter is not available in this browser. Install Freighter (${FREIGHTER_INSTALL_URL}), unlock it, and allow this site.`,
+  );
+  if (!connected.isConnected) {
     throw new StellarWalletError(
       'wallet_unavailable',
-      'Freighter is not installed. Install the Freighter browser extension to sign Stellar transactions.',
+      `Freighter is not available in this browser. Install Freighter (${FREIGHTER_INSTALL_URL}), unlock it, enable it for this site, and use the same browser profile as the extension.`,
     );
   }
 
-  try {
-    if (api.isConnected) {
-      const connected = asBoolean(await api.isConnected());
-      if (!connected && api.setAllowed) await api.setAllowed();
-    } else if (api.isAllowed) {
-      const allowed = asBoolean(await api.isAllowed());
-      if (!allowed && api.setAllowed) await api.setAllowed();
-    } else if (api.setAllowed) {
-      await api.setAllowed();
-    }
-  } catch (error) {
-    if (error instanceof StellarWalletError) throw error;
-    throw new StellarWalletError(
+  // requestAccess prompts allow-list + returns the active public key when approved.
+  const access = await freighterApi.requestAccess();
+  throwIfFreighterError(
+    access,
+    'wallet_permission_denied',
+    'Freighter did not grant access. Approve this site in the Freighter popup and try again.',
+  );
+  if (access.address?.trim()) return access.address.trim();
+
+  // Fallback if requestAccess returned empty but site was previously allowed.
+  const allowed = await freighterApi.isAllowed();
+  if (!allowed.isAllowed) {
+    const set = await freighterApi.setAllowed();
+    throwIfFreighterError(
+      set,
       'wallet_permission_denied',
-      'Freighter did not grant access. Approve this site in the extension and try again.',
+      'Freighter did not grant access. Approve this site in the Freighter popup and try again.',
     );
   }
 
-  try {
-    if (api.getAddress) {
-      const address = asString(await api.getAddress(), ['address', 'error']);
-      if (address) return address;
-    }
-    if (api.getPublicKey) {
-      const publicKey = asString(await api.getPublicKey(), ['publicKey', 'error']);
-      if (publicKey) return publicKey;
-    }
-  } catch (error) {
-    if (error instanceof StellarWalletError) throw error;
-    throw new StellarWalletError(
-      'wallet_address_failed',
-      error instanceof Error ? error.message : 'Freighter did not return a public key.',
-    );
-  }
+  const addressResult = await freighterApi.getAddress();
+  throwIfFreighterError(
+    addressResult,
+    'wallet_address_failed',
+    'Freighter did not return a public key.',
+  );
+  if (addressResult.address?.trim()) return addressResult.address.trim();
 
   throw new StellarWalletError('wallet_address_failed', 'Freighter did not return a public key.');
 }
@@ -115,34 +128,136 @@ export async function signTransaction(
   serializedTransaction: string,
   networkPassphrase: string = TESTNET_PASSPHRASE,
 ): Promise<string> {
-  const api = freighter();
-  if (!api?.signTransaction) {
-    throw new StellarWalletError(
-      'wallet_unavailable',
-      'Freighter is not installed. Install the Freighter browser extension to sign Stellar transactions.',
-    );
+  if (typeof window === 'undefined') {
+    throw new StellarWalletError('wallet_unavailable', 'Wallet APIs are only available in the browser.');
   }
   if (!serializedTransaction.trim()) {
     throw new StellarWalletError('wallet_invalid_transaction', 'No prepared transaction is available to sign.');
   }
 
-  try {
-    const signed = await api.signTransaction(serializedTransaction, {
-      networkPassphrase,
-      network: 'TESTNET',
-    });
-    const xdr = asString(signed, ['signedTxXdr', 'error']);
-    if (!xdr) {
-      throw new StellarWalletError('wallet_sign_failed', 'Freighter did not return a signed transaction.');
-    }
-    return xdr;
-  } catch (error) {
-    if (error instanceof StellarWalletError) throw error;
+  const connected = await freighterApi.isConnected();
+  throwIfFreighterError(
+    connected,
+    'wallet_unavailable',
+    `Freighter is not available in this browser. Install Freighter (${FREIGHTER_INSTALL_URL}), unlock it, and allow this site.`,
+  );
+  if (!connected.isConnected) {
     throw new StellarWalletError(
-      'wallet_sign_failed',
-      error instanceof Error ? error.message : 'Freighter could not sign the transaction.',
+      'wallet_unavailable',
+      `Freighter is not available in this browser. Install Freighter (${FREIGHTER_INSTALL_URL}), unlock it, enable it for this site, and use the same browser profile as the extension.`,
     );
   }
+
+  // Ensure site is allowed before sign prompt.
+  const allowed = await freighterApi.isAllowed();
+  if (!allowed.isAllowed) {
+    await freighterApi.requestAccess();
+  }
+
+  let address: string | undefined;
+  try {
+    address = await getPublicKey();
+  } catch {
+    // Signing can still prompt; address is optional for freighter-api opts.
+  }
+
+  const network = networkPassphrase === TESTNET_PASSPHRASE ? 'TESTNET' : undefined;
+  
+  let txIsJSON = false;
+  try {
+    JSON.parse(serializedTransaction);
+    txIsJSON = serializedTransaction.trim().startsWith('{');
+  } catch {
+    // not JSON
+  }
+
+  if (txIsJSON) {
+    if (!address) {
+      throw new StellarWalletError('wallet_sign_failed', 'Wallet address required to sign authorization entries.');
+    }
+
+    try {
+      const parsed = JSON.parse(serializedTransaction) as {
+        method?: string;
+        tx?: string;
+        simulationResult?: {
+          auth: string[];
+          retval: string;
+        };
+        simulationTransactionData?: string;
+      };
+      if (!parsed.tx || !parsed.simulationResult || !parsed.simulationTransactionData) {
+        throw new StellarWalletError(
+          'wallet_invalid_transaction',
+          'Prepared transaction JSON is missing simulation data required for wallet authorization.',
+        );
+      }
+
+      // Placeholder client options: we only need to rehydrate auth entries and re-serialize.
+      // Submission always happens on the NFT API with the sponsor envelope.
+      const tx = AssembledTransaction.fromJSON(
+        {
+          contractId: 'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4',
+          networkPassphrase,
+          rpcUrl: 'https://soroban-testnet.stellar.org',
+          method: parsed.method || 'mint',
+          parseResultXdr: () => undefined,
+        },
+        {
+          tx: parsed.tx,
+          simulationResult: parsed.simulationResult,
+          simulationTransactionData: parsed.simulationTransactionData,
+        },
+      );
+
+      await tx.signAuthEntries({
+        address,
+        signAuthEntry: async (entryXdr: string, opts?: { networkPassphrase?: string; address?: string }) => {
+          const signed = await freighterApi.signAuthEntry(entryXdr, {
+            networkPassphrase: opts?.networkPassphrase || networkPassphrase,
+            address: opts?.address || address,
+          });
+          throwIfFreighterError(signed, 'wallet_sign_failed', 'Freighter could not sign the authorization entry.');
+          if (!signed.signedAuthEntry) {
+            throw new StellarWalletError('wallet_sign_failed', 'Freighter did not return a signed authorization entry.');
+          }
+          return {
+            signedAuthEntry: signed.signedAuthEntry,
+            signerAddress: signed.signerAddress || address,
+          };
+        },
+      });
+      return tx.toJSON();
+    } catch (error) {
+      if (error instanceof StellarWalletError) throw error;
+      throw new StellarWalletError(
+        'wallet_sign_failed',
+        error instanceof Error ? error.message : 'Failed to sign authorization entries.',
+      );
+    }
+  }
+
+  const signed = await freighterApi.signTransaction(serializedTransaction, {
+    networkPassphrase,
+    ...(network ? { network } : {}),
+    ...(address ? { address } : {}),
+  });
+  throwIfFreighterError(
+    signed,
+    'wallet_sign_failed',
+    'Freighter could not sign the transaction. Confirm Freighter is unlocked, on Testnet, and that you approve the prompt.',
+  );
+  if (!signed.signedTxXdr?.trim()) {
+    throw new StellarWalletError('wallet_sign_failed', 'Freighter did not return a signed transaction.');
+  }
+  return signed.signedTxXdr.trim();
+}
+
+export function formatWalletError(error: unknown): string {
+  if (error instanceof StellarWalletError) return error.message;
+  if (error instanceof Error && error.message.trim()) return error.message;
+  return 'Wallet action failed.';
 }
 
 export const STELLAR_TESTNET_PASSPHRASE = TESTNET_PASSPHRASE;
+export const FREIGHTER_WALLET_INSTALL_URL = FREIGHTER_INSTALL_URL;

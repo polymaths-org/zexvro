@@ -14,15 +14,19 @@ import {
 import {
   createPublicCheckoutIntent,
   getPublicNftCollection,
+  NftApiError,
   submitPublicCheckoutIntent,
   type NftCheckoutIntent,
   type PublicNftCollection,
 } from './nftApi';
-import { getPublicKey, isWalletAvailable, signTransaction } from './stellarWallet';
+import { formatWalletError, getPublicKey, isWalletAvailable, signTransaction } from './stellarWallet';
 
 const STELLAR_ADDRESS = /^G[A-Z2-7]{55}$/;
 
 function errorMessage(error: unknown) {
+  if (error instanceof NftApiError && error.message) return error.message;
+  const wallet = formatWalletError(error);
+  if (wallet && wallet !== 'Wallet action failed.') return wallet;
   if (error instanceof Error && error.message) return error.message;
   return 'The NFT service could not complete this request.';
 }
@@ -95,8 +99,8 @@ export default function PublicCollection() {
   const connectBuyerWallet = async () => {
     setCheckoutError('');
     try {
-      if (!isWalletAvailable()) {
-        throw new Error('Freighter is not installed. Install Freighter or paste a buyer address manually.');
+      if (!(await isWalletAvailable())) {
+        throw new Error('Freighter is not available in this browser. Unlock Freighter, allow this site, or paste a buyer address manually.');
       }
       const address = await getPublicKey();
       setBuyerAddress(address);
@@ -112,8 +116,8 @@ export default function PublicCollection() {
     setCheckoutError('');
     setConfirmedHash('');
     try {
-      if (!isWalletAvailable()) {
-        throw new Error('Freighter is not installed. Install Freighter to sign the checkout transaction.');
+      if (!(await isWalletAvailable())) {
+        throw new Error('Freighter is not available in this browser. Unlock Freighter, allow this site on Testnet, then try again.');
       }
       const walletAddress = await getPublicKey();
       if (walletAddress !== checkoutIntent.buyerAddress) {

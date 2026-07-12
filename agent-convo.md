@@ -461,3 +461,22 @@ Want me to **push** `feature/nft-service` next?
   - `npm --prefix services/nft-service/api run lint && npm --prefix services/nft-service/api test`
 - Do not touch: Morph (Paris), Trade/Agent Auth (Rushi)
 
+## Handoff after Freighter detection fix
+- Branch / tip: `feature/nft-service` (uncommitted freighter fix until commit)
+- Done: Official `@stellar/freighter-api` integration; async availability; better errors
+- Next: Manual Freighter smoke on localhost, then Phase 4 mint UI
+- Commands: `npm --prefix frontend test`, `npm --prefix frontend run lint`, then browser Connect wallet
+- Do not touch: Morph, Trade, Agent Auth
+
+## Handoff after Phase 4 — creator mint UI + Freighter JSON auth signing
+- Branch / tip: `feature/nft-service` (commit pending this handoff)
+- Done:
+  - Official `@stellar/freighter-api` connect/sign path
+  - AssembledTransaction JSON auth-entry signing for sale/mint/checkout submit
+  - Dashboard **Mint token** modal: prepare → Sign with wallet → submit
+  - Clearer NFT API simulation error mapping for trustline/balance
+- Next: Phase 5 Pinata readiness; optional live Freighter mint smoke
+- Commands:
+  - `npm --prefix frontend run lint && npm --prefix frontend test && npm --prefix frontend run build`
+  - `npm --prefix services/nft-service/api run lint && npm --prefix services/nft-service/api test`
+- Do not touch: Morph (Paris), Trade/Agent Auth (Rushi)
