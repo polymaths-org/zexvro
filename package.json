@@ -8,6 +8,7 @@
     "dev:frontend": "node scripts/dev.mjs --only=frontend",
     "dev:nft": "node scripts/dev.mjs --only=nft",
     "dev:depin": "node scripts/dev.mjs --only=depin",
+    "nft:smoke": "node scripts/nft-smoke.mjs",
     "lint:frontend": "npm --prefix frontend run lint",
     "lint:nft": "npm --prefix services/nft-service/api run lint",
     "lint:depin": "npm --prefix services/depin run lint",

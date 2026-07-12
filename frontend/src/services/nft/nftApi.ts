@@ -292,3 +292,93 @@ export async function createPublicCheckoutIntent(input: {
   );
   return result.intent;
 }
+
+export async function submitNftSaleConfig(input: {
+  collectionId: string;
+  preparedTransaction: string;
+  signedTransaction: string;
+  accessToken: string;
+}) {
+  const result = await requestJson<{
+    transaction: { transactionHash: string; status: 'confirmed' };
+    collection?: ApiNftCollection;
+  }>(
+    `/v1/collections/${encodeURIComponent(input.collectionId)}/sale-config/submit`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        preparedTransaction: input.preparedTransaction,
+        signedTransaction: input.signedTransaction,
+      }),
+    },
+    input.accessToken,
+  );
+  return result;
+}
+
+export async function submitNftMint(input: {
+  collectionId: string;
+  preparedTransaction: string;
+  signedTransaction: string;
+  accessToken: string;
+}) {
+  const result = await requestJson<{
+    transaction: { transactionHash: string; status: 'confirmed' };
+  }>(
+    `/v1/collections/${encodeURIComponent(input.collectionId)}/mints/submit`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        preparedTransaction: input.preparedTransaction,
+        signedTransaction: input.signedTransaction,
+      }),
+    },
+    input.accessToken,
+  );
+  return result.transaction;
+}
+
+export async function prepareNftMint(input: {
+  collectionId: string;
+  operatorAddress: string;
+  recipientAddress: string;
+  tokenId: number;
+  accessToken: string;
+}) {
+  const result = await requestJson<{ intent: PreparedNftTransaction }>(
+    `/v1/collections/${encodeURIComponent(input.collectionId)}/mints/intent`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        operatorAddress: input.operatorAddress,
+        recipientAddress: input.recipientAddress,
+        tokenId: input.tokenId,
+      }),
+    },
+    input.accessToken,
+  );
+  return result.intent;
+}
+
+export async function submitPublicCheckoutIntent(input: {
+  intentId: string;
+  signedTransaction: string;
+}) {
+  const result = await requestJson<{
+    intent: NftCheckoutIntent;
+    transaction?: { transactionHash: string; status: 'confirmed' };
+  }>(
+    `/v1/public/checkout/intents/${encodeURIComponent(input.intentId)}/submit`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        signedTransaction: input.signedTransaction,
+      }),
+    },
+  );
+  return result;
+}

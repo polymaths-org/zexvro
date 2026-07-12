@@ -66,3 +66,14 @@ npm run dev:all
 Use `dev:all` when you also want the De-pin gateway. Keep real secrets only in
 root `.env` or your shell; folder-level `.env.example` files are compatibility
 pointers to the root template.
+
+## NFT smoke
+
+After `npm run dev`, check the API with:
+
+```bash
+npm run nft:smoke
+```
+
+Full signed-in browser steps live in `services/nft-service/README.md`.
+
