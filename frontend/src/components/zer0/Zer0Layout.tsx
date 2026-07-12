@@ -2,16 +2,17 @@ import { useState } from 'react';
 import { Link, Outlet, useParams, useRouterState } from '@tanstack/react-router';
 import {
   LayoutDashboard, Users, SendHorizontal, History, ShieldCheck,
-  Settings, ChevronLeft, BookOpen, Banknote
+  Settings, ChevronLeft, BookOpen, Banknote, Eye
 } from 'lucide-react';
 
 const ZER0_NAV = [
-  { id: 'overview', path: 'zer0', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'people', path: 'zer0/people', label: 'People', icon: Users },
-  { id: 'pay', path: 'zer0/pay', label: 'Pay a Party', icon: SendHorizontal },
-  { id: 'payroll', path: 'zer0/payroll', label: 'Payroll Runs', icon: Banknote },
-  { id: 'history', path: 'zer0/history', label: 'Payment History', icon: History },
-  { id: 'proofs', path: 'zer0/proofs', label: 'Proof Manager', icon: ShieldCheck },
+  { id: 'overview', path: 'zer0', label: 'Overview', icon: LayoutDashboard },
+  { id: 'people', path: 'zer0/people', label: 'Team directory', icon: Users },
+  { id: 'pay', path: 'zer0/pay', label: 'Send payment', icon: SendHorizontal },
+  { id: 'payroll', path: 'zer0/payroll', label: 'Payroll runs', icon: Banknote },
+  { id: 'history', path: 'zer0/history', label: 'Payment ledger', icon: History },
+  { id: 'proofs', path: 'zer0/proofs', label: 'Payment proofs', icon: ShieldCheck },
+  { id: 'data-preview', path: 'zer0/data-preview', label: 'What stays private', icon: Eye },
   { id: 'settings', path: 'zer0/settings', label: 'Settings', icon: Settings },
 ] as const;
 
@@ -44,8 +45,8 @@ export default function Zer0Layout() {
 
         {/* Brand */}
         <div className="mb-6">
-          <h2 className="text-sm font-bold text-zinc-900 dark:text-white tracking-tight">Zer0</h2>
-          <p className="text-[10px] text-zinc-400 mt-0.5">Privacy & Payroll</p>
+          <h2 className="text-sm font-bold text-zinc-900 dark:text-white tracking-tight">Payroll</h2>
+          <p className="text-[10px] text-zinc-400 mt-0.5">Private & public disbursements</p>
         </div>
 
         {/* Nav Items */}

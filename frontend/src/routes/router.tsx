@@ -21,6 +21,7 @@ import Zer0PayParty from '../components/zer0/Zer0PayParty';
 import Zer0History from '../components/zer0/Zer0History';
 import Zer0Proofs from '../components/zer0/Zer0Proofs';
 import Zer0Settings from '../components/zer0/Zer0Settings';
+import Zer0DataPreview from '../components/zer0/Zer0DataPreview';
 import PlaceholderScreen from '../components/PlaceholderScreen';
 import Services from '../components/services/Services';
 import AgentStudio from '../components/dashboard/AgentStudio';
@@ -288,6 +289,12 @@ const wsZer0ProofsRoute = createRoute({
   component: Zer0Proofs,
 });
 
+const wsZer0DataPreviewRoute = createRoute({
+  getParentRoute: () => wsZer0LayoutRoute,
+  path: 'data-preview',
+  component: Zer0DataPreview,
+});
+
 const wsZer0SettingsRoute = createRoute({
   getParentRoute: () => wsZer0LayoutRoute,
   path: 'settings',
@@ -420,6 +427,12 @@ const projectZer0ProofsRoute = createRoute({
   getParentRoute: () => projectZer0LayoutRoute,
   path: 'proofs',
   component: Zer0Proofs,
+});
+
+const projectZer0DataPreviewRoute = createRoute({
+  getParentRoute: () => projectZer0LayoutRoute,
+  path: 'data-preview',
+  component: Zer0DataPreview,
 });
 
 const projectZer0SettingsRoute = createRoute({
@@ -566,6 +579,7 @@ const routeTree = rootRoute.addChildren([
       wsZer0HistoryRoute,
       wsZer0PayrollRoute,
       wsZer0ProofsRoute,
+      wsZer0DataPreviewRoute,
       wsZer0SettingsRoute,
     ]),
     wsAuditRoute,
@@ -588,6 +602,7 @@ const routeTree = rootRoute.addChildren([
       projectZer0HistoryRoute,
       projectZer0PayrollRoute,
       projectZer0ProofsRoute,
+      projectZer0DataPreviewRoute,
       projectZer0SettingsRoute,
     ]),
     projectAgentRoute,

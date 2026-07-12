@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from '@tanstack/react-router';
-import { Settings, ShieldAlert, Save } from 'lucide-react';
+import { Save, ShieldAlert } from 'lucide-react';
 import { useProjectStore } from '../../stores/project';
 
 export default function ProjectSettings() {
@@ -11,10 +11,8 @@ export default function ProjectSettings() {
 
   const [name, setName] = useState(currentProject?.name || '');
   const [description, setDescription] = useState(currentProject?.description || '');
-  const [framework, setFramework] = useState(currentProject?.framework || '');
-  const [branch, setBranch] = useState(currentProject?.branch || 'main');
-  const [network, setNetwork] = useState(currentProject?.network || 'Stellar Testnet');
   const [purpose, setPurpose] = useState(currentProject?.purpose || '');
+  const [network, setNetwork] = useState(currentProject?.network || 'Stellar Testnet');
   const [lifecycle, setLifecycle] = useState(currentProject?.lifecycle || 'active');
   const [saved, setSaved] = useState(false);
 
@@ -22,10 +20,8 @@ export default function ProjectSettings() {
     if (!currentProject) return;
     setName(currentProject.name);
     setDescription(currentProject.description);
-    setFramework(currentProject.framework);
-    setBranch(currentProject.branch || 'main');
-    setNetwork(currentProject.network || 'Stellar Testnet');
     setPurpose(currentProject.purpose || '');
+    setNetwork(currentProject.network || 'Stellar Testnet');
     setLifecycle(currentProject.lifecycle);
   }, [currentProject]);
 
@@ -37,8 +33,6 @@ export default function ProjectSettings() {
       name,
       description,
       purpose,
-      framework,
-      branch,
       network,
       lifecycle,
     });
@@ -47,7 +41,7 @@ export default function ProjectSettings() {
   };
 
   const handleDelete = () => {
-    const confirm = window.confirm('Are you absolutely sure you want to permanently delete this project? This will erase all environments, logs, and configurations.');
+    const confirm = window.confirm('Are you absolutely sure you want to permanently delete this project? This will erase all configurations and logs.');
     if (confirm) {
       projectStore.deleteProject(currentProject.id);
       navigate({ to: `/dashboard/w/${workspaceId}/projects` });
@@ -59,7 +53,7 @@ export default function ProjectSettings() {
       <div>
         <h1 className="text-lg font-semibold text-zinc-900 dark:text-white">Settings</h1>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          Modify project configuration parameters, environments, and deletion.
+          Modify project configuration and lifecycle.
         </p>
       </div>
 
@@ -98,14 +92,15 @@ export default function ProjectSettings() {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="block text-xs font-semibold text-zinc-550 mb-1.5">Default Branch</label>
-              <input
-                type="text"
-                required
-                value={branch}
-                onChange={e => setBranch(e.target.value)}
-                className="h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-900 outline-none dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
-              />
+              <label className="block text-xs font-semibold text-zinc-550 mb-1.5">Target Network</label>
+              <select
+                value={network}
+                onChange={e => setNetwork(e.target.value)}
+                className="h-10 w-full rounded-lg border border-zinc-200 bg-white px-2.5 text-sm text-zinc-900 outline-none dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+              >
+                <option>Stellar Testnet</option>
+                <option>Stellar Mainnet</option>
+              </select>
             </div>
 
             <div>
@@ -121,38 +116,7 @@ export default function ProjectSettings() {
                 <option value="archived">Archived</option>
               </select>
             </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-zinc-550 mb-1.5">Target Network</label>
-              <select
-                value={network}
-                onChange={e => setNetwork(e.target.value)}
-                className="h-10 w-full rounded-lg border border-zinc-200 bg-white px-2.5 text-sm text-zinc-900 outline-none dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
-              >
-                <option>Stellar Testnet</option>
-                <option>Stellar Mainnet</option>
-                <option>Ethereum Sepolia</option>
-                <option>Ethereum Mainnet</option>
-              </select>
-            </div>
           </div>
-
-          {framework !== 'None (Backend Service)' && (
-            <div>
-              <label className="block text-xs font-semibold text-zinc-550 mb-1.5">Framework Preset</label>
-              <select
-                value={framework}
-                onChange={e => setFramework(e.target.value)}
-                className="h-10 w-full rounded-lg border border-zinc-200 bg-white px-2.5 text-sm text-zinc-900 outline-none dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
-              >
-                <option>Vite + React</option>
-                <option>Next.js</option>
-                <option>SvelteKit</option>
-                <option>Astro</option>
-                <option>Other</option>
-              </select>
-            </div>
-          )}
 
           <div className="flex items-center justify-end gap-3 pt-2">
             {saved && <span className="text-xs font-medium text-green-600 dark:text-green-400">Configuration saved</span>}
@@ -174,7 +138,7 @@ export default function ProjectSettings() {
           <div>
             <h2 className="text-sm font-semibold text-red-700 dark:text-red-400">Danger Zone</h2>
             <p className="text-xs text-red-650 dark:text-red-300 mt-0.5">
-              Irreversible actions that will permanently affect the project and its active workloads.
+              Irreversible actions that will permanently affect the project.
             </p>
           </div>
         </div>
@@ -182,7 +146,7 @@ export default function ProjectSettings() {
         <div className="flex items-center justify-between border-t border-red-500/10 pt-4">
           <div>
             <p className="text-xs font-bold text-zinc-750 dark:text-zinc-200">Delete this project</p>
-            <p className="text-[11px] text-zinc-500 mt-0.5">Once you delete a project, there is no going back. Please be certain.</p>
+            <p className="text-[11px] text-zinc-500 mt-0.5">Once you delete a project, there is no going back.</p>
           </div>
           <button
             onClick={handleDelete}

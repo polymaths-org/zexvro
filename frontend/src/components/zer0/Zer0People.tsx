@@ -43,7 +43,7 @@ export default function Zer0People() {
       if (filterDept !== 'all' && e.department !== filterDept) return false;
       if (search) {
         const q = search.toLowerCase();
-        return e.name.toLowerCase().includes(q) || e.email.toLowerCase().includes(q) || e.role.toLowerCase().includes(q);
+        return String(e.name || '').toLowerCase().includes(q) || String(e.email || '').toLowerCase().includes(q) || String(e.role || '').toLowerCase().includes(q);
       }
       return true;
     });
@@ -145,7 +145,7 @@ export default function Zer0People() {
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-lg font-bold text-zinc-900 dark:text-white">People</h1>
+          <h1 className="text-lg font-bold text-zinc-900 dark:text-white">Team directory</h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
             {employees.length} team members • {employees.filter(e => e.status === 'active').length} active
           </p>
@@ -154,7 +154,7 @@ export default function Zer0People() {
           onClick={() => { resetForm(); setShowModal(true); }}
           className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3.5 py-2 text-xs font-semibold text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200 transition shadow-sm"
         >
-          <Plus className="h-3.5 w-3.5" /> Add Employee
+          <Plus className="h-3.5 w-3.5" /> Add team member
         </button>
       </div>
 
@@ -230,9 +230,9 @@ export default function Zer0People() {
                     <td className="px-4 py-3 text-right font-semibold text-zinc-800 dark:text-zinc-200 tabular-nums">
                       {emp.salary.toLocaleString('en-US', { minimumFractionDigits: 2 })} {emp.currency}
                     </td>
-                    <td className="px-4 py-3 text-zinc-500 capitalize">{emp.frequency.replace('-', ' ')}</td>
+                    <td className="px-4 py-3 text-zinc-500 capitalize">{String(emp.frequency || '').replace('-', ' ')}</td>
                     <td className="px-4 py-3">
-                      <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${statusBadge[emp.status]}`}>
+                      <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${statusBadge[emp.status || 'active'] || ''}`}>
                         {emp.status}
                       </span>
                     </td>

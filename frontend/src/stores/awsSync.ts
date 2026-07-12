@@ -1,11 +1,9 @@
-import { api, employeeApi, projectApi, workspaceApi } from '../api/api';
+import { employeeApi, projectApi, workspaceApi, proofApi, payrollApi } from '../api/api';
 import { useWorkspaceStore } from './workspace';
 import { useProjectStore } from './project';
 import { useZer0Store } from './zer0';
-import type { Workspace } from './types';
 
 let isHydrating = false;
-let syncTimeout: number | null = null;
 
 function getUserSession() {
   try {
@@ -35,45 +33,26 @@ function uniqueByWorkspaceName<T extends { name?: string }>(items: T[]) {
   });
 }
 
-async function pullMemoryFallback() {
-  try {
-    const data = await api.get<{ memory?: Record<string, any> }>('/api/memory');
-    return data.memory || {};
-  } catch (err) {
-    console.error('Failed to pull fallback memory from AWS:', err);
-    return {};
-  }
-}
-
 export async function pullFromAWS() {
   const session = getUserSession();
   if (!session?.token) return;
 
   isHydrating = true;
   try {
-    const fallback = await pullMemoryFallback();
-
+    // All data comes from dedicated APIs — no memory endpoint calls
     const wsData = await workspaceApi.list();
     const workspaces = uniqueByWorkspaceName(
       (wsData.workspaces || []).map(workspace => idFromRemote(workspace, 'workspaceId')),
     );
 
     if (workspaces.length) {
-      const fallbackWorkspaceId = fallback.currentWorkspaceId;
-      const currentWorkspaceId =
-        workspaces.some(workspace => workspace.id === fallbackWorkspaceId)
-          ? fallbackWorkspaceId
+      const currentWorkspaceId = useWorkspaceStore.getState().currentWorkspaceId;
+      const resolvedWorkspaceId =
+        workspaces.some(workspace => workspace.id === currentWorkspaceId)
+          ? currentWorkspaceId
           : workspaces[0].id;
 
-      useWorkspaceStore.setState({ workspaces, currentWorkspaceId });
-    } else if (fallback.workspaces) {
-      const fallbackWorkspaces = uniqueByWorkspaceName((fallback.workspaces || []) as Workspace[]);
-      useWorkspaceStore.setState({
-        workspaces: fallbackWorkspaces,
-        currentWorkspaceId: fallback.currentWorkspaceId || fallbackWorkspaces[0]?.id || null,
-      });
-    } else if (fallback.currentWorkspaceId) {
-      useWorkspaceStore.setState({ currentWorkspaceId: fallback.currentWorkspaceId });
+      useWorkspaceStore.setState({ workspaces, currentWorkspaceId: resolvedWorkspaceId });
     }
 
     const currentWorkspaceId = useWorkspaceStore.getState().currentWorkspaceId;
@@ -85,78 +64,99 @@ export async function pullFromAWS() {
 
       useProjectStore.setState({
         projects,
-        environments: environments.length ? environments : fallback.environments || [],
-        serviceInstances: serviceInstances.length ? serviceInstances : fallback.serviceInstances || [],
-        deployments: fallback.deployments || [],
-        currentProjectId: fallback.currentProjectId || projects[0]?.id || null,
+        environments,
+        serviceInstances,
+        deployments: useProjectStore.getState().deployments,
+        currentProjectId: useProjectStore.getState().currentProjectId || projects[0]?.id || null,
       });
 
       const empData = await employeeApi.list(currentWorkspaceId);
       const employees = (empData.employees || []).map(employee => idFromRemote(employee, 'employeeId'));
-      useZer0Store.setState({
-        employees,
-        payments: fallback.payments || [],
-        proofs: fallback.proofs || [],
-        pool: useZer0Store.getState().pool,
-        settings: { ...useZer0Store.getState().settings, ...(fallback.settings || {}) },
-      });
-    } else if (fallback.projects || fallback.employees || fallback.payments || fallback.pool || fallback.settings) {
-      useProjectStore.setState({
-        projects: fallback.projects || [],
-        environments: fallback.environments || [],
-        serviceInstances: fallback.serviceInstances || [],
-        deployments: fallback.deployments || [],
-        currentProjectId: fallback.currentProjectId || null,
-      });
+      
+      let proofs: any[] = [];
+      try {
+        const proofRes = await proofApi.list('');
+        proofs = proofRes.proofs || [];
+      } catch (e) {
+        console.error('Failed to pull proofs from AWS:', e);
+        proofs = useZer0Store.getState().proofs;
+      }
+
+      // Start with current store payments (preserve anything created this session)
+      let payments = [...useZer0Store.getState().payments];
+
+      try {
+        const runData = await payrollApi.listRuns(currentWorkspaceId);
+        const runs = runData.runs || [];
+        
+        const existingPaymentIds = new Set(payments.map(p => p.id));
+
+        const currentProjectId = useProjectStore.getState().currentProjectId || '';
+
+        // Import runs that don't exist in local payments yet
+        for (const run of runs) {
+          const runId = run.id || run.runId;
+          if (existingPaymentIds.has(runId)) continue;
+          if (!run.lineItems || !run.lineItems.length) continue;
+          const item = run.lineItems[0];
+          payments.push({
+            id: runId,
+            projectId: run.projectId || item.projectId || currentProjectId || '',
+            employeeId: item.employeeId || null,
+            recipientName: item.name || 'Unknown',
+            recipientWallet: item.walletAddress || '',
+            amount: item.amount || run.totalAmount || 0,
+            currency: item.currency || 'XLM',
+            type: item.type || run.type || 'payroll',
+            status: run.status || 'processing',
+            shielded: item.shielded ?? false,
+            memo: item.memo || run.memo || '',
+            proofId: null,
+            txHash: run.txHash || null,
+            lastError: run.status === 'failed' ? (run.lastError || 'Unknown error') : null,
+            approvedBy: null,
+            createdAt: run.createdAt || Date.now(),
+            processedAt: run.processedAt || null,
+          });
+          existingPaymentIds.add(runId);
+        }
+
+        // Merge AWS run status into local payments (don't wipe local history)
+        payments = payments.map(p => {
+          const matchingRun = runs.find(run => (run.id === p.id || run.runId === p.id));
+          if (!matchingRun) return p;
+          return {
+            ...p,
+            projectId: p.projectId || matchingRun.projectId || currentProjectId || '',
+            status: matchingRun.status || p.status,
+            txHash: matchingRun.txHash || p.txHash,
+            processedAt: matchingRun.processedAt || p.processedAt,
+            amount: matchingRun.totalAmount ?? p.amount,
+          };
+        });
+      } catch (err) {
+        console.error('Failed to sync payroll runs with Zer0 payments:', err);
+      }
 
       useZer0Store.setState({
-        employees: fallback.employees || [],
-        payments: fallback.payments || [],
-        proofs: fallback.proofs || [],
-        pool: useZer0Store.getState().pool,
-        settings: { ...useZer0Store.getState().settings, ...(fallback.settings || {}) },
+        employees,
+        payments,
+        proofs,
+        settings: { ...useZer0Store.getState().settings },
       });
     }
   } catch (err) {
     console.error('Failed to pull ZEXVRO state from AWS DynamoDB:', err);
   } finally {
     isHydrating = false;
+    useWorkspaceStore.getState().setHydrated(true);
   }
 }
 
 export function pushToAWS() {
-  if (isHydrating) return;
-
-  const session = getUserSession();
-  if (!session?.token) return;
-
-  if (syncTimeout) {
-    window.clearTimeout(syncTimeout);
-  }
-
-  syncTimeout = window.setTimeout(async () => {
-    const wState = useWorkspaceStore.getState();
-    const pState = useProjectStore.getState();
-    const zState = useZer0Store.getState();
-
-    const memoryPayload = {
-      currentWorkspaceId: wState.currentWorkspaceId,
-      environments: pState.environments,
-      serviceInstances: pState.serviceInstances,
-      deployments: pState.deployments,
-      currentProjectId: pState.currentProjectId,
-      payments: zState.payments,
-      proofs: zState.proofs,
-      pool: zState.pool,
-      settings: zState.settings,
-    };
-
-    try {
-      await api.post('/api/memory', { memory: memoryPayload });
-    } catch (err) {
-      console.error('Failed to push fallback ZEXVRO state to AWS DynamoDB:', err);
-    }
-  }, 1000);
+  // Memory endpoint is reserved for the transformation agent.
+  // App state is persisted via dedicated APIs (workspace, project, employee, payroll, proof).
+  // No action needed here.
 }
 
 export function initializeAWSSync() {

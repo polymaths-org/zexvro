@@ -24,6 +24,8 @@ import {
 import { employeeApi, payrollApi, payrollTaxonomyApi } from '../../api/api';
 import { useWorkspaceStore } from '../../stores/workspace';
 import { useZer0Store } from '../../stores/zer0';
+import { connectFreighter, connectAlbedo, connectXBull, isValidStellarPublicKey } from '../../api/walletConnect';
+import { Loader2 } from 'lucide-react';
 import type {
   Zer0Currency,
   Zer0Employee,
@@ -119,8 +121,25 @@ const EMPTY_FORM = (currency: Zer0Currency): EmployeeForm => ({
   status: 'active',
 });
 
-function formatCurrency(amount: number, currency: string) {
-  return `${amount.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${currency}`;
+function formatCurrency(amount: number | null | undefined, currency: string | null | undefined) {
+  const safeAmount = typeof amount === 'number' ? amount : 0;
+  return `${safeAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${currency || ''}`;
+}
+
+const CONVERSION_RATES: Record<Zer0Currency, { rate: number; symbol: string; label: string }> = {
+  USDC: { rate: 1.00, symbol: '$', label: 'USD' },
+  EURC: { rate: 1.08, symbol: '€', label: 'EUR' },
+  XLM: { rate: 0.12, symbol: '$', label: 'USD' },
+};
+
+function formatFiatConversion(amount: number | null | undefined, cryptoCurrency: Zer0Currency, preferredFiat: 'USD' | 'EUR' = 'USD'): string {
+  const safeAmount = typeof amount === 'number' ? amount : 0;
+  const usdVal = safeAmount * (CONVERSION_RATES[cryptoCurrency]?.rate || 1);
+  if (preferredFiat === 'EUR') {
+    const eurVal = usdVal * 0.925; // 1 USD = 0.925 EUR approx
+    return `€${eurVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EUR`;
+  }
+  return `$${usdVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`;
 }
 
 function formatDate(value?: number | string | null) {
@@ -226,11 +245,12 @@ function parseEmployeeCsv(text: string, defaultCurrency: Zer0Currency): Employee
   }).filter(row => row.name || row.email);
 }
 
-function statusLabel(status: string) {
-  return status.split('_').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
+function statusLabel(status: string | null | undefined) {
+  if (!status) return '—';
+  return String(status).split('_').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
 }
 
-function StatusBadge({ status }: { status: string }) {
+function StatusBadge({ status }: { status: string | null | undefined }) {
   const palette: Record<string, string> = {
     active: 'bg-green-500/10 text-green-600 dark:text-green-400',
     invited: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
@@ -244,15 +264,16 @@ function StatusBadge({ status }: { status: string }) {
     cancelled: 'bg-zinc-500/10 text-zinc-500 dark:text-zinc-400',
   };
 
+  const safeStatus = status || 'unknown';
   return (
-    <span className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-semibold ${palette[status] || palette.inactive}`}>
-      {statusLabel(status)}
+    <span className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-semibold ${palette[safeStatus] || palette.inactive}`}>
+      {statusLabel(safeStatus)}
     </span>
   );
 }
 
-function uniqueSorted(values: string[]) {
-  return Array.from(new Set(values.map(value => value.trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+function uniqueSorted(values: (string | null | undefined)[]) {
+  return Array.from(new Set((values || []).map(value => String(value || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b));
 }
 
 function taxonomyIdFor(type: 'role' | 'department', name: string) {
@@ -285,6 +306,9 @@ export default function Payroll() {
   const settingsState = useZer0Store(s => s.settings);
   const updateSettings = useZer0Store(s => s.updateSettings);
 
+  const workspace = useWorkspaceStore(s => s.workspaces.find(w => w.id === activeWorkspaceId));
+  const preferredCurrency = ((workspace?.settings as any)?.preferredCurrency || 'USD') as 'USD' | 'EUR';
+
   const [activeTab, setActiveTab] = useState<PayrollTab>('employees');
   const [payrollRuns, setPayrollRuns] = useState<PayrollRun[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -308,7 +332,7 @@ export default function Payroll() {
   const [departmentAssignmentValue, setDepartmentAssignmentValue] = useState('');
   const [showEmployeeModal, setShowEmployeeModal] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Zer0Employee | null>(null);
-  const [employeeForm, setEmployeeForm] = useState<EmployeeForm>(() => EMPTY_FORM(settingsState.defaultCurrency));
+  const [employeeForm, setEmployeeForm] = useState<EmployeeForm>(() => EMPTY_FORM(settingsState?.defaultCurrency || 'USDC'));
   const [csvPreview, setCsvPreview] = useState<EmployeeForm[]>([]);
   const [showCsvModal, setShowCsvModal] = useState(false);
   const [showRunModal, setShowRunModal] = useState(false);
@@ -316,6 +340,9 @@ export default function Payroll() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [walletLoading, setWalletLoading] = useState(false);
+  const [walletError, setWalletError] = useState<string | null>(null);
+  const [connectedProvider, setConnectedProvider] = useState<string | null>(null);
 
   useEffect(() => {
     if (!activeWorkspaceId) return;
@@ -366,6 +393,8 @@ export default function Payroll() {
     return new Map(workspaceEmployees.map(employee => [employee.id, employee]));
   }, [workspaceEmployees]);
 
+  const isWalletConnected = settingsState?.walletAddress && /^G[A-Z2-7]{55}$/.test(settingsState.walletAddress);
+
   const visibleEmployees = useMemo(() => {
     return workspaceEmployees.filter(employee => {
       if (departmentFilter !== 'all' && employee.department !== departmentFilter) return false;
@@ -375,7 +404,7 @@ export default function Payroll() {
 
       const query = searchQuery.toLowerCase();
       return [employee.name, employee.email, employee.role, employee.department, employee.walletAddress]
-        .some(value => value.toLowerCase().includes(query));
+        .some(value => String(value || '').toLowerCase().includes(query));
     });
   }, [departmentFilter, roleFilter, searchQuery, statusFilter, workspaceEmployees]);
 
@@ -406,7 +435,20 @@ export default function Payroll() {
     }));
   }, [payrollEmployees]);
 
-  const runTotal = runReviewItems.reduce((sum, item) => sum + item.amount, 0);
+  const runTotal = useMemo(() => {
+    return runReviewItems.reduce((sum, item) => sum + item.amount, 0);
+  }, [runReviewItems]);
+
+  const runTotalFiat = useMemo(() => {
+    return runReviewItems.reduce((sum, item) => {
+      const rate = CONVERSION_RATES[item.currency]?.rate || 1.00;
+      const usdVal = item.amount * rate;
+      if (preferredCurrency === 'EUR') {
+        return sum + (usdVal * 0.925);
+      }
+      return sum + usdVal;
+    }, 0);
+  }, [runReviewItems, preferredCurrency]);
 
   const historyRows = useMemo<HistoryRow[]>(() => {
     const runRows = payrollRuns.flatMap(run =>
@@ -458,18 +500,35 @@ export default function Payroll() {
         return true;
       })
       .sort((a, b) => {
-        if (historySort === 'oldest') return a.createdAt - b.createdAt;
-        if (historySort === 'role') return (a.role || 'Unassigned').localeCompare(b.role || 'Unassigned') || b.createdAt - a.createdAt;
-        if (historySort === 'department') return (a.department || 'Unassigned').localeCompare(b.department || 'Unassigned') || b.createdAt - a.createdAt;
-        if (historySort === 'amount_high') return b.amount - a.amount || b.createdAt - a.createdAt;
-        if (historySort === 'amount_low') return a.amount - b.amount || b.createdAt - a.createdAt;
-        if (historySort === 'status') return a.status.localeCompare(b.status) || b.createdAt - a.createdAt;
-        if (historySort === 'type') return a.type.localeCompare(b.type) || b.createdAt - a.createdAt;
-        return b.createdAt - a.createdAt;
+        if (historySort === 'oldest') return (a.createdAt || 0) - (b.createdAt || 0);
+        if (historySort === 'role') return String(a.role || 'Unassigned').localeCompare(String(b.role || 'Unassigned')) || (b.createdAt || 0) - (a.createdAt || 0);
+        if (historySort === 'department') return String(a.department || 'Unassigned').localeCompare(String(b.department || 'Unassigned')) || (b.createdAt || 0) - (a.createdAt || 0);
+        if (historySort === 'amount_high') return (b.amount || 0) - (a.amount || 0) || (b.createdAt || 0) - (a.createdAt || 0);
+        if (historySort === 'amount_low') return (a.amount || 0) - (b.amount || 0) || (b.createdAt || 0) - (a.createdAt || 0);
+        if (historySort === 'status') return String(a.status || '').localeCompare(String(b.status || '')) || (b.createdAt || 0) - (a.createdAt || 0);
+        if (historySort === 'type') return String(a.type || '').localeCompare(String(b.type || '')) || (b.createdAt || 0) - (a.createdAt || 0);
+        return (b.createdAt || 0) - (a.createdAt || 0);
       });
   }, [activeWorkspaceId, employeeById, historyDepartmentFilter, historyEndDate, historyRoleFilter, historySort, historyStartDate, historyStatusFilter, historyTypeFilter, payments, payrollRuns]);
 
-  const totalPayroll = visibleEmployees.reduce((sum, employee) => sum + employee.salary, 0);
+  const totalPayrollFiat = visibleEmployees.reduce((sum, employee) => {
+    const rate = CONVERSION_RATES[employee.currency]?.rate || 1.00;
+    const usdVal = employee.salary * rate;
+    if (preferredCurrency === 'EUR') {
+      return sum + (usdVal * 0.925);
+    }
+    return sum + usdVal;
+  }, 0);
+
+  const cryptoBreakdown = useMemo(() => {
+    const counts = {} as Record<Zer0Currency, number>;
+    visibleEmployees.forEach(e => {
+      counts[e.currency] = (counts[e.currency] || 0) + e.salary;
+    });
+    return Object.entries(counts)
+      .map(([curr, amt]) => `${amt.toLocaleString()} ${curr}`)
+      .join(' + ');
+  }, [visibleEmployees]);
 
   function applyTaxonomyItem(item: PayrollTaxonomyItem) {
     if (item.type === 'role') {
@@ -512,7 +571,7 @@ export default function Payroll() {
 
   function openAddEmployee(defaults: Partial<Pick<EmployeeForm, 'role' | 'department'>> = {}) {
     setEditingEmployee(null);
-    setEmployeeForm({ ...EMPTY_FORM(settingsState.defaultCurrency), ...defaults });
+    setEmployeeForm({ ...EMPTY_FORM(settingsState?.defaultCurrency || 'USDC'), ...defaults });
     setErrorMessage('');
     setShowEmployeeModal(true);
   }
@@ -692,7 +751,7 @@ export default function Payroll() {
     if (!file) return;
 
     const text = await file.text();
-    const rows = parseEmployeeCsv(text, settingsState.defaultCurrency);
+    const rows = parseEmployeeCsv(text, settingsState?.defaultCurrency || 'USDC');
     setCsvPreview(rows);
     setShowCsvModal(true);
   }
@@ -742,7 +801,7 @@ export default function Payroll() {
         lineItems: runReviewItems,
         totalAmount: runTotal,
         employeeCount: runReviewItems.length,
-        status: settingsState.paymentApprovalRequired ? 'pending_approval' : 'approved',
+        status: settingsState?.paymentApprovalRequired ? 'pending_approval' : 'approved',
       });
       const run = normalizeRun(response.run, activeWorkspaceId);
       setPayrollRuns(current => [run, ...current.filter(item => item.id !== run.id)]);
@@ -794,6 +853,32 @@ export default function Payroll() {
 
   return (
     <div className="space-y-5">
+      {!isWalletConnected && (
+        <div className="relative overflow-hidden rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3 min-w-0">
+              <div className="h-8 w-8 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0 mt-0.5 animate-pulse">
+                <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-xs font-bold text-zinc-900 dark:text-white">Funding Wallet Disconnected</h3>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                  A Stellar funding wallet is required to process payroll runs and fund employee wallets. Go to the Settings tab to configure it.
+                </p>
+              </div>
+            </div>
+            {activeTab !== 'settings' && (
+              <button
+                onClick={() => setActiveTab('settings')}
+                className="inline-flex items-center justify-center gap-1.5 h-8 rounded-lg bg-amber-650 px-4 text-xs font-semibold text-white hover:bg-amber-650 transition shadow-sm shrink-0"
+              >
+                Go to Settings
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-lg font-semibold text-zinc-900 dark:text-white">Payroll</h1>
@@ -836,7 +921,12 @@ export default function Payroll() {
 
       <div className="grid gap-3 md:grid-cols-2">
         <Metric icon={<Clock className="h-4 w-4" />} label="Runs" value={String(payrollRuns.length)} />
-        <Metric icon={<Calendar className="h-4 w-4" />} label="Visible Payroll" value={formatCurrency(totalPayroll, settingsState.defaultCurrency)} />
+        <Metric
+          icon={<Calendar className="h-4 w-4" />}
+          label="Visible Payroll"
+          value={preferredCurrency === 'EUR' ? `€${totalPayrollFiat.toLocaleString(undefined, { minimumFractionDigits: 2 })} EUR` : `$${totalPayrollFiat.toLocaleString(undefined, { minimumFractionDigits: 2 })} USD`}
+          detail={cryptoBreakdown ? `Breakdown: ${cryptoBreakdown}` : undefined}
+        />
       </div>
 
       <div className="flex overflow-x-auto rounded-lg border border-zinc-200 bg-white p-1 dark:border-zinc-800 dark:bg-[#080809]">
@@ -933,7 +1023,12 @@ export default function Payroll() {
                         <td className="px-4 py-3">{employee.department || 'Unassigned'}</td>
                         <td className="px-4 py-3">{employee.role || 'Member'}</td>
                         <td className="max-w-[220px] truncate px-4 py-3 font-mono text-[11px]">{employee.walletAddress || 'No wallet'}</td>
-                        <td className="px-4 py-3 font-semibold">{employee.salary.toLocaleString()}</td>
+                        <td className="px-4 py-3 font-semibold">
+                          <div>{employee.salary.toLocaleString()}</div>
+                          <div className="text-[10px] text-zinc-400 font-normal mt-0.5">
+                            ~ {formatFiatConversion(employee.salary, employee.currency, preferredCurrency)}
+                          </div>
+                        </td>
                         <td className="px-4 py-3">{employee.currency}</td>
                         <td className="px-4 py-3">{statusLabel(employee.frequency)}</td>
                         <td className="px-4 py-3"><StatusBadge status={employee.status} /></td>
@@ -999,7 +1094,7 @@ export default function Payroll() {
                         <StatusBadge status={run.status} />
                       </div>
                       <p className="mt-1 text-xs text-zinc-500">
-                        {formatDate(run.createdAt)} - {run.employeeCount} employees - {formatCurrency(run.totalAmount, settingsState.defaultCurrency)}
+                        {formatDate(run.createdAt)} - {run.employeeCount} employees - {formatCurrency(run.totalAmount, settingsState?.defaultCurrency || 'USDC')}
                       </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -1187,7 +1282,7 @@ export default function Payroll() {
                       <div className="min-w-0">
                         <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">{role}</h3>
                         <p className="mt-1 text-xs text-zinc-500">
-                          {assigned.length} employees - {formatCurrency(rolePayroll, settingsState.defaultCurrency)}
+                          {assigned.length} employees - {formatCurrency(rolePayroll, settingsState?.defaultCurrency || 'USDC')}
                         </p>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
@@ -1290,7 +1385,7 @@ export default function Payroll() {
                       <div className="min-w-0">
                         <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">{department}</h3>
                         <p className="mt-1 text-xs text-zinc-500">
-                          {assigned.length} employees - {formatCurrency(departmentPayroll, settingsState.defaultCurrency)}
+                          {assigned.length} employees - {formatCurrency(departmentPayroll, settingsState?.defaultCurrency || 'USDC')}
                         </p>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
@@ -1322,29 +1417,120 @@ export default function Payroll() {
       )}
 
       {activeTab === 'settings' && (
-        <section className="grid gap-4 lg:grid-cols-2">
-          <SettingField label="Default currency">
-            <select value={settingsState.defaultCurrency} onChange={event => updateSettings({ defaultCurrency: event.target.value as Zer0Currency })} className="h-9 w-full rounded-md border border-zinc-200 bg-white px-2 text-xs text-zinc-700 outline-none dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
-              {CURRENCIES.map(currency => <option key={currency} value={currency}>{currency}</option>)}
-            </select>
-          </SettingField>
-          <SettingField label="Payment approval required">
-            <label className="inline-flex h-9 items-center gap-2 text-xs font-medium text-zinc-700 dark:text-zinc-200">
-              <input
-                type="checkbox"
-                checked={settingsState.paymentApprovalRequired}
-                onChange={event => updateSettings({ paymentApprovalRequired: event.target.checked })}
-                className="h-4 w-4 rounded border-zinc-300 text-zinc-900"
-              />
-              Require approval before processing
-            </label>
-          </SettingField>
-          <SettingField label="Wallet address">
-            <input value={settingsState.walletAddress} onChange={event => updateSettings({ walletAddress: event.target.value })} className="h-9 w-full rounded-md border border-zinc-200 bg-white px-3 font-mono text-xs text-zinc-700 outline-none dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200" />
-          </SettingField>
-          <SettingField label="Timezone">
-            <input value={settingsState.timezone} onChange={event => updateSettings({ timezone: event.target.value })} className="h-9 w-full rounded-md border border-zinc-200 bg-white px-3 text-xs text-zinc-700 outline-none dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200" />
-          </SettingField>
+        <section className="space-y-6">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <SettingField label="Default currency">
+              <select value={settingsState?.defaultCurrency || 'USDC'} onChange={event => updateSettings({ defaultCurrency: event.target.value as Zer0Currency })} className="h-9 w-full rounded-md border border-zinc-200 bg-white px-2 text-xs text-zinc-700 outline-none dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
+                {CURRENCIES.map(currency => <option key={currency} value={currency}>{currency}</option>)}
+              </select>
+            </SettingField>
+            <SettingField label="Payment approval required">
+              <label className="inline-flex h-9 items-center gap-2 text-xs font-medium text-zinc-700 dark:text-zinc-200">
+                <input
+                  type="checkbox"
+                  checked={!!settingsState?.paymentApprovalRequired}
+                  onChange={event => updateSettings({ paymentApprovalRequired: event.target.checked })}
+                  className="h-4 w-4 rounded border-zinc-300 text-zinc-900"
+                />
+                Require approval before processing
+              </label>
+            </SettingField>
+            <SettingField label="Timezone">
+              <input value={settingsState?.timezone || ''} onChange={event => updateSettings({ timezone: event.target.value })} className="h-9 w-full rounded-md border border-zinc-200 bg-white px-3 text-xs text-zinc-700 outline-none dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200" />
+            </SettingField>
+          </div>
+
+          <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-[#080809] space-y-4">
+            <div>
+              <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Funding Wallet Connection</h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                Connect a Stellar wallet extension or manually enter a public key starting with 'G'.
+              </p>
+            </div>
+
+            <div className="grid gap-3">
+              <SettingField label="Stellar Public Key">
+                <input
+                  value={settingsState?.walletAddress || ''}
+                  onChange={event => updateSettings({ walletAddress: event.target.value })}
+                  placeholder="G..."
+                  className="h-9 w-full rounded-md border border-zinc-200 bg-white px-3 font-mono text-xs text-zinc-700 outline-none focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200"
+                />
+              </SettingField>
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                <button
+                  type="button"
+                  disabled={walletLoading}
+                  onClick={async () => {
+                    setWalletLoading(true);
+                    setWalletError(null);
+                    setConnectedProvider('Freighter');
+                    try {
+                      const conn = await connectFreighter();
+                      updateSettings({ walletAddress: conn.publicKey });
+                    } catch (err: any) {
+                      setWalletError(err.message || 'Freighter connection failed');
+                    } finally {
+                      setWalletLoading(false);
+                    }
+                  }}
+                  className="h-10 rounded-lg border border-zinc-200 hover:border-zinc-300 dark:border-zinc-800 dark:hover:border-zinc-700 bg-white dark:bg-zinc-950 text-xs font-semibold flex items-center justify-center gap-2 transition hover:bg-zinc-50 dark:hover:bg-zinc-900"
+                >
+                  {walletLoading && connectedProvider === 'Freighter' ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  Connect Freighter
+                </button>
+                <button
+                  type="button"
+                  disabled={walletLoading}
+                  onClick={async () => {
+                    setWalletLoading(true);
+                    setWalletError(null);
+                    setConnectedProvider('Albedo');
+                    try {
+                      const conn = await connectAlbedo();
+                      updateSettings({ walletAddress: conn.publicKey });
+                    } catch (err: any) {
+                      setWalletError(err.message || 'Albedo connection failed');
+                    } finally {
+                      setWalletLoading(false);
+                    }
+                  }}
+                  className="h-10 rounded-lg border border-zinc-200 hover:border-zinc-300 dark:border-zinc-800 dark:hover:border-zinc-700 bg-white dark:bg-zinc-950 text-xs font-semibold flex items-center justify-center gap-2 transition hover:bg-zinc-50 dark:hover:bg-zinc-900"
+                >
+                  {walletLoading && connectedProvider === 'Albedo' ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  Connect Albedo
+                </button>
+                <button
+                  type="button"
+                  disabled={walletLoading}
+                  onClick={async () => {
+                    setWalletLoading(true);
+                    setWalletError(null);
+                    setConnectedProvider('xBull');
+                    try {
+                      const conn = await connectXBull();
+                      updateSettings({ walletAddress: conn.publicKey });
+                    } catch (err: any) {
+                      setWalletError(err.message || 'xBull connection failed');
+                    } finally {
+                      setWalletLoading(false);
+                    }
+                  }}
+                  className="h-10 rounded-lg border border-zinc-200 hover:border-zinc-300 dark:border-zinc-800 dark:hover:border-zinc-700 bg-white dark:bg-zinc-950 text-xs font-semibold flex items-center justify-center gap-2 transition hover:bg-zinc-50 dark:hover:bg-zinc-900"
+                >
+                  {walletLoading && connectedProvider === 'xBull' ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  Connect xBull
+                </button>
+              </div>
+
+              {walletError && (
+                <div className="text-xs font-semibold text-rose-600 dark:text-rose-400 bg-rose-500/10 rounded-lg p-3">
+                  {walletError}
+                </div>
+              )}
+            </div>
+          </div>
         </section>
       )}
 
@@ -1377,7 +1563,12 @@ export default function Payroll() {
                 </datalist>
               </Field>
               <TextField label="Wallet Address" value={employeeForm.walletAddress} onChange={value => setEmployeeForm(form => ({ ...form, walletAddress: value }))} />
-              <TextField label="Salary" required type="number" value={employeeForm.salary} onChange={value => setEmployeeForm(form => ({ ...form, salary: value }))} />
+              <div>
+                <TextField label="Salary" required type="number" value={employeeForm.salary} onChange={value => setEmployeeForm(form => ({ ...form, salary: value }))} />
+                <div className="text-[10px] text-zinc-500 mt-1 pl-1 font-medium">
+                  Equivalent: {formatFiatConversion(Number(employeeForm.salary || 0), employeeForm.currency, preferredCurrency)}
+                </div>
+              </div>
               <Field label="Currency">
                 <select value={employeeForm.currency} onChange={event => setEmployeeForm(form => ({ ...form, currency: event.target.value as Zer0Currency }))} className="h-9 w-full rounded-md border border-zinc-200 bg-white px-2 text-xs outline-none dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
                   {CURRENCIES.map(currency => <option key={currency} value={currency}>{currency}</option>)}
@@ -1440,9 +1631,16 @@ export default function Payroll() {
               <input type="month" value={payrollPeriod} onChange={event => setPayrollPeriod(event.target.value)} className="h-9 w-full rounded-md border border-zinc-200 bg-white px-3 text-xs outline-none dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100" />
             </Field>
             <div className="rounded-lg border border-zinc-200 dark:border-zinc-800">
-              <div className="flex items-center justify-between border-b border-zinc-100 px-3 py-2 text-xs dark:border-zinc-800">
+              <div className="flex items-center justify-between border-b border-zinc-100 px-3 py-2.5 text-xs dark:border-zinc-800">
                 <span className="font-semibold text-zinc-900 dark:text-white">{runReviewItems.length} employees</span>
-                <span className="font-semibold text-zinc-900 dark:text-white">{formatCurrency(runTotal, settingsState.defaultCurrency)}</span>
+                <div className="text-right">
+                  <span className="font-semibold text-zinc-900 dark:text-white block">
+                    {preferredCurrency === 'EUR' ? `€${runTotalFiat.toLocaleString(undefined, { minimumFractionDigits: 2 })} EUR` : `$${runTotalFiat.toLocaleString(undefined, { minimumFractionDigits: 2 })} USD`}
+                  </span>
+                  <span className="text-[10px] text-zinc-400 font-medium block mt-0.5">
+                    ({cryptoBreakdown})
+                  </span>
+                </div>
               </div>
               <div className="max-h-72 divide-y divide-zinc-100 overflow-auto dark:divide-zinc-800">
                 {runReviewItems.map(item => (
@@ -1451,7 +1649,10 @@ export default function Payroll() {
                       <p className="font-medium text-zinc-900 dark:text-white">{item.name}</p>
                       <p className="truncate text-zinc-500">{item.email}</p>
                     </div>
-                    <span className="shrink-0 font-semibold text-zinc-900 dark:text-white">{formatCurrency(item.amount, item.currency)}</span>
+                    <div className="text-right shrink-0">
+                      <span className="font-semibold text-zinc-900 dark:text-white block">{formatCurrency(item.amount, item.currency)}</span>
+                      <span className="text-[10px] text-zinc-400 font-normal block mt-0.5">~ {formatFiatConversion(item.amount, item.currency, preferredCurrency)}</span>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1464,7 +1665,7 @@ export default function Payroll() {
   );
 }
 
-function Metric({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
+function Metric({ icon, label, value, detail }: { icon: ReactNode; label: string; value: string; detail?: ReactNode }) {
   return (
     <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-[#080809]">
       <div className="flex items-center gap-2 text-zinc-500">
@@ -1472,6 +1673,7 @@ function Metric({ icon, label, value }: { icon: ReactNode; label: string; value:
         <span className="text-xs font-medium">{label}</span>
       </div>
       <p className="mt-3 truncate text-xl font-semibold text-zinc-900 dark:text-white">{value}</p>
+      {detail && <div className="mt-1.5 text-[10px] text-zinc-400 font-medium">{detail}</div>}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ShieldCheck, Plus, Trash2, Copy, Check } from 'lucide-react';
+import { copyText } from '../../lib/clipboard';
 
 type ApiKey = {
   id: string;
@@ -69,10 +70,14 @@ export default function WorkspaceSecurity() {
     setKeys(prev => prev.filter(k => k.id !== id));
   };
 
-  const handleCopy = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 1500);
+  const handleCopy = async (text: string, id: string) => {
+    const ok = await copyText(text);
+    if (ok) {
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 1500);
+    } else {
+      window.prompt('Copy this value:', text);
+    }
   };
 
   const toggleSetting = (key: keyof Omit<SecuritySettings, 'ipAllowlist'>) => {

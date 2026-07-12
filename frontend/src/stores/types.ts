@@ -43,8 +43,8 @@ export interface Project {
   createdAt: number;
   updatedAt: number;
   owner: string;
-  framework: string;
-  branch: string;
+  framework?: string;
+  branch?: string;
   network: string;
   enabledServices?: string[];
 }
@@ -149,6 +149,7 @@ export interface Zer0Payment {
   memo: string;
   proofId: string | null;
   txHash: string | null;
+  lastError: string | null;
   createdAt: number;
   processedAt: number | null;
   approvedBy: string | null;
@@ -175,12 +176,30 @@ export interface Zer0PoolState {
   lastUpdated: number;
 }
 
+export interface Zer0SecurityEvent {
+  id: string;
+  type:
+    | 'payment_blocked'
+    | 'limit_hit'
+    | 'approval_required'
+    | 'decoy_sent'
+    | 'delay_applied'
+    | 'payment_completed'
+    | 'payment_failed'
+    | 'batch_window';
+  message: string;
+  paymentId?: string;
+  createdAt: number;
+}
+
 export interface Zer0Settings {
   proofSystem: Zer0ProofSystem;
   complianceThreshold: number;
   merkleDepth: number;
   requireValidatorSig: boolean;
   paymentApprovalRequired: boolean;
+  /** Auto-require approval when amount (XLM units) exceeds complianceThreshold */
+  enforceThresholdApproval: boolean;
   paymentWorkflow: 'manual' | 'approval' | 'auto';
   settlementMode: 'stellar' | 'manual_review';
   allowTransparentPayments: boolean;
@@ -193,4 +212,28 @@ export interface Zer0Settings {
   horizonUrl: string;
   sorobanRpcUrl: string;
   contractAddress: string;
+  obfuscateOrgName: boolean;
+  proxyOrgName: string;
+  /** Min seconds to wait after all deposits before any withdraw (timing privacy) */
+  privacyDelaySec: number;
+  /** Extra random 0..jitter seconds added to delay */
+  privacyJitterSec: number;
+  /** Deposit extra unused notes to grow anonymity set */
+  decoyDepositsEnabled: boolean;
+  decoyDepositCount: number;
+  /** Max XLM settled via shielded pays per UTC day (0 = off) */
+  dailySpendLimitXlm: number;
+  /** Prefer batching: deposit all notes, delay once, then withdraw all */
+  batchDepositThenWithdraw: boolean;
+  /**
+   * How many on-chain pool units (notes) per private payment.
+   * On-chain denomination is fixed (e.g. 10 XLM); total = units × denom.
+   * Each unit needs ~2 Freighter signatures (bundled deposit + withdraw).
+   */
+  shieldedUnitsPerPay: number;
+  /**
+   * When true, always use Freighter popups (debug).
+   * When false, use treasury auto-sign if VITE_TREASURY_SECRET is set.
+   */
+  preferFreighterSigning: boolean;
 }

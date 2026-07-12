@@ -604,7 +604,6 @@ export default function DashboardApp() {
   const navigationItems: NavItem[] = [
     { id: 'overview', label: 'Overview', icon: 'overview' },
     { id: 'projects', label: 'Projects', icon: 'projects' },
-    { id: 'deployments', label: 'Deployments', icon: 'deployments' },
     { id: 'services', label: 'Services', icon: 'services' },
     { id: 'agent', label: 'Agentic Operations', icon: 'agent' },
     { id: 'analytics', label: 'Analytics', icon: 'analytics' },
@@ -622,10 +621,9 @@ export default function DashboardApp() {
   const sidebarCategories: Array<{ id: string; label: string; subItems: NavItem[] }> = [
     {
       id: 'compute',
-      label: 'Compute & Deploy',
+      label: 'Compute',
       subItems: [
         { id: 'projects', label: 'Projects', icon: 'projects' },
-        { id: 'deployments', label: 'Deployments', icon: 'deployments' },
       ],
     },
     {
@@ -656,11 +654,6 @@ export default function DashboardApp() {
         { id: 'analytics', label: 'Analytics', icon: 'analytics' },
         { id: 'team', label: 'Team', icon: 'team' },
       ],
-    },
-    {
-      id: 'transactions-payroll',
-      label: 'Transactions & Payroll',
-      subItems: [],
     },
     {
       id: 'config',
