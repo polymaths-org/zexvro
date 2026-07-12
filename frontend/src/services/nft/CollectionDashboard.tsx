@@ -73,6 +73,12 @@ function errorMessage(error: unknown) {
   return 'NFT API unavailable';
 }
 
+function reportActionError(error: unknown, setActionError: (message: string) => void) {
+  const message = errorMessage(error);
+  console.error('[nft/dashboard]', message, error);
+  setActionError(message);
+}
+
 function collectionPublicPath(collectionId: string) {
   return `/nft/collections/${collectionId}`;
 }
@@ -280,7 +286,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
         setActionMessage('Mint transaction prepared. Sign with the minter wallet to submit.');
       }
     } catch (error) {
-      setActionError(errorMessage(error));
+      reportActionError(error, setActionError);
     } finally {
       setBusyCollectionId('');
     }
@@ -320,7 +326,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
       });
       setActionMessage(`Token ${mintTokenId} signed and minted on Stellar testnet.`);
     } catch (error) {
-      setActionError(errorMessage(error));
+      reportActionError(error, setActionError);
     } finally {
       setBusyCollectionId('');
     }
@@ -363,7 +369,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
         setActionMessage('Sale configuration transaction prepared.');
       }
     } catch (error) {
-      setActionError(errorMessage(error));
+      reportActionError(error, setActionError);
     } finally {
       setBusyCollectionId('');
     }
@@ -418,7 +424,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
       setActionMessage('Sale configuration signed and confirmed on Stellar testnet.');
       await loadRemoteData(undefined, true);
     } catch (error) {
-      setActionError(errorMessage(error));
+      reportActionError(error, setActionError);
     } finally {
       setBusyCollectionId('');
     }

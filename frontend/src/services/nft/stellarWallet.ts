@@ -1,4 +1,5 @@
 import freighterApi from '@stellar/freighter-api';
+import { Address, TransactionBuilder } from '@stellar/stellar-sdk';
 import { AssembledTransaction } from '@stellar/stellar-sdk/contract';
 
 export class StellarWalletError extends Error {
@@ -13,6 +14,62 @@ export class StellarWalletError extends Error {
 
 const TESTNET_PASSPHRASE = 'Test SDF Network ; September 2015';
 const FREIGHTER_INSTALL_URL = 'https://www.freighter.app/';
+const PLACEHOLDER_RPC_URL = 'https://soroban-testnet.stellar.org';
+
+type PreparedAssembledJson = {
+  method?: string;
+  tx?: string;
+  simulationResult?: {
+    auth: string[];
+    retval: string;
+  };
+  simulationTransactionData?: string;
+};
+
+function extractInvokeContractTarget(
+  txXdr: string,
+  networkPassphrase: string,
+): { contractId: string; method: string } {
+  const built = TransactionBuilder.fromXDR(txXdr, networkPassphrase);
+  if (built.operations.length !== 1) {
+    throw new StellarWalletError(
+      'wallet_invalid_transaction',
+      'Prepared transaction must contain exactly one contract invocation.',
+    );
+  }
+  const operation = built.operations[0] as {
+    type?: string;
+    func?: {
+      switch: () => { name: string };
+      value: () => {
+        contractAddress: () => unknown;
+        functionName: () => { toString: (encoding: string) => string };
+      };
+    };
+  };
+  if (operation.type !== 'invokeHostFunction' || !operation.func) {
+    throw new StellarWalletError(
+      'wallet_invalid_transaction',
+      'Prepared transaction is not a Soroban contract invocation.',
+    );
+  }
+  if (operation.func.switch().name !== 'hostFunctionTypeInvokeContract') {
+    throw new StellarWalletError(
+      'wallet_invalid_transaction',
+      'Prepared transaction is not an invokeContract host function.',
+    );
+  }
+  const invoke = operation.func.value();
+  const contractId = Address.fromScAddress(invoke.contractAddress() as never).toString();
+  const method = invoke.functionName().toString('utf-8');
+  if (!contractId || !method) {
+    throw new StellarWalletError(
+      'wallet_invalid_transaction',
+      'Could not read contract id or method from the prepared transaction.',
+    );
+  }
+  return { contractId, method };
+}
 
 type FreighterErrorLike = {
   code?: number | string;
@@ -177,15 +234,7 @@ export async function signTransaction(
     }
 
     try {
-      const parsed = JSON.parse(serializedTransaction) as {
-        method?: string;
-        tx?: string;
-        simulationResult?: {
-          auth: string[];
-          retval: string;
-        };
-        simulationTransactionData?: string;
-      };
+      const parsed = JSON.parse(serializedTransaction) as PreparedAssembledJson;
       if (!parsed.tx || !parsed.simulationResult || !parsed.simulationTransactionData) {
         throw new StellarWalletError(
           'wallet_invalid_transaction',
@@ -193,14 +242,23 @@ export async function signTransaction(
         );
       }
 
-      // Placeholder client options: we only need to rehydrate auth entries and re-serialize.
-      // Submission always happens on the NFT API with the sponsor envelope.
+      // Client.fromJSON validates that options.contractId matches the envelope.
+      // Extract the real target from the prepared XDR instead of using a placeholder.
+      const target = extractInvokeContractTarget(parsed.tx, networkPassphrase);
+      const method = parsed.method || target.method;
+      if (method !== target.method) {
+        throw new StellarWalletError(
+          'wallet_invalid_transaction',
+          `Prepared method '${method}' does not match envelope method '${target.method}'.`,
+        );
+      }
+
       const tx = AssembledTransaction.fromJSON(
         {
-          contractId: 'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4',
+          contractId: target.contractId,
           networkPassphrase,
-          rpcUrl: 'https://soroban-testnet.stellar.org',
-          method: parsed.method || 'mint',
+          rpcUrl: PLACEHOLDER_RPC_URL,
+          method,
           parseResultXdr: () => undefined,
         },
         {
