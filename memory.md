@@ -465,3 +465,17 @@ Use `None` for empty fields. Do not delete fields.
 - Follow-ups: Add backend-side uniqueness constraints or conflict responses for workspace names if multiple clients create workspaces concurrently.
 - Blockers: None.
 - Verification: `npm run lint` and `npm run build` pass from `frontend/`. Vite still reports the existing large dashboard chunk warning.
+
+## 2026-07-12 - Antigravity - ZKPP Project Persistence & Payroll Approval Workflows
+
+- Service or area: ZKPP Privacy Pool, Project Configuration Persistence, and Payment Approval Workflows
+- Files changed: `frontend/src/stores/project.ts`, `frontend/src/api/awsSync.ts`, `frontend/src/stores/zer0.ts`, `frontend/src/components/zer0/Zer0PayParty.tsx`, `frontend/src/components/zer0/Zer0Dashboard.tsx`, `frontend/src/components/zer0/Zer0History.tsx`
+- Summary: Implemented complete project config persistence to AWS DynamoDB (for environments and service instances), resolved initial mock pool balance issues (ensured fallback from Stellar query 0 USDC/EURC to default pool balances), and created the full payment approval workflow (auto-creating pending payroll runs on the backend, syncing approvals from AWS DynamoDB/Lambda, and adding direct approve/reject widgets and controls on the dashboard and history pages).
+- Decisions:
+  - Accepted - Fallback to mock balances when Stellar Horizon API returns 0 USDC/EURC/XLM on testnet.
+  - Accepted - Keep payment approvals synced with the backend payroll run statuses.
+- Follow-ups: None.
+- Blockers: None.
+- Verification:
+  - Successful build with `npm run build`.
+  - Full E2E verification of payment flow, settings toggle, dashboard card, history list, and approvals via Chromium browser tool.

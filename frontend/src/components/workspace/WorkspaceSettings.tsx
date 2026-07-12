@@ -18,6 +18,7 @@ export default function WorkspaceSettings() {
     requireInviteApproval: false,
     allowMemberProjectCreation: true,
     auditRetentionDays: 90,
+    preferredCurrency: 'USD',
   });
 
   useEffect(() => {
@@ -32,6 +33,7 @@ export default function WorkspaceSettings() {
       requireInviteApproval: workspace.settings?.requireInviteApproval || false,
       allowMemberProjectCreation: workspace.settings?.allowMemberProjectCreation ?? true,
       auditRetentionDays: workspace.settings?.auditRetentionDays || 90,
+      preferredCurrency: (workspace.settings as any)?.preferredCurrency || 'USD',
     });
   }, [workspace]);
 
@@ -50,7 +52,8 @@ export default function WorkspaceSettings() {
         requireInviteApproval: form.requireInviteApproval,
         allowMemberProjectCreation: form.allowMemberProjectCreation,
         auditRetentionDays: form.auditRetentionDays,
-      },
+        preferredCurrency: form.preferredCurrency,
+      } as any,
     });
     setSaved(true);
     window.setTimeout(() => setSaved(false), 1800);
@@ -78,8 +81,14 @@ export default function WorkspaceSettings() {
               <input type="email" value={form.billingEmail} onChange={event => setForm(current => ({ ...current, billingEmail: event.target.value }))} className="h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-900 outline-none focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100" />
             </Field>
           </Section>
-
+ 
           <Section title="Defaults" icon={<Globe2 className="h-4 w-4" />}>
+            <Field label="Preferred Display Currency">
+              <select value={form.preferredCurrency} onChange={event => setForm(current => ({ ...current, preferredCurrency: event.target.value }))} className="h-10 w-full rounded-lg border border-zinc-200 bg-white px-2.5 text-sm text-zinc-900 outline-none dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+                <option value="USD">USD ($)</option>
+                <option value="EUR">EUR (€)</option>
+              </select>
+            </Field>
             <Field label="Service Runtime Region">
               <select value={form.region} onChange={event => setForm(current => ({ ...current, region: event.target.value }))} className="h-10 w-full rounded-lg border border-zinc-200 bg-white px-2.5 text-sm text-zinc-900 outline-none dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
                 <option value="us-east-1">US East (N. Virginia)</option>

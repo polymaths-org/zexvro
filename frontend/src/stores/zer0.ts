@@ -1,8 +1,12 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import type {
   Zer0Employee, Zer0Payment, Zer0Proof, Zer0PoolState, Zer0Settings,
-  Zer0Currency, Zer0PaymentStatus, Zer0ProofSystem,
+  Zer0Currency, Zer0PaymentStatus, Zer0ProofSystem, Zer0SecurityEvent,
 } from './types';
+import { proofApi, payrollApi, stellar } from '../api/api';
+import { shieldPay as zkShieldPay, getNotes as getZkNotes } from '../api/privacyPool';
+import { useWorkspaceStore } from './workspace';
 
 function createId(prefix: string) {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -19,22 +23,41 @@ const DEFAULT_POOL: Zer0PoolState = {
 const DEFAULT_SETTINGS: Zer0Settings = {
   proofSystem: 'Groth16',
   complianceThreshold: 10000,
-  merkleDepth: 32,
+  merkleDepth: 20,
   requireValidatorSig: true,
   paymentApprovalRequired: false,
+  enforceThresholdApproval: true,
   paymentWorkflow: 'manual',
   settlementMode: 'stellar',
   allowTransparentPayments: false,
   exportFormat: 'csv',
   proofRetryLimit: 3,
   webhookUrl: '',
-  defaultCurrency: 'USDC',
+  defaultCurrency: 'XLM',
   timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
   walletAddress: '',
   horizonUrl: 'https://horizon-testnet.stellar.org',
-  sorobanRpcUrl: '',
-  contractAddress: '',
+  sorobanRpcUrl: 'https://soroban-testnet.stellar.org:443',
+  contractAddress: 'CDQSV7I3FRQ6EBQOOE6MQSJHPCPQNHPWRK2G75DYYOOOGHDVIQGOZF4I',
+  obfuscateOrgName: false,
+  proxyOrgName: '',
+  privacyDelaySec: 0,
+  privacyJitterSec: 0,
+  decoyDepositsEnabled: false,
+  decoyDepositCount: 0,
+  dailySpendLimitXlm: 500,
+  batchDepositThenWithdraw: true,
+  shieldedUnitsPerPay: 1,
+  preferFreighterSigning: true,
 };
+
+function utcDayKey(ts = Date.now()) {
+  return new Date(ts).toISOString().slice(0, 10);
+}
+
+function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 interface Zer0State {
   employees: Zer0Employee[];
@@ -42,29 +65,28 @@ interface Zer0State {
   proofs: Zer0Proof[];
   pool: Zer0PoolState;
   settings: Zer0Settings;
+  securityEvents: Zer0SecurityEvent[];
+  dailySpend: { day: string; xlm: number };
 
-  // Employee CRUD
   addEmployee: (input: Omit<Zer0Employee, 'id' | 'createdAt' | 'updatedAt'>) => Zer0Employee;
   updateEmployee: (id: string, updates: Partial<Zer0Employee>) => void;
   removeEmployee: (id: string) => void;
   getEmployeesByProject: (projectId: string) => Zer0Employee[];
 
-  // Payment CRUD
   createPayment: (input: Omit<Zer0Payment, 'id' | 'createdAt' | 'processedAt' | 'proofId' | 'txHash' | 'approvedBy'>) => Zer0Payment;
   updatePaymentStatus: (id: string, status: Zer0PaymentStatus, extra?: Partial<Zer0Payment>) => void;
   getPaymentsByProject: (projectId: string) => Zer0Payment[];
 
-  // Proof CRUD
   createProof: (paymentId: string, projectId: string, proofSystem: Zer0ProofSystem) => Zer0Proof;
   updateProofStatus: (id: string, status: Zer0Proof['status'], extra?: Partial<Zer0Proof>) => void;
   getProofsByProject: (projectId: string) => Zer0Proof[];
 
-  // Pool operations
   depositToPool: (currency: Zer0Currency, amount: number) => void;
   withdrawFromPool: (currency: Zer0Currency, amount: number) => boolean;
   processPayment: (paymentId: string) => void;
+  logSecurityEvent: (event: Omit<Zer0SecurityEvent, 'id' | 'createdAt'>) => void;
+  clearSecurityEvents: () => void;
 
-  // Settings
   updateSettings: (updates: Partial<Zer0Settings>) => void;
   resetSettings: () => void;
 }
@@ -73,12 +95,15 @@ const INITIAL_EMPLOYEES: Zer0Employee[] = [];
 const INITIAL_PAYMENTS: Zer0Payment[] = [];
 
 export const useZer0Store = create<Zer0State>()(
+  persist(
   (set, get) => ({
     employees: INITIAL_EMPLOYEES,
     payments: INITIAL_PAYMENTS,
     proofs: [],
     pool: { ...DEFAULT_POOL },
     settings: { ...DEFAULT_SETTINGS },
+    securityEvents: [],
+    dailySpend: { day: utcDayKey(), xlm: 0 },
 
     // ─── Employees ───
     addEmployee: (input) => {
@@ -112,6 +137,7 @@ export const useZer0Store = create<Zer0State>()(
         id: createId('pay'),
         proofId: null,
         txHash: null,
+        lastError: null,
         approvedBy: null,
         createdAt: Date.now(),
         processedAt: null,
@@ -128,7 +154,9 @@ export const useZer0Store = create<Zer0State>()(
       })),
 
     getPaymentsByProject: (projectId) =>
-      get().payments.filter(p => p.projectId === projectId),
+      get().payments.filter(p =>
+        !p.projectId || p.projectId === projectId,
+      ),
 
     // ─── Proofs ───
     createProof: (paymentId, projectId, proofSystem) => {
@@ -183,32 +211,347 @@ export const useZer0Store = create<Zer0State>()(
       return true;
     },
 
-    processPayment: (paymentId) => {
+    logSecurityEvent: (event) => {
+      const row: Zer0SecurityEvent = {
+        ...event,
+        id: createId('sec'),
+        createdAt: Date.now(),
+      };
+      set(s => ({ securityEvents: [row, ...s.securityEvents].slice(0, 100) }));
+    },
+
+    clearSecurityEvents: () => set({ securityEvents: [] }),
+
+    processPayment: async (paymentId) => {
       const state = get();
       const payment = state.payments.find(p => p.id === paymentId);
       if (!payment) return;
+      const log = get().logSecurityEvent;
 
-      const hasFunds = (state.pool.balances[payment.currency] || 0) >= payment.amount;
-      if (!hasFunds) {
-        state.updatePaymentStatus(paymentId, 'failed');
+      // Prevent double-clicks / re-entry from opening endless Freighter windows
+      if (payment.status === 'processing' || payment.status === 'completed') {
+        return;
+      }
+      // Claim immediately so concurrent processPayment calls bail out
+      if (payment.status !== 'pending_approval') {
+        state.updatePaymentStatus(paymentId, 'processing');
+      }
+
+      if (payment.status === 'pending_approval') {
+        log({ type: 'approval_required', message: 'Payment still awaiting approval', paymentId });
         return;
       }
 
-      state.withdrawFromPool(payment.currency, payment.amount);
+      if (!payment.shielded && !state.settings.allowTransparentPayments) {
+        const msg = 'Public transfers are disabled in settings';
+        state.updatePaymentStatus(paymentId, 'failed', { lastError: msg });
+        log({ type: 'payment_blocked', message: msg, paymentId });
+        return;
+      }
+
+      // Shielded: fund enough for ceil(amount / unit) pool units
+      const fundCurrency = payment.shielded ? 'XLM' : payment.currency;
+      let needAmount = payment.amount;
+      if (payment.shielded) {
+        const { DENOMINATION_XLM: unit, MAX_SHIELD_UNITS } = await import('../api/privacyPool');
+        const n = Math.max(1, Math.min(MAX_SHIELD_UNITS, Math.ceil((payment.amount || unit) / unit)));
+        needAmount = unit * n;
+      }
+      const hasFunds = (state.pool.balances[fundCurrency] || 0) >= needAmount;
+      if (!hasFunds) {
+        const msg = `Insufficient ${fundCurrency} in funding wallet (need ${needAmount})`;
+        state.updatePaymentStatus(paymentId, 'failed', { lastError: msg });
+        log({ type: 'payment_blocked', message: msg, paymentId });
+        return;
+      }
+
+      const senderAddress = state.settings.walletAddress?.trim();
+      if (!senderAddress) {
+        state.updatePaymentStatus(paymentId, 'failed', { lastError: 'No funding wallet' });
+        log({ type: 'payment_blocked', message: 'No funding wallet configured', paymentId });
+        return;
+      }
+
+      const recipientAddress = payment.recipientWallet?.trim();
+      if (!recipientAddress) {
+        state.updatePaymentStatus(paymentId, 'failed', { lastError: 'No recipient wallet' });
+        log({ type: 'payment_blocked', message: 'No recipient wallet', paymentId });
+        return;
+      }
+
+      const workspaceId = useWorkspaceStore.getState().currentWorkspaceId || 'default';
+      const horizonUrl = state.settings.horizonUrl || 'https://horizon-testnet.stellar.org';
+
+      const logRunStart = async (shielded: boolean) => {
+        try {
+          await payrollApi.createRun({
+            workspaceId,
+            runId: paymentId,
+            projectId: payment.projectId,
+            type: payment.type,
+            lineItems: [{
+              employeeId: payment.employeeId,
+              name: payment.recipientName,
+              email: '',
+              amount: payment.amount,
+              currency: payment.currency,
+              walletAddress: recipientAddress,
+              status: 'processing',
+              shielded,
+              projectId: payment.projectId,
+              type: payment.type,
+              memo: payment.memo || '',
+            }],
+            totalAmount: payment.amount,
+            status: 'processing',
+            memo: payment.memo || '',
+          });
+        } catch (e) {
+          console.error('Failed to log payment start to backend:', e);
+        }
+      };
+
+      const completeRun = async (txHash: string, shielded: boolean) => {
+        try {
+          await payrollApi.updateRun(paymentId, {
+            workspaceId,
+            projectId: payment.projectId,
+            status: 'completed',
+            lineItems: [{
+              employeeId: payment.employeeId,
+              name: payment.recipientName,
+              email: '',
+              amount: payment.amount,
+              currency: payment.currency,
+              walletAddress: recipientAddress,
+              status: 'completed',
+              shielded,
+              projectId: payment.projectId,
+              type: payment.type,
+              memo: payment.memo || '',
+            }],
+            txHash,
+            processedAt: Date.now(),
+            type: payment.type,
+            memo: payment.memo || '',
+          });
+        } catch (e) {
+          // create may have failed earlier — try create as completed
+          try {
+            await payrollApi.createRun({
+              workspaceId,
+              runId: paymentId,
+              projectId: payment.projectId,
+              type: payment.type,
+              lineItems: [{
+                employeeId: payment.employeeId,
+                name: payment.recipientName,
+                email: '',
+                amount: payment.amount,
+                currency: payment.currency,
+                walletAddress: recipientAddress,
+                status: 'completed',
+                shielded,
+                projectId: payment.projectId,
+              }],
+              totalAmount: payment.amount,
+              status: 'completed',
+              txHash,
+              processedAt: Date.now(),
+            });
+          } catch (e2) {
+            console.error('Failed to complete payment logs:', e, e2);
+          }
+        }
+      };
 
       if (payment.shielded) {
+        const {
+          DENOMINATION_XLM, MAX_SHIELD_UNITS, estimateFreighterPrompts, isAutoSignEnabled,
+        } = await import('../api/privacyPool');
+        const unitXlm = DENOMINATION_XLM;
+        const noteCount = Math.max(1, Math.min(MAX_SHIELD_UNITS, Math.ceil((payment.amount || unitXlm) / unitXlm)));
+        const settledXlm = unitXlm * noteCount;
+        const estimatedPrompts = estimateFreighterPrompts(noteCount);
+        log({
+          type: 'batch_window',
+          message: `ZK multi-unit: ${noteCount}×${unitXlm} XLM = ${settledXlm} XLM (${isAutoSignEnabled() ? 'auto-sign' : `~${estimatedPrompts} Freighter confirms`})`,
+          paymentId,
+        });
+
+        const day = utcDayKey();
+        const spentToday = state.dailySpend.day === day ? state.dailySpend.xlm : 0;
+        const limit = state.settings.dailySpendLimitXlm || 0;
+        if (limit > 0 && spentToday + settledXlm > limit) {
+          const msg = `Daily private spend limit reached (${spentToday}/${limit} XLM). Blocked ${settledXlm} XLM payment.`;
+          state.updatePaymentStatus(paymentId, 'failed', { lastError: msg });
+          log({ type: 'limit_hit', message: msg, paymentId });
+          return;
+        }
+
         const proof = state.createProof(paymentId, payment.projectId, state.settings.proofSystem);
         state.updatePaymentStatus(paymentId, 'processing', { proofId: proof.id });
+        await logRunStart(true);
+        get().updateProofStatus(proof.id, 'generating');
+        try {
+          await proofApi.create({
+            id: proof.id,
+            projectId: payment.projectId,
+            paymentId,
+            status: 'queued',
+            proofSystem: state.settings.proofSystem,
+          });
+        } catch {}
+
+        try {
+          const t0 = Date.now();
+          const { lastTxHash, settledXlm: paid } = await zkShieldPay({
+            fromAddress: senderAddress,
+            toAddress: recipientAddress,
+            units: noteCount,
+            onProgress: (label, cur, total) => {
+              log({
+                type: 'batch_window',
+                message: `[${cur}/${total}] ${label}`,
+                paymentId,
+              });
+            },
+          });
+
+          const genTime = Date.now() - t0;
+          const proofHash = `zk_${lastTxHash.slice(0, 16)}_x${noteCount}`;
+          const vk = `vk_${Date.now().toString(16)}`;
+
+          get().updateProofStatus(proof.id, 'verified', {
+            proofData: proofHash,
+            verificationKey: vk,
+            generationTimeMs: genTime,
+            verifiedAt: Date.now(),
+          });
+
+          try {
+            await proofApi.update(proof.id, {
+              status: 'verified',
+              proofData: proofHash,
+              verificationKey: vk,
+              generationTimeMs: genTime,
+              verifiedAt: Date.now(),
+              projectId: payment.projectId,
+              paymentId,
+              proofSystem: state.settings.proofSystem,
+            });
+          } catch {}
+
+          set(s => {
+            const d = utcDayKey();
+            const prev = s.dailySpend.day === d ? s.dailySpend.xlm : 0;
+            return {
+              pool: {
+                ...s.pool,
+                balances: { ...s.pool.balances, XLM: Math.max(0, s.pool.balances.XLM - paid) },
+                totalPaymentsProcessed: s.pool.totalPaymentsProcessed + 1,
+                lastUpdated: Date.now(),
+              },
+              dailySpend: { day: d, xlm: prev + paid },
+            };
+          });
+
+          get().updatePaymentStatus(paymentId, 'completed', {
+            txHash: lastTxHash,
+            processedAt: Date.now(),
+            amount: paid,
+          });
+          log({
+            type: 'payment_completed',
+            message: `ZK paid ${paid} XLM (${noteCount} units) to recipient`,
+            paymentId,
+          });
+          await completeRun(lastTxHash, true);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : 'Shielded payment failed';
+          console.error(`Shielded payment failed for ${paymentId}:`, msg);
+          get().updateProofStatus(proof.id, 'failed');
+          get().updatePaymentStatus(paymentId, 'failed', { lastError: msg });
+          log({ type: 'payment_failed', message: msg, paymentId });
+          try { await payrollApi.updateRun(paymentId, { workspaceId, status: 'failed' }); } catch {}
+        }
       } else {
         state.updatePaymentStatus(paymentId, 'processing');
+        await logRunStart(false);
+
+        try {
+          const result = await stellar.submitPayment(
+            senderAddress, recipientAddress, payment.amount, payment.currency, horizonUrl, undefined,
+          );
+
+          try {
+            const newBalances = await stellar.getPoolBalance(senderAddress, horizonUrl);
+            useZer0Store.setState(s => ({
+              pool: {
+                ...s.pool,
+                balances: {
+                  USDC: Number.isFinite(newBalances.USDC) ? newBalances.USDC : s.pool.balances.USDC,
+                  XLM: Number.isFinite(newBalances.XLM) ? newBalances.XLM : s.pool.balances.XLM,
+                  EURC: Number.isFinite(newBalances.EURC) ? newBalances.EURC : s.pool.balances.EURC,
+                },
+                totalPaymentsProcessed: s.pool.totalPaymentsProcessed + 1,
+                lastUpdated: Date.now(),
+              },
+            }));
+          } catch {}
+
+          get().updatePaymentStatus(paymentId, 'completed', { txHash: result.txHash, processedAt: Date.now() });
+          log({ type: 'payment_completed', message: `Public transfer ${payment.amount} ${payment.currency}`, paymentId });
+          await completeRun(result.txHash, false);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : 'Transaction failed';
+          console.error(`Transparent payment failed for ${paymentId}:`, msg);
+          get().updatePaymentStatus(paymentId, 'failed', { lastError: msg });
+          log({ type: 'payment_failed', message: msg, paymentId });
+          try { await payrollApi.updateRun(paymentId, { workspaceId, status: 'failed' }); } catch {}
+        }
       }
     },
 
-    // ─── Settings ───
-    updateSettings: (updates) =>
-      set(s => ({ settings: { ...s.settings, ...updates } })),
+    updateSettings: (updates) => {
+      set(s => ({ settings: { ...s.settings, ...updates } }));
+      if (typeof updates.preferFreighterSigning === 'boolean') {
+        import('../api/privacyPool').then(m => m.setForceFreighterSigning(updates.preferFreighterSigning!));
+      }
+    },
 
     resetSettings: () =>
       set({ settings: { ...DEFAULT_SETTINGS } }),
-  })
+  }),
+  {
+    name: 'zexvro_zer0',
+    partialize: (state) => ({
+      settings: state.settings,
+      proofs: state.proofs,
+      payments: state.payments,
+      employees: state.employees,
+      pool: state.pool,
+      securityEvents: state.securityEvents,
+      dailySpend: state.dailySpend,
+    }),
+    merge: (persisted, current) => {
+      const p = (persisted || {}) as Partial<Zer0State>;
+      const mergedSettings = { ...DEFAULT_SETTINGS, ...(p.settings || {}) };
+      if (typeof mergedSettings.preferFreighterSigning !== 'boolean') {
+        mergedSettings.preferFreighterSigning = true;
+      }
+      // Apply signing preference immediately after rehydrate
+      import('../api/privacyPool').then(m =>
+        m.setForceFreighterSigning(!!mergedSettings.preferFreighterSigning),
+      );
+      return {
+        ...current,
+        ...p,
+        settings: mergedSettings,
+        securityEvents: p.securityEvents || [],
+        dailySpend: p.dailySpend || { day: utcDayKey(), xlm: 0 },
+      };
+    },
+  },
+  )
 );

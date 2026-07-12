@@ -972,6 +972,225 @@ def lambda_handler(event, context):
         )
         return respond(200, {"status": "success", "run": normalize_payroll_run_item(updated)})
 
+    # Route: GET/POST /api/proofs
+    elif path == "/api/proofs" and http_method == "GET":
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+
+        query = get_query_params(event)
+        project_id = query.get("projectId") or query.get("workspaceId")
+
+        res = memory_table.get_item(Key={"username": username})
+        memory_data = res.get("Item", {}).get("memory", {})
+        proofs = memory_data.get("proofs", [])
+        
+        if project_id:
+            proofs = [p for p in proofs if p.get("projectId") == project_id]
+            
+        return respond(200, {"proofs": proofs})
+
+    elif path == "/api/proofs" and http_method == "POST":
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+
+        project_id = body.get("projectId")
+        payment_id = body.get("paymentId")
+        proof_system = body.get("proofSystem", "Groth16")
+
+        if not project_id or not payment_id:
+            return respond(400, {"error": "invalid_request", "error_description": "projectId and paymentId are required"})
+
+        res = memory_table.get_item(Key={"username": username})
+        item = res.get("Item") or {"username": username, "memory": {}}
+        memory_data = item.get("memory", {})
+        proofs = memory_data.get("proofs", [])
+
+        # Prefer client-supplied id so frontend local + AWS stay in sync
+        proof_id = body.get("id") or create_id("proof")
+        new_proof = {
+            "id": proof_id,
+            "projectId": project_id,
+            "paymentId": payment_id,
+            "proofSystem": proof_system,
+            "status": body.get("status", "queued"),
+            "verificationKey": body.get("verificationKey"),
+            "proofData": body.get("proofData"),
+            "generationTimeMs": body.get("generationTimeMs"),
+            "createdAt": int(time.time() * 1000),
+            "verifiedAt": body.get("verifiedAt"),
+        }
+
+        proofs.append(new_proof)
+        memory_data["proofs"] = proofs
+        memory_table.put_item(Item={
+            "username": username,
+            "memory": to_dynamodb_value(memory_data)
+        })
+
+        return respond(200, {"status": "success", "proof": new_proof})
+
+    # Route: PUT /api/proofs/{id}  (upsert — create if missing)
+    elif path.startswith("/api/proofs/") and http_method == "PUT":
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+
+        proof_id = path.split("/")[-1]
+
+        res = memory_table.get_item(Key={"username": username})
+        item = res.get("Item") or {"username": username, "memory": {}}
+        memory_data = item.get("memory", {})
+        proofs = memory_data.get("proofs", [])
+
+        proof = None
+        for p in proofs:
+            if p.get("id") == proof_id:
+                proof = p
+                break
+
+        if not proof:
+            proof = {
+                "id": proof_id,
+                "projectId": body.get("projectId") or "",
+                "paymentId": body.get("paymentId") or "",
+                "proofSystem": body.get("proofSystem", "Groth16"),
+                "status": body.get("status", "queued"),
+                "verificationKey": body.get("verificationKey"),
+                "proofData": body.get("proofData"),
+                "generationTimeMs": body.get("generationTimeMs"),
+                "createdAt": int(time.time() * 1000),
+                "verifiedAt": body.get("verifiedAt"),
+            }
+            proofs.append(proof)
+        else:
+            for field in ["status", "verificationKey", "proofData", "generationTimeMs", "verifiedAt", "projectId", "paymentId", "proofSystem"]:
+                if field in body:
+                    proof[field] = body[field]
+
+        memory_data["proofs"] = proofs
+        memory_table.put_item(Item={
+            "username": username,
+            "memory": to_dynamodb_value(memory_data)
+        })
+
+        return respond(200, {"status": "success", "proof": proof})
+
+    # Route: GET /api/zk-notes (list user's deposit notes)
+    elif path == "/api/zk-notes" and http_method == "GET":
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+
+        res = memory_table.get_item(Key={"username": username})
+        memory_data = res.get("Item", {}).get("memory", {})
+        notes = memory_data.get("zkNotes", [])
+        return respond(200, {"notes": notes})
+
+    # Route: POST /api/zk-notes (save a deposit note)
+    elif path == "/api/zk-notes" and http_method == "POST":
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+
+        commitment = body.get("commitment")
+        if not commitment:
+            return respond(400, {"error": "invalid_request", "error_description": "commitment is required"})
+
+        res = memory_table.get_item(Key={"username": username})
+        item = res.get("Item") or {"username": username, "memory": {}}
+        memory_data = item.get("memory", {})
+        notes = memory_data.get("zkNotes", [])
+
+        # Deduplicate by commitment
+        for existing in notes:
+            if existing.get("commitment") == commitment:
+                return respond(200, {"status": "success", "note": existing})
+
+        note_id = create_id("zkn")
+        new_note = {
+            "id": note_id,
+            "secret": body.get("secret", ""),
+            "nullifier": body.get("nullifier", ""),
+            "commitment": commitment,
+            "nullifierHash": body.get("nullifierHash", ""),
+            "index": body.get("index", 0),
+            "spent": body.get("spent", False),
+            "timestamp": body.get("timestamp", int(time.time() * 1000)),
+            "createdAt": int(time.time() * 1000),
+        }
+
+        notes.append(new_note)
+        memory_data["zkNotes"] = notes
+        memory_table.put_item(Item={
+            "username": username,
+            "memory": to_dynamodb_value(memory_data)
+        })
+
+        return respond(200, {"status": "success", "note": new_note})
+
+    # Route: PUT /api/zk-notes/{id} (mark note spent, etc.)
+    elif path.startswith("/api/zk-notes/") and http_method == "PUT":
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+
+        note_id = path.split("/")[-1]
+
+        res = memory_table.get_item(Key={"username": username})
+        item = res.get("Item")
+        if not item:
+            return respond(404, {"error": "not_found", "error_description": "User memory not found"})
+
+        memory_data = item.get("memory", {})
+        notes = memory_data.get("zkNotes", [])
+
+        target = None
+        for n in notes:
+            if n.get("id") == note_id:
+                target = n
+                break
+
+        if not target:
+            return respond(404, {"error": "not_found", "error_description": "Note not found"})
+
+        for field in ["spent", "nullifierHash", "index"]:
+            if field in body:
+                target[field] = body[field]
+
+        memory_data["zkNotes"] = notes
+        memory_table.put_item(Item={
+            "username": username,
+            "memory": to_dynamodb_value(memory_data)
+        })
+
+        return respond(200, {"status": "success", "note": target})
+
+    # Route: DELETE /api/zk-notes/{id}
+    elif path.startswith("/api/zk-notes/") and http_method == "DELETE":
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+
+        note_id = path.split("/")[-1]
+
+        res = memory_table.get_item(Key={"username": username})
+        item = res.get("Item")
+        if not item:
+            return respond(404, {"error": "not_found", "error_description": "User memory not found"})
+
+        memory_data = item.get("memory", {})
+        notes = memory_data.get("zkNotes", [])
+        notes = [n for n in notes if n.get("id") != note_id]
+        memory_data["zkNotes"] = notes
+        memory_table.put_item(Item={
+            "username": username,
+            "memory": to_dynamodb_value(memory_data)
+        })
+
+        return respond(200, {"status": "success"})
+
     # Route: POST /api/invite/send
     elif path == "/api/invite/send" and http_method == "POST":
         username, auth_error = require_username(event, headers)
@@ -999,7 +1218,7 @@ def lambda_handler(event, context):
         import urllib.error
         
         api_url = "https://opencode.ai/zen/v1/chat/completions"
-        api_key = "sk-qheeoxksGwgHDCcr0F6u9fisSj7L46o9xDuXYbqForNleRwb0ZMTkYeOofHmhRHK"
+        api_key = os.environ.get("OPENCODE_API_KEY", "")
         
         messages = body.get("messages", [])
         model = body.get("model", "big-pickle")

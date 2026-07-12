@@ -1,5 +1,6 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
+import { nodePolyfills } from 'vite-plugin-node-polyfills';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import path from 'path';
 import {defineConfig, loadEnv, type Plugin} from 'vite';
@@ -145,7 +146,15 @@ function opencodeAgentApi(env: Record<string, string>): Plugin {
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   return {
-    plugins: [opencodeAgentApi(env), react(), tailwindcss()],
+    plugins: [
+      opencodeAgentApi(env),
+      react(),
+      tailwindcss(),
+      nodePolyfills({ include: ['buffer', 'events', 'util', 'stream', 'crypto', 'process'] }),
+    ],
+    optimizeDeps: {
+      include: ['@stellar/js-xdr', '@stellar/stellar-base', 'stellar-sdk'],
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

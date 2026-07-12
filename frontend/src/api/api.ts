@@ -2,7 +2,7 @@
  * ZEXVRO API Client
  * 
  * Centralized HTTP client for AWS Lambda backend.
- * Currently stubs Stellar SDK calls — will become live when credentials are provided.
+ * Stellar transaction building, signing (Freighter), and submission via Horizon.
  */
 
 const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
@@ -26,10 +26,20 @@ function getAuthHeaders(): Record<string, string> {
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE}${path}`;
-  const response = await fetch(url, {
-    ...options,
-    headers: { ...getAuthHeaders(), ...(options.headers as Record<string, string> || {}) },
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...options,
+      headers: { ...getAuthHeaders(), ...(options.headers as Record<string, string> || {}) },
+    });
+  } catch (e: any) {
+    const msg = e?.message || String(e);
+    throw new Error(
+      msg.includes('NetworkError') || msg.includes('Failed to fetch')
+        ? `Network error reaching API (${API_BASE}). Check VITE_API_URL / CORS / auth session.`
+        : msg,
+    );
+  }
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: response.statusText }));
     throw new Error(error.error_description || error.error || 'API request failed');
@@ -64,7 +74,7 @@ export const employeeApi = {
   create: (data: any) => api.post<any>('/api/employees', data),
   bulkCreate: (data: any) => api.post<any>('/api/employees/bulk', data),
   update: (id: string, data: any) => api.put<any>(`/api/employees/${id}`, data),
-  delete: (id: string) => api.delete<any>(`/api/employees/${id}`),
+  delete: (id: string, workspaceId?: string) => api.delete<any>(`/api/employees/${id}${workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : ''}`),
 };
 
 export const payrollApi = {
@@ -90,25 +100,174 @@ export const inviteApi = {
     api.post<any>('/api/invite/send', data),
 };
 
-/* ─── Stellar SDK Stubs ─── */
-// TODO: Replace with actual Stellar SDK calls when credentials are provided
+export const proofApi = {
+  list: async (projectId: string) => {
+    try {
+      const q = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
+      return await api.get<{ proofs: any[] }>(`/api/proofs${q}`);
+    } catch (e) {
+      console.warn('proofApi.list failed (non-fatal):', e);
+      return { proofs: [] as any[] };
+    }
+  },
+  create: async (data: any) => {
+    try {
+      return await api.post<any>('/api/proofs', data);
+    } catch (e) {
+      console.warn('proofApi.create failed (non-fatal):', e);
+      return null;
+    }
+  },
+  update: async (id: string, data: any) => {
+    try {
+      return await api.put<any>(`/api/proofs/${id}`, data);
+    } catch (e) {
+      console.warn('proofApi.update failed (non-fatal):', e);
+      return null;
+    }
+  },
+};
+
+export const zkNotesApi = {
+  list: () => api.get<{ notes: any[] }>('/api/zk-notes'),
+  save: (note: any) => api.post<any>('/api/zk-notes', note),
+  update: (id: string, data: any) => api.put<any>(`/api/zk-notes/${id}`, data),
+  delete: (id: string) => api.delete<any>(`/api/zk-notes/${id}`),
+};
+
+/* ─── Stellar SDK — Real On-Chain Transactions ─── */
+
+import {
+  TransactionBuilder, Operation, Asset, Networks, Account, BASE_FEE, Memo,
+} from 'stellar-sdk';
+import { signTransaction as freighterSign } from '@stellar/freighter-api';
+
+/** Known USDC/EURC testnet issuers (Stellar Development Foundation) */
+const TESTNET_ISSUERS: Record<string, string> = {
+  USDC: 'GBBD47IF6LWK7P7M7SC3DEUQ7OCSEZUO7UHYE2442BENPDUXZUCMV32V',
+  EURC: 'GB3Q6QDZYADPKVZGQ5G4Y3XSZFCR5B4XHY7G2T2GK4YRQO6G4SP6YO3G',
+};
+
+function isTestnet(horizonUrl: string): boolean {
+  return horizonUrl.includes('testnet');
+}
+
+function getNetworkPassphrase(horizonUrl: string): string {
+  return isTestnet(horizonUrl) ? Networks.TESTNET : Networks.PUBLIC;
+}
+
+function getStellarAsset(currency: string, horizonUrl: string): Asset {
+  if (currency === 'XLM') return Asset.native();
+  const issuer = TESTNET_ISSUERS[currency];
+  if (!issuer) throw new Error(`Unknown asset: ${currency}. Only XLM, USDC, EURC are supported.`);
+  return new Asset(currency, issuer);
+}
 
 export const stellar = {
-  /** Check pool balance on-chain */
-  getPoolBalance: async (_walletAddress: string) => {
-    // TODO: Stellar SDK — server.loadAccount(walletAddress).then(acc => acc.balances)
-    return { USDC: 0, XLM: 0, EURC: 0 };
+  getPoolBalance: async (walletAddress: string, horizonUrl = 'https://horizon-testnet.stellar.org') => {
+    try {
+      const cleanUrl = horizonUrl.replace(/\/$/, '');
+      const response = await fetch(`${cleanUrl}/accounts/${walletAddress}`);
+      if (!response.ok) {
+        if (response.status === 404) {
+          return { USDC: 0, XLM: 0, EURC: 0 };
+        }
+        throw new Error(`Horizon error: ${response.statusText}`);
+      }
+      const data = await response.json();
+      const balances = { USDC: 0, XLM: 0, EURC: 0 };
+      if (Array.isArray(data.balances)) {
+        for (const bal of data.balances) {
+          if (bal.asset_type === 'native') {
+            balances.XLM = parseFloat(bal.balance) || 0;
+          } else if (bal.asset_code === 'USDC') {
+            balances.USDC = parseFloat(bal.balance) || 0;
+          } else if (bal.asset_code === 'EURC') {
+            balances.EURC = parseFloat(bal.balance) || 0;
+          }
+        }
+      }
+      return balances;
+    } catch (err) {
+      console.error('Failed to fetch Stellar balance:', err);
+      throw new Error(err instanceof Error ? err.message : 'Failed to retrieve account details from Horizon API');
+    }
   },
 
-  /** Submit a payment transaction to Stellar */
-  submitPayment: async (_from: string, _to: string, _amount: number, _asset: string) => {
-    // TODO: Stellar SDK — build + sign + submit transaction
-    return { txHash: `0xstub_${Date.now().toString(16)}`, success: true };
-  },
+  /**
+   * Build, sign (via Freighter), and submit a real Stellar payment transaction.
+   * Returns the on-chain transaction hash on success.
+   */
+  submitPayment: async (
+    fromAddress: string,
+    toAddress: string,
+    amount: number,
+    currency: string,
+    horizonUrl: string,
+    memo?: string,
+  ): Promise<{ txHash: string; success: boolean }> => {
+    const cleanUrl = horizonUrl.replace(/\/$/, '');
+    const passphrase = getNetworkPassphrase(horizonUrl);
+    const asset = getStellarAsset(currency, horizonUrl);
 
-  /** Generate a ZK proof via Soroban contract */
-  generateProof: async (_contractAddress: string, _inputs: unknown) => {
-    // TODO: Soroban SDK — invoke contract method
-    return { proofData: '0xstub_proof', verificationKey: '0xstub_vk' };
+    // 1. Fetch source account sequence number from Horizon
+    const accountResponse = await fetch(`${cleanUrl}/accounts/${fromAddress}`);
+    if (!accountResponse.ok) {
+      throw new Error(`Source account not found or unfunded: ${fromAddress}`);
+    }
+    const accountData = await accountResponse.json();
+    const sequence = accountData.sequence;
+
+    // 2. Build the transaction
+    const sourceAccount = new Account(fromAddress, sequence);
+    const txBuilder = new TransactionBuilder(sourceAccount, {
+      fee: BASE_FEE,
+      networkPassphrase: passphrase,
+    });
+
+    txBuilder.addOperation(
+      Operation.payment({
+        destination: toAddress,
+        asset,
+        amount: amount.toFixed(7),
+      }),
+    );
+
+    if (memo) {
+      txBuilder.addMemo(Memo.text(memo.slice(0, 28)));
+    }
+
+    const transaction = txBuilder.setTimeout(180).build();
+
+    // 3. Sign via Freighter
+    const txXdr = transaction.toXDR();
+    const signedResult = await freighterSign(txXdr, { networkPassphrase: passphrase });
+
+    if (signedResult.error) {
+      const errMsg = typeof signedResult.error === 'object'
+        ? (signedResult.error as any).message || JSON.stringify(signedResult.error)
+        : signedResult.error;
+      throw new Error(`Transaction signing failed: ${errMsg}`);
+    }
+
+    if (!signedResult.signedTxXdr) {
+      throw new Error('Transaction was not signed. Did you approve in Freighter?');
+    }
+
+    // 4. Submit signed transaction to Horizon
+    const submitResponse = await fetch(`${cleanUrl}/transactions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ tx: signedResult.signedTxXdr }).toString(),
+    });
+
+    const submitData = await submitResponse.json();
+
+    if (!submitResponse.ok || submitData.status === 'ERROR') {
+      const detail = submitData.extras?.result_xdr || submitData.detail || submitData.title || 'Unknown error';
+      throw new Error(`Transaction submission failed: ${detail}`);
+    }
+
+    return { txHash: submitData.hash, success: true };
   },
 };
