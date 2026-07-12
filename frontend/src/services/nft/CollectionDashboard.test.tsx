@@ -11,10 +11,18 @@ const api = vi.hoisted(() => ({
   listNftCollections: vi.fn(),
   prepareNftSaleConfig: vi.fn(),
   retryNftCollectionDeployment: vi.fn(),
+  submitNftSaleConfig: vi.fn(),
   updateNftCollection: vi.fn(),
 }));
 
+const wallet = vi.hoisted(() => ({
+  getPublicKey: vi.fn(),
+  isWalletAvailable: vi.fn(),
+  signTransaction: vi.fn(),
+}));
+
 vi.mock('./nftApi', () => api);
+vi.mock('./stellarWallet', () => wallet);
 
 const remoteCollection = {
   id: '4a0dc446-4f57-4cf2-94ec-257b41b786a1',
@@ -76,6 +84,12 @@ describe('CollectionDashboard', () => {
     api.retryNftCollectionDeployment.mockResolvedValue(remoteCollection);
     api.updateNftCollection.mockResolvedValue(failedCollection);
     api.deleteNftCollection.mockResolvedValue(undefined);
+    api.submitNftSaleConfig.mockResolvedValue({
+      transaction: { transactionHash: 'wallet-sale-hash', status: 'confirmed' },
+    });
+    wallet.isWalletAvailable.mockReturnValue(false);
+    wallet.getPublicKey.mockResolvedValue(remoteCollection.ownerAddress);
+    wallet.signTransaction.mockResolvedValue('signed-sale');
   });
 
   it('shows an honest API-backed empty state', async () => {
@@ -204,6 +218,42 @@ describe('CollectionDashboard', () => {
 
     expect(await screen.findByRole('button', { name: /sale configured/i })).toBeDisabled();
     expect(screen.getByText('Submitted by local sponsor')).toBeInTheDocument();
+  });
+
+  it('signs non-sponsor sale configuration with Freighter and submits', async () => {
+    const user = userEvent.setup();
+    api.listNftCollections.mockResolvedValue([remoteCollection]);
+    api.prepareNftSaleConfig.mockResolvedValue({
+      serializedTransaction: 'prepared-sale',
+      requiredSigners: [remoteCollection.ownerAddress],
+    });
+    api.submitNftSaleConfig.mockResolvedValue({
+      transaction: { transactionHash: 'wallet-sale-hash', status: 'confirmed' },
+    });
+    wallet.isWalletAvailable.mockReturnValue(true);
+    wallet.getPublicKey.mockResolvedValue(remoteCollection.ownerAddress);
+    wallet.signTransaction.mockResolvedValue('signed-sale');
+
+    render(
+      <MemoryRouter>
+        <CollectionDashboard workspaceId="studio-a" accessToken="access-token" onCreate={() => undefined} />
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByTitle('Configure primary sale'));
+    await user.clear(screen.getByLabelText(/Price/));
+    await user.type(screen.getByLabelText(/Price/), '1.25');
+    await user.click(screen.getByRole('button', { name: /prepare sale/i }));
+    await user.click(await screen.findByRole('button', { name: /sign with wallet/i }));
+
+    expect(wallet.signTransaction).toHaveBeenCalledWith('prepared-sale');
+    expect(api.submitNftSaleConfig).toHaveBeenCalledWith({
+      collectionId: remoteCollection.id,
+      preparedTransaction: 'prepared-sale',
+      signedTransaction: 'signed-sale',
+      accessToken: 'access-token',
+    });
+    expect(await screen.findByText(/signed and confirmed/i)).toBeInTheDocument();
   });
 
   it('surfaces API failures without hiding browser drafts', async () => {

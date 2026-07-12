@@ -124,3 +124,59 @@ credentials but returns an explicit `503` for chain operations.
 The frontend uploads collection media, deploys through the authenticated API,
 and lists live or failed workspace records. Older browser-local drafts remain
 visible in a separate migration section and are never presented as deployed.
+
+## Signed-in smoke runbook
+
+Use this to prove the local NFT product loop. Do not treat a successful smoke as a production claim.
+
+### Prerequisites
+
+1. Root env: `cp .env.example .env` (set Cognito public IDs; leave secrets out of git).
+2. Local Stellar CLI identity `zexvro-provider` funded on testnet (or set `STELLAR_SPONSOR_SECRET`).
+3. `NFT_COLLECTION_WASM_HASH` set (defaults in root `.env.example`).
+4. Browser access to the configured Cognito user pool.
+
+### Start services
+
+```bash
+npm run dev
+```
+
+- NFT API: `http://127.0.0.1:4101/health`
+- Frontend: `http://127.0.0.1:3000` (Vite may pick the next free port)
+
+### API harness
+
+```bash
+npm run nft:smoke
+```
+
+Optional authenticated list check (Cognito **access** token, not ID token):
+
+```bash
+NFT_SMOKE_ACCESS_TOKEN='<cognito-access-token>' \
+NFT_SMOKE_WORKSPACE_ID='default' \
+npm run nft:smoke
+```
+
+The harness fails when `/health` is down. It reports `stellarConfigured` / `storageMode` and skips authenticated routes when no token is provided.
+
+### Browser loop
+
+1. Sign in at `/dashboard`.
+2. Open a project NFT screen: `/dashboard/w/<workspaceId>/p/<projectId>/nft`.
+3. **New collection** → complete the wizard → deploy.
+4. On a live collection, open primary sale setup:
+   - Local sponsor owner: prepare may auto-submit and mark the sale live.
+   - Other owners: prepare returns a transaction; use **Sign with wallet** (Freighter) then submit.
+5. Open the public page (`/nft/collections/<collectionId>`).
+6. Enter buyer address (or connect wallet) → **Prepare checkout** → **Sign & submit** with the buyer wallet.
+7. Confirm only after a Stellar transaction hash is returned as `confirmed`.
+
+### Known manual gates
+
+- Cognito browser sign-in cannot be automated without secrets in CI.
+- Freighter must be installed for non-sponsor signing.
+- Buyer needs testnet USDC for live checkout settlement.
+- Pinata mode requires `NFT_STORAGE_MODE=pinata` and `PINATA_JWT`.
+

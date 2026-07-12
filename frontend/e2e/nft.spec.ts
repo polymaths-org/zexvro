@@ -173,3 +173,54 @@ test('De-pin gateway route shows a standard x402 challenge probe', async ({ page
     fullPage: true,
   });
 });
+
+test('mocked sale configuration wallet path reaches sign CTA', async ({ page }) => {
+  const collectionId = '4a0dc446-4f57-4cf2-94ec-257b41b786a1';
+  const owner = 'GCD4SBBOLPUM7UYWLPRKOP6IYKOZ6FX5YQOJHVVE7RKC2QGZYNUHKRCZ';
+  await page.route('**/api/nft/v1/collections?*', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        collections: [{
+          id: collectionId,
+          workspaceId: 'ws-test',
+          name: 'Sky Forge',
+          symbol: 'SKY',
+          description: 'A collection of verifiable game items.',
+          ownerAddress: owner,
+          baseMetadataUri: 'ipfs://bafybase/',
+          collectionMetadataUri: 'ipfs://bafymeta',
+          coverImageUri: 'ipfs://bafycover',
+          royaltyRecipient: owner,
+          royaltyBps: 500,
+          status: 'live',
+          contractId: `C${'A'.repeat(55)}`,
+          deploymentTxHash: 'deployment-hash',
+          createdAt: '2026-07-11T00:00:00.000Z',
+          updatedAt: '2026-07-11T00:00:00.000Z',
+        }],
+      }),
+    });
+  });
+  await page.route('**/api/nft/v1/collections/*/sale-config/intent', async (route) => {
+    await route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        intent: {
+          serializedTransaction: 'prepared-sale',
+          requiredSigners: [owner],
+        },
+      }),
+    });
+  });
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/dashboard/w/ws-test/p/project-test/nft');
+  await expect(page.getByText('Sky Forge')).toBeVisible();
+  await page.getByTitle('Configure primary sale').click();
+  await page.getByRole('button', { name: /prepare sale/i }).click();
+  await expect(page.getByRole('button', { name: /sign with wallet/i })).toBeVisible();
+});
+

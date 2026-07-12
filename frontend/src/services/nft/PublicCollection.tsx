@@ -14,9 +14,11 @@ import {
 import {
   createPublicCheckoutIntent,
   getPublicNftCollection,
+  submitPublicCheckoutIntent,
   type NftCheckoutIntent,
   type PublicNftCollection,
 } from './nftApi';
+import { getPublicKey, isWalletAvailable, signTransaction } from './stellarWallet';
 
 const STELLAR_ADDRESS = /^G[A-Z2-7]{55}$/;
 
@@ -64,6 +66,8 @@ export default function PublicCollection() {
   const [checkoutIntent, setCheckoutIntent] = useState<NftCheckoutIntent | null>(null);
   const [checkoutError, setCheckoutError] = useState('');
   const [preparing, setPreparing] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [confirmedHash, setConfirmedHash] = useState('');
   const [copied, setCopied] = useState('');
 
   useEffect(() => {
@@ -86,6 +90,54 @@ export default function PublicCollection() {
     if (typeof window === 'undefined') return '';
     return window.location.href.split('?')[0] || window.location.href;
   }, []);
+
+
+  const connectBuyerWallet = async () => {
+    setCheckoutError('');
+    try {
+      if (!isWalletAvailable()) {
+        throw new Error('Freighter is not installed. Install Freighter or paste a buyer address manually.');
+      }
+      const address = await getPublicKey();
+      setBuyerAddress(address);
+      setCopied('Wallet connected.');
+    } catch (error) {
+      setCheckoutError(errorMessage(error));
+    }
+  };
+
+  const signAndSubmitCheckout = async () => {
+    if (!checkoutIntent) return;
+    setSubmitting(true);
+    setCheckoutError('');
+    setConfirmedHash('');
+    try {
+      if (!isWalletAvailable()) {
+        throw new Error('Freighter is not installed. Install Freighter to sign the checkout transaction.');
+      }
+      const walletAddress = await getPublicKey();
+      if (walletAddress !== checkoutIntent.buyerAddress) {
+        setCheckoutError(`Connected wallet must match buyer address ${checkoutIntent.buyerAddress}.`);
+        return;
+      }
+      const signedTransaction = await signTransaction(checkoutIntent.serializedTransaction);
+      const result = await submitPublicCheckoutIntent({
+        intentId: checkoutIntent.id,
+        signedTransaction,
+      });
+      const hash = result.transaction?.transactionHash || result.intent.transactionHash || '';
+      if (!hash || (result.intent.status !== 'confirmed' && result.transaction?.status !== 'confirmed')) {
+        throw new Error(result.intent.failureReason || 'Checkout was submitted but not confirmed yet.');
+      }
+      setConfirmedHash(hash);
+      setCheckoutIntent({ ...result.intent, status: 'confirmed', transactionHash: hash });
+      setCopied('Purchase confirmed on Stellar testnet.');
+    } catch (error) {
+      setCheckoutError(errorMessage(error));
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const prepareCheckout = async () => {
     if (!collection || !collectionId) return;
@@ -250,6 +302,13 @@ export default function PublicCollection() {
                 className="mt-2 w-full rounded-md border border-zinc-800 bg-[#050506] px-3 py-2.5 font-mono text-sm text-white outline-none transition focus:border-brand-blue"
               />
             </label>
+            <button
+              type="button"
+              onClick={() => void connectBuyerWallet()}
+              className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md border border-zinc-800 px-3 text-sm font-medium text-zinc-300 transition hover:border-zinc-700 hover:text-white"
+            >
+              Connect wallet
+            </button>
             <label className="block text-sm font-medium text-zinc-200">
               Token ID
               <input
@@ -305,6 +364,28 @@ export default function PublicCollection() {
                 <Copy className="h-4 w-4" />
                 Copy transaction
               </button>
+              {checkoutIntent.status !== 'confirmed' && (
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => void signAndSubmitCheckout()}
+                  className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-white px-4 text-sm font-medium text-zinc-950 transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {submitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+                  Sign & submit
+                </button>
+              )}
+              {confirmedHash && (
+                <a
+                  href={`https://stellar.expert/explorer/testnet/tx/${confirmedHash}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 text-sm text-emerald-300 hover:text-emerald-200"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  Confirmed {shortAddress(confirmedHash)}
+                </a>
+              )}
             </div>
           )}
         </aside>

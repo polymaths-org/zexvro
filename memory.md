@@ -623,3 +623,14 @@ Use `None` for empty fields. Do not delete fields.
 - Follow-ups: Optional npm workspaces migration later; signed-in frontend collection deploy smoke remains Nabil's next product step.
 - Blockers: None for the root runner itself. Production Pinata, managed sponsor secrets, shared NFT persistence, and multi-instance De-pin stores remain open.
 - Verification: `node --check scripts/dev.mjs`, frontend lint/build, NFT API lint/build, and De-pin lint passed. `git diff --check` clean. Root `npm run dev` smoke started NFT API on `4101` and Vite on `3000` with Stellar identity `zexvro-provider` loaded from CLI without a root `.env` file. Landed on `feature/nft-service` as commit `feat: unify local env and root dev runner`.
+
+## 2026-07-12 - Codex with Nabil - Phase 1-2 NFT smoke harness and wallet sale submit
+
+- Service or area: NFT Service frontend/API harness, Freighter wallet sale-config submit, public checkout submit client.
+- Files changed: `scripts/nft-smoke.mjs`, `package.json`, `services/nft-service/README.md`, `README.md`, `frontend/src/services/nft/stellarWallet.ts`, `frontend/src/services/nft/stellarWallet.test.ts`, `frontend/src/services/nft/nftApi.ts`, `frontend/src/services/nft/nftApi.test.ts`, `frontend/src/services/nft/CollectionDashboard.tsx`, `frontend/src/services/nft/CollectionDashboard.test.tsx`, `frontend/src/services/nft/PublicCollection.tsx`, `frontend/e2e/nft.spec.ts`, `memory.md`, `agent-convo.md`.
+- Summary: Implemented plan phases 1–2 (and public checkout submit client for phase 3 prep). Added `npm run nft:smoke` health/auth harness and signed-in runbook. Added Freighter-first wallet adapter, sale-config sign+submit on the dashboard when prepare does not auto-submit, and public page connect/sign/submit checkout path. Sponsor auto-submit path unchanged. No secrets committed.
+- Decisions: Accepted - Freighter is the v1 browser wallet. Accepted - Smoke harness stays API-level; browser Cognito loop remains manual. Accepted - Do not claim purchase until API returns confirmed hash.
+- Follow-ups: Phase 3 polish if live buyer Freighter smoke needed; Phase 4 creator mint UI; Pinata/shared persistence later phases.
+- Blockers: Live Freighter and Cognito browser sessions are manual. `gh auth` still invalid for remote PR automation.
+- Verification: Frontend lint/build passed; frontend Vitest 34/34; NFT API lint passed; NFT API tests 33/33; `node --check scripts/nft-smoke.mjs` passed. Known large frontend chunk warning unchanged.
+

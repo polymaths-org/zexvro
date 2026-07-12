@@ -30,11 +30,13 @@ import {
   listNftCollections,
   prepareNftSaleConfig,
   retryNftCollectionDeployment,
+  submitNftSaleConfig,
   updateNftCollection,
   type ApiNftCollection,
   type NftServiceHealth,
   type PreparedNftTransaction,
 } from './nftApi';
+import { getPublicKey, isWalletAvailable, signTransaction } from './stellarWallet';
 
 interface CollectionDashboardProps {
   workspaceId: string;
@@ -248,6 +250,61 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
       } else {
         setActionMessage('Sale configuration transaction prepared.');
       }
+    } catch (error) {
+      setActionError(errorMessage(error));
+    } finally {
+      setBusyCollectionId('');
+    }
+  };
+
+  const signAndSubmitSaleConfig = async () => {
+    if (!saleCollection || !saleIntent || saleIntent.autoSubmitted) return;
+    setBusyCollectionId(saleCollection.id);
+    setActionError('');
+    setActionMessage('');
+    try {
+      if (!isWalletAvailable()) {
+        throw new Error('Freighter is not installed. Install Freighter to sign sale configuration, or use the local sponsor auto-submit path.');
+      }
+      const walletAddress = await getPublicKey();
+      if (
+        saleCollection.ownerAddress &&
+        walletAddress !== saleCollection.ownerAddress &&
+        !saleIntent.requiredSigners.includes(walletAddress)
+      ) {
+        setActionMessage(`Connected wallet ${walletAddress.slice(0, 6)}... differs from required signers. Continue only if this key is authorized.`);
+      }
+      const signedTransaction = await signTransaction(saleIntent.serializedTransaction);
+      const result = await submitNftSaleConfig({
+        collectionId: saleCollection.id,
+        preparedTransaction: saleIntent.serializedTransaction,
+        signedTransaction,
+        accessToken,
+      });
+      const configuredSale = {
+        paymentTokenAddress: '',
+        priceAtomic: usdcToAtomic(salePrice) || '0',
+        transactionHash: result.transaction.transactionHash,
+        configuredAt: new Date().toISOString(),
+      };
+      setSaleCollection(previous => previous ? {
+        ...previous,
+        primarySale: result.collection?.primarySale || configuredSale,
+      } : previous);
+      setCollections(previous => previous.map(collection =>
+        collection.id === saleCollection.id
+          ? { ...collection, primarySale: result.collection?.primarySale || configuredSale }
+          : collection,
+      ));
+      setSaleIntent({
+        ...saleIntent,
+        autoSubmitted: {
+          transactionHash: result.transaction.transactionHash,
+          status: 'confirmed',
+        },
+      });
+      setActionMessage('Sale configuration signed and confirmed on Stellar testnet.');
+      await loadRemoteData(undefined, true);
     } catch (error) {
       setActionError(errorMessage(error));
     } finally {
@@ -752,6 +809,21 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
                   <Copy className="h-4 w-4" />
                   Copy transaction
                 </button>
+                {!saleIntent.autoSubmitted && (
+                  <button
+                    type="button"
+                    disabled={busyCollectionId === saleCollection.id}
+                    className="inline-flex h-9 items-center gap-2 rounded-md bg-zinc-900 px-3 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
+                    onClick={() => void signAndSubmitSaleConfig()}
+                  >
+                    {busyCollectionId === saleCollection.id ? (
+                      <LoaderCircle className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <ShieldCheck className="h-4 w-4" />
+                    )}
+                    Sign with wallet
+                  </button>
+                )}
               </div>
             )}
 
