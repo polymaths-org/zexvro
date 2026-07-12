@@ -31,6 +31,13 @@ function errorMessage(error: unknown) {
   return 'The NFT service could not complete this request.';
 }
 
+function reportCheckoutError(error: unknown, setCheckoutError: (message: string) => void) {
+  const message = errorMessage(error);
+  // Help local debugging when Freighter/signing fails outside the network tab.
+  console.error('[nft/checkout]', message, error);
+  setCheckoutError(message);
+}
+
 function shortAddress(value: string) {
   return value.length > 18 ? `${value.slice(0, 9)}...${value.slice(-7)}` : value;
 }
@@ -106,7 +113,7 @@ export default function PublicCollection() {
       setBuyerAddress(address);
       setCopied('Wallet connected.');
     } catch (error) {
-      setCheckoutError(errorMessage(error));
+      reportCheckoutError(error, setCheckoutError);
     }
   };
 
@@ -137,7 +144,7 @@ export default function PublicCollection() {
       setCheckoutIntent({ ...result.intent, status: 'confirmed', transactionHash: hash });
       setCopied('Purchase confirmed on Stellar testnet.');
     } catch (error) {
-      setCheckoutError(errorMessage(error));
+      reportCheckoutError(error, setCheckoutError);
     } finally {
       setSubmitting(false);
     }

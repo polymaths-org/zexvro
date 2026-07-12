@@ -87,6 +87,19 @@ describe('stellarWallet', () => {
     );
   });
 
+  it('rejects assembled JSON rehydrate when envelope contract mismatches placeholder usage', async () => {
+    freighterApi.isConnected.mockResolvedValue({ isConnected: true });
+    freighterApi.isAllowed.mockResolvedValue({ isAllowed: true });
+    freighterApi.requestAccess.mockResolvedValue({
+      address: 'GCD4SBBOLPUM7UYWLPRKOP6IYKOZ6FX5YQOJHVVE7RKC2QGZYNUHKRCZ',
+    });
+
+    // Invalid/incomplete JSON body should surface as wallet_invalid_transaction / wallet_sign_failed
+    await expect(
+      signTransaction(JSON.stringify({ method: 'mint', tx: 'not-valid-xdr' })),
+    ).rejects.toMatchObject({ name: 'StellarWalletError' });
+  });
+
   it('throws a clear error when Freighter is missing', async () => {
     freighterApi.isConnected.mockResolvedValue({ isConnected: false });
     await expect(getPublicKey()).rejects.toBeInstanceOf(StellarWalletError);
