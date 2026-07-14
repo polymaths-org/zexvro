@@ -46,11 +46,19 @@ function buildDisclosure(mode: PrivacyMode): Disclosure[] {
       },
       {
         label: 'Employee wallet address',
-        public: 'Visible only as the withdraw destination of a pool payout',
-        private: 'Stored with the payee record',
+        public: 'Without stealth: withdraw destination is the long-term G… wallet. With stealth: a fresh one-time G… each pay',
+        private: 'Long-term wallet + optional z0st1… meta-address; scan secrets stay offline',
         onExplorer: true,
         inZexvro: true,
-        note: 'Someone can see a wallet received unit-sized XLM from the pool — not who the employer is or the full salary.',
+        note: 'Stealth addresses break “always the same employee wallet” linkage. Payee recovers the one-time key via ECDH scan of the published ephemeral public key.',
+      },
+      {
+        label: 'Stealth meta-address (z0st1…)',
+        public: 'May be shared like a payment handle; does not appear as a Stellar account itself',
+        private: 'Bound to scan/spend keys; used to derive one-time receive accounts',
+        onExplorer: false,
+        inZexvro: true,
+        note: 'Not a Stellar G… address. Each private pay derives a new G… + publishes an ephemeral X25519 public key for the payee to scan.',
       },
       {
         label: 'Company funding wallet',
@@ -204,7 +212,8 @@ export default function Zer0DataPreview() {
                 <li><strong className="text-zinc-800 dark:text-zinc-200">Salary confidentiality</strong> — competitors and public explorers cannot read exact compensation from a single payment graph.</li>
                 <li><strong className="text-zinc-800 dark:text-zinc-200">Still auditable internally</strong> — ZEXVRO keeps employee, amount, type, timestamps, and tx references for your books.</li>
                 <li><strong className="text-zinc-800 dark:text-zinc-200">On-chain integrity</strong> — the pool verifies a real zero-knowledge proof before releasing funds; double-spend is blocked by nullifiers.</li>
-                <li><strong className="text-zinc-800 dark:text-zinc-200">Fixed units ({unit} XLM)</strong> — every pool move looks the same size, so amount is not a fingerprint of one salary.</li>
+                <li><strong className="text-zinc-800 dark:text-zinc-200">Fixed multi-pool units</strong> — notes are 1000 / 100 / 10 / 1 XLM so amount is not a fingerprint of one salary.</li>
+                <li><strong className="text-zinc-800 dark:text-zinc-200">Stealth receives (optional)</strong> — withdraw to a one-time G… address derived from the payee’s meta-address, so their long-term wallet is not reused on every payday.</li>
               </ul>
             ) : (
               <ul className="list-disc pl-4 space-y-1.5">

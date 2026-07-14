@@ -1,8 +1,7 @@
-import { useState } from 'react';
 import { Link, Outlet, useParams, useRouterState } from '@tanstack/react-router';
 import {
   LayoutDashboard, Users, SendHorizontal, History, ShieldCheck,
-  Settings, ChevronLeft, BookOpen, Banknote, Eye
+  Settings, ChevronLeft, BookOpen, Banknote, Eye, Ghost,
 } from 'lucide-react';
 
 const ZER0_NAV = [
@@ -12,6 +11,7 @@ const ZER0_NAV = [
   { id: 'payroll', path: 'zer0/payroll', label: 'Payroll runs', icon: Banknote },
   { id: 'history', path: 'zer0/history', label: 'Payment ledger', icon: History },
   { id: 'proofs', path: 'zer0/proofs', label: 'Payment proofs', icon: ShieldCheck },
+  { id: 'stealth', path: 'zer0/stealth', label: 'Stealth addresses', icon: Ghost },
   { id: 'data-preview', path: 'zer0/data-preview', label: 'What stays private', icon: Eye },
   { id: 'settings', path: 'zer0/settings', label: 'Settings', icon: Settings },
 ] as const;

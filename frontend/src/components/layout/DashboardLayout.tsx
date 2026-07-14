@@ -13,7 +13,6 @@ import { globalSignOut, type UserSession } from '../../auth/cognito';
 import { buildAgentChatPayload, loadAgentSettingsFromAWS } from '../../agent/settings';
 import CliActivation from '../auth/CliActivation';
 import { initializeAWSSync, pullFromAWS } from '../../stores/awsSync';
-
 const IS_LOCAL_HOST = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 const API_BASE_URL = import.meta.env.VITE_API_URL ||
   (IS_LOCAL_HOST
@@ -1408,6 +1407,7 @@ export default function DashboardLayout() {
           )}
         </>
       )}
+
     </div>
   );
 }

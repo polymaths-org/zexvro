@@ -2,10 +2,13 @@ import { useState, useMemo } from 'react';
 import { useParams } from '@tanstack/react-router';
 import {
   Search, Plus, X, Users, Mail, Wallet, Briefcase,
-  MoreHorizontal, Edit3, UserX, ChevronDown
+  MoreHorizontal, Edit3, UserX, ChevronDown, Shield, Copy, Check, Loader2, Ghost,
 } from 'lucide-react';
 import { employeeApi } from '../../api/api';
 import { useZer0Store } from '../../stores/zer0';
+import { useStealthStore } from '../../stores/stealth';
+import { generateStealthIdentity, isStealthMetaAddress, shortAddr } from '../../lib/stealth';
+import { copyText } from '../../lib/clipboard';
 import type { Zer0Employee, Zer0Currency, Zer0PayFrequency, Zer0EmployeeStatus } from '../../stores/types';
 
 const DEPARTMENTS = ['Engineering', 'Design', 'Operations', 'Finance', 'Marketing', 'Sales', 'Legal', 'Other'];
@@ -28,12 +31,22 @@ export default function Zer0People() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
 
+  const setEmployeeMeta = useStealthStore(s => s.setEmployeeMeta);
+  const importIdentity = useStealthStore(s => s.importIdentity);
+  const employeeMetaMap = useStealthStore(s => s.employeeMeta);
+  const updateSettings = useZer0Store(s => s.updateSettings);
+  const stealthPaymentsEnabled = useZer0Store(s => s.settings.stealthPaymentsEnabled);
+
   // Form state
   const [form, setForm] = useState({
     name: '', email: '', role: 'Employee', department: 'Engineering',
-    walletAddress: '', salary: '', currency: 'USDC' as Zer0Currency,
+    walletAddress: '', stealthMetaAddress: '', salary: '', currency: 'USDC' as Zer0Currency,
     frequency: 'monthly' as Zer0PayFrequency,
   });
+  const [generatedScanBackup, setGeneratedScanBackup] = useState<string | null>(null);
+  const [copiedMeta, setCopiedMeta] = useState(false);
+  const [stealthBusyId, setStealthBusyId] = useState<string | null>(null);
+  const [stealthFlash, setStealthFlash] = useState('');
 
   const employees = useMemo(() => allEmployees.filter(e => e.projectId === pid), [allEmployees, pid]);
 
@@ -50,8 +63,12 @@ export default function Zer0People() {
   }, [employees, search, filterStatus, filterDept]);
 
   const resetForm = () => {
-    setForm({ name: '', email: '', role: 'Employee', department: 'Engineering', walletAddress: '', salary: '', currency: 'USDC', frequency: 'monthly' });
+    setForm({
+      name: '', email: '', role: 'Employee', department: 'Engineering',
+      walletAddress: '', stealthMetaAddress: '', salary: '', currency: 'USDC', frequency: 'monthly',
+    });
     setEditingId(null);
+    setGeneratedScanBackup(null);
   };
 
   const normalizeEmployee = (raw: any): Zer0Employee => ({
@@ -62,6 +79,7 @@ export default function Zer0People() {
     role: raw.role || '',
     department: raw.department || '',
     walletAddress: raw.walletAddress || '',
+    stealthMetaAddress: raw.stealthMetaAddress || '',
     salary: Number(raw.salary || 0),
     currency: (raw.currency || 'USDC') as Zer0Currency,
     frequency: (raw.frequency || 'monthly') as Zer0PayFrequency,
@@ -78,6 +96,13 @@ export default function Zer0People() {
 
     setIsSaving(true);
     setError('');
+    const meta = form.stealthMetaAddress.trim();
+    if (meta && !isStealthMetaAddress(meta)) {
+      setError('Stealth meta-address must start with z0st1… (generate one or paste a valid address).');
+      setIsSaving(false);
+      return;
+    }
+
     const payload = {
       workspaceId: scopeWorkspaceId,
       projectId: pid,
@@ -86,6 +111,7 @@ export default function Zer0People() {
       role: form.role,
       department: form.department,
       walletAddress: form.walletAddress,
+      stealthMetaAddress: meta || undefined,
       salary,
       currency: form.currency,
       frequency: form.frequency,
@@ -96,11 +122,14 @@ export default function Zer0People() {
     try {
       if (editingId) {
         const res = await employeeApi.update(editingId, payload);
-        updateEmployee(editingId, normalizeEmployee(res.employee || { ...payload, id: editingId }));
+        const emp = normalizeEmployee(res.employee || { ...payload, id: editingId });
+        updateEmployee(editingId, emp);
+        if (meta) setEmployeeMeta(editingId, meta);
       } else {
         const res = await employeeApi.create(payload);
         const employee = normalizeEmployee(res.employee || payload);
         useZer0Store.setState(state => ({ employees: [...state.employees, employee] }));
+        if (meta && employee.id) setEmployeeMeta(employee.id, meta);
       }
       setShowModal(false);
       resetForm();
@@ -123,14 +152,81 @@ export default function Zer0People() {
   };
 
   const startEdit = (emp: Zer0Employee) => {
+    const metaFromStore = useStealthStore.getState().employeeMeta[emp.id] || '';
     setForm({
       name: emp.name, email: emp.email, role: emp.role, department: emp.department,
-      walletAddress: emp.walletAddress, salary: emp.salary.toString(),
+      walletAddress: emp.walletAddress,
+      stealthMetaAddress: emp.stealthMetaAddress || metaFromStore,
+      salary: emp.salary.toString(),
       currency: emp.currency, frequency: emp.frequency,
     });
+    setGeneratedScanBackup(null);
     setEditingId(emp.id);
     setShowModal(true);
     setOpenMenu(null);
+  };
+
+  const handleGenerateStealth = () => {
+    const identity = generateStealthIdentity(form.name || 'Team member');
+    importIdentity(identity);
+    setForm(f => ({ ...f, stealthMetaAddress: identity.metaAddress }));
+    // Backup blob for the payee (scan + spend secrets). Never put on-chain.
+    setGeneratedScanBackup(JSON.stringify({
+      v: 1,
+      label: identity.label,
+      metaAddress: identity.metaAddress,
+      scanSecretHex: identity.scanSecretHex,
+      spendSecretHex: identity.spendSecretHex,
+      spendPublicHex: identity.spendPublicHex,
+      scanPublicHex: identity.scanPublicHex,
+      createdAt: identity.createdAt,
+    }, null, 2));
+  };
+
+  /** One-click: enable workspace stealth + generate meta for a team member */
+  const enableStealthForEmployee = async (emp: Zer0Employee) => {
+    setStealthFlash('');
+    setStealthBusyId(emp.id);
+    setOpenMenu(null);
+    try {
+      if (!stealthPaymentsEnabled) {
+        updateSettings({ stealthPaymentsEnabled: true });
+      }
+      const existing = (emp.stealthMetaAddress || employeeMetaMap[emp.id] || '').trim();
+      if (existing && isStealthMetaAddress(existing)) {
+        setStealthFlash(`${emp.name}: stealth already ready`);
+        return;
+      }
+      const identity = generateStealthIdentity(emp.name || 'Team member');
+      importIdentity(identity);
+      setEmployeeMeta(emp.id, identity.metaAddress);
+      updateEmployee(emp.id, { stealthMetaAddress: identity.metaAddress });
+      try {
+        await employeeApi.update(emp.id, {
+          workspaceId: scopeWorkspaceId,
+          stealthMetaAddress: identity.metaAddress,
+        });
+      } catch (e) {
+        console.warn('Could not persist stealth meta to API', e);
+      }
+      const backup = JSON.stringify({
+        v: 1,
+        label: identity.label,
+        metaAddress: identity.metaAddress,
+        scanSecretHex: identity.scanSecretHex,
+        spendSecretHex: identity.spendSecretHex,
+        spendPublicHex: identity.spendPublicHex,
+        scanPublicHex: identity.scanPublicHex,
+        createdAt: identity.createdAt,
+      }, null, 2);
+      await copyText(backup);
+      setStealthFlash(`${emp.name}: stealth ready · ${shortAddr(identity.metaAddress, 8)} · scan backup copied`);
+    } catch (e) {
+      setStealthFlash(e instanceof Error ? e.message : 'Could not enable stealth');
+    } finally {
+      setStealthBusyId(null);
+      setTimeout(() => setStealthFlash(''), 5000);
+    }
   };
 
   const statusBadge: Record<Zer0EmployeeStatus, string> = {
@@ -196,6 +292,13 @@ export default function Zer0People() {
         </div>
       )}
 
+      {stealthFlash && (
+        <div className="rounded-md border border-violet-500/25 bg-violet-500/5 px-3 py-2 text-xs text-violet-700 dark:text-violet-300 flex items-center gap-1.5">
+          <Ghost className="h-3.5 w-3.5 shrink-0" />
+          {stealthFlash}
+        </div>
+      )}
+
       {/* Table */}
       <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-[#0A0A0B] overflow-hidden">
         {filtered.length === 0 ? (
@@ -222,8 +325,20 @@ export default function Zer0People() {
                 {filtered.map(emp => (
                   <tr key={emp.id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/20 transition-colors">
                     <td className="px-4 py-3">
-                      <div className="font-semibold text-zinc-800 dark:text-zinc-200">{emp.name}</div>
+                      <div className="font-semibold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                        {emp.name}
+                        {(emp.stealthMetaAddress || employeeMetaMap[emp.id]) && (
+                          <span title="Stealth meta-address on file" className="inline-flex items-center text-violet-500">
+                            <Shield className="h-3 w-3" />
+                          </span>
+                        )}
+                      </div>
                       <div className="text-[10px] text-zinc-400 mt-0.5">{emp.email}</div>
+                      {(emp.stealthMetaAddress || employeeMetaMap[emp.id]) && (
+                        <div className="text-[9px] font-mono text-violet-500/80 mt-0.5">
+                          {shortAddr(emp.stealthMetaAddress || employeeMetaMap[emp.id], 6)}
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">{emp.department}</td>
                     <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">{emp.role}</td>
@@ -244,13 +359,25 @@ export default function Zer0People() {
                         <MoreHorizontal className="h-4 w-4 text-zinc-400" />
                       </button>
                       {openMenu === emp.id && (
-                        <div className="absolute right-4 top-10 z-20 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-lg py-1 min-w-[120px]">
+                        <div className="absolute right-4 top-10 z-20 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-lg py-1 min-w-[160px]">
                           <button
                             onClick={() => startEdit(emp)}
                             className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800"
                           >
                             <Edit3 className="h-3 w-3" /> Edit
                           </button>
+                          {!(emp.stealthMetaAddress || employeeMetaMap[emp.id]) && (
+                            <button
+                              onClick={() => void enableStealthForEmployee(emp)}
+                              disabled={stealthBusyId === emp.id}
+                              className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/20 disabled:opacity-50"
+                            >
+                              {stealthBusyId === emp.id
+                                ? <Loader2 className="h-3 w-3 animate-spin" />
+                                : <Ghost className="h-3 w-3" />}
+                              One-click stealth
+                            </button>
+                          )}
                           <button
                             onClick={() => terminateEmployee(emp.id)}
                             className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20"
@@ -311,8 +438,59 @@ export default function Zer0People() {
               <div>
                 <label className="text-[10px] font-semibold text-zinc-500 uppercase block mb-1">Wallet Address (Stellar Public Key)</label>
                 <input value={form.walletAddress} onChange={e => setForm(f => ({ ...f, walletAddress: e.target.value }))}
-                  placeholder="G... (Stellar) or 0x... (EVM)"
+                  placeholder="G... long-term fallback wallet"
                   className="h-9 w-full rounded-lg border border-zinc-200 bg-white px-3 text-xs outline-none font-mono focus:border-blue-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100" />
+                <p className="text-[10px] text-zinc-400 mt-1">Used for transparent pays, and as fallback if stealth is off.</p>
+              </div>
+
+              <div className="rounded-lg border border-violet-200/70 dark:border-violet-500/25 bg-violet-500/5 p-3 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-[10px] font-semibold text-violet-700 dark:text-violet-300 uppercase flex items-center gap-1">
+                    <Shield className="h-3 w-3" /> Stealth meta-address
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleGenerateStealth}
+                    className="inline-flex items-center gap-1 text-[10px] font-bold text-violet-600 dark:text-violet-400 hover:underline"
+                  >
+                    <Plus className="h-3 w-3" /> One-click generate
+                  </button>
+                </div>
+                <input
+                  value={form.stealthMetaAddress}
+                  onChange={e => setForm(f => ({ ...f, stealthMetaAddress: e.target.value }))}
+                  placeholder="z0st1… (one-time receive meta)"
+                  className="h-9 w-full rounded-lg border border-violet-200 dark:border-violet-500/30 bg-white px-3 text-xs outline-none font-mono focus:border-violet-500 dark:bg-zinc-950 dark:text-zinc-100"
+                />
+                <p className="text-[10px] text-zinc-500 leading-relaxed">
+                  Private pays withdraw to a <strong>fresh G… address</strong> derived from this meta — not the long-term wallet.
+                  Share the meta publicly; keep scan secrets offline (Stealth scanner).
+                </p>
+                {generatedScanBackup && (
+                  <div className="space-y-1.5">
+                    <p className="text-[10px] font-semibold text-amber-700 dark:text-amber-400">
+                      Save this backup for the payee (scan keys) — shown once:
+                    </p>
+                    <textarea
+                      readOnly
+                      value={generatedScanBackup}
+                      rows={4}
+                      className="w-full rounded-md border border-amber-300/50 bg-white dark:bg-zinc-950 p-2 text-[10px] font-mono text-zinc-700 dark:text-zinc-300"
+                    />
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await copyText(generatedScanBackup);
+                        setCopiedMeta(true);
+                        setTimeout(() => setCopiedMeta(false), 1500);
+                      }}
+                      className="inline-flex items-center gap-1 text-[10px] font-semibold text-violet-600"
+                    >
+                      {copiedMeta ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                      Copy backup JSON
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-3 gap-3">

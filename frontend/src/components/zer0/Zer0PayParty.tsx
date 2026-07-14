@@ -2,16 +2,18 @@ import { useMemo, useState, useEffect } from 'react';
 import { useParams, useNavigate } from '@tanstack/react-router';
 import {
   Send, Shield, ShieldOff, Loader2, ChevronRight, AlertCircle, CheckCircle2,
-  ExternalLink, Copy, Check, Eye, Lock
+  ExternalLink, Copy, Check, Eye, Lock, Ghost, Plus,
 } from 'lucide-react';
 import { getExplorerTxUrl, truncateKey } from '../../api/walletConnect';
 import { useZer0Store } from '../../stores/zer0';
-import { stellar, payrollApi } from '../../api/api';
+import { stellar, payrollApi, employeeApi } from '../../api/api';
 import {
   estimateFreighterPromptsForAmount, isAutoSignEnabled,
   MAX_SHIELD_UNITS, planShieldPay,
 } from '../../api/privacyPool';
 import { copyText } from '../../lib/clipboard';
+import { useStealthStore } from '../../stores/stealth';
+import { generateStealthIdentity, isStealthMetaAddress, shortAddr } from '../../lib/stealth';
 import type { Zer0Currency, Zer0PaymentType } from '../../stores/types';
 
 const PAYMENT_TYPES: { value: Zer0PaymentType; label: string; desc: string }[] = [
@@ -32,6 +34,8 @@ export default function Zer0PayParty() {
   const settings = useZer0Store(s => s.settings);
   const createPayment = useZer0Store(s => s.createPayment);
   const processPayment = useZer0Store(s => s.processPayment);
+  const updateSettings = useZer0Store(s => s.updateSettings);
+  const updateEmployee = useZer0Store(s => s.updateEmployee);
 
   const employees = useMemo(() => allEmployees.filter(e => e.projectId === pid), [allEmployees, pid]);
   const activeEmployees = useMemo(() => employees.filter(e => e.status === 'active'), [employees]);
@@ -40,15 +44,20 @@ export default function Zer0PayParty() {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
   const [customRecipient, setCustomRecipient] = useState('');
   const [customWallet, setCustomWallet] = useState('');
+  const [customStealthMeta, setCustomStealthMeta] = useState('');
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState<Zer0Currency>(settings.defaultCurrency);
   const [paymentType, setPaymentType] = useState<Zer0PaymentType>('payroll');
   const [memo, setMemo] = useState('');
   const [shielded, setShielded] = useState(true);
+  /** Per-payment stealth override — starts from workspace setting */
+  const [useStealth, setUseStealth] = useState(!!settings.stealthPaymentsEnabled);
   const [isProcessing, setIsProcessing] = useState(false);
   const [createdPaymentId, setCreatedPaymentId] = useState<string | null>(null);
   const [isFunding, setIsFunding] = useState(false);
   const [fundingSuccess, setFundingSuccess] = useState(false);
+  const [stealthSetupBusy, setStealthSetupBusy] = useState(false);
+  const [stealthSetupMsg, setStealthSetupMsg] = useState('');
 
   const fundFromFaucet = async () => {
     setIsFunding(true);
@@ -119,9 +128,96 @@ export default function Zer0PayParty() {
     autoRefresh();
   }, [settings.walletAddress, settings.horizonUrl]);
 
+  const employeeMetaMap = useStealthStore(s => s.employeeMeta);
+  const setEmployeeMeta = useStealthStore(s => s.setEmployeeMeta);
+  const importIdentity = useStealthStore(s => s.importIdentity);
   const selectedEmployee = activeEmployees.find(e => e.id === selectedEmployeeId);
   const recipientName = selectedEmployee?.name || customRecipient;
   const recipientWallet = selectedEmployee?.walletAddress || customWallet;
+  const recipientStealthMeta = (
+    selectedEmployee?.stealthMetaAddress
+    || (selectedEmployeeId ? employeeMetaMap[selectedEmployeeId] : '')
+    || customStealthMeta
+    || ''
+  ).trim();
+  const hasValidStealthMeta = !!(recipientStealthMeta && isStealthMetaAddress(recipientStealthMeta));
+  const canUseStealth = !!(
+    useStealth
+    && shielded
+    && hasValidStealthMeta
+  );
+
+  // Keep local stealth toggle in sync when settings hydrate / user flips workspace default
+  useEffect(() => {
+    setUseStealth(!!settings.stealthPaymentsEnabled);
+  }, [settings.stealthPaymentsEnabled]);
+
+  const enableStealthForPayee = async () => {
+    setStealthSetupMsg('');
+    setStealthSetupBusy(true);
+    try {
+      // Always turn on workspace stealth for private pays
+      if (!settings.stealthPaymentsEnabled) {
+        updateSettings({ stealthPaymentsEnabled: true });
+      }
+      setUseStealth(true);
+      setShielded(true);
+
+      if (selectedEmployeeId && selectedEmployee) {
+        if (hasValidStealthMeta) {
+          setStealthSetupMsg('Stealth already ready for this payee.');
+          return;
+        }
+        const identity = generateStealthIdentity(selectedEmployee.name || 'Team member');
+        importIdentity(identity);
+        setEmployeeMeta(selectedEmployeeId, identity.metaAddress);
+        updateEmployee(selectedEmployeeId, { stealthMetaAddress: identity.metaAddress });
+        try {
+          await employeeApi.update(selectedEmployeeId, {
+            workspaceId: workspaceId || pid,
+            stealthMetaAddress: identity.metaAddress,
+          });
+        } catch (e) {
+          // Local store still has meta — backend optional
+          console.warn('Could not persist stealth meta to API', e);
+        }
+        // Copy backup for payee in one click
+        const backup = JSON.stringify({
+          v: 1,
+          label: identity.label,
+          metaAddress: identity.metaAddress,
+          scanSecretHex: identity.scanSecretHex,
+          spendSecretHex: identity.spendSecretHex,
+          spendPublicHex: identity.spendPublicHex,
+          scanPublicHex: identity.scanPublicHex,
+          createdAt: identity.createdAt,
+        }, null, 2);
+        await copyText(backup);
+        setStealthSetupMsg(`Stealth ready · ${shortAddr(identity.metaAddress, 8)} · scan backup copied`);
+      } else {
+        // Custom recipient: generate meta they can share later
+        const identity = generateStealthIdentity(customRecipient || 'Payee');
+        importIdentity(identity);
+        setCustomStealthMeta(identity.metaAddress);
+        const backup = JSON.stringify({
+          v: 1,
+          label: identity.label,
+          metaAddress: identity.metaAddress,
+          scanSecretHex: identity.scanSecretHex,
+          spendSecretHex: identity.spendSecretHex,
+          spendPublicHex: identity.spendPublicHex,
+          scanPublicHex: identity.scanPublicHex,
+          createdAt: identity.createdAt,
+        }, null, 2);
+        await copyText(backup);
+        setStealthSetupMsg(`Stealth meta set · ${shortAddr(identity.metaAddress, 8)} · scan backup copied for payee`);
+      }
+    } catch (e) {
+      setStealthSetupMsg(e instanceof Error ? e.message : 'Could not set up stealth');
+    } finally {
+      setStealthSetupBusy(false);
+    }
+  };
   // Free-form amount → multi-denom plan (1000/100/10/1 XLM notes) for few ZK proofs.
   const typedAmount = parseFloat(amount);
   const shieldPlan = (!isNaN(typedAmount) && typedAmount > 0)
@@ -153,6 +249,23 @@ export default function Zer0PayParty() {
       return;
     }
 
+    // Persist stealth preference for this settle path
+    if (settings.stealthPaymentsEnabled !== useStealth) {
+      updateSettings({ stealthPaymentsEnabled: useStealth });
+    }
+
+    if (shielded && useStealth && !hasValidStealthMeta && !recipientWallet?.trim()) {
+      setIsProcessing(false);
+      alert('Stealth is on but this payee has no meta-address and no G… wallet. Use one-click stealth setup or add a wallet.');
+      return;
+    }
+
+    if (!shielded && !recipientWallet?.trim()) {
+      setIsProcessing(false);
+      alert('Public pays need a recipient G… wallet.');
+      return;
+    }
+
     const needsApproval =
       settings.paymentApprovalRequired
       || (settings.enforceThresholdApproval && parsedAmount >= (settings.complianceThreshold || 0));
@@ -163,7 +276,12 @@ export default function Zer0PayParty() {
       projectId: pid,
       employeeId: selectedEmployeeId || null,
       recipientName,
-      recipientWallet,
+      // Empty wallet is OK for private+stealth (one-time G… derived at settle)
+      recipientWallet: recipientWallet || '',
+      // Persist meta on the payment so custom (non-employee) payees still stealth-settle
+      recipientStealthMeta: (shielded && useStealth && hasValidStealthMeta)
+        ? recipientStealthMeta
+        : null,
       amount: settleAmount,
       currency: shielded ? 'XLM' : currency,
       type: paymentType,
@@ -190,7 +308,7 @@ export default function Zer0PayParty() {
           email: '',
           amount: payment.amount,
           currency: payment.currency,
-          walletAddress: payment.recipientWallet,
+          walletAddress: payment.recipientWallet || (canUseStealth ? recipientStealthMeta : ''),
           status: needsApproval ? 'pending_approval' : 'processing',
           shielded: payment.shielded,
           projectId: pid,
@@ -207,6 +325,7 @@ export default function Zer0PayParty() {
 
     if (!needsApproval) {
       try {
+        // processPayment opens the non-dismissible live progress modal (portaled to body)
         await processPayment(payment.id);
       } catch (e) {
         console.error('processPayment threw unexpectedly:', e);
@@ -215,6 +334,7 @@ export default function Zer0PayParty() {
 
     setCreatedPaymentId(payment.id);
     setIsProcessing(false);
+    // Receipt stays under the modal; user dismisses modal when done/error
     setStep('done');
   };
 
@@ -223,8 +343,10 @@ export default function Zer0PayParty() {
     setSelectedEmployeeId('');
     setCustomRecipient('');
     setCustomWallet('');
+    setCustomStealthMeta('');
     setAmount('');
     setMemo('');
+    setStealthSetupMsg('');
     setCreatedPaymentId(null);
   };
 
@@ -407,22 +529,105 @@ export default function Zer0PayParty() {
           </div>
 
           {/* Privacy Toggle */}
-          <div className="flex items-center justify-between p-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-900/30">
-            <div className="flex items-center gap-2">
-              {shielded ? <Shield className="h-4 w-4 text-blue-500" /> : <ShieldOff className="h-4 w-4 text-zinc-400" />}
-              <div>
-                <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 block">{shielded ? 'Shielded Payment' : 'Transparent Payment'}</span>
-                <span className="text-[10px] text-zinc-400">{shielded
-                  ? (isAutoSignEnabled()
-                    ? 'Private · auto-sign · N×1 XLM proofs'
-                    : 'Private · N×1 XLM proofs (slow for large N)')
-                  : 'Direct transfer — amount and parties fully public'}</span>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between p-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-900/30">
+              <div className="flex items-center gap-2">
+                {shielded ? <Shield className="h-4 w-4 text-blue-500" /> : <ShieldOff className="h-4 w-4 text-zinc-400" />}
+                <div>
+                  <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 block">{shielded ? 'Shielded Payment' : 'Transparent Payment'}</span>
+                  <span className="text-[10px] text-zinc-400">{shielded
+                    ? (isAutoSignEnabled()
+                      ? 'Private · auto-sign · multi-pool ZK notes'
+                      : 'Private · multi-pool ZK notes (slow without auto-sign)')
+                    : 'Direct transfer — amount and parties fully public'}</span>
+                </div>
               </div>
+              <button type="button" onClick={() => setShielded(!shielded)}
+                className={`relative h-5 w-9 rounded-full transition-colors ${shielded ? 'bg-blue-500' : 'bg-zinc-300 dark:bg-zinc-700'}`}>
+                <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${shielded ? 'left-[18px]' : 'left-0.5'}`} />
+              </button>
             </div>
-            <button type="button" onClick={() => setShielded(!shielded)}
-              className={`relative h-5 w-9 rounded-full transition-colors ${shielded ? 'bg-blue-500' : 'bg-zinc-300 dark:bg-zinc-700'}`}>
-              <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${shielded ? 'left-[18px]' : 'left-0.5'}`} />
-            </button>
+
+            {/* Stealth — nested under shield so it is obvious and one-click */}
+            {shielded && (
+              <div className={`rounded-lg border p-3 space-y-2.5 ${
+                canUseStealth
+                  ? 'border-violet-500/30 bg-violet-500/5'
+                  : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950/40'
+              }`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-2 min-w-0">
+                    <Ghost className={`h-4 w-4 shrink-0 mt-0.5 ${canUseStealth ? 'text-violet-500' : 'text-zinc-400'}`} />
+                    <div className="min-w-0">
+                      <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 block">
+                        Stealth one-time receive
+                      </span>
+                      <span className="text-[10px] text-zinc-500 leading-relaxed block mt-0.5">
+                        {canUseStealth
+                          ? <>Withdraw to a fresh G… from <span className="font-mono">{shortAddr(recipientStealthMeta, 8)}</span> — not the long-term wallet.</>
+                          : 'Hide the payee’s long-term wallet. One click generates a meta-address for this payee.'}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !useStealth;
+                      setUseStealth(next);
+                      updateSettings({ stealthPaymentsEnabled: next });
+                      if (next && !hasValidStealthMeta) {
+                        void enableStealthForPayee();
+                      }
+                    }}
+                    className={`relative h-5 w-9 rounded-full transition-colors shrink-0 mt-0.5 ${
+                      useStealth ? 'bg-violet-500' : 'bg-zinc-300 dark:bg-zinc-700'
+                    }`}
+                    title={useStealth ? 'Disable stealth for private pays' : 'Enable stealth one-time receives'}
+                  >
+                    <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${useStealth ? 'left-[18px]' : 'left-0.5'}`} />
+                  </button>
+                </div>
+
+                {useStealth && !hasValidStealthMeta && (
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void enableStealthForPayee()}
+                      disabled={stealthSetupBusy}
+                      className="inline-flex items-center justify-center gap-1.5 h-8 px-3 rounded-md bg-violet-600 text-white text-[11px] font-semibold hover:bg-violet-500 disabled:opacity-50 transition"
+                    >
+                      {stealthSetupBusy ? (
+                        <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Setting up…</>
+                      ) : (
+                        <><Plus className="h-3.5 w-3.5" /> One-click stealth setup</>
+                      )}
+                    </button>
+                    {!selectedEmployeeId && (
+                      <input
+                        value={customStealthMeta}
+                        onChange={e => setCustomStealthMeta(e.target.value)}
+                        placeholder="or paste z0st1… meta"
+                        className="h-8 flex-1 min-w-0 rounded-md border border-violet-200 dark:border-violet-500/30 bg-white dark:bg-zinc-950 px-2 text-[11px] font-mono outline-none"
+                      />
+                    )}
+                  </div>
+                )}
+
+                {stealthSetupMsg && (
+                  <p className="text-[10px] font-medium text-violet-700 dark:text-violet-300 flex items-center gap-1">
+                    <CheckCircle2 className="h-3 w-3 shrink-0" />
+                    {stealthSetupMsg}
+                  </p>
+                )}
+
+                {useStealth && hasValidStealthMeta && (
+                  <p className="text-[10px] text-violet-700/90 dark:text-violet-300/90 leading-relaxed">
+                    Ready · meta <span className="font-mono">{shortAddr(recipientStealthMeta, 10)}</span>
+                    {recipientWallet ? ' · long-term wallet kept as fallback only' : ' · no long-term wallet needed'}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           {shielded && shieldPlan && shieldPlan.totalNotes > 0 && (
@@ -451,7 +656,12 @@ export default function Zer0PayParty() {
 
           <button
             type="submit"
-            disabled={!recipientName || !amount || !hasFunds}
+            disabled={
+              !recipientName
+              || !amount
+              || !hasFunds
+              || (!recipientWallet?.trim() && !(shielded && useStealth && hasValidStealthMeta))
+            }
             className="w-full h-10 rounded-lg bg-zinc-900 text-white text-xs font-semibold hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200 transition disabled:opacity-40 flex items-center justify-center gap-2"
           >
             Review Payment <ChevronRight className="h-3.5 w-3.5" />
@@ -467,15 +677,28 @@ export default function Zer0PayParty() {
           <div className="space-y-3">
             {[
               { label: 'Recipient', value: recipientName },
-              { label: 'Wallet', value: recipientWallet || 'Not provided' },
+              {
+                label: 'Wallet',
+                value: canUseStealth
+                  ? (recipientWallet ? `${recipientWallet.slice(0, 8)}… (fallback only)` : 'Stealth one-time G… (no long-term wallet)')
+                  : (recipientWallet || 'Not provided'),
+              },
               { label: 'Amount', value: `${parsedAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })} ${currency}` },
               { label: 'Type', value: paymentType.replace('-', ' ') },
               { label: 'Memo', value: memo || '—' },
               { label: 'Privacy', value: shielded ? '🛡️ Shielded (ZK Proof)' : 'Transparent' },
+              ...(shielded
+                ? [{
+                    label: 'Stealth',
+                    value: canUseStealth
+                      ? `One-time receive via ${shortAddr(recipientStealthMeta, 8)}`
+                      : (useStealth ? 'On — missing meta (will use long-term wallet)' : 'Off'),
+                  }]
+                : []),
             ].map(row => (
               <div key={row.label} className="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-zinc-800 last:border-0">
                 <span className="text-xs text-zinc-500">{row.label}</span>
-                <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">{row.value}</span>
+                <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 text-right max-w-[65%]">{row.value}</span>
               </div>
             ))}
           </div>

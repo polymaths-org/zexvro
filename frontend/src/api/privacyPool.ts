@@ -73,7 +73,7 @@ let activePoolContract = DEFAULT_TIER.contract;
 let activeDenomStroops = DEFAULT_TIER.stroops;
 let activeDenomXlm = DEFAULT_TIER.xlm;
 
-function usePool(tier: PoolTier) {
+export function usePool(tier: PoolTier) {
   activePoolContract = tier.contract;
   activeDenomStroops = tier.stroops;
   activeDenomXlm = tier.xlm;
@@ -804,8 +804,9 @@ async function settleTierServer(args: {
   tier: PoolTier;
   count: number;
   onProgress: (label: string) => void;
+  onJobId?: (jobId: string) => void;
 }): Promise<{ lastTxHash: string; notes: DepositNote[] } | null> {
-  const { toAddress, tier, count, onProgress } = args;
+  const { toAddress, tier, count, onProgress, onJobId } = args;
 
   const online = await ensureZkWorkerOnline(onProgress);
   if (!online) {
@@ -874,12 +875,32 @@ async function settleTierServer(args: {
     }
 
     const jobId = started.jobId;
+    onJobId?.(jobId);
     const deadline = Date.now() + 12 * 60 * 1000; // 12 min max
     let lastProgress = '';
     let stallTicks = 0;
+    let netFailStreak = 0;
     while (Date.now() < deadline) {
       await new Promise(r => setTimeout(r, 1200));
-      const job = await zkWorkerApi.job(jobId);
+      let job: Awaited<ReturnType<typeof zkWorkerApi.job>>;
+      try {
+        job = await zkWorkerApi.job(jobId);
+        netFailStreak = 0;
+      } catch (e) {
+        netFailStreak += 1;
+        // Network blips: keep polling — worker may still be settling on-chain
+        if (netFailStreak <= 20) {
+          if (netFailStreak === 1 || netFailStreak % 4 === 0) {
+            onProgress(
+              `Network hiccup — settle still running on worker (retry ${netFailStreak})…`,
+            );
+          }
+          continue;
+        }
+        console.warn('[zk] server settle poll failed repeatedly:', e);
+        onProgress(`Lost network to worker after ${netFailStreak} tries`);
+        return null;
+      }
       if (job.progress && job.progress !== lastProgress) {
         lastProgress = job.progress;
         stallTicks = 0;
@@ -935,12 +956,13 @@ async function settleTier(args: {
   tier: PoolTier;
   count: number;
   onProgress: (label: string) => void;
+  onJobId?: (jobId: string) => void;
 }): Promise<{ lastTxHash: string; notes: DepositNote[] }> {
-  const { from, toAddress, tier, count, onProgress } = args;
+  const { from, toAddress, tier, count, onProgress, onJobId } = args;
   usePool(tier);
 
   // Fast path: entire chain+prove on EC2 relayer (no Freighter, no browser RPC spam)
-  const server = await settleTierServer({ toAddress, tier, count, onProgress });
+  const server = await settleTierServer({ toAddress, tier, count, onProgress, onJobId });
   if (server) return server;
 
   // Browser path is much slower (minutes + many Freighter prompts). Prefer failing
@@ -1050,6 +1072,17 @@ export async function shieldPayAmount(args: {
   toAddress: string;
   amountXlm: number;
   onProgress?: (step: string, current: number, total: number) => void;
+  /** Fired when EC2 worker accepts an async settle job (for reload recovery). */
+  onJobId?: (jobId: string) => void;
+  /**
+   * Optional privacy knobs (timing / decoys). Delay is usually applied by the store
+   * before calling this; decoys run after successful settle when browser path is used.
+   */
+  privacy?: {
+    delaySec?: number;
+    decoyCount?: number;
+    batchDepositThenWithdraw?: boolean;
+  };
 }): Promise<{ lastTxHash: string; notes: DepositNote[]; settledXlm: number; plan: ShieldPayPlan }> {
   const plan = planShieldPay(args.amountXlm);
   if (plan.totalNotes === 0) throw new Error('Amount must be > 0');
@@ -1063,8 +1096,10 @@ export async function shieldPayAmount(args: {
   const from = resolveFundingAddress(args.fromAddress);
   if (!from) throw new Error('No funding address for shielded pay');
 
+  const decoyCount = Math.max(0, Math.min(5, args.privacy?.decoyCount ?? 0));
+
   // Rough step budget: per note ≈ fund-group + deposit + prove + withdraw (+ few shared)
-  const totalSteps = Math.max(1, plan.totalNotes * 4 + plan.notes.length * 2);
+  const totalSteps = Math.max(1, plan.totalNotes * 4 + plan.notes.length * 2 + decoyCount + 2);
   let step = 0;
   const progress = (label: string) => {
     step = Math.min(step + 1, totalSteps);
@@ -1074,6 +1109,12 @@ export async function shieldPayAmount(args: {
   progress(`Plan: ${plan.description}`);
   loadZkArtifacts().catch(() => {});
   getPoseidon().catch(() => {});
+
+  const delaySec = Math.max(0, args.privacy?.delaySec ?? 0);
+  if (delaySec > 0) {
+    progress(`Privacy delay ${delaySec}s…`);
+    await new Promise(r => setTimeout(r, delaySec * 1000));
+  }
 
   const allNotes: DepositNote[] = [];
   let lastTxHash = '';
@@ -1086,9 +1127,28 @@ export async function shieldPayAmount(args: {
       tier: chunk.tier,
       count: chunk.count,
       onProgress: progress,
+      onJobId: args.onJobId,
     });
     lastTxHash = hash || lastTxHash;
     allNotes.push(...notes);
+  }
+
+  // Decoy deposits: fund+deposit only (never withdraw) → grow anonymity set.
+  // Best-effort; failures do not roll back the real payment.
+  if (decoyCount > 0 && isAutoSignEnabled()) {
+    try {
+      const tier1 = POOL_TIERS.find(t => t.xlm === 1) || POOL_TIERS[POOL_TIERS.length - 1];
+      usePool(tier1);
+      for (let i = 0; i < decoyCount; i++) {
+        progress(`Decoy deposit ${i + 1}/${decoyCount} @ ${tier1.xlm} XLM`);
+        await deposit(from, tier1.stroops);
+      }
+    } catch (e) {
+      console.warn('[privacy] decoy deposit failed (non-fatal):', e);
+      progress('Decoy deposit skipped (non-fatal)');
+    }
+  } else if (decoyCount > 0) {
+    progress(`Decoy deposits deferred (need auto-sign; ${decoyCount} requested)`);
   }
 
   return {

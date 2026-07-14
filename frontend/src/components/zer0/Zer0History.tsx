@@ -252,6 +252,11 @@ export default function Zer0History() {
                         <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded shrink-0 ${statusColors[p.status || ''] || ''}`}>
                           {String(p.status || '').replace('_', ' ')}
                         </span>
+                        {p.stealth && (
+                          <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded shrink-0 bg-violet-500/10 text-violet-600 dark:text-violet-400">
+                            stealth
+                          </span>
+                        )}
                       </div>
                       <div className="text-[10px] text-zinc-400 mt-0.5 flex items-center gap-1.5">
                         <span>{new Date(p.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
@@ -302,6 +307,22 @@ export default function Zer0History() {
                           <span className="text-red-400 font-semibold uppercase block mb-0.5">Error</span>
                           <span className="text-red-500 dark:text-red-400 font-mono text-[10px] break-all">{p.lastError}</span>
                         </div>
+                      )}
+                      {p.stealth && (
+                        <>
+                          <div>
+                            <span className="text-zinc-400 font-semibold uppercase block mb-0.5">Stealth one-time</span>
+                            <span className="font-mono text-violet-600 dark:text-violet-400 break-all">
+                              {p.stealthOneTimeAddress || '—'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-zinc-400 font-semibold uppercase block mb-0.5">Ephemeral pub (scan)</span>
+                            <span className="font-mono text-zinc-600 dark:text-zinc-400 break-all">
+                              {p.stealthEphemeralPub || '—'}
+                            </span>
+                          </div>
+                        </>
                       )}
                       {p.shielded && (
                         <div>
