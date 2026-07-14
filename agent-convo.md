@@ -480,3 +480,104 @@ Want me to **push** `feature/nft-service` next?
   - `npm --prefix frontend run lint && npm --prefix frontend test && npm --prefix frontend run build`
   - `npm --prefix services/nft-service/api run lint && npm --prefix services/nft-service/api test`
 - Do not touch: Morph (Paris), Trade/Agent Auth (Rushi)
+
+## Handoff after Phase 8 — inventory + archive
+- Branch / tip: `feature/nft-service` (commit pending this handoff)
+- Done:
+  - `MintedItemRecord` + repository list/get/save
+  - Owner inventory + archive/unarchive routes; public inventory/nextTokenId; sold token metadata
+  - Public buy page disables sold tokens and suggests next free ID
+  - Dashboard inventory modal, minted counts, archive/restore
+- Next: Phase 5 Pinata readiness, then shared persistence / De-pin durable stores
+- Commands:
+  - `npm --prefix services/nft-service/api run lint && npm --prefix services/nft-service/api test`
+  - `npm --prefix frontend run lint && npm --prefix frontend test -- --run src/services/nft`
+- Do not touch: Morph (Paris), Trade/Agent Auth (Rushi)
+
+## Handoff after Phase 5 — Pinata readiness
+- Branch / tip: `feature/nft-service` (Phase 8 + Phase 5 uncommitted)
+- Done:
+  - Pinata service hardened + mocked unit tests (success / 502 / unreachable / no JWT leak)
+  - App tests for pinata media + collection metadata ipfs URIs + baseMetadataUri required
+  - server warn when pinata mode without JWT; health already reports storageMode
+  - README + `.env.example` Pinata docs; `NFT_SMOKE_PINATA=1` media smoke path
+- Next: Phase 6 shared NFT persistence (Dynamo option), or manual Pinata JWT smoke
+- Commands:
+  - `npm --prefix services/nft-service/api run lint && npm --prefix services/nft-service/api test`
+  - `npm run nft:smoke` (optional `NFT_SMOKE_PINATA=1` + access token)
+- Do not touch: Morph (Paris), Trade/Agent Auth (Rushi)
+
+## Handoff after Phase 5 — AWS S3 media (AWS-first storage)
+- Branch / tip: `feature/nft-service` (Phase 8 inventory + Phase 5 S3 uncommitted)
+- Done:
+  - Product decision: S3+CDN media, Dynamo records (next), Secrets Manager for sponsor
+  - `S3AssetPinningService` + mocked tests; config/server modes `local|s3|pinata`
+  - FE storage labels for AWS S3; docs/env examples updated
+- Next: Phase 6 DynamoDB NFT repository, or real S3 smoke with bucket/role
+- Commands:
+  - `npm --prefix services/nft-service/api run lint && npm --prefix services/nft-service/api test`
+  - For S3: set `NFT_STORAGE_MODE=s3 NFT_S3_BUCKET=... NFT_S3_REGION=...` (+ optional `NFT_CDN_BASE_URL`), AWS creds/role, restart API
+- Do not touch: Morph (Paris), Trade/Agent Auth (Rushi)
+
+## Handoff after Phase 6 — DynamoDB NFT repository
+- Branch / tip: `feature/nft-service` (Phase 8 inventory + Phase 5 S3 + Phase 6 Dynamo uncommitted)
+- Done:
+  - `DynamoNftRepository` single-table design (`zexvro-nft`) + GSIs + atomic checkout claim
+  - `NFT_REPOSITORY=file|dynamo` factory; file default for local
+  - Mocked Dynamo unit tests; README + `.env.example` table/env docs
+  - Build fixes: mint submit exactOptional fields; stripKeys generics; S3 optional typing
+- Next: Phase 7 managed sponsor secret (Secrets Manager gate), or live S3/Dynamo smoke
+- Commands:
+  - `npm --prefix services/nft-service/api run lint && npm --prefix services/nft-service/api test && npm --prefix services/nft-service/api run build`
+  - Dynamo: `NFT_REPOSITORY=dynamo NFT_DYNAMO_TABLE=zexvro-nft` (+ region/GSIs), AWS creds/role, restart API
+- Do not touch: Morph (Paris), Trade/Agent Auth (Rushi)
+
+## Handoff after Phase 7 — Managed sponsor secret gate
+- Branch / tip: `feature/nft-service` (Phases 5–8 NFT work uncommitted)
+- Done:
+  - Fail-fast when `NODE_ENV=production` or `NFT_REQUIRE_SPONSOR=1` without sponsor secret + wasm hash
+  - Config unit tests; README + aws_deployment + `.env.example` docs
+  - Local CLI identity path preserved for `npm run dev`
+- Next: Phase 9–10 De-pin durable replay/rate-limit + managed config; then Phase 11 docs/PR
+- Commands:
+  - `npm --prefix services/nft-service/api run lint && npm --prefix services/nft-service/api test && npm --prefix services/nft-service/api run build`
+- Do not touch: Morph (Paris), Trade/Agent Auth (Rushi)
+
+## Handoff after Phase 9–10 — De-pin stores + managed config
+- Branch / tip: `feature/nft-service` (NFT Phases 5–8 + De-pin 9–10 uncommitted)
+- Done:
+  - Pluggable replay/rate-limit stores (`memory`|`file`; redis reserved)
+  - Config sources: inline JSON / URL / file path with documented priority
+  - `/status` + FE types include `configSource` and `stateBackend`
+- Next: Phase 11 docs sync + PR readiness; optional commit/push with user confirm
+- Commands:
+  - `npm --prefix services/depin run lint && npm --prefix services/depin test && npm --prefix services/depin run build`
+  - `npm --prefix services/nft-service/api run lint && npm --prefix services/nft-service/api test && npm --prefix services/nft-service/api run build`
+- Do not touch: Morph (Paris), Trade/Agent Auth (Rushi)
+
+## Handoff after Phase 11 — Docs sync + PR readiness
+- Branch / tip: `feature/nft-service` (all plan phases 5–11 code/docs uncommitted)
+- Done:
+  - `pages.md` / `planning.md` / `context.md` / `plan.md` reflect NFT + De-pin as working local/testnet MVPs
+  - Full matrix re-verified: NFT API 60/60 + De-pin 34/34, lint/build green
+- Next (user-gated):
+  1. Commit Nabil work (prefer logical commits: NFT AWS stack, De-pin stores/config, docs)
+  2. Optional PR `feature/nft-service` → `main` after push confirm
+  3. Live AWS/Freighter ops smokes when credentials ready
+- Commands:
+  - `npm --prefix services/nft-service/api run lint && npm --prefix services/nft-service/api test && npm --prefix services/nft-service/api run build`
+  - `npm --prefix services/depin run lint && npm --prefix services/depin test && npm --prefix services/depin run build`
+- Do not touch: Morph (Paris), Trade/Agent Auth (Rushi)
+- Do not commit secrets, local scratch scripts, or Morph dirt
+
+### 2026-07-13 20:44 UTC — Live verification matrix
+Completed full live AWS + local API smoke after unit green. NFT API running on 4101 with S3/Dynamo/Secrets Manager; De-pin on 4102 with file state. CloudFront 200; Dynamo integration OK; nft-smoke health OK; FE NFT tests 28/28. No commit. Remaining: browser Cognito/Freighter E2E + container host + IAM tighten.
+
+## Handoff after commit + push — phases 5–11 landed on branch
+- Branch / tip: `feature/nft-service` pushed to origin (no PR)
+- Done: Committed NFT AWS stack, inventory, De-pin stores/config, docs/AWS runbook; excluded secrets/Morph/scratch
+- Next: Auto token IDs (always allocate server-side); multi-surface checkout (public API + web popup SDK + headless); then browser Freighter E2E
+- Commands:
+  - `npm --prefix services/nft-service/api run lint && npm --prefix services/nft-service/api test && npm --prefix services/nft-service/api run build`
+  - `npm --prefix services/depin run lint && npm --prefix services/depin test && npm --prefix services/depin run build`
+- Do not touch: Morph (Paris), Trade/Agent Auth (Rushi)

@@ -59,8 +59,8 @@ Branch note for `updates-routing-and-zer0`:
 | Transformation Agent, Morph | Paris | CLI built | CLI/TUI exists. Web panel and deeper frontend integration are future work. |
 | A-2-A Trade Pipeline | Rushi | Planned | Agent negotiation, identity, offer schema, wallet authorization, and settlement are undecided. |
 | Captcha-like Agent Authentication | Rushi | Planned | Must avoid claims of perfect detection. Needs confidence score, appeal, and privacy model. |
-| NFT Service | Nabil | Planned | Minting, metadata, checkout, and NFT model still need detailed scope. |
-| De-pin | Nabil | Blocked | Scope is undefined. Do not implement until Nabil provides direction. |
+| NFT Service | Nabil | Working local/testnet MVP | Contract + API + FE for deploy, sale, mint, public buy, inventory/archive. Production media/records/secrets code ready (S3/Dynamo/Secrets Manager gates); live AWS still ops. |
+| De-pin | Nabil | Working local/testnet MVP | Exact x402 Stellar testnet gateway with pluggable replay/rate-limit stores and multi-source provider config. Multi-instance file backend available; redis not implemented. |
 
 Secondary PaaS features like deploy, DB, hosting, security, connectors, and billing should support the MVP services, not overtake them.
 
@@ -122,7 +122,7 @@ Workspace sections:
 - A-2-A
 - Agent Auth
 - NFT
-- De-pin, blocked until scoped
+- De-pin
 - Transactions & Payroll
 - Finance Overview
 - Transactions
@@ -707,7 +707,7 @@ Step 15: Replace mock state with API-backed state
 ## Do Not Do Yet
 
 - Do not build full finance/payroll/proof screens before approval.
-- Do not implement De-pin until scope is documented.
+- De-pin scope is documented in `context.md` and `services/depin/README.md`; keep changes inside the exact x402 gateway boundaries.
 - Do not claim live payroll, off-ramp, tax, legal, privacy, ZK, or blockchain settlement behavior.
 - Do not let project views duplicate canonical workspace finance/proof records.
 - Do not allow agents to approve their own actions.
