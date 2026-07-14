@@ -1,34 +1,22 @@
-interface RateLimitEntry {
-  count: number
-  resetsAt: number
-}
+import type { RateLimitResult, RateLimitStore } from './domain.js'
+import { MemoryRateLimitStore } from './stores.js'
 
-export interface RateLimitResult {
-  allowed: boolean
-  retryAfterSeconds: number
-}
+export type { RateLimitResult }
 
+/** Thin adapter over MemoryRateLimitStore for tests that prefer a class API. */
 export class UnpaidRateLimiter {
-  private readonly entries = new Map<string, RateLimitEntry>()
+  private readonly store: RateLimitStore
 
   constructor(
     private readonly maxRequests: number,
     private readonly windowMs: number,
-    private readonly now: () => number = Date.now,
-  ) {}
+    now: () => number = Date.now,
+    store?: RateLimitStore,
+  ) {
+    this.store = store ?? new MemoryRateLimitStore(now)
+  }
 
-  consume(key: string): RateLimitResult {
-    const timestamp = this.now()
-    const current = this.entries.get(key)
-    const entry =
-      current === undefined || current.resetsAt <= timestamp
-        ? { count: 0, resetsAt: timestamp + this.windowMs }
-        : current
-    entry.count += 1
-    this.entries.set(key, entry)
-    return {
-      allowed: entry.count <= this.maxRequests,
-      retryAfterSeconds: Math.max(1, Math.ceil((entry.resetsAt - timestamp) / 1_000)),
-    }
+  async consume(key: string): Promise<RateLimitResult> {
+    return this.store.consume(key, this.maxRequests, this.windowMs)
   }
 }

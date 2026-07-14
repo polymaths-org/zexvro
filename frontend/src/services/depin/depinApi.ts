@@ -20,6 +20,11 @@ export interface DepinProvider {
 export interface DepinStatus {
   status: 'ok';
   service: 'depin';
+  configSource?: {
+    type: 'file' | 'inline' | 'url';
+    detail: string;
+  };
+  stateBackend?: 'memory' | 'file';
   capabilities: {
     scheme: 'exact';
     network: 'stellar:testnet';

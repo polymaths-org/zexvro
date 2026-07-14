@@ -1,7 +1,8 @@
 import { readFile } from 'node:fs/promises'
+import { basename, resolve } from 'node:path'
 import { z } from 'zod'
 import { validateStellarDestinationAddress } from '@x402/stellar'
-import type { DepinConfig } from './domain.js'
+import type { DepinConfig, DepinConfigSource } from './domain.js'
 
 const routeSchema = z
   .string()
@@ -15,6 +16,9 @@ const routeSchema = z
   })
   .refine((route) => route !== '/health', {
     message: 'The /health route is reserved',
+  })
+  .refine((route) => route !== '/status', {
+    message: 'The /status route is reserved',
   })
 
 const priceSchema = z.string().refine((value) => {
@@ -86,6 +90,61 @@ export function parseConfig(value: unknown): DepinConfig {
 export async function loadConfig(path: string): Promise<DepinConfig> {
   const contents = await readFile(path, 'utf8')
   return parseConfig(JSON.parse(contents) as unknown)
+}
+
+export function parseConfigJson(contents: string): DepinConfig {
+  return parseConfig(JSON.parse(contents) as unknown)
+}
+
+function sanitizeUrlDetail(value: string): string {
+  try {
+    const url = new URL(value)
+    return url.origin + url.pathname
+  } catch {
+    return 'url'
+  }
+}
+
+export interface LoadedDepinConfig {
+  config: DepinConfig
+  source: DepinConfigSource
+}
+
+export async function loadConfigFromEnvironment(
+  environment: NodeJS.ProcessEnv = process.env,
+  fetchImplementation: typeof fetch = fetch,
+): Promise<LoadedDepinConfig> {
+  const inline = environment.DEPIN_CONFIG_JSON
+  if (inline !== undefined && inline.trim() !== '') {
+    return {
+      config: parseConfigJson(inline),
+      source: { type: 'inline', detail: 'DEPIN_CONFIG_JSON' },
+    }
+  }
+
+  const remoteUrl = environment.DEPIN_CONFIG_URL
+  if (remoteUrl !== undefined && remoteUrl.trim() !== '') {
+    const response = await fetchImplementation(remoteUrl, {
+      headers: { accept: 'application/json' },
+      redirect: 'error',
+    })
+    if (!response.ok) {
+      throw new Error(
+        `Failed to load DEPIN_CONFIG_URL (${String(response.status)} ${response.statusText})`,
+      )
+    }
+    const text = await response.text()
+    return {
+      config: parseConfigJson(text),
+      source: { type: 'url', detail: sanitizeUrlDetail(remoteUrl) },
+    }
+  }
+
+  const path = resolve(environment.DEPIN_CONFIG_PATH ?? 'depin.config.json')
+  return {
+    config: await loadConfig(path),
+    source: { type: 'file', detail: basename(path) },
+  }
 }
 
 export function assertSecretReferences(
