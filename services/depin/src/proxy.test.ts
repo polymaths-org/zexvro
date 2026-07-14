@@ -188,6 +188,8 @@ describe('De-pin proxy', () => {
     expect(response.body).toMatchObject({
       status: 'ok',
       service: 'depin',
+      configSource: { type: 'file', detail: 'depin.config.json' },
+      stateBackend: 'memory',
       capabilities: {
         scheme: 'exact',
         network: 'stellar:testnet',

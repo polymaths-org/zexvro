@@ -1,33 +1,36 @@
 import { createHash } from 'node:crypto'
+import type { ReplayStore } from './domain.js'
+import { MemoryReplayStore } from './stores.js'
 
-interface ReplayEntry {
-  expiresAt: number
+export function paymentFingerprint(paymentSignature: string): string {
+  return createHash('sha256').update(paymentSignature).digest('hex')
 }
 
+export async function claimPaymentReplay(
+  store: ReplayStore,
+  paymentSignature: string,
+  ttlMs: number,
+): Promise<boolean> {
+  return store.claim(paymentFingerprint(paymentSignature), ttlMs)
+}
+
+/** Thin adapter over MemoryReplayStore for tests that prefer a class API. */
 export class ReplayGuard {
-  private readonly entries = new Map<string, ReplayEntry>()
+  private readonly store: ReplayStore
 
   constructor(
     private readonly ttlMs: number,
-    private readonly now: () => number = Date.now,
-  ) {}
+    now: () => number = Date.now,
+    store?: ReplayStore,
+  ) {
+    this.store = store ?? new MemoryReplayStore(now)
+  }
 
   fingerprint(paymentSignature: string): string {
-    return createHash('sha256').update(paymentSignature).digest('hex')
+    return paymentFingerprint(paymentSignature)
   }
 
-  claim(paymentSignature: string): boolean {
-    const timestamp = this.now()
-    this.prune(timestamp)
-    const fingerprint = this.fingerprint(paymentSignature)
-    if (this.entries.has(fingerprint)) return false
-    this.entries.set(fingerprint, { expiresAt: timestamp + this.ttlMs })
-    return true
-  }
-
-  private prune(timestamp: number): void {
-    for (const [key, entry] of this.entries) {
-      if (entry.expiresAt <= timestamp) this.entries.delete(key)
-    }
+  async claim(paymentSignature: string): Promise<boolean> {
+    return claimPaymentReplay(this.store, paymentSignature, this.ttlMs)
   }
 }

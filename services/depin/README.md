@@ -24,6 +24,27 @@ npm run dev:all
 
 Copy `depin.config.example.json` to `depin.config.json`, replace the recipient with the provider's Stellar G-address, and set any referenced secrets in the environment. Secret values are injected as `Authorization: Bearer ...` upstream and are never accepted from or returned to clients.
 
+### Config sources (boot only)
+
+Priority:
+
+1. `DEPIN_CONFIG_JSON` — inline JSON (containers / Secrets Manager-injected env)
+2. `DEPIN_CONFIG_URL` — HTTPS JSON document fetched once at startup
+3. `DEPIN_CONFIG_PATH` — local file (default `depin.config.json`)
+
+Production ownership: platform/ops owns the managed JSON document and secret env
+names (`upstreamSecretRef`); service owners do not bake secrets into the image.
+
+### Replay / rate-limit state
+
+| `DEPIN_STATE_BACKEND` | Behavior |
+| --- | --- |
+| `memory` (default) | Single-process only |
+| `file` | Shared JSON file via `DEPIN_STATE_PATH` (default `.data/depin-state.json`) |
+| `redis` | Reserved; not implemented yet |
+
+Multi-instance hosts must not use `memory`.
+
 V1 accepts concrete `GET` and `HEAD` routes only. Streaming, sessions, mutable POST compute, custom facilitators, physical-device adapters, and a provider marketplace remain outside this version.
 
 ```bash
@@ -34,7 +55,7 @@ npm run build
 DEPIN_CONFIG_PATH=depin.config.json npm start
 ```
 
-The gateway exposes `/health` for readiness and `/status` for the frontend setup screen. `/status` returns sanitized provider routes, prices, recipients, network, timeout policy, and upstream origins; it does not expose upstream secret values or secret reference names.
+The gateway exposes `/health` for readiness and `/status` for the frontend setup screen. `/status` returns sanitized provider routes, prices, recipients, network, timeout policy, upstream origins, `configSource`, and `stateBackend`; it does not expose upstream secret values or secret reference names.
 
 ## Local testnet smoke test
 

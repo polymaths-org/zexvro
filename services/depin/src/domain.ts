@@ -77,3 +77,27 @@ export interface AuditLogger {
   info(record: AuditRecord): void
   error(record: AuditRecord): void
 }
+
+export interface RateLimitResult {
+  allowed: boolean
+  retryAfterSeconds: number
+}
+
+export interface ReplayStore {
+  claim(key: string, ttlMs: number): Promise<boolean>
+}
+
+export interface RateLimitStore {
+  consume(
+    key: string,
+    max: number,
+    windowMs: number,
+  ): Promise<RateLimitResult>
+}
+
+export type DepinConfigSourceType = 'file' | 'inline' | 'url'
+
+export interface DepinConfigSource {
+  type: DepinConfigSourceType
+  detail: string
+}

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { assertSecretReferences, parseConfig } from './config.js'
+import {
+  assertSecretReferences,
+  loadConfigFromEnvironment,
+  parseConfig,
+  parseConfigJson,
+} from './config.js'
 
 const recipient = 'GCSPMRWNIC4CLCGGWX42GH4TFXC3RAHNO5VHMKHRPBN6EJ56T6AZTDK3'
 
@@ -59,5 +64,34 @@ describe('De-pin configuration', () => {
     expect(() =>
       assertSecretReferences(config, { WEATHER_TOKEN: 'configured' }),
     ).not.toThrow()
+  })
+
+  it('parses inline JSON config', () => {
+    const config = parseConfigJson(JSON.stringify(valid))
+    expect(config.providers[0]?.route).toBe('/v1/weather')
+  })
+
+  it('loads DEPIN_CONFIG_JSON before path/url', async () => {
+    const loaded = await loadConfigFromEnvironment({
+      DEPIN_CONFIG_JSON: JSON.stringify(valid),
+      DEPIN_CONFIG_PATH: '/does/not/exist.json',
+      DEPIN_CONFIG_URL: 'https://example.com/depin.json',
+    })
+    expect(loaded.source).toEqual({ type: 'inline', detail: 'DEPIN_CONFIG_JSON' })
+    expect(loaded.config.providers).toHaveLength(1)
+  })
+
+  it('loads DEPIN_CONFIG_URL when inline is absent', async () => {
+    const fetchMock = async () =>
+      new Response(JSON.stringify(valid), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    const loaded = await loadConfigFromEnvironment(
+      { DEPIN_CONFIG_URL: 'https://config.example/providers.json' },
+      fetchMock,
+    )
+    expect(loaded.source.type).toBe('url')
+    expect(loaded.source.detail).toContain('https://config.example')
   })
 })

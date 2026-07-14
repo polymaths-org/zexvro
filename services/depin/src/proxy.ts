@@ -4,13 +4,16 @@ import type { HTTPResponseInstructions } from '@x402/core/server'
 import type {
   AuditLogger,
   DepinConfig,
+  DepinConfigSource,
   PaymentProtocol,
   ProviderConfig,
+  RateLimitStore,
+  ReplayStore,
   VerifiedPayment,
 } from './domain.js'
 import { JsonAuditLogger } from './audit.js'
-import { ReplayGuard } from './replay.js'
-import { UnpaidRateLimiter } from './rateLimit.js'
+import { claimPaymentReplay } from './replay.js'
+import { MemoryRateLimitStore, MemoryReplayStore } from './stores.js'
 
 class UpstreamError extends Error {
   constructor(
@@ -28,8 +31,10 @@ interface DepinAppOptions {
   fetchImplementation?: typeof fetch
   environment?: NodeJS.ProcessEnv
   logger?: AuditLogger
-  replayGuard?: ReplayGuard
-  unpaidRateLimiter?: UnpaidRateLimiter
+  replayStore?: ReplayStore
+  rateLimitStore?: RateLimitStore
+  configSource?: DepinConfigSource
+  stateBackend?: 'memory' | 'file'
   now?: () => number
 }
 
@@ -49,11 +54,10 @@ export function createDepinApp(options: DepinAppOptions) {
     fetchImplementation = fetch,
     environment = process.env,
     logger = new JsonAuditLogger(),
-    replayGuard = new ReplayGuard(config.replayTtlMs),
-    unpaidRateLimiter = new UnpaidRateLimiter(
-      config.unpaidRateLimit.maxRequests,
-      config.unpaidRateLimit.windowMs,
-    ),
+    replayStore = new MemoryReplayStore(),
+    rateLimitStore = new MemoryRateLimitStore(),
+    configSource = { type: 'file', detail: 'depin.config.json' },
+    stateBackend = 'memory',
     now = Date.now,
   } = options
 
@@ -80,6 +84,8 @@ export function createDepinApp(options: DepinAppOptions) {
     response.json({
       status: 'ok',
       service: 'depin',
+      configSource,
+      stateBackend,
       capabilities: {
         scheme: 'exact',
         network: 'stellar:testnet',
@@ -113,7 +119,11 @@ export function createDepinApp(options: DepinAppOptions) {
       const paymentSignature = request.header('PAYMENT-SIGNATURE')
 
       if (paymentSignature === undefined) {
-        const rateLimit = unpaidRateLimiter.consume(request.ip ?? 'unknown')
+        const rateLimit = await rateLimitStore.consume(
+          request.ip ?? 'unknown',
+          config.unpaidRateLimit.maxRequests,
+          config.unpaidRateLimit.windowMs,
+        )
         if (!rateLimit.allowed) {
           response.setHeader('Retry-After', String(rateLimit.retryAfterSeconds))
           response.status(429).json({
@@ -155,7 +165,11 @@ export function createDepinApp(options: DepinAppOptions) {
 
       if (decision.type === 'payment-error') {
         if (paymentSignature !== undefined) {
-          const rateLimit = unpaidRateLimiter.consume(request.ip ?? 'unknown')
+          const rateLimit = await rateLimitStore.consume(
+            request.ip ?? 'unknown',
+            config.unpaidRateLimit.maxRequests,
+            config.unpaidRateLimit.windowMs,
+          )
           if (!rateLimit.allowed) {
             response.setHeader('Retry-After', String(rateLimit.retryAfterSeconds))
             response.status(429).json({
@@ -187,7 +201,11 @@ export function createDepinApp(options: DepinAppOptions) {
 
       if (
         paymentSignature === undefined ||
-        !replayGuard.claim(replayMaterial(decision.payment))
+        !(await claimPaymentReplay(
+          replayStore,
+          replayMaterial(decision.payment),
+          config.replayTtlMs,
+        ))
       ) {
         await safeCancel(protocol, decision.payment, {
           reason: 'handler_failed',
