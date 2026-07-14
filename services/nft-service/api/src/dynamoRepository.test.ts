@@ -144,4 +144,21 @@ describe('DynamoNftRepository', () => {
     const found = await repository.findCheckoutIntentByIdempotencyKey('idem-1')
     expect(found).toEqual(intent)
   })
+
+  it('allocates monotonic token IDs via counter update', async () => {
+    // seedCounterBase → listMintedItems
+    send.mockResolvedValueOnce({ Items: [] })
+    send.mockResolvedValueOnce({
+      Attributes: { nextTokenId: 1 },
+    })
+    await expect(repository.allocateNextTokenId('col-1')).resolves.toBe(1)
+
+    send.mockResolvedValueOnce({
+      Items: [{ ...minted, tokenId: 7 }],
+    })
+    send.mockResolvedValueOnce({
+      Attributes: { nextTokenId: 8 },
+    })
+    await expect(repository.allocateNextTokenId('col-1')).resolves.toBe(8)
+  })
 })

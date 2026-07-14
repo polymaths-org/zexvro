@@ -603,6 +603,7 @@ describe('NFT service API', () => {
     expect(prepared.body.intent).toMatchObject({
       serializedTransaction: 'prepared-mint',
       requiredSigners: [ownerAddress],
+      tokenId: 42,
     })
 
     const submitted = await request(app)
@@ -616,6 +617,41 @@ describe('NFT service API', () => {
       transactionHash: 'mint-hash',
       status: 'confirmed',
     })
+  })
+
+  it('auto-allocates token IDs when mint and checkout omit tokenId', async () => {
+    const collection = await createCollection()
+
+    const mintA = await request(app)
+      .post(`/v1/collections/${collection.id}/mints/intent`)
+      .send({
+        operatorAddress: ownerAddress,
+        recipientAddress: buyerAddress,
+      })
+      .expect(201)
+    expect(mintA.body.intent.tokenId).toBe(1)
+
+    const mintB = await request(app)
+      .post(`/v1/collections/${collection.id}/mints/intent`)
+      .send({
+        operatorAddress: ownerAddress,
+        recipientAddress: buyerAddress,
+      })
+      .expect(201)
+    expect(mintB.body.intent.tokenId).toBe(2)
+
+    const checkout = await request(app)
+      .post('/v1/public/checkout/intents')
+      .set('Idempotency-Key', 'auto-token-checkout')
+      .send({ collectionId: collection.id, buyerAddress })
+      .expect(201)
+    expect(checkout.body.intent.tokenId).toBe(3)
+
+    const inventory = await request(app)
+      .get(`/v1/public/collections/${collection.id}/tokens`)
+      .expect(200)
+    // Counter advanced even though mints were only prepared (not submitted).
+    expect(inventory.body.nextTokenId).toBeGreaterThanOrEqual(4)
   })
 
   it('accepts local sponsor-owned sale configuration that is auto-submitted', async () => {

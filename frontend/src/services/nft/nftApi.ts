@@ -120,6 +120,8 @@ export interface PublicTokenMetadata {
 export interface PreparedNftTransaction {
   serializedTransaction: string;
   requiredSigners: string[];
+  /** Assigned by the API when tokenId was omitted (always-auto allocation). */
+  tokenId?: number;
   autoSubmitted?: {
     transactionHash: string;
     status: 'confirmed';
@@ -364,7 +366,8 @@ export async function unarchiveNftCollection(input: {
 export async function createPublicCheckoutIntent(input: {
   collectionId: string;
   buyerAddress: string;
-  tokenId: number;
+  /** Optional. Omit to let the API allocate the next free token ID. */
+  tokenId?: number;
   idempotencyKey?: string;
 }) {
   const idempotencyKey =
@@ -380,7 +383,7 @@ export async function createPublicCheckoutIntent(input: {
       body: JSON.stringify({
         collectionId: input.collectionId,
         buyerAddress: input.buyerAddress,
-        tokenId: input.tokenId,
+        ...(input.tokenId === undefined ? {} : { tokenId: input.tokenId }),
       }),
     },
   );
@@ -443,7 +446,8 @@ export async function prepareNftMint(input: {
   collectionId: string;
   operatorAddress: string;
   recipientAddress: string;
-  tokenId: number;
+  /** Optional. Omit to let the API allocate the next free token ID. */
+  tokenId?: number;
   accessToken: string;
 }) {
   const result = await requestJson<{ intent: PreparedNftTransaction }>(
@@ -454,7 +458,7 @@ export async function prepareNftMint(input: {
       body: JSON.stringify({
         operatorAddress: input.operatorAddress,
         recipientAddress: input.recipientAddress,
-        tokenId: input.tokenId,
+        ...(input.tokenId === undefined ? {} : { tokenId: input.tokenId }),
       }),
     },
     input.accessToken,

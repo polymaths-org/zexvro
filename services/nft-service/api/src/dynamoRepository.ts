@@ -268,5 +268,73 @@ export class DynamoNftRepository implements NftRepository {
         Item: mintedItemRecord(item),
       }),
     )
+    // Raise the counter floor so allocateNextTokenId never reuses this ID.
+    try {
+      await this.client.send(
+        new UpdateCommand({
+          TableName: this.tableName,
+          Key: {
+            pk: `COLLECTION#${item.collectionId}`,
+            sk: 'COUNTER',
+          },
+          UpdateExpression: 'SET entityType = :entityType, nextTokenId = :tokenId',
+          ConditionExpression:
+            'attribute_not_exists(nextTokenId) OR nextTokenId < :tokenId',
+          ExpressionAttributeValues: {
+            ':entityType': 'token_counter',
+            ':tokenId': item.tokenId,
+          },
+        }),
+      )
+    } catch (error) {
+      if (!(error instanceof ConditionalCheckFailedException)) throw error
+    }
+  }
+
+  async allocateNextTokenId(collectionId: string): Promise<number> {
+    const seed = await this.seedCounterBase(collectionId)
+    const updated = await this.client.send(
+      new UpdateCommand({
+        TableName: this.tableName,
+        Key: {
+          pk: `COLLECTION#${collectionId}`,
+          sk: 'COUNTER',
+        },
+        UpdateExpression:
+          'SET entityType = :entityType, nextTokenId = if_not_exists(nextTokenId, :seed) + :one',
+        ExpressionAttributeValues: {
+          ':entityType': 'token_counter',
+          ':seed': seed,
+          ':one': 1,
+        },
+        ReturnValues: 'UPDATED_NEW',
+      }),
+    )
+    const next = Number(updated.Attributes?.nextTokenId)
+    if (!Number.isInteger(next) || next < 1 || next > 4_294_967_295) {
+      throw new Error('Failed to allocate a valid token ID')
+    }
+    return next
+  }
+
+  async getTokenCounter(collectionId: string): Promise<number> {
+    const response = await this.client.send(
+      new GetCommand({
+        TableName: this.tableName,
+        Key: {
+          pk: `COLLECTION#${collectionId}`,
+          sk: 'COUNTER',
+        },
+      }),
+    )
+    const stored = Number(response.Item?.nextTokenId)
+    if (Number.isInteger(stored) && stored > 0) return stored
+    return this.seedCounterBase(collectionId)
+  }
+
+  private async seedCounterBase(collectionId: string): Promise<number> {
+    const items = await this.listMintedItems(collectionId)
+    if (items.length === 0) return 0
+    return Math.max(...items.map((item) => item.tokenId))
   }
 }

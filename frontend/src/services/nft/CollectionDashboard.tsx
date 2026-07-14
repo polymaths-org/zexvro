@@ -137,7 +137,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
   const [saleIntent, setSaleIntent] = useState<PreparedNftTransaction | null>(null);
   const [mintCollection, setMintCollection] = useState<ApiNftCollection | null>(null);
   const [mintRecipient, setMintRecipient] = useState('');
-  const [mintTokenId, setMintTokenId] = useState('1');
+  const [mintAssignedTokenId, setMintAssignedTokenId] = useState<number | null>(null);
   const [mintOperator, setMintOperator] = useState('');
   const [mintIntent, setMintIntent] = useState<PreparedNftTransaction | null>(null);
   const [lastMintTxHash, setLastMintTxHash] = useState('');
@@ -274,6 +274,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
     setMintRecipient(collection.ownerAddress);
     setMintOperator(collection.ownerAddress);
     setMintIntent(null);
+    setMintAssignedTokenId(null);
     setLastMintTxHash('');
     setActionError('');
     setActionMessage('');
@@ -282,13 +283,12 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
         collectionId: collection.id,
         accessToken,
       });
-      setMintTokenId(String(inventory.nextTokenId));
       setInventoryByCollection((previous) => ({
         ...previous,
         [collection.id]: inventory.mintedCount,
       }));
     } catch {
-      setMintTokenId('1');
+      // Inventory is optional for opening the mint modal.
     }
   };
 
@@ -362,11 +362,6 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
 
   const prepareMint = async () => {
     if (!mintCollection) return;
-    const tokenId = Number(mintTokenId);
-    if (!Number.isInteger(tokenId) || tokenId < 0 || tokenId > 4_294_967_295) {
-      setActionError('Token ID must be an integer between 0 and 4294967295.');
-      return;
-    }
     const recipientAddress = mintRecipient.trim();
     const operatorAddress = mintOperator.trim() || mintCollection.ownerAddress;
     if (!/^G[A-Z0-9]{55}$/.test(recipientAddress)) {
@@ -381,20 +376,31 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
     setActionError('');
     setActionMessage('');
     setLastMintTxHash('');
+    setMintAssignedTokenId(null);
     try {
       const intent = await prepareNftMint({
         collectionId: mintCollection.id,
         operatorAddress,
         recipientAddress,
-        tokenId,
         accessToken,
       });
       setMintIntent(intent);
+      if (intent.tokenId !== undefined) {
+        setMintAssignedTokenId(intent.tokenId);
+      }
       if (intent.autoSubmitted) {
         setLastMintTxHash(intent.autoSubmitted.transactionHash);
-        setActionMessage(`Token ${tokenId} minted on Stellar testnet.`);
+        setActionMessage(
+          intent.tokenId === undefined
+            ? 'Token minted on Stellar testnet.'
+            : `Token #${intent.tokenId} minted on Stellar testnet.`,
+        );
       } else {
-        setActionMessage('Mint transaction prepared. Sign with the minter wallet to submit.');
+        setActionMessage(
+          intent.tokenId === undefined
+            ? 'Mint transaction prepared. Sign with the minter wallet to submit.'
+            : `Token #${intent.tokenId} reserved. Sign with the minter wallet to submit.`,
+        );
       }
     } catch (error) {
       reportActionError(error, setActionError);
@@ -421,12 +427,12 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
         setActionMessage(`Connected wallet ${walletAddress.slice(0, 6)}... differs from required minter. Continue only if this key is authorized.`);
       }
       const signedTransaction = await signTransaction(mintIntent.serializedTransaction);
-      const tokenId = Number(mintTokenId);
+      const tokenId = mintAssignedTokenId ?? mintIntent.tokenId;
       const result = await submitNftMint({
         collectionId: mintCollection.id,
         preparedTransaction: mintIntent.serializedTransaction,
         signedTransaction,
-        tokenId,
+        ...(tokenId === undefined ? {} : { tokenId }),
         ownerAddress: mintRecipient.trim(),
         accessToken,
       });
@@ -442,7 +448,12 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
         ...previous,
         [mintCollection.id]: (previous[mintCollection.id] || 0) + 1,
       }));
-      setActionMessage(`Token ${mintTokenId} signed and minted on Stellar testnet.`);
+      const mintedId = result.item?.tokenId ?? tokenId;
+      setActionMessage(
+        mintedId === undefined
+          ? 'Token signed and minted on Stellar testnet.'
+          : `Token #${mintedId} signed and minted on Stellar testnet.`,
+      );
     } catch (error) {
       reportActionError(error, setActionError);
     } finally {
@@ -1187,17 +1198,14 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
                   className="mt-2 w-full rounded-md border border-zinc-200 bg-white px-3 py-2.5 font-mono text-xs text-zinc-950 outline-none transition focus:border-brand-blue dark:border-zinc-800 dark:bg-[#050506] dark:text-white"
                 />
               </label>
-              <label className="block text-sm font-medium text-zinc-800 dark:text-zinc-200">
-                Token ID
-                <input
-                  type="number"
-                  min={0}
-                  step={1}
-                  value={mintTokenId}
-                  onChange={event => setMintTokenId(event.target.value)}
-                  className="mt-2 w-full rounded-md border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-950 outline-none transition focus:border-brand-blue dark:border-zinc-800 dark:bg-[#050506] dark:text-white"
-                />
-              </label>
+              <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-[#050506] dark:text-zinc-400">
+                Token ID is assigned automatically when you prepare the mint.
+                {mintAssignedTokenId !== null && (
+                  <p className="mt-1 font-medium tabular-nums text-zinc-900 dark:text-zinc-100">
+                    Assigned token #{mintAssignedTokenId}
+                  </p>
+                )}
+              </div>
             </div>
 
             {mintIntent && (

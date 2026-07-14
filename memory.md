@@ -771,3 +771,13 @@ Use `None` for empty fields. Do not delete fields.
 - Follow-ups: Auto token-ID allocation (no manual entry); multi-surface public checkout (popup + custom UI + backend API) + web SDK scaffold; Cognito/Freighter browser E2E; hosted API + least-privilege IAM.
 - Blockers: Browser E2E and container host still open.
 - Verification: Prior matrix green (NFT 60/60, De-pin 34/34, FE NFT 28/28, live AWS smoke recorded).
+
+## 2026-07-14 - Codex with Nabil - Auto token IDs + multi-surface checkout SDK
+
+- Service or area: NFT Service API, frontend, public checkout SDK.
+- Files changed: `domain.ts`, `repository.ts`, `dynamoRepository.ts`, `service.ts`, `app.ts`, `app.test.ts`, `dynamoRepository.test.ts`, FE mint/buy UIs + tests, `packages/nft-checkout-sdk/*`, `EmbedCheckout.tsx`, `router.tsx`, NFT README, memory/agent-convo.
+- Summary: Token IDs always auto-allocated when omitted (Dynamo/file counter). Studio mint + public buy hide manual token ID entry. Scaffolded `@zexvro/nft-checkout-sdk` (headless client + openCheckout popup) and `/nft/embed/checkout` embed route for game integrations. Three surfaces: popup, custom UI, backend REST.
+- Decisions: Accepted - Always auto by default; optional explicit tokenId for advanced API. Accepted - Web SDK only for v1; API is universal. Accepted - NFT = platform service; game decides currency vs ownership semantics.
+- Follow-ups: Publish npm package when ready; partner CORS allowlist; Cognito/Freighter full E2E; optional commit of this slice.
+- Blockers: Browser Freighter E2E still manual.
+- Verification: NFT API 62/62 lint/build; FE nft+routing 34 tests expected after route test; FE lint green.

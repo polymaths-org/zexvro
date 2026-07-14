@@ -291,6 +291,11 @@ describe('CollectionDashboard', () => {
   it('prepares and submits creator mint with Freighter', async () => {
     const user = userEvent.setup();
     api.listNftCollections.mockResolvedValue([remoteCollection]);
+    api.prepareNftMint.mockResolvedValue({
+      serializedTransaction: 'prepared-mint',
+      requiredSigners: [remoteCollection.ownerAddress],
+      tokenId: 7,
+    });
     wallet.isWalletAvailable.mockResolvedValue(true);
     wallet.getPublicKey.mockResolvedValue(remoteCollection.ownerAddress);
     wallet.signTransaction.mockResolvedValue('signed-mint');
@@ -303,17 +308,16 @@ describe('CollectionDashboard', () => {
 
     await user.click(await screen.findByTitle('Mint token'));
     expect(await screen.findByRole('heading', { name: 'Mint token' })).toBeInTheDocument();
-    await user.clear(screen.getByLabelText(/Token ID/));
-    await user.type(screen.getByLabelText(/Token ID/), '7');
+    expect(screen.getByText(/assigned automatically/i)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /prepare mint/i }));
 
     expect(api.prepareNftMint).toHaveBeenCalledWith({
       collectionId: remoteCollection.id,
       operatorAddress: remoteCollection.ownerAddress,
       recipientAddress: remoteCollection.ownerAddress,
-      tokenId: 7,
       accessToken: 'access-token',
     });
+    expect(await screen.findByText(/Assigned token #7/i)).toBeInTheDocument();
 
     await user.click(await screen.findByRole('button', { name: /sign with wallet/i }));
     expect(wallet.signTransaction).toHaveBeenCalledWith('prepared-mint');

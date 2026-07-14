@@ -49,6 +49,7 @@ import NftService, { NftCollectionCreate } from '../components/services/NftServi
 import DepinService from '../components/services/DepinService';
 import DocsLibrary from '../components/docs/DocsLibrary';
 import PublicCollection from '../services/nft/PublicCollection';
+import EmbedCheckout from '../services/nft/EmbedCheckout';
 
 const MarketingPage = React.lazy(() => import('../marketing/MarketingPage'));
 
@@ -559,6 +560,15 @@ const publicNftCollectionRoute = createRoute({
   component: PublicCollection,
 });
 
+const embedNftCheckoutRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/nft/embed/checkout',
+  validateSearch: (search: Record<string, unknown>) => ({
+    collectionId: typeof search.collectionId === 'string' ? search.collectionId : '',
+  }),
+  component: EmbedCheckout,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   agentShortcutRoute,
@@ -568,6 +578,7 @@ const routeTree = rootRoute.addChildren([
   dashboardServicesShortcutRoute,
   docsRoute,
   publicNftCollectionRoute,
+  embedNftCheckoutRoute,
   dashboardLayoutRoute.addChildren([
     dashboardIndexRoute,
     wsOverviewRoute,

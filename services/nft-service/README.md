@@ -38,12 +38,17 @@ stellar contract build --manifest-path services/nft-service/Cargo.toml
 ```text
 GET  /health
 GET  /v1/assets/:assetId
+GET  /v1/public/collections/:collectionId
+GET  /v1/public/collections/:collectionId/tokens
 GET  /v1/public/collections/:collectionId/tokens/:tokenId
+POST /v1/public/checkout/intents
+POST /v1/public/checkout/intents/:intentId/submit
 POST /v1/media
 POST /v1/collections
 GET  /v1/collections?workspaceId=...
 GET  /v1/collections/:collectionId
 GET  /v1/collections/:collectionId/status
+GET  /v1/collections/:collectionId/items
 POST /v1/collections/:collectionId/sale-config/intent
 POST /v1/collections/:collectionId/sale-config/submit
 POST /v1/collections/:collectionId/mints/intent
@@ -53,12 +58,34 @@ GET  /v1/checkout/intents/:intentId
 POST /v1/checkout/intents/:intentId/submit
 ```
 
-`/health`, local assets, and live token metadata are public. All workspace,
-upload, mint, sale, and checkout routes require a Cognito access token. The API
-derives storage scope from the verified token subject; a browser-provided
-workspace ID cannot cross user boundaries.
+`/health`, local assets, public collection/inventory/metadata, and public
+checkout routes are unauthenticated. All workspace, upload, mint, sale, and
+authenticated checkout routes require a Cognito access token. The API derives
+storage scope from the verified token subject; a browser-provided workspace ID
+cannot cross user boundaries.
+
+### Token IDs (always auto by default)
+
+Mint prepare and checkout intent accept an **optional** `tokenId`. When omitted,
+the API allocates the next free ID (monotonic counter, starts at 1) and returns
+it on the prepared intent (`intent.tokenId`). Studio UI and public buy page no
+longer ask users to type a token ID. Explicit `tokenId` remains available for
+advanced API callers.
+
+### Public checkout for games / third parties
+
+Three integration surfaces share the same public REST API:
+
+1. **Hosted popup** — `packages/nft-checkout-sdk` `openCheckout()` opens
+   `/nft/embed/checkout?collectionId=...` and receives `postMessage` success.
+2. **Custom web UI** — headless `createNftCheckoutClient` (or raw fetch) + Freighter
+   auth-entry signing.
+3. **Backend only** — game server calls public intent/submit routes; wallet signing
+   still happens in a browser/wallet the player controls.
 
 Checkout intent creation requires `Idempotency-Key`. The returned value is the Stellar SDK's serialized simulated transaction. A buyer signs only the required Soroban authorization entry and returns that serialized transaction. Before submission, the API checks its source, sequence, fee, time bounds, contract, method, and arguments against the stored intent, then rebuilds the envelope with the sponsor's current sequence and signs it server-side. Sale configuration and creator minting use the same owner/minter auth-entry pattern.
+
+See `packages/nft-checkout-sdk/README.md` for curl and JS examples.
 
 The API uses a versioned local JSON repository by default. Production still needs shared persistence and authenticated workspace authorization.
 
