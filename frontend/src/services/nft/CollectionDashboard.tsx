@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
+  Archive,
   ArrowRight,
   Boxes,
   CalendarDays,
@@ -26,16 +27,20 @@ import {
 import type { NftCollection } from '../../types';
 import { loadCollections } from './collectionStore';
 import {
+  archiveNftCollection,
   deleteNftCollection,
   getNftServiceHealth,
+  listCollectionItems,
   listNftCollections,
   prepareNftMint,
   prepareNftSaleConfig,
   retryNftCollectionDeployment,
   submitNftMint,
   submitNftSaleConfig,
+  unarchiveNftCollection,
   updateNftCollection,
   type ApiNftCollection,
+  type NftMintedItem,
   type NftServiceHealth,
   type PreparedNftTransaction,
 } from './nftApi';
@@ -107,6 +112,7 @@ const STATUS_STYLE = {
   deploying: 'border-blue-500/20 bg-blue-500/10 text-blue-600 dark:text-blue-400',
   live: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
   failed: 'border-red-500/20 bg-red-500/10 text-red-600 dark:text-red-400',
+  archived: 'border-zinc-500/20 bg-zinc-500/10 text-zinc-600 dark:text-zinc-300',
 };
 
 export default function CollectionDashboard({ workspaceId, accessToken, onCreate }: CollectionDashboardProps) {
@@ -135,6 +141,12 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
   const [mintOperator, setMintOperator] = useState('');
   const [mintIntent, setMintIntent] = useState<PreparedNftTransaction | null>(null);
   const [lastMintTxHash, setLastMintTxHash] = useState('');
+  const [inventoryByCollection, setInventoryByCollection] = useState<Record<string, number>>({});
+  const [inventoryPanel, setInventoryPanel] = useState<{
+    collection: ApiNftCollection;
+    items: NftMintedItem[];
+    nextTokenId: number;
+  } | null>(null);
 
   const loadRemoteData = useCallback(async (signal?: AbortSignal, isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -146,6 +158,25 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
       getNftServiceHealth(signal),
       listNftCollections(workspaceId, accessToken, signal),
     ]);
+    if (collectionResult.status === 'fulfilled') {
+      const counts = await Promise.all(
+        collectionResult.value.map(async (collection) => {
+          try {
+            const inventory = await listCollectionItems({
+              collectionId: collection.id,
+              accessToken,
+              signal,
+            });
+            return [collection.id, inventory.mintedCount] as const;
+          } catch {
+            return [collection.id, 0] as const;
+          }
+        }),
+      );
+      if (!signal?.aborted) {
+        setInventoryByCollection(Object.fromEntries(counts));
+      }
+    }
 
     if (signal?.aborted) return;
     if (healthResult.status === 'fulfilled') setHealth(healthResult.value);
@@ -238,15 +269,95 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
     setActionMessage('');
   };
 
-  const openMintSetup = (collection: ApiNftCollection) => {
+  const openMintSetup = async (collection: ApiNftCollection) => {
     setMintCollection(collection);
     setMintRecipient(collection.ownerAddress);
     setMintOperator(collection.ownerAddress);
-    setMintTokenId('1');
     setMintIntent(null);
     setLastMintTxHash('');
     setActionError('');
     setActionMessage('');
+    try {
+      const inventory = await listCollectionItems({
+        collectionId: collection.id,
+        accessToken,
+      });
+      setMintTokenId(String(inventory.nextTokenId));
+      setInventoryByCollection((previous) => ({
+        ...previous,
+        [collection.id]: inventory.mintedCount,
+      }));
+    } catch {
+      setMintTokenId('1');
+    }
+  };
+
+  const openInventory = async (collection: ApiNftCollection) => {
+    setBusyCollectionId(collection.id);
+    setActionError('');
+    try {
+      const inventory = await listCollectionItems({
+        collectionId: collection.id,
+        accessToken,
+      });
+      setInventoryPanel({
+        collection,
+        items: inventory.items,
+        nextTokenId: inventory.nextTokenId,
+      });
+      setInventoryByCollection((previous) => ({
+        ...previous,
+        [collection.id]: inventory.mintedCount,
+      }));
+    } catch (error) {
+      reportActionError(error, setActionError);
+    } finally {
+      setBusyCollectionId('');
+    }
+  };
+
+  const archiveCollection = async (collection: ApiNftCollection) => {
+    const confirmed = window.confirm(
+      `Archive ${collection.name}? It will hide from public studio lists. The Stellar contract remains live.`,
+    );
+    if (!confirmed) return;
+    setBusyCollectionId(collection.id);
+    setActionError('');
+    setActionMessage('');
+    try {
+      const updated = await archiveNftCollection({
+        collectionId: collection.id,
+        accessToken,
+      });
+      setCollections((previous) =>
+        previous.map((item) => (item.id === updated.id ? updated : item)),
+      );
+      setActionMessage(`${collection.name} archived. Contract remains live on-chain.`);
+    } catch (error) {
+      reportActionError(error, setActionError);
+    } finally {
+      setBusyCollectionId('');
+    }
+  };
+
+  const unarchiveCollection = async (collection: ApiNftCollection) => {
+    setBusyCollectionId(collection.id);
+    setActionError('');
+    setActionMessage('');
+    try {
+      const updated = await unarchiveNftCollection({
+        collectionId: collection.id,
+        accessToken,
+      });
+      setCollections((previous) =>
+        previous.map((item) => (item.id === updated.id ? updated : item)),
+      );
+      setActionMessage(`${collection.name} restored to live.`);
+    } catch (error) {
+      reportActionError(error, setActionError);
+    } finally {
+      setBusyCollectionId('');
+    }
   };
 
   const prepareMint = async () => {
@@ -310,20 +421,27 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
         setActionMessage(`Connected wallet ${walletAddress.slice(0, 6)}... differs from required minter. Continue only if this key is authorized.`);
       }
       const signedTransaction = await signTransaction(mintIntent.serializedTransaction);
-      const transaction = await submitNftMint({
+      const tokenId = Number(mintTokenId);
+      const result = await submitNftMint({
         collectionId: mintCollection.id,
         preparedTransaction: mintIntent.serializedTransaction,
         signedTransaction,
+        tokenId,
+        ownerAddress: mintRecipient.trim(),
         accessToken,
       });
-      setLastMintTxHash(transaction.transactionHash);
+      setLastMintTxHash(result.transaction.transactionHash);
       setMintIntent({
         ...mintIntent,
         autoSubmitted: {
-          transactionHash: transaction.transactionHash,
+          transactionHash: result.transaction.transactionHash,
           status: 'confirmed',
         },
       });
+      setInventoryByCollection((previous) => ({
+        ...previous,
+        [mintCollection.id]: (previous[mintCollection.id] || 0) + 1,
+      }));
       setActionMessage(`Token ${mintTokenId} signed and minted on Stellar testnet.`);
     } catch (error) {
       reportActionError(error, setActionError);
@@ -599,7 +717,9 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
                             </span>
                           </div>
                         </td>
-                        <td className="px-3 py-3.5 text-zinc-600 dark:text-zinc-300">0</td>
+                        <td className="px-3 py-3.5 text-zinc-600 dark:text-zinc-300">
+                          {inventoryByCollection[collection.id] ?? 0}
+                        </td>
                         <td className="px-3 py-3.5 text-zinc-600 dark:text-zinc-300">
                           <span className="inline-flex items-center gap-1.5">
                             <CircleDollarSign className="h-3.5 w-3.5 text-zinc-400" />
@@ -666,6 +786,14 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
                                 </button>
                                 <button
                                   type="button"
+                                  onClick={() => void openInventory(collection)}
+                                  title="View minted inventory"
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-zinc-200 text-zinc-500 transition hover:border-zinc-300 hover:text-zinc-950 dark:border-zinc-800 dark:hover:border-zinc-700 dark:hover:text-white"
+                                >
+                                  <Boxes className="h-4 w-4" />
+                                </button>
+                                <button
+                                  type="button"
                                   onClick={() => openSaleSetup(collection)}
                                   title={collection.primarySale ? 'Update primary sale' : 'Configure primary sale'}
                                   className={`inline-flex h-8 w-8 items-center justify-center rounded-md border transition ${
@@ -678,11 +806,40 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => openMintSetup(collection)}
+                                  onClick={() => void openMintSetup(collection)}
                                   title="Mint token"
                                   className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-zinc-200 text-zinc-500 transition hover:border-zinc-300 hover:text-zinc-950 dark:border-zinc-800 dark:hover:border-zinc-700 dark:hover:text-white"
                                 >
                                   <Sparkles className="h-4 w-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void archiveCollection(collection)}
+                                  disabled={busyCollectionId === collection.id}
+                                  title="Archive collection (hides from public; contract stays live)"
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-zinc-200 text-zinc-500 transition hover:border-zinc-300 hover:text-zinc-950 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-800 dark:hover:border-zinc-700 dark:hover:text-white"
+                                >
+                                  <Archive className="h-4 w-4" />
+                                </button>
+                              </>
+                            ) : collection.status === 'archived' ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => void openInventory(collection)}
+                                  title="View minted inventory"
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-zinc-200 text-zinc-500 transition hover:border-zinc-300 hover:text-zinc-950 dark:border-zinc-800 dark:hover:border-zinc-700 dark:hover:text-white"
+                                >
+                                  <Boxes className="h-4 w-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void unarchiveCollection(collection)}
+                                  disabled={busyCollectionId === collection.id}
+                                  title="Restore collection to live"
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-zinc-200 text-zinc-500 transition hover:border-zinc-300 hover:text-zinc-950 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-800 dark:hover:border-zinc-700 dark:hover:text-white"
+                                >
+                                  <RotateCcw className="h-4 w-4" />
                                 </button>
                               </>
                             ) : (
@@ -1106,6 +1263,73 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
                 {busyCollectionId === mintCollection.id && <LoaderCircle className="h-4 w-4 animate-spin" />}
                 {mintIntent?.autoSubmitted ? 'Minted' : 'Prepare mint'}
               </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {inventoryPanel && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <section className="w-full max-w-2xl rounded-lg border border-zinc-200 bg-white p-5 shadow-2xl dark:border-zinc-800 dark:bg-[#0A0A0B]">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-base font-semibold text-zinc-950 dark:text-white">
+                  Minted inventory · {inventoryPanel.collection.name}
+                </h2>
+                <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                  {inventoryPanel.items.length} minted · next free token #{inventoryPanel.nextTokenId}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setInventoryPanel(null)}
+                aria-label="Close inventory"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-zinc-200 text-zinc-500 transition hover:text-zinc-950 dark:border-zinc-800 dark:hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="mt-4 max-h-80 overflow-auto border border-zinc-200 dark:border-zinc-800">
+              <table className="w-full min-w-[520px] text-left text-sm">
+                <thead className="border-b border-zinc-200 bg-zinc-50 text-xs text-zinc-500 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-400">
+                  <tr>
+                    <th className="px-3 py-2 font-medium">Token</th>
+                    <th className="px-3 py-2 font-medium">Owner</th>
+                    <th className="px-3 py-2 font-medium">Source</th>
+                    <th className="px-3 py-2 font-medium">Tx</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-900">
+                  {inventoryPanel.items.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-3 py-6 text-center text-zinc-500">
+                        No minted items yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    inventoryPanel.items.map((item) => (
+                      <tr key={item.id}>
+                        <td className="px-3 py-2 font-medium text-zinc-950 dark:text-white">#{item.tokenId}</td>
+                        <td className="px-3 py-2 font-mono text-xs text-zinc-600 dark:text-zinc-300">
+                          {shortAddress(item.ownerAddress)}
+                        </td>
+                        <td className="px-3 py-2 capitalize text-zinc-600 dark:text-zinc-300">{item.source}</td>
+                        <td className="px-3 py-2">
+                          <a
+                            href={`https://stellar.expert/explorer/testnet/tx/${item.transactionHash}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 font-mono text-xs text-brand-blue hover:underline"
+                          >
+                            {shortAddress(item.transactionHash)}
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </section>
         </div>

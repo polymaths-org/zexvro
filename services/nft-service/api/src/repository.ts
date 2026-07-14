@@ -4,6 +4,7 @@ import { dirname } from 'node:path'
 import type {
   CheckoutIntentRecord,
   CollectionRecord,
+  MintedItemRecord,
   NftRepository,
   RepositoryState,
 } from './domain.js'
@@ -12,13 +13,18 @@ const emptyState = (): RepositoryState => ({
   version: 1,
   collections: [],
   checkoutIntents: [],
+  mintedItems: [],
 })
 
 export class InMemoryNftRepository implements NftRepository {
   protected state: RepositoryState
 
   constructor(initialState: RepositoryState = emptyState()) {
-    this.state = structuredClone(initialState)
+    this.state = {
+      ...emptyState(),
+      ...structuredClone(initialState),
+      mintedItems: structuredClone(initialState.mintedItems ?? []),
+    }
   }
 
   async listCollections(workspaceId: string): Promise<CollectionRecord[]> {
@@ -100,6 +106,37 @@ export class InMemoryNftRepository implements NftRepository {
     return structuredClone(claimed)
   }
 
+  async listMintedItems(collectionId: string): Promise<MintedItemRecord[]> {
+    return structuredClone(
+      this.state.mintedItems
+        .filter((item) => item.collectionId === collectionId)
+        .sort((left, right) => left.tokenId - right.tokenId),
+    )
+  }
+
+  async getMintedItem(
+    collectionId: string,
+    tokenId: number,
+  ): Promise<MintedItemRecord | undefined> {
+    const item = this.state.mintedItems.find(
+      (entry) => entry.collectionId === collectionId && entry.tokenId === tokenId,
+    )
+    return item === undefined ? undefined : structuredClone(item)
+  }
+
+  async saveMintedItem(item: MintedItemRecord): Promise<void> {
+    const index = this.state.mintedItems.findIndex(
+      (entry) =>
+        entry.collectionId === item.collectionId && entry.tokenId === item.tokenId,
+    )
+    if (index === -1) {
+      this.state.mintedItems.push(structuredClone(item))
+    } else {
+      this.state.mintedItems[index] = structuredClone(item)
+    }
+    await this.afterMutation()
+  }
+
   protected async afterMutation(): Promise<void> {}
 }
 
@@ -121,7 +158,11 @@ export class FileNftRepository extends InMemoryNftRepository {
       if (parsed.version !== 1) {
         throw new Error(`Unsupported NFT repository version: ${String(parsed.version)}`)
       }
-      state = parsed
+      state = {
+        ...emptyState(),
+        ...parsed,
+        mintedItems: parsed.mintedItems ?? [],
+      }
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code
       if (code !== 'ENOENT') {

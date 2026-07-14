@@ -9,7 +9,7 @@ export interface NftServiceHealth {
     network: 'stellar:testnet';
     pinningConfigured: boolean;
     stellarConfigured: boolean;
-    storageMode: 'pinata' | 'local';
+    storageMode: 'local' | 's3' | 'pinata';
   };
 }
 
@@ -82,6 +82,39 @@ export interface NftCheckoutIntent {
   updatedAt: string;
   transactionHash?: string;
   failureReason?: string;
+}
+
+export interface NftMintedItem {
+  id: string;
+  collectionId: string;
+  tokenId: number;
+  ownerAddress: string;
+  source: 'mint' | 'purchase';
+  transactionHash: string;
+  mintedAt: string;
+}
+
+export interface NftInventorySummary {
+  items: NftMintedItem[];
+  nextTokenId: number;
+  mintedCount: number;
+}
+
+export interface PublicTokenMetadata {
+  name: string;
+  description: string;
+  image: string;
+  external_url?: string;
+  collection: {
+    name: string;
+    symbol: string;
+  };
+  attributes: Array<{ trait_type: string; value: string | number }>;
+  availability: 'available' | 'sold';
+  ownerAddress?: string;
+  source?: 'mint' | 'purchase';
+  transactionHash?: string;
+  mintedAt?: string;
 }
 
 export interface PreparedNftTransaction {
@@ -260,9 +293,70 @@ export async function getPublicNftCollection(
   collectionId: string,
   signal?: AbortSignal,
 ) {
-  const result = await requestJson<{ collection: PublicNftCollection }>(
+  const result = await requestJson<{
+    collection: PublicNftCollection;
+    inventory?: NftInventorySummary;
+  }>(
     `/v1/public/collections/${encodeURIComponent(collectionId)}`,
     { signal },
+  );
+  return result;
+}
+
+export async function getPublicCollectionInventory(
+  collectionId: string,
+  signal?: AbortSignal,
+) {
+  const result = await requestJson<NftInventorySummary>(
+    `/v1/public/collections/${encodeURIComponent(collectionId)}/tokens`,
+    { signal },
+  );
+  return result;
+}
+
+export async function getPublicTokenMetadata(
+  collectionId: string,
+  tokenId: number,
+  signal?: AbortSignal,
+) {
+  return requestJson<PublicTokenMetadata>(
+    `/v1/public/collections/${encodeURIComponent(collectionId)}/tokens/${encodeURIComponent(String(tokenId))}`,
+    { signal },
+  );
+}
+
+export async function listCollectionItems(input: {
+  collectionId: string;
+  accessToken: string;
+  signal?: AbortSignal;
+}) {
+  return requestJson<NftInventorySummary>(
+    `/v1/collections/${encodeURIComponent(input.collectionId)}/items`,
+    { signal: input.signal },
+    input.accessToken,
+  );
+}
+
+export async function archiveNftCollection(input: {
+  collectionId: string;
+  accessToken: string;
+}) {
+  const result = await requestJson<{ collection: ApiNftCollection }>(
+    `/v1/collections/${encodeURIComponent(input.collectionId)}/archive`,
+    { method: 'POST' },
+    input.accessToken,
+  );
+  return result.collection;
+}
+
+export async function unarchiveNftCollection(input: {
+  collectionId: string;
+  accessToken: string;
+}) {
+  const result = await requestJson<{ collection: ApiNftCollection }>(
+    `/v1/collections/${encodeURIComponent(input.collectionId)}/unarchive`,
+    { method: 'POST' },
+    input.accessToken,
   );
   return result.collection;
 }
@@ -321,10 +415,13 @@ export async function submitNftMint(input: {
   collectionId: string;
   preparedTransaction: string;
   signedTransaction: string;
+  tokenId?: number;
+  ownerAddress?: string;
   accessToken: string;
 }) {
   const result = await requestJson<{
     transaction: { transactionHash: string; status: 'confirmed' };
+    item?: NftMintedItem;
   }>(
     `/v1/collections/${encodeURIComponent(input.collectionId)}/mints/submit`,
     {
@@ -333,11 +430,13 @@ export async function submitNftMint(input: {
       body: JSON.stringify({
         preparedTransaction: input.preparedTransaction,
         signedTransaction: input.signedTransaction,
+        ...(input.tokenId === undefined ? {} : { tokenId: input.tokenId }),
+        ...(input.ownerAddress === undefined ? {} : { ownerAddress: input.ownerAddress }),
       }),
     },
     input.accessToken,
   );
-  return result.transaction;
+  return result;
 }
 
 export async function prepareNftMint(input: {

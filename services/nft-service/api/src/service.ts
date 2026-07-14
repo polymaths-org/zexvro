@@ -2,10 +2,13 @@ import { randomUUID } from 'node:crypto'
 import type {
   CheckoutIntentRecord,
   CollectionRecord,
+  MintedItemRecord,
+  MintedItemSource,
   NftChainGateway,
   NftRepository,
   PinningService,
   PreparedContractCall,
+  SubmissionResult,
 } from './domain.js'
 import { ApiError } from './errors.js'
 
@@ -83,7 +86,7 @@ export class NftService {
       throw new ApiError(
         400,
         'base_metadata_uri_required',
-        'An IPFS token metadata directory is required for Pinata storage',
+        'A token metadata base URI ending with / is required for this storage mode',
       )
     }
     const pinnedMetadata = await this.pinCollectionMetadata({
@@ -170,6 +173,7 @@ export class NftService {
     if (collection.status !== 'live') {
       throw new ApiError(404, 'collection_not_found', 'Collection not found')
     }
+    const minted = await this.resolveMintedItem(collection, tokenId)
     return {
       name: `${collection.name} #${String(tokenId)}`,
       description: collection.description,
@@ -185,7 +189,99 @@ export class NftService {
         { trait_type: 'Collection', value: collection.name },
         { trait_type: 'Token ID', value: tokenId },
       ],
+      availability: minted === undefined ? 'available' : 'sold',
+      ...(minted === undefined
+        ? {}
+        : {
+            ownerAddress: minted.ownerAddress,
+            source: minted.source,
+            transactionHash: minted.transactionHash,
+            mintedAt: minted.mintedAt,
+          }),
     }
+  }
+
+  async listMintedItems(collectionId: string): Promise<MintedItemRecord[]> {
+    await this.getCollection(collectionId)
+    return this.repository.listMintedItems(collectionId)
+  }
+
+  async getMintedItem(
+    collectionId: string,
+    tokenId: number,
+  ): Promise<MintedItemRecord | undefined> {
+    const collection = await this.getCollection(collectionId)
+    return this.resolveMintedItem(collection, tokenId)
+  }
+
+  async suggestNextTokenId(collectionId: string): Promise<number> {
+    const collection = await this.getCollection(collectionId)
+    const items = await this.repository.listMintedItems(collectionId)
+    let candidate = items.length === 0 ? 1 : Math.max(...items.map((item) => item.tokenId)) + 1
+    if (collection.contractId === undefined) return candidate
+
+    // Walk forward until chain agrees the token is free (covers pre-inventory mints).
+    for (let attempt = 0; attempt < 64; attempt += 1) {
+      const owner = await this.chain.getTokenOwner({
+        contractId: collection.contractId,
+        tokenId: candidate,
+      })
+      if (owner === undefined) return candidate
+      await this.recordMintedItem({
+        collectionId,
+        tokenId: candidate,
+        ownerAddress: owner,
+        source: 'purchase',
+        transactionHash: `on-chain-sync:${collection.contractId}:${candidate}`,
+      })
+      candidate += 1
+    }
+    return candidate
+  }
+
+  async archiveCollection(id: string): Promise<CollectionRecord> {
+    const collection = await this.getCollection(id)
+    if (collection.status !== 'live') {
+      throw new ApiError(
+        409,
+        'collection_not_archivable',
+        'Only live collections can be archived',
+        { status: collection.status },
+      )
+    }
+    const archived: CollectionRecord = {
+      ...collection,
+      status: 'archived',
+      updatedAt: this.now().toISOString(),
+    }
+    await this.repository.saveCollection(archived)
+    return archived
+  }
+
+  async unarchiveCollection(id: string): Promise<CollectionRecord> {
+    const collection = await this.getCollection(id)
+    if (collection.status !== 'archived') {
+      throw new ApiError(
+        409,
+        'collection_not_archived',
+        'Only archived collections can be restored',
+        { status: collection.status },
+      )
+    }
+    if (collection.contractId === undefined) {
+      throw new ApiError(
+        409,
+        'collection_not_live',
+        'Archived collection is missing its contract identifier',
+      )
+    }
+    const restored: CollectionRecord = {
+      ...collection,
+      status: 'live',
+      updatedAt: this.now().toISOString(),
+    }
+    await this.repository.saveCollection(restored)
+    return restored
   }
 
   async updateFailedCollection(
@@ -302,6 +398,7 @@ export class NftService {
     tokenId: number
   }): Promise<PreparedContractCall> {
     const collection = await this.requireLiveCollection(input.collectionId)
+    await this.assertTokenAvailable(collection.id, input.tokenId)
     const prepared = await this.chain.prepareMint({
       contractId: collection.contractId,
       operatorAddress: input.operatorAddress,
@@ -374,13 +471,31 @@ export class NftService {
     collectionId: string
     preparedTransaction: string
     signedTransaction: string
-  }) {
+    tokenId?: number
+    ownerAddress?: string
+  }): Promise<SubmissionResult & { item?: MintedItemRecord }> {
     const collection = await this.requireLiveCollection(input.collectionId)
-    return this.chain.submitMint({
+    if (input.tokenId !== undefined) {
+      await this.assertTokenAvailable(collection.id, input.tokenId)
+    }
+    const result = await this.chain.submitMint({
       contractId: collection.contractId,
       expectedSerializedTransaction: input.preparedTransaction,
       serializedTransaction: input.signedTransaction,
     })
+    const tokenId = input.tokenId ?? result.tokenId
+    const ownerAddress = input.ownerAddress ?? result.ownerAddress
+    if (tokenId === undefined || ownerAddress === undefined) {
+      return result
+    }
+    const item = await this.recordMintedItem({
+      collectionId: collection.id,
+      tokenId,
+      ownerAddress,
+      source: 'mint',
+      transactionHash: result.transactionHash,
+    })
+    return { ...result, item }
   }
 
   async createCheckoutIntent(input: {
@@ -408,6 +523,7 @@ export class NftService {
     }
 
     const collection = await this.requireLiveCollection(input.collectionId)
+    await this.assertTokenAvailable(collection.id, input.tokenId)
     const prepared = await this.chain.prepareCheckout({
       contractId: collection.contractId,
       buyerAddress: input.buyerAddress,
@@ -490,6 +606,13 @@ export class NftService {
         expectedSerializedTransaction: claimed.serializedTransaction,
         serializedTransaction: input.signedTransaction,
       })
+      await this.recordMintedItem({
+        collectionId: collection.id,
+        tokenId: claimed.tokenId,
+        ownerAddress: claimed.buyerAddress,
+        source: 'purchase',
+        transactionHash: result.transactionHash,
+      })
       const confirmed: CheckoutIntentRecord = {
         ...claimed,
         status: 'confirmed',
@@ -515,10 +638,88 @@ export class NftService {
     }
   }
 
+  private async resolveMintedItem(
+    collection: CollectionRecord,
+    tokenId: number,
+  ): Promise<MintedItemRecord | undefined> {
+    const existing = await this.repository.getMintedItem(collection.id, tokenId)
+    if (existing !== undefined) return existing
+    if (collection.contractId === undefined) return undefined
+
+    const owner = await this.chain.getTokenOwner({
+      contractId: collection.contractId,
+      tokenId,
+    })
+    if (owner === undefined) return undefined
+
+    return this.recordMintedItem({
+      collectionId: collection.id,
+      tokenId,
+      ownerAddress: owner,
+      source: 'purchase',
+      transactionHash: `on-chain-sync:${collection.contractId}:${tokenId}`,
+    })
+  }
+
+  private async assertTokenAvailable(
+    collectionId: string,
+    tokenId: number,
+  ): Promise<void> {
+    const collection = await this.getCollection(collectionId)
+    const existing = await this.resolveMintedItem(collection, tokenId)
+    if (existing !== undefined) {
+      throw new ApiError(
+        409,
+        'token_already_minted',
+        'That token ID is already minted. Choose another token ID.',
+        {
+          tokenId,
+          ownerAddress: existing.ownerAddress,
+          transactionHash: existing.transactionHash,
+        },
+      )
+    }
+  }
+
+  private async recordMintedItem(input: {
+    collectionId: string
+    tokenId: number
+    ownerAddress: string
+    source: MintedItemSource
+    transactionHash: string
+  }): Promise<MintedItemRecord> {
+    const existing = await this.repository.getMintedItem(
+      input.collectionId,
+      input.tokenId,
+    )
+    if (existing !== undefined) {
+      return existing
+    }
+    const item: MintedItemRecord = {
+      id: randomUUID(),
+      collectionId: input.collectionId,
+      tokenId: input.tokenId,
+      ownerAddress: input.ownerAddress,
+      source: input.source,
+      transactionHash: input.transactionHash,
+      mintedAt: this.now().toISOString(),
+    }
+    await this.repository.saveMintedItem(item)
+    return item
+  }
+
   private async requireLiveCollection(
     id: string,
   ): Promise<CollectionRecord & { contractId: string }> {
     const collection = await this.getCollection(id)
+    if (collection.status === 'archived') {
+      throw new ApiError(
+        409,
+        'collection_archived',
+        'Collection is archived. Restore it before minting, selling, or buying.',
+        { status: collection.status },
+      )
+    }
     if (collection.status !== 'live' || collection.contractId === undefined) {
       throw new ApiError(
         409,

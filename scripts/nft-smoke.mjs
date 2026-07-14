@@ -47,6 +47,10 @@ const base = (env.NFT_API_BASE || env.NFT_PUBLIC_BASE_URL || 'http://127.0.0.1:4
 );
 const accessToken = env.NFT_SMOKE_ACCESS_TOKEN || env.COGNITO_ACCESS_TOKEN || '';
 const workspaceId = env.NFT_SMOKE_WORKSPACE_ID || 'smoke-workspace';
+const pinataSmoke =
+  env.NFT_SMOKE_PINATA === '1' ||
+  env.NFT_SMOKE_PINATA === 'true' ||
+  env.NFT_SMOKE_PINATA === 'yes';
 
 const failures = [];
 const notes = [];
@@ -90,6 +94,16 @@ try {
     if (!caps.pinningConfigured) {
       notes.push('Pinning not configured — media upload will fail until local/pinata mode is set.');
     }
+    if (caps.storageMode === 'pinata' && !caps.pinningConfigured) {
+      notes.push(
+        'storageMode=pinata but pinningConfigured=false — set PINATA_JWT (server-side only).',
+      );
+    }
+    if (pinataSmoke && caps.storageMode !== 'pinata') {
+      notes.push(
+        `NFT_SMOKE_PINATA requested but health storageMode=${caps.storageMode}. Set NFT_STORAGE_MODE=pinata for real IPFS smoke.`,
+      );
+    }
   }
 } catch (error) {
   fail('GET /health', error instanceof Error ? error.message : String(error));
@@ -103,6 +117,9 @@ if (!accessToken) {
   notes.push(
     'No NFT_SMOKE_ACCESS_TOKEN set. Authenticated collection routes were skipped. Sign in via Cognito in the browser and export the access token to exercise list/create.',
   );
+  if (pinataSmoke) {
+    notes.push('NFT_SMOKE_PINATA requires NFT_SMOKE_ACCESS_TOKEN for POST /v1/media.');
+  }
 } else {
   const headers = {
     Accept: 'application/json',
@@ -130,6 +147,60 @@ if (!accessToken) {
   } catch (error) {
     fail('GET /v1/collections', error instanceof Error ? error.message : String(error));
   }
+
+  if (pinataSmoke) {
+    try {
+      // 1x1 PNG
+      const png = Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+        'base64',
+      );
+      const form = new FormData();
+      form.set(
+        'file',
+        new Blob([png], { type: 'image/png' }),
+        'nft-smoke-pinata.png',
+      );
+      const upload = await fetch(`${base}/v1/media`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body: form,
+      });
+      const uploadBody = await upload.json().catch(() => undefined);
+      if (!upload.ok) {
+        fail(
+          'POST /v1/media (pinata smoke)',
+          `status=${upload.status} body=${JSON.stringify(uploadBody)}`,
+        );
+        if (uploadBody?.error?.code === 'pinning_not_configured') {
+          notes.push('PINATA_JWT missing on the API process. Set it in root .env and restart.');
+        }
+      } else {
+        const uri = uploadBody?.asset?.uri;
+        if (typeof uri === 'string' && uri.startsWith('ipfs://')) {
+          ok(`POST /v1/media → ${uri}`);
+          notes.push(
+            `Pinata smoke CID recorded for memory (not the JWT): ${uri.replace('ipfs://', '')}`,
+          );
+        } else if (typeof uri === 'string' && uri.startsWith('http')) {
+          fail(
+            'POST /v1/media (pinata smoke)',
+            `expected ipfs:// URI in pinata mode, got ${uri}`,
+          );
+        } else {
+          fail(
+            'POST /v1/media (pinata smoke)',
+            `unexpected body=${JSON.stringify(uploadBody)}`,
+          );
+        }
+      }
+    } catch (error) {
+      fail(
+        'POST /v1/media (pinata smoke)',
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  }
 }
 
 console.log('');
@@ -145,6 +216,12 @@ console.log('2. Open http://127.0.0.1:3000/dashboard and sign in with Cognito');
 console.log('3. Project → NFT → New collection → deploy');
 console.log('4. Configure primary sale (sponsor auto-submit or wallet sign)');
 console.log('5. Open public collection page → Prepare checkout → wallet sign/submit');
+console.log('');
+console.log('Pinata smoke (optional, real JWT local only):');
+console.log('  NFT_STORAGE_MODE=pinata PINATA_JWT=... in root .env, restart API');
+console.log(
+  '  NFT_SMOKE_ACCESS_TOKEN=... NFT_SMOKE_PINATA=1 npm run nft:smoke',
+);
 
 if (failures.length > 0) {
   console.error(`\nSmoke failed (${failures.length}).`);

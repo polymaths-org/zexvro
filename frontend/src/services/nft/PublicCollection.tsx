@@ -14,10 +14,13 @@ import {
 import {
   createPublicCheckoutIntent,
   getPublicNftCollection,
+  getPublicTokenMetadata,
   NftApiError,
   submitPublicCheckoutIntent,
+  type NftInventorySummary,
   type NftCheckoutIntent,
   type PublicNftCollection,
+  type PublicTokenMetadata,
 } from './nftApi';
 import { formatWalletError, getPublicKey, isWalletAvailable, signTransaction } from './stellarWallet';
 
@@ -70,6 +73,8 @@ function atomicToUsdc(value: string) {
 export default function PublicCollection() {
   const { collectionId } = useParams({ strict: false });
   const [collection, setCollection] = useState<PublicNftCollection | null>(null);
+  const [inventory, setInventory] = useState<NftInventorySummary | null>(null);
+  const [tokenMeta, setTokenMeta] = useState<PublicTokenMetadata | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [buyerAddress, setBuyerAddress] = useState('');
@@ -81,13 +86,21 @@ export default function PublicCollection() {
   const [confirmedHash, setConfirmedHash] = useState('');
   const [copied, setCopied] = useState('');
 
+  const tokenSold = tokenMeta?.availability === 'sold';
+
   useEffect(() => {
     if (!collectionId) return;
     const controller = new AbortController();
     setLoading(true);
     setLoadError('');
     getPublicNftCollection(collectionId, controller.signal)
-      .then(setCollection)
+      .then((result) => {
+        setCollection(result.collection);
+        if (result.inventory) {
+          setInventory(result.inventory);
+          setTokenId(result.inventory.nextTokenId);
+        }
+      })
       .catch((error: unknown) => {
         if (!controller.signal.aborted) setLoadError(errorMessage(error));
       })
@@ -96,6 +109,22 @@ export default function PublicCollection() {
       });
     return () => controller.abort();
   }, [collectionId]);
+
+  useEffect(() => {
+    if (!collectionId || !Number.isInteger(tokenId) || tokenId < 0) {
+      setTokenMeta(null);
+      return;
+    }
+    const controller = new AbortController();
+    getPublicTokenMetadata(collectionId, tokenId, controller.signal)
+      .then((meta) => {
+        if (!controller.signal.aborted) setTokenMeta(meta);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setTokenMeta(null);
+      });
+    return () => controller.abort();
+  }, [collectionId, tokenId]);
 
   const publicUrl = useMemo(() => {
     if (typeof window === 'undefined') return '';
@@ -163,6 +192,14 @@ export default function PublicCollection() {
       setCheckoutError('Enter a valid token ID.');
       return;
     }
+    if (tokenSold) {
+      setCheckoutError(
+        tokenMeta?.ownerAddress
+          ? `Token #${tokenId} is already owned by ${tokenMeta.ownerAddress}.`
+          : `Token #${tokenId} is already minted.`,
+      );
+      return;
+    }
 
     setPreparing(true);
     try {
@@ -208,14 +245,14 @@ export default function PublicCollection() {
   }
 
   return (
-    <main className="min-h-screen bg-[#050506] text-zinc-100">
-      <div className="mx-auto grid min-h-screen max-w-7xl gap-8 px-6 py-8 lg:grid-cols-[minmax(0,1fr)_420px] lg:items-center">
+    <main className="min-h-dvh bg-[#050506] text-zinc-100">
+      <div className="mx-auto grid min-h-dvh max-w-7xl gap-8 px-6 py-8 lg:grid-cols-[minmax(0,1fr)_400px] lg:items-start lg:py-12">
         <section className="min-w-0">
           <a href="/dashboard" className="mb-8 inline-flex items-center gap-2 text-sm text-zinc-400 transition hover:text-white">
             <ArrowLeft className="h-4 w-4" />
             ZEXVRO
           </a>
-          <div className="grid gap-6 md:grid-cols-[320px_minmax(0,1fr)] md:items-start">
+          <div className="grid gap-6 md:grid-cols-[280px_minmax(0,1fr)] md:items-start">
             <div className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950">
               {collection.coverImageUri.startsWith('http') ? (
                 <img src={collection.coverImageUri} alt="" className="aspect-square w-full object-cover" />
@@ -230,38 +267,45 @@ export default function PublicCollection() {
                 <Gamepad2 className="h-4 w-4" />
                 {collection.symbol}
               </div>
-              <h1 className="text-4xl font-semibold tracking-normal text-white">{collection.name}</h1>
-              <p className="mt-4 max-w-2xl text-sm leading-6 text-zinc-400">{collection.description}</p>
+              <h1 className="text-balance text-4xl font-semibold text-white">{collection.name}</h1>
+              <p className="mt-4 max-w-2xl text-pretty text-sm leading-6 text-zinc-400">{collection.description}</p>
 
-              <div className="mt-8 grid gap-px overflow-hidden rounded-lg border border-zinc-800 bg-zinc-800 sm:grid-cols-2">
+              <div className="mt-8 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-zinc-800 bg-zinc-800">
                 <div className="bg-[#080809] p-4">
-                  <span className="text-xs text-zinc-500">Royalty preference</span>
-                  <span className="mt-1 flex items-center gap-1.5 text-sm font-medium text-white">
-                    <CircleDollarSign className="h-4 w-4 text-zinc-500" />
+                  <span className="text-xs text-zinc-500">Royalty</span>
+                  <span className="mt-1 flex items-center gap-1.5 text-sm font-medium tabular-nums text-white">
+                    <CircleDollarSign className="h-4 w-4 shrink-0 text-zinc-500" />
                     {(collection.royaltyBps / 100).toFixed(2)}%
+                  </span>
+                </div>
+                <div className="bg-[#080809] p-4">
+                  <span className="text-xs text-zinc-500">Minted items</span>
+                  <span className="mt-1 block text-sm font-medium tabular-nums text-white">
+                    {inventory?.mintedCount ?? 0}
                   </span>
                 </div>
                 <div className="bg-[#080809] p-4">
                   <span className="text-xs text-zinc-500">Created</span>
                   <span className="mt-1 block text-sm font-medium text-white">{formatDate(collection.createdAt)}</span>
                 </div>
-                <div className="bg-[#080809] p-4 sm:col-span-2">
+                <div className="bg-[#080809] p-4">
                   <span className="text-xs text-zinc-500">Primary sale</span>
-                  <span className="mt-1 block text-sm font-medium text-white">
+                  <span className="mt-1 block text-sm font-medium tabular-nums text-white">
                     {collection.primarySale ? `${atomicToUsdc(collection.primarySale.priceAtomic)} USDC` : 'Not configured'}
                   </span>
                 </div>
-                <div className="bg-[#080809] p-4 sm:col-span-2">
+                <div className="col-span-2 bg-[#080809] p-4">
                   <span className="text-xs text-zinc-500">Contract</span>
                   {collection.contractId ? (
                     <a
                       href={`https://stellar.expert/explorer/testnet/contract/${collection.contractId}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="mt-1 inline-flex items-center gap-1.5 font-mono text-sm text-brand-blue hover:underline"
+                      title={collection.contractId}
+                      className="mt-1 inline-flex max-w-full items-center gap-1.5 font-mono text-sm text-brand-blue hover:underline"
                     >
-                      {shortAddress(collection.contractId)}
-                      <ExternalLink className="h-3.5 w-3.5" />
+                      <span className="truncate">{shortAddress(collection.contractId)}</span>
+                      <ExternalLink className="h-3.5 w-3.5 shrink-0" />
                     </a>
                   ) : (
                     <span className="mt-1 block text-sm text-zinc-500">Pending</span>
@@ -292,14 +336,16 @@ export default function PublicCollection() {
           </div>
         </section>
 
-        <aside className="rounded-lg border border-zinc-800 bg-[#080809] p-5">
+        <aside className="min-w-0 rounded-lg border border-zinc-800 bg-[#080809] p-5">
           <div className="flex items-start gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-zinc-800 text-brand-blue">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-zinc-800 text-brand-blue">
               <ShoppingCart className="h-5 w-5" />
             </span>
-            <div>
+            <div className="min-w-0">
               <h2 className="text-base font-semibold text-white">Buy item</h2>
-              <p className="mt-1 text-sm leading-6 text-zinc-400">Prepare the Stellar checkout for your wallet signature.</p>
+              <p className="mt-1 text-pretty text-sm leading-6 text-zinc-400">
+                Prepare the Stellar checkout for your wallet signature.
+              </p>
             </div>
           </div>
 
@@ -310,7 +356,8 @@ export default function PublicCollection() {
                 value={buyerAddress}
                 onChange={event => setBuyerAddress(event.target.value.trim().toUpperCase())}
                 placeholder="G..."
-                className="mt-2 w-full rounded-md border border-zinc-800 bg-[#050506] px-3 py-2.5 font-mono text-sm text-white outline-none transition focus:border-brand-blue"
+                spellCheck={false}
+                className="mt-2 w-full rounded-md border border-zinc-800 bg-[#050506] px-3 py-2.5 font-mono text-xs text-white outline-none transition focus:border-brand-blue sm:text-sm"
               />
             </label>
             <button
@@ -326,51 +373,96 @@ export default function PublicCollection() {
                 type="number"
                 min={0}
                 value={tokenId}
-                onChange={event => setTokenId(Math.max(0, Math.floor(Number(event.target.value))))}
-                className="mt-2 w-full rounded-md border border-zinc-800 bg-[#050506] px-3 py-2.5 text-sm text-white outline-none transition focus:border-brand-blue"
+                onChange={event => {
+                  setTokenId(Math.max(0, Math.floor(Number(event.target.value))));
+                  setCheckoutIntent(null);
+                  setConfirmedHash('');
+                }}
+                className="mt-2 w-full rounded-md border border-zinc-800 bg-[#050506] px-3 py-2.5 text-sm tabular-nums text-white outline-none transition focus:border-brand-blue"
               />
             </label>
+            {inventory && (
+              <p className="text-xs tabular-nums text-zinc-500">
+                Suggested next free token: #{inventory.nextTokenId}
+              </p>
+            )}
+            {tokenMeta && (
+              <div
+                className={`rounded-md border p-3 text-sm ${
+                  tokenSold
+                    ? 'border-amber-500/25 bg-amber-500/5 text-amber-200'
+                    : 'border-emerald-500/25 bg-emerald-500/5 text-emerald-200'
+                }`}
+              >
+                {tokenSold
+                  ? `Sold · owner ${shortAddress(tokenMeta.ownerAddress || 'unknown')}`
+                  : 'Available to purchase'}
+              </div>
+            )}
 
             {checkoutError && (
-              <div className="flex gap-2 border border-red-500/25 bg-red-500/5 p-3 text-sm text-red-300">
+              <div className="flex gap-2 rounded-md border border-red-500/25 bg-red-500/5 p-3 text-sm text-red-300">
                 <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-                {checkoutError}
+                <span className="min-w-0 break-words">{checkoutError}</span>
               </div>
             )}
             {copied && (
-              <div className="flex gap-2 border border-emerald-500/25 bg-emerald-500/5 p-3 text-sm text-emerald-300">
+              <div className="flex gap-2 rounded-md border border-emerald-500/25 bg-emerald-500/5 p-3 text-sm text-emerald-300">
                 <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
-                {copied}
+                <span className="min-w-0 break-words">{copied}</span>
               </div>
             )}
 
             <button
               type="button"
-              disabled={preparing}
+              disabled={preparing || tokenSold || !collection.primarySale}
               onClick={() => void prepareCheckout()}
               className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-white px-4 text-sm font-medium text-zinc-950 transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {preparing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShoppingCart className="h-4 w-4" />}
-              Prepare checkout
+              {tokenSold ? 'Already sold' : 'Prepare checkout'}
             </button>
           </div>
 
           {checkoutIntent && (
-            <div className="mt-5 space-y-3 border-t border-zinc-800 pt-5">
-              <div className="text-xs text-zinc-500">Required signer</div>
-              <div className="font-mono text-xs text-zinc-300">{checkoutIntent.requiredSigners.join(', ')}</div>
-              <div className="text-xs text-zinc-500">Expires</div>
-              <div className="text-sm text-zinc-300">{formatDateTime(checkoutIntent.expiresAt)}</div>
+            <div className="mt-5 min-w-0 space-y-3 border-t border-zinc-800 pt-5">
+              <div className="grid grid-cols-1 gap-3">
+                <div className="min-w-0">
+                  <div className="text-xs text-zinc-500">Required signer</div>
+                  <div className="mt-1 flex min-w-0 items-center gap-2">
+                    <code
+                      title={checkoutIntent.requiredSigners.join(', ')}
+                      className="min-w-0 flex-1 truncate font-mono text-xs text-zinc-300"
+                    >
+                      {checkoutIntent.requiredSigners.map(shortAddress).join(', ')}
+                    </code>
+                    <button
+                      type="button"
+                      aria-label="Copy required signer"
+                      onClick={() => void copyText('Required signer', checkoutIntent.requiredSigners.join(', '))}
+                      className="inline-flex size-7 shrink-0 items-center justify-center rounded-md border border-zinc-800 text-zinc-400 transition hover:border-zinc-700 hover:text-white"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-zinc-500">Expires</div>
+                  <div className="mt-1 text-sm tabular-nums text-zinc-300">
+                    {formatDateTime(checkoutIntent.expiresAt)}
+                  </div>
+                </div>
+              </div>
               <textarea
                 readOnly
                 value={checkoutIntent.serializedTransaction}
-                rows={5}
-                className="w-full resize-none rounded-md border border-zinc-800 bg-[#050506] p-3 font-mono text-xs text-zinc-300 outline-none"
+                rows={4}
+                className="w-full resize-none break-all rounded-md border border-zinc-800 bg-[#050506] p-3 font-mono text-[11px] leading-4 text-zinc-400 outline-none"
               />
               <button
                 type="button"
                 onClick={() => void copyText('Prepared transaction', checkoutIntent.serializedTransaction)}
-                className="inline-flex h-9 items-center gap-2 rounded-md border border-zinc-800 px-3 text-sm font-medium text-zinc-300 transition hover:border-zinc-700 hover:text-white"
+                className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md border border-zinc-800 px-3 text-sm font-medium text-zinc-300 transition hover:border-zinc-700 hover:text-white"
               >
                 <Copy className="h-4 w-4" />
                 Copy transaction
@@ -391,10 +483,10 @@ export default function PublicCollection() {
                   href={`https://stellar.expert/explorer/testnet/tx/${confirmedHash}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-2 text-sm text-emerald-300 hover:text-emerald-200"
+                  className="inline-flex max-w-full items-center gap-2 text-sm text-emerald-300 hover:text-emerald-200"
                 >
-                  <ExternalLink className="h-4 w-4" />
-                  Confirmed {shortAddress(confirmedHash)}
+                  <ExternalLink className="h-4 w-4 shrink-0" />
+                  <span className="truncate">Confirmed {shortAddress(confirmedHash)}</span>
                 </a>
               )}
             </div>
