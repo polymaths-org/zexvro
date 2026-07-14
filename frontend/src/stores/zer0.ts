@@ -5,7 +5,7 @@ import type {
   Zer0Currency, Zer0PaymentStatus, Zer0ProofSystem, Zer0SecurityEvent,
 } from './types';
 import { proofApi, payrollApi, stellar } from '../api/api';
-import { shieldPay as zkShieldPay, getNotes as getZkNotes } from '../api/privacyPool';
+import { shieldPayAmount as zkShieldPayAmount, planShieldPay, getNotes as getZkNotes } from '../api/privacyPool';
 import { useWorkspaceStore } from './workspace';
 
 function createId(prefix: string) {
@@ -249,13 +249,11 @@ export const useZer0Store = create<Zer0State>()(
         return;
       }
 
-      // Shielded: fund enough for ceil(amount / unit) pool units
+      // Shielded: fund enough for multi-denom settled total (ceil via 1000/100/10/1 notes)
       const fundCurrency = payment.shielded ? 'XLM' : payment.currency;
       let needAmount = payment.amount;
       if (payment.shielded) {
-        const { DENOMINATION_XLM: unit, MAX_SHIELD_UNITS } = await import('../api/privacyPool');
-        const n = Math.max(1, Math.min(MAX_SHIELD_UNITS, Math.ceil((payment.amount || unit) / unit)));
-        needAmount = unit * n;
+        needAmount = planShieldPay(payment.amount || 0).settledXlm;
       }
       const hasFunds = (state.pool.balances[fundCurrency] || 0) >= needAmount;
       if (!hasFunds) {
@@ -311,12 +309,14 @@ export const useZer0Store = create<Zer0State>()(
         }
       };
 
-      const completeRun = async (txHash: string, shielded: boolean) => {
+      const completeRun = async (txHash: string, shielded: boolean, proofId?: string | null) => {
+        const linkedProofId = proofId || useZer0Store.getState().payments.find(p => p.id === paymentId)?.proofId || null;
         try {
           await payrollApi.updateRun(paymentId, {
             workspaceId,
             projectId: payment.projectId,
             status: 'completed',
+            proofId: linkedProofId,
             lineItems: [{
               employeeId: payment.employeeId,
               name: payment.recipientName,
@@ -329,6 +329,7 @@ export const useZer0Store = create<Zer0State>()(
               projectId: payment.projectId,
               type: payment.type,
               memo: payment.memo || '',
+              proofId: linkedProofId,
             }],
             txHash,
             processedAt: Date.now(),
@@ -343,6 +344,7 @@ export const useZer0Store = create<Zer0State>()(
               runId: paymentId,
               projectId: payment.projectId,
               type: payment.type,
+              proofId: linkedProofId,
               lineItems: [{
                 employeeId: payment.employeeId,
                 name: payment.recipientName,
@@ -366,16 +368,14 @@ export const useZer0Store = create<Zer0State>()(
       };
 
       if (payment.shielded) {
-        const {
-          DENOMINATION_XLM, MAX_SHIELD_UNITS, estimateFreighterPrompts, isAutoSignEnabled,
-        } = await import('../api/privacyPool');
-        const unitXlm = DENOMINATION_XLM;
-        const noteCount = Math.max(1, Math.min(MAX_SHIELD_UNITS, Math.ceil((payment.amount || unitXlm) / unitXlm)));
-        const settledXlm = unitXlm * noteCount;
-        const estimatedPrompts = estimateFreighterPrompts(noteCount);
+        const { estimateFreighterPromptsForAmount, isAutoSignEnabled } = await import('../api/privacyPool');
+        const plan = planShieldPay(payment.amount || 0);
+        const settledXlm = plan.settledXlm;
+        const noteCount = plan.totalNotes;
+        const estimatedPrompts = estimateFreighterPromptsForAmount(payment.amount || 0);
         log({
           type: 'batch_window',
-          message: `ZK multi-unit: ${noteCount}×${unitXlm} XLM = ${settledXlm} XLM (${isAutoSignEnabled() ? 'auto-sign' : `~${estimatedPrompts} Freighter confirms`})`,
+          message: `ZK multi-denom: ${plan.description} (${isAutoSignEnabled() ? 'auto-sign' : `~${estimatedPrompts} Freighter confirms`})`,
           paymentId,
         });
 
@@ -386,6 +386,14 @@ export const useZer0Store = create<Zer0State>()(
           const msg = `Daily private spend limit reached (${spentToday}/${limit} XLM). Blocked ${settledXlm} XLM payment.`;
           state.updatePaymentStatus(paymentId, 'failed', { lastError: msg });
           log({ type: 'limit_hit', message: msg, paymentId });
+          return;
+        }
+
+        // Fund check uses settled (rounded-up) multi-denom total
+        if ((state.pool.balances.XLM || 0) < settledXlm) {
+          const msg = `Insufficient XLM in funding wallet (need ${settledXlm} for ${plan.description})`;
+          state.updatePaymentStatus(paymentId, 'failed', { lastError: msg });
+          log({ type: 'payment_blocked', message: msg, paymentId });
           return;
         }
 
@@ -405,10 +413,10 @@ export const useZer0Store = create<Zer0State>()(
 
         try {
           const t0 = Date.now();
-          const { lastTxHash, settledXlm: paid } = await zkShieldPay({
+          const { lastTxHash, settledXlm: paid } = await zkShieldPayAmount({
             fromAddress: senderAddress,
             toAddress: recipientAddress,
-            units: noteCount,
+            amountXlm: payment.amount,
             onProgress: (label, cur, total) => {
               log({
                 type: 'batch_window',
@@ -419,7 +427,7 @@ export const useZer0Store = create<Zer0State>()(
           });
 
           const genTime = Date.now() - t0;
-          const proofHash = `zk_${lastTxHash.slice(0, 16)}_x${noteCount}`;
+          const proofHash = `zk_${lastTxHash.slice(0, 16)}_n${noteCount}`;
           const vk = `vk_${Date.now().toString(16)}`;
 
           get().updateProofStatus(proof.id, 'verified', {
@@ -463,10 +471,10 @@ export const useZer0Store = create<Zer0State>()(
           });
           log({
             type: 'payment_completed',
-            message: `ZK paid ${paid} XLM (${noteCount} units) to recipient`,
+            message: `ZK paid ${paid} XLM (${plan.description}) to recipient`,
             paymentId,
           });
-          await completeRun(lastTxHash, true);
+          await completeRun(lastTxHash, true, proof.id);
         } catch (err) {
           const msg = err instanceof Error ? err.message : 'Shielded payment failed';
           console.error(`Shielded payment failed for ${paymentId}:`, msg);

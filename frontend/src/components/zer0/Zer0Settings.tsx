@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import {
   Settings, Shield, Wallet, Eye, AlertTriangle, Save, RotateCcw, CheckCircle2,
-  Check, Loader2, X, Info,
+  Check, Loader2, X, Info, Server, Power, PowerOff, RefreshCw,
 } from 'lucide-react';
 import { useZer0Store } from '../../stores/zer0';
 import type { Zer0ProofSystem, Zer0Currency } from '../../stores/types';
-import { stellar } from '../../api/api';
+import { stellar, zkWorkerApi, type ZkWorkerStatus } from '../../api/api';
 import {
   connectFreighter, connectAlbedo, connectXBull, isValidStellarPublicKey,
 } from '../../api/walletConnect';
@@ -91,10 +91,69 @@ export default function Zer0Settings() {
   const [poolInfoLoading, setPoolInfoLoading] = useState(false);
   const [proofModalOpen, setProofModalOpen] = useState(false);
   const [proofDraft, setProofDraft] = useState<Zer0ProofSystem>(local.proofSystem);
+  const [zkWorker, setZkWorker] = useState<ZkWorkerStatus | null>(null);
+  const [zkWorkerLoading, setZkWorkerLoading] = useState(false);
+  const [zkWorkerAction, setZkWorkerAction] = useState<'start' | 'stop' | null>(null);
+  const [zkWorkerError, setZkWorkerError] = useState<string | null>(null);
+
+  const refreshZkWorker = async () => {
+    setZkWorkerLoading(true);
+    setZkWorkerError(null);
+    try {
+      const st = await zkWorkerApi.status();
+      setZkWorker(st);
+    } catch (e) {
+      setZkWorkerError(e instanceof Error ? e.message : 'Failed to load prover status');
+    } finally {
+      setZkWorkerLoading(false);
+    }
+  };
+
+  const startZkWorker = async () => {
+    setZkWorkerAction('start');
+    setZkWorkerError(null);
+    try {
+      const st = await zkWorkerApi.start();
+      setZkWorker(st);
+      // Poll a few times while EC2 boots
+      for (let i = 0; i < 8; i++) {
+        await new Promise(r => setTimeout(r, 4000));
+        const next = await zkWorkerApi.status();
+        setZkWorker(next);
+        if (next.online || next.state === 'running') break;
+      }
+    } catch (e) {
+      setZkWorkerError(e instanceof Error ? e.message : 'Failed to start prover');
+    } finally {
+      setZkWorkerAction(null);
+    }
+  };
+
+  const stopZkWorker = async () => {
+    setZkWorkerAction('stop');
+    setZkWorkerError(null);
+    try {
+      const st = await zkWorkerApi.stop();
+      setZkWorker(st);
+      await new Promise(r => setTimeout(r, 2000));
+      const next = await zkWorkerApi.status();
+      setZkWorker(next);
+    } catch (e) {
+      setZkWorkerError(e instanceof Error ? e.message : 'Failed to stop prover');
+    } finally {
+      setZkWorkerAction(null);
+    }
+  };
 
   useEffect(() => {
     setLocal({ ...settings });
   }, [settings.walletAddress, settings.horizonUrl, settings.contractAddress, settings.proofSystem]);
+
+  useEffect(() => {
+    if (activeTab === 'security') {
+      refreshZkWorker();
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     if (local.walletAddress?.trim()) {
@@ -385,7 +444,7 @@ export default function Zer0Settings() {
             <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 p-4 space-y-2">
               <h3 className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">Private (ZK) payment amounts</h3>
               <p className="text-[11px] text-zinc-500 leading-relaxed">
-                Type any amount. On-chain it becomes N×1 XLM notes (e.g. 10 → 10 units). Flow: bulk fund once, then deposit + withdraw each unit with a real Groth16 proof.
+                Type any amount. Multi-pool routing packs it into 1000 / 100 / 10 / 1 XLM notes so big private pays stay ZK with few proofs (e.g. 2500 → 2×1000 + 5×100 = 7 notes, not 2500).
               </p>
               <p className="text-[10px] text-zinc-400">
                 Signing mode is under <strong>Security → Transaction signing</strong> (Freighter popups on/off).
@@ -503,6 +562,99 @@ export default function Zer0Settings() {
                   {' '}— Settings wallet is ignored for private pays while auto-sign is on.
                 </p>
               )}
+            </div>
+
+            {/* RapidSNARK / EC2 prover power control */}
+            <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 p-4 space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider flex items-center gap-1.5">
+                    <Server className="h-3.5 w-3.5" /> ZK prover worker (EC2)
+                  </h3>
+                  <p className="text-[11px] text-zinc-500 leading-relaxed mt-1">
+                    Turn the RapidSNARK prove machine <strong>ON</strong> before private payroll testing,
+                    then <strong>OFF</strong> when done so you are not charged for idle compute.
+                    (Stopped EC2 may still bill a little for EBS disk.)
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => refreshZkWorker()}
+                  disabled={zkWorkerLoading || !!zkWorkerAction}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-zinc-200 px-2.5 text-[10px] font-semibold text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                >
+                  <RefreshCw className={`h-3 w-3 ${zkWorkerLoading ? 'animate-spin' : ''}`} />
+                  Refresh
+                </button>
+              </div>
+
+              <div className={`rounded-lg px-3 py-2.5 text-[11px] border ${
+                zkWorker?.online
+                  ? 'border-emerald-500/25 bg-emerald-500/5 text-emerald-800 dark:text-emerald-400'
+                  : zkWorker?.configured
+                    ? 'border-amber-500/25 bg-amber-500/5 text-amber-800 dark:text-amber-400'
+                    : 'border-zinc-200 bg-zinc-50 text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-400'
+              }`}>
+                {zkWorkerLoading && !zkWorker ? (
+                  <span className="inline-flex items-center gap-1.5"><Loader2 className="h-3 w-3 animate-spin" /> Checking status…</span>
+                ) : (
+                  <>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-bold uppercase tracking-wide">
+                        {zkWorker?.online ? 'Online' : zkWorker?.configured ? 'Offline' : 'Not configured'}
+                      </span>
+                      <span className="text-[10px] opacity-80">
+                        state: {zkWorker?.state || '—'}
+                        {zkWorker?.provider ? ` · ${zkWorker.provider}` : ''}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[10px] leading-relaxed opacity-90">
+                      {zkWorker?.message || 'Deploy Lambda env ZK_WORKER_INSTANCE_ID (+ optional ZK_PROVER_URL) to enable.'}
+                    </p>
+                    {zkWorker?.instanceId && (
+                      <p className="mt-1 font-mono text-[10px] opacity-70">instance: {zkWorker.instanceId}</p>
+                    )}
+                    {zkWorker?.publicIp && (
+                      <p className="mt-0.5 font-mono text-[10px] opacity-70">ip: {zkWorker.publicIp}</p>
+                    )}
+                    {zkWorker?.proverUrl && (
+                      <p className="mt-0.5 font-mono text-[10px] opacity-70 break-all">prover: {zkWorker.proverUrl}</p>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {zkWorkerError && (
+                <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 text-[11px] text-red-600 dark:text-red-400">
+                  {zkWorkerError}
+                </div>
+              )}
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={startZkWorker}
+                  disabled={!!zkWorkerAction || zkWorkerLoading || (zkWorker?.online === true)}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 text-xs font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {zkWorkerAction === 'start' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Power className="h-3.5 w-3.5" />}
+                  {zkWorkerAction === 'start' ? 'Starting…' : 'Turn ON'}
+                </button>
+                <button
+                  type="button"
+                  onClick={stopZkWorker}
+                  disabled={!!zkWorkerAction || zkWorkerLoading || zkWorker?.state === 'stopped' || zkWorker?.state === 'unconfigured'}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3.5 text-xs font-bold text-zinc-800 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900"
+                >
+                  {zkWorkerAction === 'stop' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PowerOff className="h-3.5 w-3.5" />}
+                  {zkWorkerAction === 'stop' ? 'Stopping…' : 'Turn OFF'}
+                </button>
+              </div>
+
+              <p className="text-[10px] text-zinc-400 leading-relaxed">
+                Private pay prefers this worker when online (fast RapidSNARK path). If offline/unconfigured,
+                the app falls back to browser snarkjs (slower). After testing, hit <strong>Turn OFF</strong>.
+              </p>
             </div>
 
             <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 p-4 space-y-3">

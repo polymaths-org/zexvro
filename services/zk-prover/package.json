@@ -1,0 +1,19 @@
+{
+  "name": "zexvro-zk-prover",
+  "version": "0.2.0",
+  "private": true,
+  "description": "HTTP ZK prove + merkle + optional chain relayer for Zer0",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node --watch server.mjs"
+  },
+  "dependencies": {
+    "circomlibjs": "^0.1.7",
+    "snarkjs": "^0.7.5",
+    "stellar-sdk": "^13.1.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
