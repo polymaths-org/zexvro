@@ -1096,6 +1096,7 @@ def lambda_handler(event, context):
                 "role": row.get("role", ""),
                 "department": row.get("department", ""),
                 "walletAddress": row.get("walletAddress", ""),
+                "stealthMetaAddress": row.get("stealthMetaAddress", ""),
                 "salary": salary,
                 "currency": row.get("currency", "USDC"),
                 "frequency": row.get("frequency", "monthly"),

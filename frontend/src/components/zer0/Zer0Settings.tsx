@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import {
   Settings, Shield, Wallet, Eye, AlertTriangle, Save, RotateCcw, CheckCircle2,
-  Check, Loader2, X, Info, Server, Power, PowerOff, RefreshCw,
+  Check, Loader2, X, Info, Server, Power, PowerOff, RefreshCw, Zap, Scale, Lock, SlidersHorizontal,
 } from 'lucide-react';
-import { useZer0Store } from '../../stores/zer0';
-import type { Zer0ProofSystem, Zer0Currency } from '../../stores/types';
+import { useZer0Store, privacyPresetValues } from '../../stores/zer0';
+import type { Zer0ProofSystem, Zer0Currency, Zer0PrivacyPreset } from '../../stores/types';
 import { stellar, zkWorkerApi, type ZkWorkerStatus } from '../../api/api';
 import {
   connectFreighter, connectAlbedo, connectXBull, isValidStellarPublicKey,
@@ -13,6 +13,73 @@ import {
   getContractRoot, getCommitmentCount, POOL_CONTRACT, DENOMINATION_XLM,
   isAutoSignEnabled, isTreasuryKeyConfigured, setForceFreighterSigning, getTreasuryPublicKey,
 } from '../../api/privacyPool';
+import { computePrivacyScore } from '../../lib/stealth';
+
+const PRIVACY_PRESETS: Record<Zer0PrivacyPreset, {
+  name: string;
+  tagline: string;
+  icon: typeof Zap;
+  accent: string;
+  ring: string;
+  bullets: string[];
+  wait: string;
+}> = {
+  fast: {
+    name: 'Fast',
+    tagline: 'ZK proof + pool only',
+    icon: Zap,
+    accent: 'text-amber-600 dark:text-amber-400',
+    ring: 'border-amber-400 bg-amber-500/5 dark:border-amber-500/50',
+    bullets: [
+      'No timing delay or jitter',
+      'No decoy deposits',
+      'No stealth one-time receives',
+      'Just proof generation + contract settle',
+    ],
+    wait: '~seconds',
+  },
+  balanced: {
+    name: 'Balanced',
+    tagline: 'Recommended default',
+    icon: Scale,
+    accent: 'text-blue-600 dark:text-blue-400',
+    ring: 'border-blue-400 bg-blue-500/5 dark:border-blue-500/50',
+    bullets: [
+      '45s delay + 30s jitter',
+      '1 pre-pay decoy note',
+      'Batch deposit → delay → withdraw',
+      'Stealth one-time receives on',
+    ],
+    wait: '~45–75s extra',
+  },
+  secured: {
+    name: 'Secured',
+    tagline: 'Max privacy knobs',
+    icon: Lock,
+    accent: 'text-violet-600 dark:text-violet-400',
+    ring: 'border-violet-400 bg-violet-500/5 dark:border-violet-500/50',
+    bullets: [
+      '120s delay + 60s jitter',
+      '3 pre-pay decoys + post-pay decoy',
+      'Batch deposit → delay → withdraw',
+      'Stealth one-time receives on',
+    ],
+    wait: '~2–3 min extra',
+  },
+  custom: {
+    name: 'Custom',
+    tagline: 'Tune every knob',
+    icon: SlidersHorizontal,
+    accent: 'text-zinc-700 dark:text-zinc-300',
+    ring: 'border-zinc-400 bg-zinc-500/5 dark:border-zinc-500/50',
+    bullets: [
+      'Full control of delay & jitter',
+      'Decoys, batching, stealth',
+      'Use when presets don’t fit',
+    ],
+    wait: 'You decide',
+  },
+};
 
 const PROOF_SYSTEMS: Record<Zer0ProofSystem, {
   name: string;
@@ -179,11 +246,31 @@ export default function Zer0Settings() {
 
   const hasChanges = JSON.stringify(local) !== JSON.stringify(settings);
 
+  const applyPrivacyPreset = (preset: Zer0PrivacyPreset) => {
+    if (preset === 'custom') {
+      setLocal(l => ({ ...l, privacyPreset: 'custom' }));
+      return;
+    }
+    setLocal(l => ({ ...l, ...privacyPresetValues(preset) }));
+  };
+
+  /** Any manual knob tweak flips the profile to Custom so Save keeps free-form values. */
+  const setPrivacyKnob = <K extends keyof typeof local>(key: K, value: (typeof local)[K]) => {
+    setLocal(l => ({ ...l, [key]: value, privacyPreset: 'custom' as Zer0PrivacyPreset }));
+  };
+
   const handleSave = async () => {
-    updateSettings(local);
-    if (local.walletAddress?.trim()) {
+    // Re-assert preset values on save so Fast/Balanced/Secured stay exact
+    const preset = local.privacyPreset || 'balanced';
+    const payload = preset === 'custom'
+      ? local
+      : { ...local, ...privacyPresetValues(preset) };
+    setLocal(payload);
+    updateSettings(payload);
+    setForceFreighterSigning(!!payload.preferFreighterSigning);
+    if (payload.walletAddress?.trim()) {
       try {
-        const balances = await stellar.getPoolBalance(local.walletAddress.trim(), local.horizonUrl);
+        const balances = await stellar.getPoolBalance(payload.walletAddress.trim(), payload.horizonUrl);
         useZer0Store.setState(state => ({
           pool: {
             ...state.pool,
@@ -292,26 +379,67 @@ export default function Zer0Settings() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between p-4 rounded-lg border border-zinc-200 dark:border-zinc-700">
+            <div className="space-y-3">
               <div>
-                <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 block">Require payment approval</span>
-                <span className="text-[10px] text-zinc-400 block mt-0.5">A second admin must approve before money moves</span>
+                <h3 className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">
+                  Payroll policy
+                </h3>
+                <p className="text-[11px] text-zinc-500 mt-0.5">
+                  Workspace rules for how money is allowed to move. Save changes after toggling.
+                </p>
               </div>
-              <button type="button" onClick={() => setLocal(l => ({ ...l, paymentApprovalRequired: !l.paymentApprovalRequired }))}
-                className={`relative h-5 w-9 rounded-full transition-colors ${local.paymentApprovalRequired ? 'bg-blue-500' : 'bg-zinc-300 dark:bg-zinc-700'}`}>
-                <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${local.paymentApprovalRequired ? 'left-[18px]' : 'left-0.5'}`} />
-              </button>
-            </div>
 
-            <div className="flex items-center justify-between p-4 rounded-lg border border-zinc-200 dark:border-zinc-700">
-              <div>
-                <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 block">Allow transparent (public) payments</span>
-                <span className="text-[10px] text-zinc-400 block mt-0.5">When off, all payroll must use the privacy pool</span>
+              <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 overflow-hidden">
+                <div className="flex items-start justify-between gap-3 p-4">
+                  <div className="min-w-0 pr-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">Require payment approval</span>
+                      <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                        local.paymentApprovalRequired
+                          ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                          : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400'
+                      }`}>
+                        {local.paymentApprovalRequired ? 'On' : 'Off'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-zinc-500 mt-1 leading-relaxed">
+                      When on, a second admin must approve before funds leave the workspace.
+                      Use for dual-control payroll and larger one-off transfers.
+                    </p>
+                  </div>
+                  <button type="button"
+                    onClick={() => setLocal(l => ({ ...l, paymentApprovalRequired: !l.paymentApprovalRequired }))}
+                    className={`relative h-5 w-9 rounded-full transition-colors shrink-0 mt-0.5 ${local.paymentApprovalRequired ? 'bg-blue-500' : 'bg-zinc-300 dark:bg-zinc-700'}`}>
+                    <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${local.paymentApprovalRequired ? 'left-[18px]' : 'left-0.5'}`} />
+                  </button>
+                </div>
               </div>
-              <button type="button" onClick={() => setLocal(l => ({ ...l, allowTransparentPayments: !l.allowTransparentPayments }))}
-                className={`relative h-5 w-9 rounded-full transition-colors ${local.allowTransparentPayments ? 'bg-blue-500' : 'bg-zinc-300 dark:bg-zinc-700'}`}>
-                <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${local.allowTransparentPayments ? 'left-[18px]' : 'left-0.5'}`} />
-              </button>
+
+              <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 overflow-hidden">
+                <div className="flex items-start justify-between gap-3 p-4">
+                  <div className="min-w-0 pr-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">Allow transparent (public) payments</span>
+                      <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                        local.allowTransparentPayments
+                          ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                          : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                      }`}>
+                        {local.allowTransparentPayments ? 'On' : 'Off'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-zinc-500 mt-1 leading-relaxed">
+                      When <strong>off</strong>, every pay must use the privacy pool (recommended for salary).
+                      When <strong>on</strong>, admins can still send fully public Stellar transfers (amount + parties visible on explorers).
+                    </p>
+                  </div>
+                  <button type="button"
+                    onClick={() => setLocal(l => ({ ...l, allowTransparentPayments: !l.allowTransparentPayments }))}
+                    className={`relative h-5 w-9 rounded-full transition-colors shrink-0 mt-0.5 ${local.allowTransparentPayments ? 'bg-blue-500' : 'bg-zinc-300 dark:bg-zinc-700'}`}>
+                    <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${local.allowTransparentPayments ? 'left-[18px]' : 'left-0.5'}`} />
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -434,26 +562,394 @@ export default function Zer0Settings() {
                 <Shield className="h-4 w-4" /> How private payroll works
               </h3>
               <ul className="text-[11px] text-zinc-600 dark:text-zinc-400 space-y-1.5 list-disc pl-4">
-                <li>Money goes into a shared pool in fixed units of <strong>{denomXlm} XLM</strong>.</li>
+                <li>Money goes into a shared pool in fixed units (1000 / 100 / 10 / 1 XLM notes).</li>
                 <li>Explorers show pool transfers — not “employer paid employee $X” as one linked payment.</li>
-                <li>Your real payroll amount is split into multiple pool units so the public only sees unit-sized moves.</li>
                 <li>A zero-knowledge proof proves the payee is entitled to withdraw without revealing which deposit.</li>
+                <li>Pick a <strong>privacy profile</strong> (Fast / Balanced / Secured) or unlock <strong>Custom</strong> knobs (delay, decoys, stealth).</li>
               </ul>
-            </div>
-
-            <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 p-4 space-y-2">
-              <h3 className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">Private (ZK) payment amounts</h3>
-              <p className="text-[11px] text-zinc-500 leading-relaxed">
-                Type any amount. Multi-pool routing packs it into 1000 / 100 / 10 / 1 XLM notes so big private pays stay ZK with few proofs (e.g. 2500 → 2×1000 + 5×100 = 7 notes, not 2500).
-              </p>
               <p className="text-[10px] text-zinc-400">
-                Signing mode is under <strong>Security → Transaction signing</strong> (Freighter popups on/off).
+                Signing mode is under <strong>Security → Transaction signing</strong>. Click <strong>Save Changes</strong> after choosing a profile.
               </p>
             </div>
 
-            {/* Proof system picker button */}
+            {/* Privacy presets */}
+            <div className="space-y-3">
+              <div>
+                <h3 className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">
+                  Privacy profile
+                </h3>
+                <p className="text-[11px] text-zinc-500 mt-0.5">
+                  Pick a preset for every private pay. <strong>Fast</strong> is ZK + contract only;
+                  <strong> Balanced</strong> / <strong>Secured</strong> add delay, decoys, and stealth.
+                  Choose <strong>Custom</strong> to tune knobs yourself.
+                </p>
+              </div>
+              <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-2.5">
+                {(['fast', 'balanced', 'secured', 'custom'] as Zer0PrivacyPreset[]).map((id) => {
+                  const p = PRIVACY_PRESETS[id];
+                  const Icon = p.icon;
+                  const active = (local.privacyPreset || 'balanced') === id;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => applyPrivacyPreset(id)}
+                      className={`text-left rounded-xl border p-3.5 transition relative ${
+                        active
+                          ? p.ring + ' shadow-sm'
+                          : 'border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600 bg-white dark:bg-zinc-950/40'
+                      }`}
+                    >
+                      {active && (
+                        <span className="absolute top-2.5 right-2.5 h-5 w-5 rounded-full bg-emerald-500 text-white flex items-center justify-center">
+                          <Check className="h-3 w-3" />
+                        </span>
+                      )}
+                      <div className={`flex items-center gap-1.5 ${p.accent}`}>
+                        <Icon className="h-3.5 w-3.5" />
+                        <span className="text-sm font-bold text-zinc-900 dark:text-white">{p.name}</span>
+                      </div>
+                      <p className="text-[10px] font-semibold text-zinc-500 mt-0.5">{p.tagline}</p>
+                      <ul className="mt-2 space-y-0.5 text-[10px] text-zinc-500 dark:text-zinc-400">
+                        {p.bullets.map((b) => (
+                          <li key={b} className="leading-snug">· {b}</li>
+                        ))}
+                      </ul>
+                      <p className="mt-2 text-[10px] font-bold uppercase tracking-wide text-zinc-400">
+                        Extra wait · {p.wait}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+              {(local.privacyPreset || 'balanced') === 'fast' && (
+                <div className="rounded-lg border border-amber-200/70 dark:border-amber-500/25 bg-amber-500/5 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-200/90 leading-relaxed">
+                  <strong>Fast</strong> still uses the privacy pool + Groth16 ZK proof on the contract — it just skips
+                  timing delay, decoys, and stealth. Pays settle as quickly as the chain + prover allow.
+                </div>
+              )}
+            </div>
+
+            {/* Live privacy score */}
+            {(() => {
+              const score = computePrivacyScore({
+                shielded: true,
+                stealthEnabled: !!local.stealthPaymentsEnabled,
+                privacyDelaySec: local.privacyDelaySec || 0,
+                privacyJitterSec: local.privacyJitterSec || 0,
+                decoyDepositsEnabled: !!local.decoyDepositsEnabled || !!local.postPayDecoyEnabled,
+                decoyDepositCount:
+                  (local.decoyDepositsEnabled ? Math.max(0, local.decoyDepositCount || 0) : 0)
+                  + (local.postPayDecoyEnabled ? 1 : 0),
+                anonymitySetSize: poolOnChainInfo?.count || 0,
+                preferRelayer: false,
+              });
+              const gradeColor =
+                score.grade === 'A+' || score.grade === 'A' ? 'text-emerald-600 dark:text-emerald-400'
+                : score.grade === 'B' ? 'text-blue-600 dark:text-blue-400'
+                : score.grade === 'C' ? 'text-amber-600 dark:text-amber-400'
+                : 'text-red-600 dark:text-red-400';
+              const presetLabel = PRIVACY_PRESETS[(local.privacyPreset || 'balanced') as Zer0PrivacyPreset]?.name || 'Balanced';
+              return (
+                <div className="rounded-xl border border-violet-200/60 dark:border-violet-500/20 bg-violet-500/5 p-4 space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-xs font-bold text-violet-700 dark:text-violet-300 uppercase tracking-wider">
+                      Privacy score (live) · {presetLabel}
+                    </h3>
+                    <span className={`text-lg font-black tabular-nums ${gradeColor}`}>
+                      {score.score}<span className="text-xs font-bold ml-1">/ 100 · {score.grade}</span>
+                    </span>
+                  </div>
+                  <ul className="text-[10px] text-zinc-600 dark:text-zinc-400 space-y-1 list-disc pl-4">
+                    {score.factors.map((f) => (
+                      <li key={f}>{f}</li>
+                    ))}
+                  </ul>
+                  <p className="text-[10px] text-zinc-400 leading-relaxed">
+                    Updates when you change presets or custom knobs. Transparent pays always score near zero.
+                  </p>
+                </div>
+              );
+            })()}
+
+            {/* ── Customization: core privacy knobs ── */}
+            <div className="space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">
+                    {(local.privacyPreset || 'balanced') === 'custom' ? 'Custom knobs' : 'Preset knobs (preview)'}
+                  </h3>
+                  <p className="text-[11px] text-zinc-500 mt-0.5">
+                    {(local.privacyPreset || 'balanced') === 'custom'
+                      ? 'Tune delay, decoys, batching, and stealth. Stronger privacy is usually slower and costs more pool notes.'
+                      : `Showing values for ${PRIVACY_PRESETS[(local.privacyPreset || 'balanced') as Zer0PrivacyPreset].name}. Edit any control to switch to Custom.`}
+                  </p>
+                </div>
+                {(local.privacyPreset || 'balanced') !== 'custom' && (
+                  <button
+                    type="button"
+                    onClick={() => applyPrivacyPreset('custom')}
+                    className="shrink-0 text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:underline"
+                  >
+                    Unlock custom
+                  </button>
+                )}
+              </div>
+
+              {/* Stealth */}
+              <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 overflow-hidden">
+                <div className="flex items-start justify-between gap-3 p-4">
+                  <div className="min-w-0 pr-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">Stealth one-time receives</span>
+                      <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                        local.stealthPaymentsEnabled
+                          ? 'bg-violet-500/15 text-violet-700 dark:text-violet-300'
+                          : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400'
+                      }`}>
+                        {local.stealthPaymentsEnabled ? 'On' : 'Off'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-zinc-500 mt-1 leading-relaxed">
+                      When a teammate has a <code className="font-mono text-[10px]">z0st1…</code> meta-address, private pays settle to a
+                      <strong> fresh G… address</strong> each time — not their long-term wallet. Breaks “always the same employee wallet” linkage.
+                      Generate metas under <strong>Team</strong> or <strong>Stealth</strong>.
+                    </p>
+                  </div>
+                  <button type="button"
+                    onClick={() => setPrivacyKnob('stealthPaymentsEnabled', !local.stealthPaymentsEnabled)}
+                    className={`relative h-5 w-9 rounded-full transition-colors shrink-0 mt-0.5 ${local.stealthPaymentsEnabled ? 'bg-violet-500' : 'bg-zinc-300 dark:bg-zinc-700'}`}>
+                    <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${local.stealthPaymentsEnabled ? 'left-[18px]' : 'left-0.5'}`} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Batch deposit then withdraw */}
+              <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 overflow-hidden">
+                <div className="flex items-start justify-between gap-3 p-4">
+                  <div className="min-w-0 pr-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">Batch: deposit all → delay → withdraw</span>
+                      <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                        local.batchDepositThenWithdraw
+                          ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                          : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400'
+                      }`}>
+                        {local.batchDepositThenWithdraw ? 'On' : 'Off'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-zinc-500 mt-1 leading-relaxed">
+                      Deposit every pool note first, wait once (see timing delay), then withdraw. Recommended.
+                      Off = each note deposit+withdraw back-to-back (faster, weaker timing privacy).
+                    </p>
+                  </div>
+                  <button type="button"
+                    onClick={() => setPrivacyKnob('batchDepositThenWithdraw', !local.batchDepositThenWithdraw)}
+                    className={`relative h-5 w-9 rounded-full transition-colors shrink-0 mt-0.5 ${local.batchDepositThenWithdraw ? 'bg-blue-500' : 'bg-zinc-300 dark:bg-zinc-700'}`}>
+                    <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${local.batchDepositThenWithdraw ? 'left-[18px]' : 'left-0.5'}`} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Timing privacy */}
+              <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 p-4 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 pr-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">Timing privacy delay</span>
+                      <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                        (local.privacyDelaySec || 0) > 0
+                          ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                          : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400'
+                      }`}>
+                        {(local.privacyDelaySec || 0) > 0 ? 'On' : 'Off'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-zinc-500 mt-1 leading-relaxed">
+                      Wait after deposits before any withdraw so deposit and settle times don’t line up on explorers.
+                      Higher = stronger privacy, slower pays. Use <strong>0</strong> to turn off.
+                    </p>
+                  </div>
+                  <button type="button"
+                    onClick={() => {
+                      const off = (local.privacyDelaySec || 0) > 0;
+                      setLocal(l => ({
+                        ...l,
+                        privacyPreset: 'custom',
+                        privacyDelaySec: off ? 0 : 45,
+                        privacyJitterSec: off ? 0 : Math.max(l.privacyJitterSec || 0, 30),
+                      }));
+                    }}
+                    className={`relative h-5 w-9 rounded-full transition-colors shrink-0 mt-0.5 ${(local.privacyDelaySec || 0) > 0 ? 'bg-blue-500' : 'bg-zinc-300 dark:bg-zinc-700'}`}>
+                    <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${(local.privacyDelaySec || 0) > 0 ? 'left-[18px]' : 'left-0.5'}`} />
+                  </button>
+                </div>
+
+                {(local.privacyDelaySec || 0) > 0 && (
+                  <div className="grid sm:grid-cols-2 gap-3 pt-1 border-t border-zinc-100 dark:border-zinc-800">
+                    <div>
+                      <label className="text-[10px] font-semibold text-zinc-500 uppercase block mb-1">Base delay (seconds)</label>
+                      <input
+                        type="number" min={0} max={600} step={5}
+                        value={local.privacyDelaySec || 0}
+                        onChange={e => setPrivacyKnob('privacyDelaySec', Math.max(0, parseInt(e.target.value, 10) || 0))}
+                        className="h-9 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm outline-none dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                      />
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {[15, 30, 45, 60, 120].map(v => (
+                          <button key={v} type="button"
+                            onClick={() => setPrivacyKnob('privacyDelaySec', v)}
+                            className={`h-6 px-2 rounded text-[10px] font-bold border ${
+                              (local.privacyDelaySec || 0) === v
+                                ? 'border-blue-500 bg-blue-500/10 text-blue-600'
+                                : 'border-zinc-200 dark:border-zinc-700 text-zinc-500'
+                            }`}>
+                            {v}s
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-zinc-500 uppercase block mb-1">Random jitter (0…N seconds)</label>
+                      <input
+                        type="number" min={0} max={300} step={5}
+                        value={local.privacyJitterSec || 0}
+                        onChange={e => setPrivacyKnob('privacyJitterSec', Math.max(0, parseInt(e.target.value, 10) || 0))}
+                        className="h-9 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm outline-none dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                      />
+                      <p className="text-[10px] text-zinc-400 mt-1.5">
+                        Actual wait = base + random(0…jitter). Example: {local.privacyDelaySec || 0}–{(local.privacyDelaySec || 0) + (local.privacyJitterSec || 0)}s.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Pre-pay decoy deposits */}
+              <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 p-4 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 pr-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">Pre-pay decoy deposits</span>
+                      <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                        local.decoyDepositsEnabled
+                          ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                          : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400'
+                      }`}>
+                        {local.decoyDepositsEnabled ? 'On' : 'Off'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-zinc-500 mt-1 leading-relaxed">
+                      Before settling, deposit extra pool notes that are <strong>not</strong> withdrawn with this pay.
+                      Grows the anonymity set so real payroll deposits blend with decoys. Costs extra XLM + time.
+                    </p>
+                  </div>
+                  <button type="button"
+                    onClick={() => setLocal(l => ({
+                      ...l,
+                      privacyPreset: 'custom',
+                      decoyDepositsEnabled: !l.decoyDepositsEnabled,
+                      decoyDepositCount: !l.decoyDepositsEnabled ? Math.max(1, l.decoyDepositCount || 1) : l.decoyDepositCount,
+                    }))}
+                    className={`relative h-5 w-9 rounded-full transition-colors shrink-0 mt-0.5 ${local.decoyDepositsEnabled ? 'bg-blue-500' : 'bg-zinc-300 dark:bg-zinc-700'}`}>
+                    <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${local.decoyDepositsEnabled ? 'left-[18px]' : 'left-0.5'}`} />
+                  </button>
+                </div>
+                {local.decoyDepositsEnabled && (
+                  <div className="pt-1 border-t border-zinc-100 dark:border-zinc-800">
+                    <label className="text-[10px] font-semibold text-zinc-500 uppercase block mb-1">Decoy notes per private pay</label>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        type="number" min={1} max={10} step={1}
+                        value={Math.max(1, local.decoyDepositCount || 1)}
+                        onChange={e => setPrivacyKnob('decoyDepositCount', Math.min(10, Math.max(1, parseInt(e.target.value, 10) || 1)))}
+                        className="h-9 w-24 rounded-lg border border-zinc-200 bg-white px-3 text-sm outline-none dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                      />
+                      {[1, 2, 3, 5].map(v => (
+                        <button key={v} type="button"
+                          onClick={() => setPrivacyKnob('decoyDepositCount', v)}
+                          className={`h-8 px-2.5 rounded-lg text-[10px] font-bold border ${
+                            (local.decoyDepositCount || 0) === v
+                              ? 'border-blue-500 bg-blue-500/10 text-blue-600'
+                              : 'border-zinc-200 dark:border-zinc-700 text-zinc-500'
+                          }`}>
+                          {v}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Post-pay decoy */}
+              <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 overflow-hidden">
+                <div className="flex items-start justify-between gap-3 p-4">
+                  <div className="min-w-0 pr-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">Post-pay decoy deposit</span>
+                      <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                        local.postPayDecoyEnabled
+                          ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                          : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400'
+                      }`}>
+                        {local.postPayDecoyEnabled ? 'On' : 'Off'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-zinc-500 mt-1 leading-relaxed">
+                      After a private settle, leave one extra <strong>1 XLM</strong> note in the pool (not withdrawn).
+                      Best-effort on the browser path; may be skipped if settle runs fully on the server.
+                    </p>
+                  </div>
+                  <button type="button"
+                    onClick={() => setPrivacyKnob('postPayDecoyEnabled', !local.postPayDecoyEnabled)}
+                    className={`relative h-5 w-9 rounded-full transition-colors shrink-0 mt-0.5 ${local.postPayDecoyEnabled ? 'bg-blue-500' : 'bg-zinc-300 dark:bg-zinc-700'}`}>
+                    <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${local.postPayDecoyEnabled ? 'left-[18px]' : 'left-0.5'}`} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Org name obfuscation */}
+              <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 p-4 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 pr-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">Hide company name on labels</span>
+                      <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                        local.obfuscateOrgName
+                          ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                          : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400'
+                      }`}>
+                        {local.obfuscateOrgName ? 'On' : 'Off'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-zinc-500 mt-1 leading-relaxed">
+                      Use a neutral alias in internal previews and exports. The public ledger never stores your company name either way.
+                    </p>
+                  </div>
+                  <button type="button"
+                    onClick={() => setLocal(l => ({ ...l, obfuscateOrgName: !l.obfuscateOrgName }))}
+                    className={`relative h-5 w-9 rounded-full transition-colors shrink-0 mt-0.5 ${local.obfuscateOrgName ? 'bg-blue-500' : 'bg-zinc-300 dark:bg-zinc-700'}`}>
+                    <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${local.obfuscateOrgName ? 'left-[18px]' : 'left-0.5'}`} />
+                  </button>
+                </div>
+                {local.obfuscateOrgName && (
+                  <div className="pt-1 border-t border-zinc-100 dark:border-zinc-800">
+                    <label className="text-[10px] font-semibold text-zinc-500 uppercase block mb-1">Public alias</label>
+                    <input value={local.proxyOrgName}
+                      onChange={e => setLocal(l => ({ ...l, proxyOrgName: e.target.value }))}
+                      placeholder="e.g. Payroll Desk"
+                      className="h-9 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm outline-none dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100" />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Proof system picker */}
             <div>
               <label className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 block mb-1.5">Privacy proof protocol</label>
+              <p className="text-[11px] text-zinc-500 mb-2 leading-relaxed">
+                Cryptographic system used to prove a withdraw is valid without revealing which deposit. Groth16 is live on the pool today.
+              </p>
               <button type="button"
                 onClick={() => { setProofDraft(local.proofSystem); setProofModalOpen(true); }}
                 className="w-full text-left rounded-xl border border-zinc-200 dark:border-zinc-700 p-4 hover:border-blue-400 dark:hover:border-blue-500 transition group">
@@ -483,29 +979,13 @@ export default function Zer0Settings() {
                   <div>
                     <span className="text-zinc-400 block">Deposits in pool (anonymity set)</span>
                     <span className="font-semibold text-zinc-800 dark:text-zinc-200">{poolOnChainInfo.count}</span>
+                    <span className="text-[10px] text-zinc-400 block mt-0.5">Larger set = stronger privacy for everyone</span>
                   </div>
                 </div>
               ) : (
                 <span className="text-[10px] text-zinc-400">Connect a wallet and save to load pool status.</span>
               )}
             </div>
-
-            <div className="flex items-center justify-between p-4 rounded-lg border border-zinc-200 dark:border-zinc-700">
-              <div>
-                <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 block">Hide company name on public labels</span>
-                <span className="text-[10px] text-zinc-400 block mt-0.5">Use a neutral alias in internal previews (ledger still has no company name)</span>
-              </div>
-              <button type="button" onClick={() => setLocal(l => ({ ...l, obfuscateOrgName: !l.obfuscateOrgName }))}
-                className={`relative h-5 w-9 rounded-full transition-colors ${local.obfuscateOrgName ? 'bg-blue-500' : 'bg-zinc-300 dark:bg-zinc-700'}`}>
-                <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${local.obfuscateOrgName ? 'left-[18px]' : 'left-0.5'}`} />
-              </button>
-            </div>
-            {local.obfuscateOrgName && (
-              <input value={local.proxyOrgName}
-                onChange={e => setLocal(l => ({ ...l, proxyOrgName: e.target.value }))}
-                placeholder="Alias e.g. Payroll Desk"
-                className="h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm outline-none dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100" />
-            )}
           </div>
         )}
 

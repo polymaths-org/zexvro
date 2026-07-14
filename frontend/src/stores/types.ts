@@ -126,6 +126,12 @@ export interface Zer0Employee {
   role: string;
   department: string;
   walletAddress: string;
+  /**
+   * Optional Zer0 stealth meta-address (z0st1…).
+   * When set + stealth pays enabled, withdrawals go to a fresh one-time G… address
+   * derived from this meta — not the long-term walletAddress.
+   */
+  stealthMetaAddress?: string;
   salary: number;
   currency: Zer0Currency;
   frequency: Zer0PayFrequency;
@@ -153,6 +159,18 @@ export interface Zer0Payment {
   createdAt: number;
   processedAt: number | null;
   approvedBy: string | null;
+  /**
+   * Payee stealth meta (z0st1…) captured at create time.
+   * Used at settle so ad-hoc/custom recipients still get one-time receives
+   * even without an employeeId row.
+   */
+  recipientStealthMeta?: string | null;
+  /** True when this pay used a one-time stealth receive address */
+  stealth?: boolean;
+  /** On-chain one-time G… destination (if stealth) */
+  stealthOneTimeAddress?: string | null;
+  /** Ephemeral pubkey published off-chain for recipient scan */
+  stealthEphemeralPub?: string | null;
 }
 
 export interface Zer0Proof {
@@ -192,6 +210,9 @@ export interface Zer0SecurityEvent {
   createdAt: number;
 }
 
+/** Privacy profile for private payroll settles */
+export type Zer0PrivacyPreset = 'fast' | 'balanced' | 'secured' | 'custom';
+
 export interface Zer0Settings {
   proofSystem: Zer0ProofSystem;
   complianceThreshold: number;
@@ -214,6 +235,11 @@ export interface Zer0Settings {
   contractAddress: string;
   obfuscateOrgName: boolean;
   proxyOrgName: string;
+  /**
+   * Privacy profile. Presets lock delay/decoy/stealth knobs;
+   * `custom` unlocks free-form tuning below.
+   */
+  privacyPreset: Zer0PrivacyPreset;
   /** Min seconds to wait after all deposits before any withdraw (timing privacy) */
   privacyDelaySec: number;
   /** Extra random 0..jitter seconds added to delay */
@@ -236,4 +262,14 @@ export interface Zer0Settings {
    * When false, use treasury auto-sign if VITE_TREASURY_SECRET is set.
    */
   preferFreighterSigning: boolean;
+  /**
+   * When true (default), private pays to employees with a stealth meta-address
+   * withdraw to a fresh one-time Stellar account instead of their long-term G….
+   */
+  stealthPaymentsEnabled: boolean;
+  /**
+   * After private settle, auto-create a small decoy deposit note that is NOT withdrawn
+   * (grows anonymity set). Requires browser path / funder — server settle may skip.
+   */
+  postPayDecoyEnabled: boolean;
 }

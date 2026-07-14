@@ -771,11 +771,18 @@ export default function Payroll() {
       }
 
       try {
+        // Prefer employee stealth meta so batch payroll can one-time-receive when enabled
+        const empForMeta = item.employeeId
+          ? useZer0Store.getState().employees.find(e => e.id === item.employeeId)
+          : null;
+        const payMeta = (empForMeta?.stealthMetaAddress || '').trim() || null;
+
         const payment = createPayment({
           projectId: run.projectId || scopeId,
           employeeId: item.employeeId || null,
           recipientName: item.name,
           recipientWallet: item.walletAddress,
+          recipientStealthMeta: run.shielded ? payMeta : null,
           amount: item.amount,
           currency: run.shielded ? 'XLM' : item.currency,
           type: 'payroll',
