@@ -14,13 +14,11 @@ import {
 import {
   createPublicCheckoutIntent,
   getPublicNftCollection,
-  getPublicTokenMetadata,
   NftApiError,
   submitPublicCheckoutIntent,
   type NftInventorySummary,
   type NftCheckoutIntent,
   type PublicNftCollection,
-  type PublicTokenMetadata,
 } from './nftApi';
 import { formatWalletError, getPublicKey, isWalletAvailable, signTransaction } from './stellarWallet';
 
@@ -74,19 +72,15 @@ export default function PublicCollection() {
   const { collectionId } = useParams({ strict: false });
   const [collection, setCollection] = useState<PublicNftCollection | null>(null);
   const [inventory, setInventory] = useState<NftInventorySummary | null>(null);
-  const [tokenMeta, setTokenMeta] = useState<PublicTokenMetadata | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [buyerAddress, setBuyerAddress] = useState('');
-  const [tokenId, setTokenId] = useState(1);
   const [checkoutIntent, setCheckoutIntent] = useState<NftCheckoutIntent | null>(null);
   const [checkoutError, setCheckoutError] = useState('');
   const [preparing, setPreparing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [confirmedHash, setConfirmedHash] = useState('');
   const [copied, setCopied] = useState('');
-
-  const tokenSold = tokenMeta?.availability === 'sold';
 
   useEffect(() => {
     if (!collectionId) return;
@@ -98,7 +92,6 @@ export default function PublicCollection() {
         setCollection(result.collection);
         if (result.inventory) {
           setInventory(result.inventory);
-          setTokenId(result.inventory.nextTokenId);
         }
       })
       .catch((error: unknown) => {
@@ -109,22 +102,6 @@ export default function PublicCollection() {
       });
     return () => controller.abort();
   }, [collectionId]);
-
-  useEffect(() => {
-    if (!collectionId || !Number.isInteger(tokenId) || tokenId < 0) {
-      setTokenMeta(null);
-      return;
-    }
-    const controller = new AbortController();
-    getPublicTokenMetadata(collectionId, tokenId, controller.signal)
-      .then((meta) => {
-        if (!controller.signal.aborted) setTokenMeta(meta);
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) setTokenMeta(null);
-      });
-    return () => controller.abort();
-  }, [collectionId, tokenId]);
 
   const publicUrl = useMemo(() => {
     if (typeof window === 'undefined') return '';
@@ -188,27 +165,16 @@ export default function PublicCollection() {
       setCheckoutError('Enter a valid Stellar buyer wallet address.');
       return;
     }
-    if (!Number.isInteger(tokenId) || tokenId < 0) {
-      setCheckoutError('Enter a valid token ID.');
-      return;
-    }
-    if (tokenSold) {
-      setCheckoutError(
-        tokenMeta?.ownerAddress
-          ? `Token #${tokenId} is already owned by ${tokenMeta.ownerAddress}.`
-          : `Token #${tokenId} is already minted.`,
-      );
-      return;
-    }
 
     setPreparing(true);
     try {
+      // API allocates the next free token ID automatically.
       const intent = await createPublicCheckoutIntent({
         collectionId,
         buyerAddress: buyerAddress.trim(),
-        tokenId,
       });
       setCheckoutIntent(intent);
+      setCopied(`Token #${intent.tokenId} reserved for checkout.`);
     } catch (error) {
       setCheckoutError(errorMessage(error));
     } finally {
@@ -367,38 +333,19 @@ export default function PublicCollection() {
             >
               Connect wallet
             </button>
-            <label className="block text-sm font-medium text-zinc-200">
-              Token ID
-              <input
-                type="number"
-                min={0}
-                value={tokenId}
-                onChange={event => {
-                  setTokenId(Math.max(0, Math.floor(Number(event.target.value))));
-                  setCheckoutIntent(null);
-                  setConfirmedHash('');
-                }}
-                className="mt-2 w-full rounded-md border border-zinc-800 bg-[#050506] px-3 py-2.5 text-sm tabular-nums text-white outline-none transition focus:border-brand-blue"
-              />
-            </label>
-            {inventory && (
-              <p className="text-xs tabular-nums text-zinc-500">
-                Suggested next free token: #{inventory.nextTokenId}
-              </p>
-            )}
-            {tokenMeta && (
-              <div
-                className={`rounded-md border p-3 text-sm ${
-                  tokenSold
-                    ? 'border-amber-500/25 bg-amber-500/5 text-amber-200'
-                    : 'border-emerald-500/25 bg-emerald-500/5 text-emerald-200'
-                }`}
-              >
-                {tokenSold
-                  ? `Sold · owner ${shortAddress(tokenMeta.ownerAddress || 'unknown')}`
-                  : 'Available to purchase'}
-              </div>
-            )}
+            <div className="rounded-md border border-zinc-800 bg-[#050506] p-3 text-sm text-zinc-400">
+              Token ID is assigned automatically at checkout.
+              {inventory && (
+                <p className="mt-1 tabular-nums text-zinc-500">
+                  {inventory.mintedCount} minted · next free suggestion #{inventory.nextTokenId}
+                </p>
+              )}
+              {checkoutIntent && (
+                <p className="mt-1 font-medium tabular-nums text-zinc-100">
+                  Reserved for this purchase: #{checkoutIntent.tokenId}
+                </p>
+              )}
+            </div>
 
             {checkoutError && (
               <div className="flex gap-2 rounded-md border border-red-500/25 bg-red-500/5 p-3 text-sm text-red-300">
@@ -415,12 +362,12 @@ export default function PublicCollection() {
 
             <button
               type="button"
-              disabled={preparing || tokenSold || !collection.primarySale}
+              disabled={preparing || !collection.primarySale}
               onClick={() => void prepareCheckout()}
               className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-white px-4 text-sm font-medium text-zinc-950 transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {preparing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShoppingCart className="h-4 w-4" />}
-              {tokenSold ? 'Already sold' : 'Prepare checkout'}
+              Prepare checkout
             </button>
           </div>
 

@@ -70,6 +70,8 @@ export interface PreparedContractCall {
   serializedTransaction: string
   requiredSigners: string[]
   autoSubmitted?: SubmissionResult
+  /** Assigned token ID when the service auto-allocated or echoed a request ID. */
+  tokenId?: number
 }
 
 export interface SubmissionResult {
@@ -155,6 +157,8 @@ export interface RepositoryState {
   collections: CollectionRecord[]
   checkoutIntents: CheckoutIntentRecord[]
   mintedItems: MintedItemRecord[]
+  /** Per-collection next token counter (last allocated ID). Missing ⇒ derive from minted items. */
+  tokenCounters?: Record<string, number>
 }
 
 export interface NftRepository {
@@ -177,4 +181,12 @@ export interface NftRepository {
     tokenId: number,
   ): Promise<MintedItemRecord | undefined>
   saveMintedItem(item: MintedItemRecord): Promise<void>
+  /**
+   * Atomically allocate the next free token ID for a collection.
+   * Returns the allocated ID (starts at 1). Implementations must be safe
+   * under concurrent mint/checkout intent creation.
+   */
+  allocateNextTokenId(collectionId: string): Promise<number>
+  /** Last allocated token ID for the collection, or 0 if none allocated yet. */
+  getTokenCounter(collectionId: string): Promise<number>
 }

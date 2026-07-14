@@ -14,16 +14,19 @@ const emptyState = (): RepositoryState => ({
   collections: [],
   checkoutIntents: [],
   mintedItems: [],
+  tokenCounters: {},
 })
 
 export class InMemoryNftRepository implements NftRepository {
   protected state: RepositoryState
+  private tokenAllocationQueue: Promise<void> = Promise.resolve()
 
   constructor(initialState: RepositoryState = emptyState()) {
     this.state = {
       ...emptyState(),
       ...structuredClone(initialState),
       mintedItems: structuredClone(initialState.mintedItems ?? []),
+      tokenCounters: structuredClone(initialState.tokenCounters ?? {}),
     }
   }
 
@@ -134,7 +137,51 @@ export class InMemoryNftRepository implements NftRepository {
     } else {
       this.state.mintedItems[index] = structuredClone(item)
     }
+    const counters = this.state.tokenCounters ?? (this.state.tokenCounters = {})
+    const current = counters[item.collectionId] ?? 0
+    if (item.tokenId > current) {
+      counters[item.collectionId] = item.tokenId
+    }
     await this.afterMutation()
+  }
+
+  async allocateNextTokenId(collectionId: string): Promise<number> {
+    const run = this.tokenAllocationQueue.then(async () => {
+      const counters = this.state.tokenCounters ?? (this.state.tokenCounters = {})
+      let next = counters[collectionId]
+      if (next === undefined) {
+        const items = this.state.mintedItems.filter(
+          (entry) => entry.collectionId === collectionId,
+        )
+        next =
+          items.length === 0
+            ? 0
+            : Math.max(...items.map((entry) => entry.tokenId))
+      }
+      next += 1
+      if (next > 4_294_967_295) {
+        throw new Error('Token ID space exhausted for collection')
+      }
+      counters[collectionId] = next
+      await this.afterMutation()
+      return next
+    })
+    this.tokenAllocationQueue = run.then(
+      () => undefined,
+      () => undefined,
+    )
+    return run
+  }
+
+  async getTokenCounter(collectionId: string): Promise<number> {
+    const counters = this.state.tokenCounters ?? {}
+    const stored = counters[collectionId]
+    if (stored !== undefined) return stored
+    const items = this.state.mintedItems.filter(
+      (entry) => entry.collectionId === collectionId,
+    )
+    if (items.length === 0) return 0
+    return Math.max(...items.map((entry) => entry.tokenId))
   }
 
   protected async afterMutation(): Promise<void> {}
@@ -162,6 +209,7 @@ export class FileNftRepository extends InMemoryNftRepository {
         ...emptyState(),
         ...parsed,
         mintedItems: parsed.mintedItems ?? [],
+        tokenCounters: parsed.tokenCounters ?? {},
       }
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code

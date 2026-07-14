@@ -16,6 +16,10 @@ describe('dashboard routing', () => {
     expect(routePaths).toContain('/nft/collections/$collectionId');
   });
 
+  it('registers the embed NFT checkout popup route', () => {
+    expect(routePaths).toContain('/nft/embed/checkout');
+  });
+
   it('registers the project De-pin gateway route', () => {
     expect(routePaths).toContain('/dashboard/w/$workspaceId/p/$projectId/depin');
   });

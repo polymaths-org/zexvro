@@ -581,3 +581,10 @@ Completed full live AWS + local API smoke after unit green. NFT API running on 4
   - `npm --prefix services/nft-service/api run lint && npm --prefix services/nft-service/api test && npm --prefix services/nft-service/api run build`
   - `npm --prefix services/depin run lint && npm --prefix services/depin test && npm --prefix services/depin run build`
 - Do not touch: Morph (Paris), Trade/Agent Auth (Rushi)
+
+## Handoff after auto token IDs + checkout SDK scaffold
+- Branch: `feature/nft-service`
+- Done: Server-side allocateNextTokenId; optional tokenId on mint/checkout; FE hides manual IDs; packages/nft-checkout-sdk + /nft/embed/checkout
+- Next: Optional commit/push of this slice; partner CORS; live Freighter buy with auto IDs; hosted API
+- Verify: `npm --prefix services/nft-service/api test` (62); FE nft tests; lint
+- Do not touch: Morph, Trade/Agent Auth

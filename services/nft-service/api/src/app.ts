@@ -50,7 +50,8 @@ const updateCollectionSchema = createCollectionSchema
 const mintPrepareSchema = z.object({
   operatorAddress: stellarAccount,
   recipientAddress: stellarAccount,
-  tokenId: z.number().int().min(0).max(4_294_967_295),
+  /** Optional. When omitted the API allocates the next free token ID. */
+  tokenId: z.number().int().min(0).max(4_294_967_295).optional(),
 })
 
 const salePrepareSchema = z.object({
@@ -77,7 +78,8 @@ const mintSubmissionSchema = transactionSubmissionSchema.extend({
 const checkoutSchema = z.object({
   collectionId: z.uuid(),
   buyerAddress: stellarAccount,
-  tokenId: z.number().int().min(0).max(4_294_967_295),
+  /** Optional. When omitted the API allocates the next free token ID. */
+  tokenId: z.number().int().min(0).max(4_294_967_295).optional(),
 })
 
 const signedCheckoutSchema = z.object({
@@ -350,7 +352,9 @@ export function createApp(service: NftService, options: CreateAppOptions) {
           input.buyerAddress,
           idempotencyKey,
         ),
-        ...input,
+        collectionId: input.collectionId,
+        buyerAddress: input.buyerAddress,
+        ...(input.tokenId === undefined ? {} : { tokenId: input.tokenId }),
       })
       response.status(201).json({ intent: presentPublicIntent(intent) })
     }),
@@ -565,7 +569,12 @@ export function createApp(service: NftService, options: CreateAppOptions) {
         collectionId,
         response.locals.nftIdentity.subject,
       )
-      const intent = await service.prepareMint({ collectionId, ...input })
+      const intent = await service.prepareMint({
+        collectionId,
+        operatorAddress: input.operatorAddress,
+        recipientAddress: input.recipientAddress,
+        ...(input.tokenId === undefined ? {} : { tokenId: input.tokenId }),
+      })
       response.status(201).json({ intent })
     }),
   )
@@ -665,7 +674,9 @@ export function createApp(service: NftService, options: CreateAppOptions) {
       const subject = response.locals.nftIdentity.subject
       const intent = await service.createCheckoutIntent({
         idempotencyKey: scopeIdempotencyKey(subject, idempotencyKey),
-        ...input,
+        collectionId: input.collectionId,
+        buyerAddress: input.buyerAddress,
+        ...(input.tokenId === undefined ? {} : { tokenId: input.tokenId }),
       })
       response.status(201).json({ intent: presentIntent(intent, subject) })
     }),

@@ -217,7 +217,10 @@ export class NftService {
   async suggestNextTokenId(collectionId: string): Promise<number> {
     const collection = await this.getCollection(collectionId)
     const items = await this.repository.listMintedItems(collectionId)
+    const counter = await this.repository.getTokenCounter(collectionId)
     let candidate = items.length === 0 ? 1 : Math.max(...items.map((item) => item.tokenId)) + 1
+    // Respect reserved IDs from prior auto-allocations (mint/checkout prepare).
+    candidate = Math.max(candidate, counter + 1)
     if (collection.contractId === undefined) return candidate
 
     // Walk forward until chain agrees the token is free (covers pre-inventory mints).
@@ -395,15 +398,15 @@ export class NftService {
     collectionId: string
     operatorAddress: string
     recipientAddress: string
-    tokenId: number
+    tokenId?: number
   }): Promise<PreparedContractCall> {
     const collection = await this.requireLiveCollection(input.collectionId)
-    await this.assertTokenAvailable(collection.id, input.tokenId)
+    const tokenId = await this.resolveTokenIdForWrite(collection.id, input.tokenId)
     const prepared = await this.chain.prepareMint({
       contractId: collection.contractId,
       operatorAddress: input.operatorAddress,
       recipientAddress: input.recipientAddress,
-      tokenId: input.tokenId,
+      tokenId,
     })
     if (!prepared.requiredSigners.includes(input.operatorAddress)) {
       throw new ApiError(
@@ -412,7 +415,7 @@ export class NftService {
         'The simulated mint did not require the selected minter authorization',
       )
     }
-    return prepared
+    return { ...prepared, tokenId }
   }
 
   async prepareSaleConfig(input: {
@@ -502,7 +505,7 @@ export class NftService {
     idempotencyKey: string
     collectionId: string
     buyerAddress: string
-    tokenId: number
+    tokenId?: number
   }): Promise<CheckoutIntentRecord> {
     const existing = await this.repository.findCheckoutIntentByIdempotencyKey(
       input.idempotencyKey,
@@ -511,7 +514,7 @@ export class NftService {
       if (
         existing.collectionId !== input.collectionId ||
         existing.buyerAddress !== input.buyerAddress ||
-        existing.tokenId !== input.tokenId
+        (input.tokenId !== undefined && existing.tokenId !== input.tokenId)
       ) {
         throw new ApiError(
           409,
@@ -523,11 +526,11 @@ export class NftService {
     }
 
     const collection = await this.requireLiveCollection(input.collectionId)
-    await this.assertTokenAvailable(collection.id, input.tokenId)
+    const tokenId = await this.resolveTokenIdForWrite(collection.id, input.tokenId)
     const prepared = await this.chain.prepareCheckout({
       contractId: collection.contractId,
       buyerAddress: input.buyerAddress,
-      tokenId: input.tokenId,
+      tokenId,
     })
     if (!prepared.requiredSigners.includes(input.buyerAddress)) {
       throw new ApiError(
@@ -542,7 +545,7 @@ export class NftService {
       id: randomUUID(),
       idempotencyKey: input.idempotencyKey,
       collectionId: input.collectionId,
-      tokenId: input.tokenId,
+      tokenId,
       buyerAddress: input.buyerAddress,
       serializedTransaction: prepared.serializedTransaction,
       requiredSigners: prepared.requiredSigners,
@@ -679,6 +682,45 @@ export class NftService {
         },
       )
     }
+  }
+
+  /**
+   * Always-auto token IDs: omit tokenId → allocate next free ID.
+   * Explicit tokenId still supported for advanced/API callers and is validated.
+   */
+  private async resolveTokenIdForWrite(
+    collectionId: string,
+    tokenId: number | undefined,
+  ): Promise<number> {
+    if (tokenId !== undefined) {
+      if (!Number.isInteger(tokenId) || tokenId < 0 || tokenId > 4_294_967_295) {
+        throw new ApiError(
+          400,
+          'invalid_token_id',
+          'Token ID must be an integer between 0 and 4294967295',
+        )
+      }
+      await this.assertTokenAvailable(collectionId, tokenId)
+      return tokenId
+    }
+
+    // Allocate then verify chain/inventory still free (handles pre-counter mints).
+    for (let attempt = 0; attempt < 16; attempt += 1) {
+      const candidate = await this.repository.allocateNextTokenId(collectionId)
+      try {
+        await this.assertTokenAvailable(collectionId, candidate)
+        return candidate
+      } catch (error) {
+        if (!(error instanceof ApiError) || error.code !== 'token_already_minted') {
+          throw error
+        }
+      }
+    }
+    throw new ApiError(
+      503,
+      'token_allocation_exhausted',
+      'Could not allocate a free token ID after several attempts',
+    )
   }
 
   private async recordMintedItem(input: {
