@@ -1,4 +1,4 @@
-export type CollectionStatus = 'deploying' | 'live' | 'failed'
+export type CollectionStatus = 'deploying' | 'live' | 'failed' | 'archived'
 
 export interface CollectionRecord {
   id: string
@@ -25,6 +25,18 @@ export interface CollectionRecord {
   }
   createdAt: string
   updatedAt: string
+}
+
+export type MintedItemSource = 'mint' | 'purchase'
+
+export interface MintedItemRecord {
+  id: string
+  collectionId: string
+  tokenId: number
+  ownerAddress: string
+  source: MintedItemSource
+  transactionHash: string
+  mintedAt: string
 }
 
 export type CheckoutStatus =
@@ -63,6 +75,8 @@ export interface PreparedContractCall {
 export interface SubmissionResult {
   transactionHash: string
   status: 'confirmed'
+  tokenId?: number
+  ownerAddress?: string
 }
 
 export interface CollectionDeploymentInput {
@@ -108,6 +122,10 @@ export interface NftChainGateway {
     expectedSerializedTransaction: string
     serializedTransaction: string
   }): Promise<SubmissionResult>
+  getTokenOwner(input: {
+    contractId: string
+    tokenId: number
+  }): Promise<string | undefined>
   getTransactionStatus(transactionHash: string): Promise<
     'pending' | 'confirmed' | 'failed' | 'not_found'
   >
@@ -136,6 +154,7 @@ export interface RepositoryState {
   version: 1
   collections: CollectionRecord[]
   checkoutIntents: CheckoutIntentRecord[]
+  mintedItems: MintedItemRecord[]
 }
 
 export interface NftRepository {
@@ -152,4 +171,10 @@ export interface NftRepository {
     id: string,
     now: Date,
   ): Promise<CheckoutIntentRecord | undefined>
+  listMintedItems(collectionId: string): Promise<MintedItemRecord[]>
+  getMintedItem(
+    collectionId: string,
+    tokenId: number,
+  ): Promise<MintedItemRecord | undefined>
+  saveMintedItem(item: MintedItemRecord): Promise<void>
 }

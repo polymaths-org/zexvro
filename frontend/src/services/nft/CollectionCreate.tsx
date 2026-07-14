@@ -108,7 +108,10 @@ function validateDeployment(
   if (!Number.isInteger(draft.royaltyBps) || draft.royaltyBps < 0 || draft.royaltyBps > 1000) {
     errors.royalty = 'Royalty must be between 0% and 10%.';
   }
-  if (health?.capabilities.storageMode === 'pinata' && !IPFS_BASE_URI.test(draft.baseMetadataUri?.trim() || '')) {
+  if (
+    health?.capabilities.storageMode === 'pinata' &&
+    !IPFS_BASE_URI.test(draft.baseMetadataUri?.trim() || '')
+  ) {
     errors.baseMetadataUri = 'Enter an IPFS base URI ending with a slash.';
   }
   return errors;
@@ -527,7 +530,16 @@ export default function CollectionCreate({ workspaceId, accessToken, onClose }: 
                 ['Creator wallet', draft.ownerAddress],
                 ['Royalty recipient', draft.royaltyRecipient],
                 ['Royalty preference', `${royaltyPercent.toFixed(2)}%`],
-                ['Media storage', health?.capabilities.storageMode === 'local' ? 'Local test storage' : 'Pinata IPFS'],
+                [
+                  'Media storage',
+                  health?.capabilities.storageMode === 'local'
+                    ? 'Local test storage'
+                    : health?.capabilities.storageMode === 's3'
+                      ? 'AWS S3'
+                      : health?.capabilities.storageMode === 'pinata'
+                        ? 'Pinata IPFS (legacy)'
+                        : 'Checking',
+                ],
                 ['Network', 'Stellar testnet'],
                 ['Status after confirmation', 'Live after successful deployment'],
               ].map(([label, value]) => (
@@ -541,7 +553,13 @@ export default function CollectionCreate({ workspaceId, accessToken, onClose }: 
           {health?.capabilities.storageMode === 'local' && (
             <div className="flex gap-2.5 border border-amber-500/25 bg-amber-500/5 p-3 text-xs leading-5 text-zinc-700 dark:text-zinc-300">
               <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-              Local test storage is content-addressed but is not IPFS. Use Pinata mode before a production deployment.
+              Local test storage is content-addressed HTTP only. Use NFT_STORAGE_MODE=s3 with an S3 bucket for production media.
+            </div>
+          )}
+          {health?.capabilities.storageMode === 's3' && (
+            <div className="flex gap-2.5 border border-brand-blue/25 bg-brand-blue/5 p-3 text-xs leading-5 text-zinc-700 dark:text-zinc-300">
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-brand-blue" />
+              Media uploads go to AWS S3. Token metadata can use the API public routes or an HTTPS directory URI ending with /.
             </div>
           )}
           {submitError && (

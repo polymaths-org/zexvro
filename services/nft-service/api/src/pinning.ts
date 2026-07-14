@@ -1,12 +1,15 @@
 import { ApiError } from './errors.js'
 import type { PinnedAsset, PinningService } from './domain.js'
 
+const PINATA_UPLOAD_URL = 'https://uploads.pinata.cloud/v3/files'
+
 interface PinataUploadResponse {
   data?: {
     cid?: string
     size?: number
     mime_type?: string
   }
+  error?: unknown
 }
 
 export class PinataPinningService implements PinningService {
@@ -40,7 +43,7 @@ export class PinataPinningService implements PinningService {
 
     let response: Response
     try {
-      response = await this.fetchImplementation('https://uploads.pinata.cloud/v3/files', {
+      response = await this.fetchImplementation(PINATA_UPLOAD_URL, {
         method: 'POST',
         headers: { Authorization: `Bearer ${this.jwt}` },
         body: form,
@@ -52,7 +55,7 @@ export class PinataPinningService implements PinningService {
     }
 
     const payload = (await response.json().catch(() => ({}))) as PinataUploadResponse
-    if (!response.ok || payload.data?.cid === undefined) {
+    if (!response.ok || payload.data?.cid === undefined || payload.data.cid === '') {
       throw new ApiError(502, 'pinata_upload_failed', 'Pinata rejected the upload', {
         status: response.status,
       })

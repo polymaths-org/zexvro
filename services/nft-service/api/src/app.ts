@@ -16,13 +16,15 @@ const identifier = z.string().trim().min(1).max(128)
 const ipfsUri = z
   .string()
   .regex(/^ipfs:\/\/[A-Za-z0-9]+(?:\/[A-Za-z0-9._~!$&'()*+,;=:@%-]+)*\/?$/)
-const baseMetadataUri = ipfsUri.refine((value) => value.endsWith('/'), {
-  message: 'Base metadata URI must end with a slash',
-})
 const httpAssetUri = z.url().refine((value) => {
   const url = new URL(value)
   return url.protocol === 'http:' || url.protocol === 'https:'
 }, 'Asset URI must use HTTP(S)')
+const baseMetadataUri = z
+  .union([ipfsUri, httpAssetUri])
+  .refine((value) => value.endsWith('/'), {
+    message: 'Base metadata URI must end with a slash',
+  })
 const assetUri = z.union([ipfsUri, httpAssetUri])
 
 const createCollectionSchema = z.object({
@@ -67,6 +69,11 @@ const transactionSubmissionSchema = z.object({
   signedTransaction: z.string().min(1).max(500_000),
 })
 
+const mintSubmissionSchema = transactionSubmissionSchema.extend({
+  tokenId: z.number().int().min(0).max(4_294_967_295).optional(),
+  ownerAddress: stellarAccount.optional(),
+})
+
 const checkoutSchema = z.object({
   collectionId: z.uuid(),
   buyerAddress: stellarAccount,
@@ -101,7 +108,7 @@ export interface NftServiceCapabilities {
   network: 'stellar:testnet'
   pinningConfigured: boolean
   stellarConfigured: boolean
-  storageMode: 'pinata' | 'local'
+  storageMode: 'local' | 's3' | 'pinata'
 }
 
 interface CreateAppOptions {
@@ -188,6 +195,26 @@ function presentPublicCollection(collection: CollectionRecord) {
   }
 }
 
+function presentMintedItem(item: {
+  id: string
+  collectionId: string
+  tokenId: number
+  ownerAddress: string
+  source: 'mint' | 'purchase'
+  transactionHash: string
+  mintedAt: string
+}) {
+  return {
+    id: item.id,
+    collectionId: item.collectionId,
+    tokenId: item.tokenId,
+    ownerAddress: item.ownerAddress,
+    source: item.source,
+    transactionHash: item.transactionHash,
+    mintedAt: item.mintedAt,
+  }
+}
+
 function presentPublicIntent(intent: CheckoutIntentRecord) {
   return {
     id: intent.id,
@@ -267,14 +294,42 @@ export function createApp(service: NftService, options: CreateAppOptions) {
   )
 
   app.get(
+    '/v1/public/collections/:collectionId/tokens',
+    asyncRoute(async (request, response) => {
+      const { collectionId } = z
+        .object({ collectionId: z.uuid() })
+        .parse(request.params)
+      const collection = await service.getCollection(collectionId)
+      presentPublicCollection(collection)
+      const nextTokenId = await service.suggestNextTokenId(collectionId)
+      const items = await service.listMintedItems(collectionId)
+      response.setHeader('Cache-Control', 'public, max-age=15')
+      response.json({
+        items: items.map(presentMintedItem),
+        nextTokenId,
+        mintedCount: items.length,
+      })
+    }),
+  )
+
+  app.get(
     '/v1/public/collections/:collectionId',
     asyncRoute(async (request, response) => {
       const { collectionId } = z
         .object({ collectionId: z.uuid() })
         .parse(request.params)
       const collection = await service.getCollection(collectionId)
-      response.setHeader('Cache-Control', 'public, max-age=60')
-      response.json({ collection: presentPublicCollection(collection) })
+      const nextTokenId = await service.suggestNextTokenId(collectionId)
+      const items = await service.listMintedItems(collectionId)
+      response.setHeader('Cache-Control', 'public, max-age=15')
+      response.json({
+        collection: presentPublicCollection(collection),
+        inventory: {
+          items: items.map(presentMintedItem),
+          nextTokenId,
+          mintedCount: items.length,
+        },
+      })
     }),
   )
 
@@ -521,14 +576,77 @@ export function createApp(service: NftService, options: CreateAppOptions) {
       const { collectionId } = z
         .object({ collectionId: z.uuid() })
         .parse(request.params)
-      const input = transactionSubmissionSchema.parse(request.body)
+      const input = mintSubmissionSchema.parse(request.body)
       await requireOwnedCollection(
         service,
         collectionId,
         response.locals.nftIdentity.subject,
       )
-      const transaction = await service.submitMint({ collectionId, ...input })
-      response.status(201).json({ transaction })
+      const transaction = await service.submitMint({
+        collectionId,
+        preparedTransaction: input.preparedTransaction,
+        signedTransaction: input.signedTransaction,
+        ...(input.tokenId === undefined ? {} : { tokenId: input.tokenId }),
+        ...(input.ownerAddress === undefined
+          ? {}
+          : { ownerAddress: input.ownerAddress }),
+      })
+      response.status(201).json({
+        transaction: {
+          transactionHash: transaction.transactionHash,
+          status: transaction.status,
+        },
+        ...(transaction.item === undefined
+          ? {}
+          : { item: presentMintedItem(transaction.item) }),
+      })
+    }),
+  )
+
+  app.get(
+    '/v1/collections/:collectionId/items',
+    asyncRoute(async (request, response) => {
+      const { collectionId } = z
+        .object({ collectionId: z.uuid() })
+        .parse(request.params)
+      await requireOwnedCollection(
+        service,
+        collectionId,
+        response.locals.nftIdentity.subject,
+      )
+      const nextTokenId = await service.suggestNextTokenId(collectionId)
+      const items = await service.listMintedItems(collectionId)
+      response.json({
+        items: items.map(presentMintedItem),
+        nextTokenId,
+        mintedCount: items.length,
+      })
+    }),
+  )
+
+  app.post(
+    '/v1/collections/:collectionId/archive',
+    asyncRoute(async (request, response) => {
+      const { collectionId } = z
+        .object({ collectionId: z.uuid() })
+        .parse(request.params)
+      const subject = response.locals.nftIdentity.subject
+      await requireOwnedCollection(service, collectionId, subject)
+      const collection = await service.archiveCollection(collectionId)
+      response.json({ collection: presentCollection(collection, subject) })
+    }),
+  )
+
+  app.post(
+    '/v1/collections/:collectionId/unarchive',
+    asyncRoute(async (request, response) => {
+      const { collectionId } = z
+        .object({ collectionId: z.uuid() })
+        .parse(request.params)
+      const subject = response.locals.nftIdentity.subject
+      await requireOwnedCollection(service, collectionId, subject)
+      const collection = await service.unarchiveCollection(collectionId)
+      response.json({ collection: presentCollection(collection, subject) })
     }),
   )
 

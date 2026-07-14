@@ -187,6 +187,10 @@ export class UnavailableNftChainGateway implements NftChainGateway {
     return this.unavailable()
   }
 
+  async getTokenOwner(): Promise<string | undefined> {
+    return this.unavailable()
+  }
+
   async getTransactionStatus(): Promise<'pending' | 'confirmed' | 'failed' | 'not_found'> {
     return this.unavailable()
   }
@@ -353,6 +357,22 @@ export class StellarNftChainGateway implements NftChainGateway {
     const invocation = this.readInvocation(expected)
     this.assertEquivalent(transaction, expected, invocation)
     return this.submit(transaction)
+  }
+
+  async getTokenOwner(input: {
+    contractId: string
+    tokenId: number
+  }): Promise<string | undefined> {
+    const client = this.client(input.contractId)
+    try {
+      const transaction = await client.owner_of({ token_id: input.tokenId })
+      const owner = transaction.result
+      return typeof owner === 'string' && StrKey.isValidEd25519PublicKey(owner)
+        ? owner
+        : undefined
+    } catch {
+      return undefined
+    }
   }
 
   async getTransactionStatus(

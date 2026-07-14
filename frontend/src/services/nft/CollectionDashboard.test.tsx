@@ -6,14 +6,17 @@ import CollectionDashboard from './CollectionDashboard';
 import { createCollection } from './collectionStore';
 
 const api = vi.hoisted(() => ({
+  archiveNftCollection: vi.fn(),
   deleteNftCollection: vi.fn(),
   getNftServiceHealth: vi.fn(),
+  listCollectionItems: vi.fn(),
   listNftCollections: vi.fn(),
   prepareNftMint: vi.fn(),
   prepareNftSaleConfig: vi.fn(),
   retryNftCollectionDeployment: vi.fn(),
   submitNftMint: vi.fn(),
   submitNftSaleConfig: vi.fn(),
+  unarchiveNftCollection: vi.fn(),
   updateNftCollection: vi.fn(),
 }));
 
@@ -95,9 +98,27 @@ describe('CollectionDashboard', () => {
       transaction: { transactionHash: 'wallet-sale-hash', status: 'confirmed' },
     });
     api.submitNftMint.mockResolvedValue({
-      transactionHash: 'wallet-mint-hash',
-      status: 'confirmed',
+      transaction: { transactionHash: 'wallet-mint-hash', status: 'confirmed' },
+      item: {
+        id: 'item-1',
+        collectionId: remoteCollection.id,
+        tokenId: 7,
+        ownerAddress: remoteCollection.ownerAddress,
+        source: 'mint',
+        transactionHash: 'wallet-mint-hash',
+        mintedAt: '2026-07-12T00:00:00.000Z',
+      },
     });
+    api.listCollectionItems.mockResolvedValue({
+      items: [],
+      nextTokenId: 1,
+      mintedCount: 0,
+    });
+    api.archiveNftCollection.mockResolvedValue({
+      ...remoteCollection,
+      status: 'archived',
+    });
+    api.unarchiveNftCollection.mockResolvedValue(remoteCollection);
     wallet.isWalletAvailable.mockResolvedValue(false);
     wallet.getPublicKey.mockResolvedValue(remoteCollection.ownerAddress);
     wallet.signTransaction.mockResolvedValue('signed-sale');
@@ -300,6 +321,8 @@ describe('CollectionDashboard', () => {
       collectionId: remoteCollection.id,
       preparedTransaction: 'prepared-mint',
       signedTransaction: 'signed-mint',
+      tokenId: 7,
+      ownerAddress: remoteCollection.ownerAddress,
       accessToken: 'access-token',
     });
     expect(await screen.findByText(/signed and minted/i)).toBeInTheDocument();

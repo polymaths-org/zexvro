@@ -17,6 +17,9 @@
     "node": ">=22"
   },
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.1085.0",
+    "@aws-sdk/client-s3": "^3.1085.0",
+    "@aws-sdk/lib-dynamodb": "^3.1085.0",
     "@stellar/stellar-sdk": "^14.5.0",
     "aws-jwt-verify": "^5.1.1",
     "buffer": "6.0.3",

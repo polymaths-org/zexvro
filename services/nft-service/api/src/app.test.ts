@@ -71,7 +71,12 @@ class FakeChain implements NftChainGateway {
 
   async submitMint(): Promise<SubmissionResult> {
     if (this.submitFailure !== undefined) throw this.submitFailure
-    return { transactionHash: 'mint-hash', status: 'confirmed' }
+    return {
+      transactionHash: 'mint-hash',
+      status: 'confirmed',
+      tokenId: 7,
+      ownerAddress: ownerAddress,
+    }
   }
 
   async prepareSaleConfig(input: {
@@ -113,6 +118,15 @@ class FakeChain implements NftChainGateway {
     this.submitCalls += 1
     if (this.submitFailure !== undefined) throw this.submitFailure
     return { transactionHash: 'checkout-hash', status: 'confirmed' }
+  }
+
+  owners = new Map<string, string>()
+
+  async getTokenOwner(input: {
+    contractId: string
+    tokenId: number
+  }): Promise<string | undefined> {
+    return this.owners.get(`${input.contractId}:${input.tokenId}`)
   }
 
   async getTransactionStatus(): Promise<'pending' | 'confirmed' | 'failed' | 'not_found'> {
@@ -245,6 +259,59 @@ describe('NFT service API', () => {
         contentType: 'image/svg+xml',
       })
       .expect(415)
+  })
+
+  it('maps Pinata upload rejection to 502 on collection create without claiming live', async () => {
+    pinning.failure = new ApiError(502, 'pinata_upload_failed', 'Pinata rejected upload')
+    const failed = await request(app)
+      .post('/v1/collections')
+      .send(validCollection)
+      .expect(502)
+
+    expect(failed.body.error.code).toBe('pinata_upload_failed')
+    const listed = await request(app)
+      .get('/v1/collections')
+      .query({ workspaceId: validCollection.workspaceId })
+      .expect(200)
+    expect(listed.body.collections).toEqual([])
+  })
+
+  it('requires baseMetadataUri for pinata-style collection create', async () => {
+    const withoutBase = {
+      workspaceId: validCollection.workspaceId,
+      name: validCollection.name,
+      symbol: validCollection.symbol,
+      description: validCollection.description,
+      ownerAddress: validCollection.ownerAddress,
+      coverImageUri: validCollection.coverImageUri,
+      royaltyRecipient: validCollection.royaltyRecipient,
+      royaltyBps: validCollection.royaltyBps,
+    }
+    const response = await request(app)
+      .post('/v1/collections')
+      .send(withoutBase)
+      .expect(400)
+
+    expect(response.body.error.code).toBe('base_metadata_uri_required')
+    expect(pinning.lastJson).toBeUndefined()
+  })
+
+  it('pins collection metadata as ipfs URI when storage mode is pinata', async () => {
+    const created = await request(app)
+      .post('/v1/collections')
+      .send(validCollection)
+      .expect(201)
+
+    expect(created.body.collection).toMatchObject({
+      status: 'live',
+      baseMetadataUri: 'ipfs://bafybase/',
+      coverImageUri: 'ipfs://bafycover',
+    })
+    expect(String(created.body.collection.collectionMetadataUri)).toMatch(/^ipfs:\/\//)
+    expect(pinning.lastJson).toMatchObject({
+      name: 'Sky Forge',
+      symbol: 'SKY',
+    })
   })
 
   it('serves local content-addressed assets without accepting bad identifiers', async () => {
@@ -640,6 +707,96 @@ describe('NFT service API', () => {
       .send({ signedTransaction: 'signed' })
       .expect(409)
     expect(chain.submitCalls).toBe(1)
+  })
+
+  it('tracks minted inventory, blocks sold tokens, and archives live collections', async () => {
+    const collection = await createCollection()
+
+    await request(app)
+      .post(`/v1/collections/${collection.id}/mints/submit`)
+      .send({
+        preparedTransaction: 'prepared-mint',
+        signedTransaction: 'signed-mint',
+        tokenId: 7,
+        ownerAddress,
+      })
+      .expect(201)
+
+    const inventory = await request(app)
+      .get(`/v1/collections/${collection.id}/items`)
+      .expect(200)
+    expect(inventory.body).toMatchObject({
+      mintedCount: 1,
+      nextTokenId: 8,
+      items: [
+        {
+          tokenId: 7,
+          ownerAddress,
+          source: 'mint',
+          transactionHash: 'mint-hash',
+        },
+      ],
+    })
+
+    const publicInventory = await request(app)
+      .get(`/v1/public/collections/${collection.id}/tokens`)
+      .expect(200)
+    expect(publicInventory.body.nextTokenId).toBe(8)
+
+    const tokenMeta = await request(app)
+      .get(`/v1/public/collections/${collection.id}/tokens/7`)
+      .expect(200)
+    expect(tokenMeta.body.availability).toBe('sold')
+    expect(tokenMeta.body.ownerAddress).toBe(ownerAddress)
+
+    const sold = await request(app)
+      .post('/v1/public/checkout/intents')
+      .set('Idempotency-Key', 'sold-token')
+      .send({ collectionId: collection.id, buyerAddress, tokenId: 7 })
+      .expect(409)
+    expect(sold.body.error.code).toBe('token_already_minted')
+
+    const archived = await request(app)
+      .post(`/v1/collections/${collection.id}/archive`)
+      .expect(200)
+    expect(archived.body.collection.status).toBe('archived')
+
+    await request(app)
+      .get(`/v1/public/collections/${collection.id}`)
+      .expect(404)
+
+    const restored = await request(app)
+      .post(`/v1/collections/${collection.id}/unarchive`)
+      .expect(200)
+    expect(restored.body.collection.status).toBe('live')
+  })
+
+  it('syncs on-chain ownership into inventory for pre-existing mints', async () => {
+    const collection = await createCollection()
+    chain.owners.set(`${'C'}${'A'.repeat(55)}:1`, buyerAddress)
+
+    const meta = await request(app)
+      .get(`/v1/public/collections/${collection.id}/tokens/1`)
+      .expect(200)
+    expect(meta.body).toMatchObject({
+      availability: 'sold',
+      ownerAddress: buyerAddress,
+    })
+
+    const inventory = await request(app)
+      .get(`/v1/public/collections/${collection.id}/tokens`)
+      .expect(200)
+    expect(inventory.body.nextTokenId).toBe(2)
+    expect(inventory.body.mintedCount).toBeGreaterThanOrEqual(1)
+    const items = inventory.body.items as Array<{ tokenId: number }>
+    expect(items.some((item) => item.tokenId === 1)).toBe(true)
+
+    const blocked = await request(app)
+      .post('/v1/public/checkout/intents')
+      .set('Idempotency-Key', 'chain-synced-sold')
+      .send({ collectionId: collection.id, buyerAddress, tokenId: 1 })
+      .expect(409)
+    expect(blocked.body.error.code).toBe('token_already_minted')
   })
 
   it('submits one signed checkout and returns its transaction hash', async () => {

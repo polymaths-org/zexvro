@@ -93,7 +93,7 @@ export interface SecurityKey {
 export type ThemeType = 'system' | 'light' | 'dark';
 export type DensityType = 'comfortable' | 'compact';
 
-export type CollectionStatus = 'draft' | 'deploying' | 'live' | 'failed';
+export type CollectionStatus = 'draft' | 'deploying' | 'live' | 'failed' | 'archived';
 
 export interface NftCollectionDraft {
   name: string;
