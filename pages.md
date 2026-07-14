@@ -1,6 +1,6 @@
 # ZEXVRO Pages And Completion Map
 
-Last updated: 2026-07-11
+Last updated: 2026-07-13
 
 This file is for the next model and team members. It explains which pages work, which pages are partial, where data is stored, and what must be finished.
 
@@ -79,8 +79,8 @@ This file is for the next model and team members. It explains which pages work, 
 | Morph Transformation | `/transformation` | Partial | UI/service component and agent backend | 55% | Needs real repository scan execution wiring. |
 | A-2-A Trade Pipeline | `/trade` | UI partial | Frontend component | 35% | Needs protocol, wallet policy, and settlement API. |
 | Agent Auth Service | `/agent-auth` | UI partial | Frontend component | 35% | Needs classifier API, SDK credentials, and telemetry. |
-| NFT Studio | `/nft` | UI partial | Frontend component | 35% | Needs minting contracts/API and asset storage. |
-| De-pin Node Monitor | `/depin` | UI partial | Frontend component | 35% | Needs node connection and health API. |
+| NFT Studio | `/nft` (project scope under `/dashboard/w/.../p/.../nft`) | Working partial | Cognito NFT API (`services/nft-service`), Soroban collection contract, local JSON or Dynamo records, local/S3/Pinata media | 85% | Create/deploy/sale/mint/public buy/inventory/archive work on local/testnet. Live production needs AWS bucket/table/role + managed sponsor secret + Freighter smoke. |
+| De-pin Gateway | `/depin` (project scope under `/dashboard/w/.../p/.../depin`) | Working partial | Local/managed De-pin gateway (`services/depin`) via Vite proxy | 80% | Health/status, unpaid 402 probe, exact x402 settle path verified on testnet. Multi-instance needs `DEPIN_STATE_BACKEND=file` (or future redis); managed config via JSON/URL/path. |
 | Docs | `/docs` | Working partial | Static docs component | 60% | Needs current service documentation and integration examples. |
 
 ## Legacy Or Removed Pages

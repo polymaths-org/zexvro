@@ -61,7 +61,7 @@ If a detail is only a work update, keep it here.
 | Transformation Agent (Morph) | Paris / `paris-29` | **In Progress — CLI built** | Owned by Paris. CLI skeleton done. Next: wire LLM, add web panel. |
 | A-2-A Trade Pipeline | Rushi / `Wraient` | Planned | Ask or record coordination before changing protocol, wallet, or negotiation design |
 | Captcha-like Agent Authentication Service | Rushi / `Wraient` | Planned | Ask or record coordination before changing identity, SDK, classifier, or HDM design |
-| NFT Service | Nabil / `n4bi10p` | Authenticated API/frontend wired for local-storage testnet runs; production Pinata pending | Ask or record coordination before changing minting, metadata, checkout, or NFT model |
+| NFT Service | Nabil / `n4bi10p` | Authenticated API/frontend + inventory; S3 media + Dynamo repository code ready (file/local defaults) | Ask or record coordination before changing minting, metadata, checkout, or NFT model |
 | De-pin | Nabil / `n4bi10p` | Live Stellar testnet x402 payment verified | Follow the accepted exact per-request x402 scope |
 
 Shared areas that need extra care:
@@ -181,8 +181,8 @@ Use `None` for empty fields. Do not delete fields.
 
 | Blocker | Owner needed | Impact |
 | --- | --- | --- |
-| Production Pinata, persistent sponsor secret injection, and shared NFT persistence are not configured | Nabil / `n4bi10p` | Local frontend-to-testnet runs work, but the NFT service is not production deployable |
-| Replay and unpaid-rate-limit state is in memory | Nabil / `n4bi10p` | Do not run multiple production gateway instances until shared persistence is added |
+| Live AWS S3/Dynamo/Secrets Manager not provisioned for NFT | Nabil / `n4bi10p` | Code/env modes ready; local/testnet defaults remain file + local media |
+| De-pin multi-instance needs non-memory state | Nabil / `n4bi10p` | Use `DEPIN_STATE_BACKEND=file` (redis reserved) before multiple gateway processes |
 
 ## Active Handoffs
 
@@ -653,3 +653,121 @@ Use `None` for empty fields. Do not delete fields.
 - Follow-ups: Manual Freighter mint/sale/checkout smoke; Phase 5 Pinata readiness; inventory/archive later.
 - Blockers: Live Cognito + Freighter browser sessions remain manual. Branch still unpushed.
 - Verification: Frontend lint, Vitest 40/40, production build passed (known large chunk warning). NFT API lint and tests 39/39.
+
+## 2026-07-13 - Codex with Nabil - Phase 8 mint inventory + archive
+
+- Service or area: NFT API inventory/archive, public buy polish, dashboard inventory UI.
+- Files changed: `services/nft-service/api/src/domain.ts`, `repository.ts`, `service.ts`, `app.ts`, `app.test.ts`, `frontend/src/types.ts`, `frontend/src/services/nft/nftApi.ts`, `PublicCollection.tsx`, `CollectionDashboard.tsx`, `CollectionDashboard.test.tsx`, `memory.md`, `agent-convo.md`.
+- Summary: Added `MintedItemRecord` persistence, inventory list/next-token endpoints, archive/unarchive for live collections, sold-token blocking on mint/checkout, public buy UI sold/next-token state, dashboard inventory table + archive actions. Public collection pages 404 when archived. No secrets committed.
+- Decisions: Accepted - Archive hides public/studio live ops but does not delete on-chain contract. Accepted - Inventory written on successful mint submit (with tokenId/owner) and confirmed checkout. Accepted - Token availability checks use API inventory before chain prepare.
+- Follow-ups: Phase 5 Pinata; Phase 6 shared persistence; Phase 7 sponsor secrets; Phase 9-10 De-pin; manual Freighter smoke with inventory after buy.
+- Blockers: Live Cognito/Freighter browser still manual. Branch unpushed.
+- Verification: NFT API lint + 40/40 tests; frontend lint + nft Vitest 28/28.
+
+## 2026-07-13 - Codex with Nabil - Phase 5 Pinata readiness
+
+- Service or area: NFT API Pinata storage mode, smoke harness, docs.
+- Files changed: `services/nft-service/api/src/pinning.ts`, `pinning.test.ts`, `server.ts`, `app.test.ts`, `scripts/nft-smoke.mjs`, `.env.example`, `services/nft-service/README.md`, `plan.md`, `memory.md`, `agent-convo.md`.
+- Summary: Hardened Pinata upload path (empty CID rejection, no JWT in errors), startup warning when pinata mode lacks JWT, expanded unit/app tests for success + 502/503/unreachable mapping, documented Pinata env and optional `NFT_SMOKE_PINATA=1` media smoke. No secrets committed.
+- Decisions: Accepted - Default local `.env.example` stays `NFT_STORAGE_MODE=local`; pinata is opt-in with server-only `PINATA_JWT`. Accepted - Collection create in pinata mode still requires explicit `ipfs://.../` baseMetadataUri (token metadata directory). Accepted - Real JWT upload remains a manual Nabil gate.
+- Follow-ups: Manual Pinata upload with real JWT if available; Phase 6 Dynamo-ready repository; Phase 7 sponsor secret production gate; commit Phase 8 inventory + Phase 5 together or separately.
+- Blockers: Live Cognito/Freighter/Pinata credential smokes remain manual. Branch unpushed.
+- Verification: NFT API lint clean; tests 46/46; `node --check scripts/nft-smoke.mjs`.
+
+## 2026-07-13 - Codex with Nabil - AWS-first NFT storage decision
+
+- Service or area: NFT Service product/architecture docs.
+- Files changed: `context.md`, `plan.md`, `memory.md` (implementation follows).
+- Summary: Production media storage moves from Pinata/IPFS-default to AWS **S3 + CloudFront/HTTPS CDN**. API records stay on path to **DynamoDB**. Secrets via **Secrets Manager**. Pinata remains optional legacy only when explicit `ipfs://` is required. Local content-addressed HTTP remains single-process dev only.
+- Decisions: Accepted - Prefer AWS over third-party storage for ZEXVRO-owned infrastructure. Accepted - S3 for blobs; DynamoDB for structured NFT records; not one service for both.
+- Follow-ups: Implement Phase 5 S3 media adapter; then Dynamo repository (Phase 6); Secrets Manager sponsor injection (Phase 7).
+- Blockers: Real AWS bucket/role smoke remains a manual gate after code lands.
+- Verification: Docs updated before code implementation.
+
+## 2026-07-13 - Codex with Nabil - Phase 5 AWS S3 media storage
+
+- Service or area: NFT API media storage, frontend labels, docs.
+- Files changed: `context.md`, `plan.md`, `services/nft-service/api/src/s3Pinning.ts`, `s3Pinning.test.ts`, `config.ts`, `server.ts`, `app.ts`, `service.ts`, `package.json` (+ `@aws-sdk/client-s3`), `frontend/src/services/nft/nftApi.ts`, `CollectionCreate.tsx`, `.env.example`, `.env` (local mode restore), `services/nft-service/README.md`, `memory.md`, `agent-convo.md`.
+- Summary: Production media path is AWS S3 (`NFT_STORAGE_MODE=s3`) with optional CDN base URL. Local remains default for dev. Pinata remains optional legacy. API accepts HTTP(S) or ipfs base metadata URIs ending in `/`. Auto token-metadata base URL works for local and s3. No secrets committed.
+- Decisions: Accepted - S3 for blobs; DynamoDB still Phase 6 for records. Accepted - Prefer IAM default credential chain over embedding keys.
+- Follow-ups: Manual S3 bucket smoke when AWS role/bucket ready; Phase 6 DynamoNftRepository; Phase 7 Secrets Manager sponsor injection.
+- Blockers: Live AWS bucket not required for CI (mocked).
+- Verification: NFT API lint + 49/49 tests; frontend lint + nft Vitest 28/28.
+
+## 2026-07-13 - Codex with Nabil - Phase 6 DynamoDB NFT repository
+
+- Service or area: NFT API multi-instance persistence.
+- Files changed: `services/nft-service/api/src/dynamoRepository.ts`, `dynamoRepository.test.ts`, `config.ts`, `server.ts`, `app.ts` (exactOptional mint submit), `s3Pinning.ts` (optional typing), `package.json` (+ Dynamo SDK), `services/nft-service/README.md`, `.env.example`, `plan.md`, `memory.md`, `agent-convo.md`.
+- Summary: Added pluggable `DynamoNftRepository` for collections, minted inventory, and checkout intents on single-table `zexvro-nft` with workspace + idempotency GSIs and conditional checkout claim. Factory via `NFT_REPOSITORY=file|dynamo` (file default). Mocked unit tests only in CI. Fixed exactOptionalPropertyTypes build issues for mint submit + S3 options.
+- Decisions: Accepted - File repository remains local default; Dynamo is opt-in via env. Accepted - Atomic claim with ConditionalCheckFailed → undefined (no double-claim). Accepted - No live Dynamo required for CI.
+- Follow-ups: Optional live Dynamo table smoke; Phase 7 Secrets Manager sponsor injection; Phase 9–10 De-pin durable stores; commit Phase 8 + 5 + 6 when ready.
+- Blockers: Live Cognito/Freighter and AWS table/bucket smokes remain manual. Branch unpushed.
+- Verification: NFT API lint clean; tests 54/54; `npm --prefix services/nft-service/api run build` green.
+
+## 2026-07-13 - Codex with Nabil - Phase 7 managed sponsor secret gate
+
+- Service or area: NFT API production startup / Secrets Manager injection docs.
+- Files changed: `services/nft-service/api/src/config.ts`, `config.test.ts`, `services/nft-service/README.md`, `.env.example`, `docs/aws_deployment.md`, `plan.md`, `memory.md`, `agent-convo.md`.
+- Summary: Production (or `NFT_REQUIRE_SPONSOR=1`) fails fast without `STELLAR_SPONSOR_SECRET` + `NFT_COLLECTION_WASM_HASH`. Local CLI identity path via `scripts/dev.mjs` unchanged. Documented Secrets Manager → task env injection. No secrets committed or logged.
+- Decisions: Accepted - Gate on `NODE_ENV=production` by default; explicit `NFT_REQUIRE_SPONSOR=0` can opt out for constrained hosts. Accepted - Hosted deploys inject secret as env; no runtime Secrets Manager SDK fetch in v1.
+- Follow-ups: Phase 9–10 De-pin durable stores/config; Phase 11 docs/PR; optional live AWS smokes; commit phases when ready.
+- Blockers: Live Cognito/Freighter and AWS smokes remain manual. Branch unpushed.
+- Verification: NFT API lint clean; tests 60/60; build green.
+
+## 2026-07-13 - Codex with Nabil - Phase 9–10 De-pin stores + managed config
+
+- Service or area: De-pin gateway multi-instance state + config sources.
+- Files changed: `services/depin/src/stores.ts`, `stores.test.ts`, `domain.ts`, `replay.ts`, `rateLimit.ts`, `proxy.ts`, `proxy.test.ts`, `config.ts`, `config.test.ts`, `server.ts`, `README.md`, `frontend/src/services/depin/depinApi.ts`, `.env.example`, `plan.md`, `memory.md`, `agent-convo.md`.
+- Summary: Added pluggable `ReplayStore`/`RateLimitStore` (memory default, file shared JSON; redis reserved). Config load priority `DEPIN_CONFIG_JSON` → `DEPIN_CONFIG_URL` → `DEPIN_CONFIG_PATH`. `/status` reports `configSource` + `stateBackend`. x402 payment order unchanged. No secrets committed.
+- Decisions: Accepted - File state for multi-process local/staging without Redis. Accepted - Boot-only config (no hot reload). Accepted - Redis not implemented yet (explicit error).
+- Follow-ups: Phase 11 docs/PR readiness; optional Redis backend; commit NFT + De-pin phases when ready.
+- Blockers: Live Cognito/Freighter/AWS smokes remain manual. Branch unpushed.
+- Verification: De-pin lint clean; tests 34/34; build green.
+
+## 2026-07-13 - Codex with Nabil - Phase 11 docs sync + PR readiness
+
+- Service or area: Shared docs for NFT + De-pin status.
+- Files changed: `pages.md`, `planning.md`, `context.md`, `plan.md`, `memory.md`, `agent-convo.md`.
+- Summary: Synced planning/pages/context with implemented Nabil services. NFT and De-pin are working local/testnet MVPs with code-ready AWS/multi-instance gates; no live production claim. Plan phases 1–11 marked done for code/docs; commits/PR remain user-gated.
+- Decisions: Accepted - Do not open PR/push without explicit user confirmation. Accepted - Keep Morph/Rushi areas out of this branch scope.
+- Follow-ups: User-requested commit(s) and optional PR `feature/nft-service` → `main`; live AWS S3/Dynamo/Secrets + Freighter smoke recorded when available.
+- Blockers: Branch still has large uncommitted Nabil work; live AWS/Freighter ops gates open.
+- Verification: NFT API lint/test/build green (60/60); De-pin lint/test/build green (34/34).
+
+## 2026-07-13 - Codex with Nabil - AWS production resources for NFT
+
+- Service or area: AWS us-east-1 account `290294660486` infrastructure for NFT media/records/secrets.
+- Files changed: root `.env` (infra keys only), `docs/aws_nft_production.md`, `docs/aws_deployment.md`, `memory.md`.
+- Summary: Provisioned DynamoDB `zexvro-nft` (pk/sk + workspace-index + idempotency-index, on-demand), S3 `zexvro-nft-media-290294660486-us-east-1` (private, versioned, SSE-S3), CloudFront `E29QH7B9BDBJZW` / `d1a0z3arlwwfrj.cloudfront.net` with OAC + bucket policy, Secrets Manager `zexvro/nft/sponsor-secret` (value from local `zexvro-provider` CLI identity, not logged). Dynamo put/get/query/delete smoke passed; S3 object upload passed; CloudFront was InProgress at provision time.
+- Decisions: Accepted - Private bucket + CloudFront only (no public S3 ACLs). Accepted - PAY_PER_REQUEST Dynamo. Accepted - Do not write sponsor secret into git; inject via Secrets Manager or CLI at runtime.
+- Follow-ups: Wait for CloudFront Deployed; run NFT API with S3+Dynamo env + secret export; optional ECS/IAM least-privilege host; Freighter end-to-end against AWS-backed API.
+- Blockers: NFT Express API still not container-deployed to ECS/Lambda (infra for storage/secrets only). CloudFront propagation.
+- Verification: `aws dynamodb` smoke OK; `aws s3 cp` smoke object OK; secret describe OK.
+
+## Live AWS verification (2026-07-13 20:44 UTC)
+
+- CloudFront smoke object: HTTP 200 `https://d1a0z3arlwwfrj.cloudfront.net/nft/smoke.json`
+- S3 put + CDN fetch of new key: HTTP 200 (then deleted)
+- Dynamo put/get/query (workspace GSI) + minted item: OK (cleaned up)
+- NFT API local (`tsx`, port 4101) with Secrets Manager sponsor secret:
+  - `/health` → storageMode=s3, stellarConfigured=true, pinningConfigured=true, repository=dynamo
+  - unauth private route → 401
+  - missing public collection → 404
+  - `scripts/nft-smoke.mjs` health path passed (no Cognito token; auth routes skipped)
+- Frontend NFT unit tests: 28/28
+- De-pin local file backend (port 4102):
+  - `/health` ok
+  - `/status` configSource=file:depin.config.json, stateBackend=file
+  - unpaid `/v1/nft-health` → 402
+- Note: empty `DEPIN_CONFIG_JSON`/`DEPIN_CONFIG_URL` in root `.env` must be unset at process start (empty string is treated as set and can break path load if cwd wrong). Use absolute `DEPIN_CONFIG_PATH` when not running from `services/depin`.
+- Still open: Cognito/Freighter browser E2E; hosted API (ECS/Lambda); least-privilege IAM role.
+
+## 2026-07-14 - Codex with Nabil - Commit phases 5–11 and push feature/nft-service
+
+- Service or area: NFT Service + De-pin + shared docs.
+- Files changed: NFT API (S3, Dynamo, inventory, sponsor gate, Pinata harden), NFT FE inventory/buy polish, De-pin stores/config, docs/aws_nft_production.md, planning/context/pages/plan/memory/agent-convo, .env.example, scripts/nft-smoke.mjs.
+- Summary: User-approved commit of uncommitted Nabil work and push to `origin/feature/nft-service`. No PR. Excluded secrets, Morph dirt, local scratch scripts, and `.vscode/`.
+- Decisions: Accepted - Push branch only; no PR. Accepted - Keep Morph/Rushi files out of commits.
+- Follow-ups: Auto token-ID allocation (no manual entry); multi-surface public checkout (popup + custom UI + backend API) + web SDK scaffold; Cognito/Freighter browser E2E; hosted API + least-privilege IAM.
+- Blockers: Browser E2E and container host still open.
+- Verification: Prior matrix green (NFT 60/60, De-pin 34/34, FE NFT 28/28, live AWS smoke recorded).

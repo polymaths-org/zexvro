@@ -108,7 +108,7 @@ Frontend workspace notes:
 - NFT collection creation is wired to the Cognito-protected NFT API for local Stellar testnet runs; browser-local drafts remain only for migration and fallback visibility.
 - The project De-pin screen reads the local gateway health/status manifest and can probe an unpaid x402 `402` challenge through the Vite proxy.
 - Cognito/session and Morph polling behavior predate Nabil's services and must be preserved when changing the shell.
-- Do not claim production Pinata upload, managed persistence, multi-instance De-pin safety, live wallet UX, or hosted deployment until credentials and infrastructure are configured and a managed end-to-end run is recorded.
+- Code paths exist for S3 media, DynamoDB NFT records, managed sponsor secret gates, and multi-instance De-pin file state. Do not claim a live production deployment until AWS roles/buckets/tables/secrets are configured and a managed end-to-end run is recorded in `memory.md`.
 
 ## Team Ownership
 
@@ -284,7 +284,11 @@ Architecture decisions:
 - NFT contract: one Soroban contract per collection using OpenZeppelin Stellar's `NonFungibleToken` Base implementation. There is no on-chain factory in v1.
 - Collection configuration: studio owner, name, symbol, immutable base metadata URI, royalty recipient, and royalty basis points capped at 10%.
 - Minting: creator-controlled through the studio owner or an explicitly delegated minter role.
-- Metadata: immutable collection identity and media use Pinata-backed public IPFS. A versioned ZEXVRO `external_url` may point to clearly mutable gameplay attributes.
+- Metadata / media (production): AWS **S3** for object storage + **CloudFront** (or public HTTPS base URL) for delivery. Local content-addressed HTTP storage is development-only and is not IPFS.
+- Metadata / media (optional legacy): Pinata public IPFS remains supported only when explicitly required (`NFT_STORAGE_MODE=pinata`); default production path is AWS.
+- API records (production): AWS **DynamoDB** for collections, inventory, checkout intents (pluggable repository; local JSON file for single-process dev).
+- Secrets: AWS **Secrets Manager** (or IAM role env injection) for `STELLAR_SPONSOR_SECRET` and similar; never commit secrets.
+- A versioned ZEXVRO `external_url` may point to clearly mutable gameplay attributes.
 - Royalties: expose marketplace-compatible royalty information, but never claim arbitrary transfers enforce payment.
 - Primary checkout: fixed-price SEP-41 USDC transfer and NFT mint happen atomically in the collection contract. The buyer signs Soroban authorization entries while a ZEXVRO sponsor signs and pays the transaction envelope fee.
 - Secondary sales, auctions, fiat checkout, and multi-chain support are outside v1.
@@ -292,15 +296,15 @@ Architecture decisions:
 Agent boundaries:
 
 - Do not change the chain decision (Stellar + Soroban) without team coordination.
+- Prefer AWS for storage/persistence/secrets; do not add new third-party storage without documenting why AWS is insufficient.
 - Keep the user experience non-Web3 friendly.
 - Any metadata schema, royalty logic, minting permission, or storage provider must be documented before implementation.
 - Do not build multi-chain support in v1.
 
 Remaining integration work:
 
-- Choose production persistence for workspace-scoped API records.
-- Configure Pinata, managed Stellar sponsor secret injection, and hosted NFT API infrastructure.
-- Define the studio wallet signing UX for creator mint and buyer checkout intents.
+- Provision live AWS S3 (+ CDN), DynamoDB `zexvro-nft`, and Secrets Manager sponsor injection for hosted NFT API (code paths already land with env switches).
+- Record managed end-to-end smoke (Cognito + Freighter mint/sale/buy) in `memory.md`.
 - Finalize game/studio onboarding details and operational status reconciliation.
 
 ### 6. De-pin (x402 Agentic Resource Gateway)
@@ -335,10 +339,10 @@ Agent boundaries:
 
 Remaining integration work:
 
-- Move provider configuration into managed infrastructure instead of machine-local `depin.config.json`.
-- Replace the in-memory replay/rate-limit stores before running multiple gateway instances.
-- Define provider onboarding UI and persistent provider configuration ownership.
-- Add an agent client SDK only after the standard x402 client path is exercised.
+- Use `DEPIN_STATE_BACKEND=file` (or future redis) for multi-instance hosts; do not run multiple processes on memory defaults.
+- Prefer managed config via `DEPIN_CONFIG_JSON` or `DEPIN_CONFIG_URL` in containers; local file remains the dev default.
+- Provider onboarding UI and richer ownership model remain product follow-ups.
+- Add an agent client SDK only after the standard x402 client path is exercised in more environments.
 
 ## Shared Platform Areas
 

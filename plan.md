@@ -16,9 +16,9 @@ Nabil (`n4bi10p`) owns **NFT Service** and **De-pin**. Core verticals already ex
 | --- | --- |
 | Signed-in E2E smoke | Paths exist; no recorded full UI deploy→sale→buy loop in memory |
 | Wallet sign/submit UX | API submit routes exist; FE only prepares txs (no Freighter/wallet adapter, no submit call from UI) |
-| Pinata production path | `PinataPinningService` exists; needs JWT + mode + smoke |
-| Shared NFT persistence | `FileNftRepository` (JSON file) — fine for local, not multi-instance prod |
-| Managed sponsor secrets | Env + CLI identity already supported; need hosted injection docs/path |
+| AWS media path (S3 + CDN) | Local pinning works; production media must use S3 (not Pinata by default) |
+| Shared NFT persistence | `FileNftRepository` (JSON file) — fine for local; prod = DynamoDB |
+| Managed sponsor secrets | Env + CLI identity already supported; prod = Secrets Manager injection |
 | Mint inventory / archive | Not implemented |
 | De-pin multi-instance safety | `ReplayGuard` / `UnpaidRateLimiter` use in-memory `Map` |
 | De-pin managed config | Machine-local `depin.config.json` only |
@@ -39,7 +39,7 @@ Nabil (`n4bi10p`) owns **NFT Service** and **De-pin**. Core verticals already ex
 
 ## Recommended approach
 
-Close the **product loop first** (smoke + wallet UX), then **production plumbing** (Pinata, secrets, shared stores), then **secondary product polish** (inventory, archive, De-pin managed config). Production infra that depends on credentials you do not have yet is **gated** — implement code + env hooks, verify with mocks/local substitutes, and mark credential smoke as a manual gate.
+Close the **product loop first** (smoke + wallet UX), then **AWS production plumbing** (S3 media, DynamoDB records, Secrets Manager), then **secondary product polish** (inventory, archive, De-pin managed config). Prefer AWS over third-party storage. Production infra that depends on credentials you do not have yet is **gated** — implement code + env hooks, verify with mocks/local substitutes, and mark credential smoke as a manual gate.
 
 ---
 
@@ -50,7 +50,8 @@ Close the **product loop first** (smoke + wallet UX), then **production plumbing
 - `services/nft-service/api/src/service.ts` — domain operations
 - `services/nft-service/api/src/stellarGateway.ts` — Soroban prepare/submit
 - `services/nft-service/api/src/repository.ts` — `InMemoryNftRepository` / `FileNftRepository`
-- `services/nft-service/api/src/pinning.ts` — `PinataPinningService` (reuse)
+- `services/nft-service/api/src/pinning.ts` — optional legacy `PinataPinningService`
+- `services/nft-service/api/src/s3Pinning.ts` — production `S3AssetPinningService`
 - `services/nft-service/api/src/domain.ts` — status/records
 - `frontend/src/services/nft/nftApi.ts` — client (prepare exists; submit clients missing)
 - `frontend/src/services/nft/CollectionDashboard.tsx` — sale prep UI
@@ -79,8 +80,11 @@ Close the **product loop first** (smoke + wallet UX), then **production plumbing
 | --- | --- |
 | Prepare/submit sale config | `NftService.prepareSaleConfig` / `submitSaleConfig`, routes in `app.ts` |
 | Prepare/submit checkout | `createCheckoutIntent` / `submitCheckoutIntent` (+ public variants) |
-| Pinata upload | `PinataPinningService` in `pinning.ts` |
+| Local media | `LocalAssetPinningService` in `localPinning.ts` |
+| AWS media | `S3AssetPinningService` (S3 + CDN HTTPS URIs) |
+| Legacy IPFS (optional) | `PinataPinningService` in `pinning.ts` only if required |
 | Local file persistence | `FileNftRepository` interface `NftRepository` |
+| AWS record store | `DynamoNftRepository` (Phase 6) |
 | Sponsor auto-submit path | `stellarGateway.prepareSaleConfig` when no non-invoker signer |
 | De-pin guard interfaces | `ReplayGuard.claim`, `UnpaidRateLimiter.consume` — swap storage behind same API |
 | Auth | Cognito access token already on private NFT routes |
@@ -222,42 +226,43 @@ feat: add creator mint flow to NFT dashboard
 
 ---
 
-### Phase 5 — Pinata mode readiness (code + gated credential smoke)
+### Phase 5 — AWS S3 media storage (replace Pinata as default production path)
 
-**Goal:** Production metadata path is switchable and verified without committing secrets.
+**Goal:** Production media/metadata objects use AWS S3 + HTTPS CDN base URL; local mode remains for single-process dev. Pinata stays optional legacy only.
 
 **Work:**
-1. Confirm `NFT_STORAGE_MODE=pinata` + `PINATA_JWT` path in `server.ts` / health capabilities (already mostly wired).
-2. Add integration test with mocked Pinata HTTP (extend `pinning.test.ts` / app tests) for success + 502 mapping.
-3. Document root `.env.example` fields and a one-command smoke:
-   - upload media → create collection → assert `storageMode: pinata` and `ipfs://` URIs
-4. **Manual gate (Nabil):** set real `PINATA_JWT` locally, run one upload, record CID in memory (not the JWT).
+1. Add `S3AssetPinningService` implementing `PinningService` (`PutObject`, content-addressed keys, HTTPS URI via `NFT_CDN_BASE_URL` or regional S3 URL).
+2. Config: `NFT_STORAGE_MODE=local|s3|pinata`, `NFT_S3_BUCKET`, `NFT_S3_REGION`, `NFT_CDN_BASE_URL` (optional), default credential chain (no secrets in repo).
+3. Server factory: local → `LocalAssetPinningService`; s3 → S3; pinata → Pinata. Auto token metadata base URL for **local and s3** via API public base (same as local token metadata routes).
+4. Accept HTTP(S) base metadata URIs ending in `/` (not only `ipfs://`).
+5. Unit tests with mocked S3 client; app/health `storageMode: s3`; FE labels “AWS S3”.
+6. Document `.env.example` + README; **manual gate:** real bucket upload smoke when AWS creds available (record object key/URI in memory, never credentials).
 
 **Verify:**
 ```bash
 npm --prefix services/nft-service/api run test
+npm --prefix services/nft-service/api run lint
 ```
-Manual only if JWT present.
 
 **Commit:**
 ```
-feat: harden Pinata storage mode and document smoke
+feat: store NFT media on AWS S3
 ```
 
 ---
 
-### Phase 6 — Shared NFT persistence interface (Dynamo-ready)
+### Phase 6 — Shared NFT persistence interface (DynamoDB) ✅
 
-**Goal:** Replace single-process file store with a repository that can run multi-instance.
+**Goal:** Replace single-process file store with a repository that can run multi-instance on AWS.
 
-**Work:**
-1. Keep `NftRepository` interface as the seam.
-2. Implement `DynamoNftRepository` (or Postgres if team prefers — default Dynamo to match platform tables naming `zexvro-*`):
-   - PK patterns for collections by workspace, checkout intents by id/idempotency key
-   - Atomic claim for checkout submit (conditional update)
-3. Factory in `server.ts` selected by env: `NFT_REPOSITORY=file|dynamo` (file remains default for local).
-4. Contract tests against the interface (shared test suite for in-memory + dynamo mock).
-5. Do **not** require live AWS in CI; use mocked AWS SDK or local file fallback.
+**Done:**
+1. Kept `NftRepository` interface as the seam.
+2. Implemented `DynamoNftRepository` (`zexvro-nft` single-table):
+   - Collections / minted inventory / checkout intents key patterns + workspace + idempotency GSIs
+   - Atomic claim via conditional `UpdateItem`
+3. Factory in `server.ts`: `NFT_REPOSITORY=file|dynamo` (file default).
+4. Mocked Dynamo unit tests (no live AWS in CI).
+5. Documented table design in NFT README + `.env.example`.
 
 **Verify:** repository unit tests + existing app tests with in-memory/file; lint/build.
 
@@ -270,17 +275,17 @@ feat: add pluggable NFT repository with Dynamo option
 
 ---
 
-### Phase 7 — Managed sponsor secret injection (docs + runtime hardening)
+### Phase 7 — Managed sponsor secret injection (Secrets Manager) ✅
 
-**Goal:** Hosted deploy can inject `STELLAR_SPONSOR_SECRET` without CLI identity.
+**Goal:** Hosted deploy injects `STELLAR_SPONSOR_SECRET` from AWS Secrets Manager / task role env without CLI identity.
 
-**Work:**
-1. Fail fast at startup if production mode and sponsor secret missing (detect via `NODE_ENV` or `NFT_REQUIRE_SPONSOR=1`).
-2. Document AWS Secrets Manager → env injection in `services/nft-service/README.md` and `docs/aws_deployment.md` if appropriate.
-3. Keep local CLI identity path for dev (`ZEXVRO_STELLAR_IDENTITY` via `scripts/dev.mjs`).
-4. Health endpoint already reports `stellarConfigured` — ensure accuracy.
+**Done:**
+1. Fail fast when `NODE_ENV=production` or `NFT_REQUIRE_SPONSOR=1` without `STELLAR_SPONSOR_SECRET` + `NFT_COLLECTION_WASM_HASH`.
+2. Documented Secrets Manager → env injection in NFT README; local CLI identity path unchanged (`scripts/dev.mjs`).
+3. Config unit tests for gate on/off and opt-out (`NFT_REQUIRE_SPONSOR=0`).
+4. `/health` `stellarConfigured` still requires both secret and wasm hash.
 
-**Verify:** unit tests for config validation; lint/build; no secret leakage in logs.
+**Verify:** config unit tests + lint/build; no secret leakage in logs.
 
 **Commit:**
 ```
@@ -310,25 +315,17 @@ feat: track minted inventory and archive live collections
 
 ---
 
-### Phase 9 — De-pin durable replay + rate-limit store
+### Phase 9 — De-pin durable replay + rate-limit store ✅
 
 **Goal:** Multi-instance-safe abuse controls.
 
-**Work:**
-1. Introduce interfaces:
-   - `ReplayStore.claim(key, ttlMs): Promise<boolean>`
-   - `RateLimitStore.consume(key, max, windowMs): Promise<RateLimitResult>`
-2. Keep in-memory implementations as default.
-3. Add file-backed or Redis/Dynamo implementation behind `DEPIN_STATE_BACKEND=memory|file|redis`.
-4. Wire into `proxy.ts` without changing x402 payment order.
-5. Extend tests for shared store behavior (replay still fails second fulfill).
+**Done:**
+1. `ReplayStore` / `RateLimitStore` interfaces in `domain.ts`.
+2. Memory default + file-backed shared store (`DEPIN_STATE_BACKEND=memory|file`; redis reserved).
+3. Wired into `proxy.ts` without changing x402 payment order.
+4. Unit tests for memory/file claim + rate-limit sharing.
 
-**Verify:**
-```bash
-npm --prefix services/depin run test
-npm --prefix services/depin run lint
-npm --prefix services/depin run build
-```
+**Verify:** depin test/lint/build.
 
 **Commit:**
 ```
@@ -337,15 +334,15 @@ feat: add pluggable depin replay and rate-limit stores
 
 ---
 
-### Phase 10 — De-pin managed provider configuration
+### Phase 10 — De-pin managed provider configuration ✅
 
 **Goal:** Provider routes not only from machine-local JSON.
 
-**Work:**
-1. Support config from env path **or** remote/managed JSON URL **or** Dynamo document (start with env path + optional `DEPIN_CONFIG_JSON` inline for containers).
-2. Validate with existing config schema; hot-reload optional (v1: load on boot).
-3. Dashboard status already lists providers — ensure source is reported.
-4. Document production config ownership.
+**Done:**
+1. Config priority: `DEPIN_CONFIG_JSON` → `DEPIN_CONFIG_URL` → `DEPIN_CONFIG_PATH`.
+2. Boot-only load; existing Zod schema validation.
+3. `/status` reports `configSource` + `stateBackend`; FE types optional fields.
+4. README production ownership docs.
 
 **Verify:** depin config tests + lint/build.
 
@@ -356,17 +353,17 @@ feat: support managed depin provider configuration sources
 
 ---
 
-### Phase 11 — Docs sync + PR readiness
+### Phase 11 — Docs sync + PR readiness ✅
 
 **Goal:** `planning.md` / `pages.md` / `context.md` match reality; PR is reviewable.
 
-**Work:**
-1. Update `pages.md` NFT/De-pin rows from “UI partial 35%” to accurate completion.
-2. Update `planning.md` ownership table (NFT not Planned; De-pin not Blocked).
-3. Final memory handoff summarizing all phases and open blockers.
-4. Open/update PR from `feature/nft-service` → `main` (execute mode only, with user confirm for push).
+**Done:**
+1. `pages.md` NFT/De-pin rows updated to working partial (not 35% UI stubs).
+2. `planning.md` ownership: NFT + De-pin working local/testnet MVP (not Planned/Blocked).
+3. `context.md` remaining work reflects code-ready AWS/De-pin gates vs live ops.
+4. Final memory/agent-convo handoff for phases 5–11; **PR/push only after user confirm**.
 
-**Verify:** doc links; full test matrix green.
+**Verify:** docs; NFT API + De-pin lint/test/build green.
 
 **Commit:**
 ```
@@ -421,15 +418,15 @@ This is what makes agent switches safe after rate limits.
 | 2 | ✓ | optional | ✓ | — | Freighter sale if available |
 | 3 | ✓ | ✓ mocked | ✓ | — | buyer Freighter if available |
 | 4 | ✓ | optional | ✓ | — | optional live mint |
-| 5 | — | — | ✓ | — | Pinata JWT smoke |
-| 6 | — | — | ✓ | — | — |
+| 5 | — | — | ✓ | — | S3 bucket smoke |
+| 6 | — | — | ✓ | — | Dynamo table smoke optional |
 | 7 | — | — | ✓ | — | — |
 | 8 | ✓ | optional | ✓ | — | — |
 | 9 | — | — | — | ✓ | — |
 | 10 | optional | optional | — | ✓ | — |
 | 11 | docs only | — | full matrix | full matrix | PR review |
 
-Never claim production Pinata, multi-instance De-pin, or live wallet success until the phase verification row is green **and** any manual gate is recorded in `memory.md`.
+Never claim live AWS media/tables, multi-instance De-pin on memory defaults, or live wallet success until the phase verification row is green **and** any manual gate is recorded in `memory.md`.
 
 ---
 
@@ -441,16 +438,16 @@ Never claim production Pinata, multi-instance De-pin, or live wallet success unt
 2 Wallet sale-config submit
 3 Wallet public checkout submit
 4 Creator mint UI
-5 Pinata readiness (+ manual JWT)
-6 Pluggable NFT repository
+5 AWS S3 media
+6 DynamoDB NFT repository
 7 Managed sponsor secret gate
-8 Inventory + archive
+8 Inventory + archive (implemented earlier; keep tests green)
 9 De-pin durable stores
 10 De-pin managed config
 11 Docs sync + PR
 ```
 
-Phases 2–3 are the highest product value. Phases 5–7 are production gates. Phases 9–10 make De-pin deployable beyond one process.
+Phases 1–11 code/docs complete on branch. Remaining: live AWS/Freighter ops gates + user-confirmed commit/PR.
 
 ---
 
@@ -479,14 +476,14 @@ Phases 2–3 are the highest product value. Phases 5–7 are production gates. P
 
 ## Definition of done (overall)
 
-- [ ] Signed-in NFT path documented and harnessed
-- [ ] Non-sponsor sale config completable via wallet UI
-- [ ] Public buyer checkout completable via wallet UI
-- [ ] Pinata mode verified (mock always; live if JWT)
-- [ ] NFT repository pluggable beyond single file
-- [ ] Production sponsor secret requirement explicit
-- [ ] Inventory + archive without lying about on-chain delete
-- [ ] De-pin replay/rate-limit pluggable for multi-instance
-- [ ] De-pin config loadable from managed sources
-- [ ] `memory.md` + `agent-convo.md` updated every phase
-- [ ] Each phase tested before commit
+- [x] Signed-in NFT path documented and harnessed
+- [x] Non-sponsor sale config completable via wallet UI
+- [x] Public buyer checkout completable via wallet UI
+- [x] S3 media path verified (mock always; live if bucket)
+- [x] NFT repository pluggable beyond single file (Dynamo option)
+- [x] Production sponsor secret requirement explicit
+- [x] Inventory + archive without lying about on-chain delete
+- [x] De-pin replay/rate-limit pluggable for multi-instance
+- [x] De-pin config loadable from managed sources
+- [x] `memory.md` + `agent-convo.md` updated every phase
+- [ ] Each phase committed (user-gated) after full matrix green
