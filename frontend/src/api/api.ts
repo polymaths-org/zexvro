@@ -135,6 +135,116 @@ export const zkNotesApi = {
   delete: (id: string) => api.delete<any>(`/api/zk-notes/${id}`),
 };
 
+/** On-demand RapidSNARK / EC2 prove worker (start/stop from Payroll Settings). */
+export type ZkWorkerStatus = {
+  configured: boolean;
+  provider?: string | null;
+  state: string;
+  online: boolean;
+  instanceId?: string | null;
+  publicIp?: string | null;
+  privateIp?: string | null;
+  proverUrl?: string | null;
+  message?: string;
+  status?: string;
+};
+
+export const zkWorkerApi = {
+  status: () => api.get<ZkWorkerStatus>('/api/zk-worker/status'),
+  start: () => api.post<ZkWorkerStatus>('/api/zk-worker/start', {}),
+  stop: () => api.post<ZkWorkerStatus>('/api/zk-worker/stop', {}),
+  /** Proxy to worker fullProve. mode browser_fallback → use local snarkjs. */
+  prove: (input: Record<string, unknown>) =>
+    api.post<{
+      mode: 'remote' | 'browser_fallback' | 'error';
+      reason?: string;
+      message?: string;
+      proof?: { a: string; b: string; c: string };
+      a?: string;
+      b?: string;
+      c?: string;
+      worker?: ZkWorkerStatus;
+      error?: string;
+    }>('/api/zk-worker/prove', { input }),
+  /** Server-side Merkle leaf fetch + path build (avoids browser O(tree) RPCs). */
+  merkle: (contract: string, commitments: string[]) =>
+    api.post<{
+      mode?: string;
+      reason?: string;
+      message?: string;
+      error?: string;
+      contract?: string;
+      count?: number;
+      rootHex?: string;
+      paths?: Record<string, {
+        leafIndex?: number;
+        pathElements?: string[];
+        pathIndices?: number[];
+        root?: string;
+        rootHex?: string;
+        error?: string;
+      }>;
+      timings?: { totalMs?: number };
+    }>('/api/zk-worker/merkle', { contract, commitments }),
+/**
+   * Start async private-pay settle on EC2 relayer.
+   * Returns { jobId } immediately — poll with job().
+   */
+  settle: (body: {
+    toAddress: string;
+    poolContract: string;
+    amountStroops: string | number;
+    notes: Array<{ secret: string; nullifier: string; commitment?: string; nullifierHash?: string }>;
+  }) =>
+    api.post<{
+      mode?: string;
+      jobId?: string;
+      status?: string;
+      ok?: boolean;
+      reason?: string;
+      message?: string;
+      error?: string;
+      lastTxHash?: string;
+      fundHash?: string;
+      notes?: Array<{
+        commitment: string;
+        nullifierHash: string;
+        leafIndex?: number;
+        depositHash?: string;
+      }>;
+      withdraws?: Array<{ commitment: string; hash: string; ms?: number }>;
+      steps?: Array<{ step: string; hash?: string; ms?: number }>;
+      timings?: { totalMs?: number };
+      relayer?: string;
+    }>('/api/zk-worker/settle', body),
+  /** Poll async worker job (settle). */
+  job: (jobId: string) =>
+    api.get<{
+      jobId?: string;
+      status?: 'running' | 'done' | 'error' | string;
+      progress?: string;
+      result?: {
+        ok?: boolean;
+        lastTxHash?: string;
+        fundHash?: string;
+        notes?: Array<{
+          commitment: string;
+          nullifierHash: string;
+          leafIndex?: number;
+          depositHash?: string;
+        }>;
+        withdraws?: Array<{ commitment: string; hash: string; ms?: number }>;
+        steps?: Array<{ step: string; hash?: string; ms?: number }>;
+        timings?: { totalMs?: number };
+        relayer?: string;
+      };
+      error?: string;
+      mode?: string;
+      reason?: string;
+      message?: string;
+    }>(`/api/zk-worker/jobs/${encodeURIComponent(jobId)}`),
+};
+
 /* ─── Stellar SDK — Real On-Chain Transactions ─── */
 
 import {

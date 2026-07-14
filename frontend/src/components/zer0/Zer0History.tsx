@@ -74,6 +74,16 @@ export default function Zer0History() {
             } as any);
           }
         }
+        // Re-link proofs → payments by paymentId (AWS runs often lack proofId)
+        const proofs = useZer0Store.getState().proofs;
+        for (const proof of proofs) {
+          if (!proof.paymentId || !proof.id) continue;
+          const pay = byId.get(proof.paymentId);
+          if (pay && !pay.proofId) {
+            byId.set(proof.paymentId, { ...pay, proofId: proof.id });
+          }
+        }
+
         useZer0Store.setState({
           payments: Array.from(byId.values()).sort(
             (a, b) => (b.createdAt || 0) - (a.createdAt || 0),

@@ -7,7 +7,10 @@ import {
 import { getExplorerTxUrl, truncateKey } from '../../api/walletConnect';
 import { useZer0Store } from '../../stores/zer0';
 import { stellar, payrollApi } from '../../api/api';
-import { DENOMINATION_XLM, estimateFreighterPrompts, isAutoSignEnabled } from '../../api/privacyPool';
+import {
+  estimateFreighterPromptsForAmount, isAutoSignEnabled,
+  MAX_SHIELD_UNITS, planShieldPay,
+} from '../../api/privacyPool';
 import { copyText } from '../../lib/clipboard';
 import type { Zer0Currency, Zer0PaymentType } from '../../stores/types';
 
@@ -119,13 +122,14 @@ export default function Zer0PayParty() {
   const selectedEmployee = activeEmployees.find(e => e.id === selectedEmployeeId);
   const recipientName = selectedEmployee?.name || customRecipient;
   const recipientWallet = selectedEmployee?.walletAddress || customWallet;
-  // Free-form amount → ceil to 1 XLM ZK units. Multi-unit: 1 bulk fund + N deposits + N withdraws.
+  // Free-form amount → multi-denom plan (1000/100/10/1 XLM notes) for few ZK proofs.
   const typedAmount = parseFloat(amount);
-  const shieldedUnits = (!isNaN(typedAmount) && typedAmount > 0)
-    ? Math.max(1, Math.min(50, Math.ceil(typedAmount / DENOMINATION_XLM)))
-    : 0;
-  const shieldedOnChainXlm = shieldedUnits * DENOMINATION_XLM;
-  const freighterPrompts = estimateFreighterPrompts(shieldedUnits || 1);
+  const shieldPlan = (!isNaN(typedAmount) && typedAmount > 0)
+    ? planShieldPay(typedAmount)
+    : null;
+  const shieldedUnits = shieldPlan?.totalNotes || 0;
+  const shieldedOnChainXlm = shieldPlan?.settledXlm || 0;
+  const freighterPrompts = estimateFreighterPromptsForAmount(typedAmount || 0);
   const parsedAmount = typedAmount;
   const needBalance = shielded
     ? (isNaN(typedAmount) || typedAmount <= 0 ? 0 : shieldedOnChainXlm)
@@ -322,16 +326,16 @@ export default function Zer0PayParty() {
                 onChange={e => setAmount(e.target.value)}
                 placeholder="e.g. 2477.27"
                 className="h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm outline-none focus:border-blue-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100" />
-              {shielded && !isNaN(typedAmount) && typedAmount > 0 && (
+              {shielded && shieldPlan && shieldPlan.totalNotes > 0 && (
                 <p className="text-[10px] text-zinc-500 mt-1 leading-relaxed">
                   ZK pays <strong className="text-zinc-800 dark:text-zinc-200">{shieldedOnChainXlm.toLocaleString()} XLM</strong>
-                  {' '}({shieldedUnits}×{DENOMINATION_XLM} unit{shieldedUnits === 1 ? '' : 's'})
+                  {' · '}{shieldPlan.description}
                   {shieldedOnChainXlm > typedAmount && (
                     <span className="text-amber-600 dark:text-amber-400"> · rounded up from {typedAmount}</span>
                   )}
                   {isAutoSignEnabled()
-                    ? ' · treasury auto-sign (no Freighter popups)'
-                    : ` · ~${freighterPrompts} Freighter confirms (1 bulk fund + deposit/withdraw per unit)`}
+                    ? ' · treasury auto-sign'
+                    : ` · ~${freighterPrompts} Freighter confirms`}
                 </p>
               )}
             </div>
@@ -410,8 +414,8 @@ export default function Zer0PayParty() {
                 <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 block">{shielded ? 'Shielded Payment' : 'Transparent Payment'}</span>
                 <span className="text-[10px] text-zinc-400">{shielded
                   ? (isAutoSignEnabled()
-                    ? 'Private payroll · auto-sign (enter any amount)'
-                    : 'Private payroll · enter any amount (split into pool units)')
+                    ? 'Private · auto-sign · N×1 XLM proofs'
+                    : 'Private · N×1 XLM proofs (slow for large N)')
                   : 'Direct transfer — amount and parties fully public'}</span>
               </div>
             </div>
@@ -420,6 +424,30 @@ export default function Zer0PayParty() {
               <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${shielded ? 'left-[18px]' : 'left-0.5'}`} />
             </button>
           </div>
+
+          {shielded && shieldPlan && shieldPlan.totalNotes > 0 && (
+            <div className={`rounded-lg border px-3 py-2 text-[11px] ${
+              shieldPlan.totalNotes > MAX_SHIELD_UNITS
+                ? 'border-red-500/25 bg-red-500/5 text-red-700 dark:text-red-400'
+                : shieldPlan.totalNotes >= 8
+                  ? 'border-amber-500/25 bg-amber-500/5 text-amber-800 dark:text-amber-400'
+                  : 'border-emerald-500/20 bg-emerald-500/5 text-emerald-800 dark:text-emerald-400'
+            }`}>
+              {shieldPlan.totalNotes > MAX_SHIELD_UNITS ? (
+                <>
+                  <strong>{typedAmount} XLM</strong> needs {shieldPlan.totalNotes} ZK notes (max {MAX_SHIELD_UNITS}).
+                  Split the payment or add larger pool tiers.
+                </>
+              ) : (
+                <>
+                  <strong>ZK multi-pool plan:</strong> {shieldPlan.description}
+                  {' · '}~{Math.round(shieldPlan.estimatedSeconds / 60)} min with auto-sign
+                  {freighterPrompts > 0 ? ` · ~${freighterPrompts} Freighter confirms` : ' · no Freighter spam'}
+                  . Still fully private (shared pools).
+                </>
+              )}
+            </div>
+          )}
 
           <button
             type="submit"

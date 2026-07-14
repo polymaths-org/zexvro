@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams } from '@tanstack/react-router';
 import { ShieldCheck, Clock, CheckCircle2, XCircle, Loader2, RefreshCw, Eye, Download, X } from 'lucide-react';
 import { useZer0Store } from '../../stores/zer0';
+import { proofApi } from '../../api/api';
 
 export default function Zer0Proofs() {
   const { workspaceId, projectId } = useParams({ strict: false });
@@ -13,8 +14,62 @@ export default function Zer0Proofs() {
 
   const [selectedProofId, setSelectedProofId] = useState<string | null>(null);
 
-  const proofs = useMemo(() => allProofs.filter(p => p.projectId === pid), [allProofs, pid]);
-  const payments = useMemo(() => allPayments.filter(p => p.projectId === pid), [allPayments, pid]);
+  // Re-merge proofs from AWS so Payment proofs survive reload / server restart
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await proofApi.list('');
+        if (cancelled) return;
+        const remote = (res.proofs || []).filter((p: any) => p?.id);
+        if (!remote.length) return;
+        const local = useZer0Store.getState().proofs;
+        const byId = new Map(local.map(p => [p.id, p]));
+        for (const raw of remote) {
+          const existing = byId.get(raw.id);
+          byId.set(raw.id, existing ? {
+            ...existing,
+            ...raw,
+            proofData: raw.proofData || existing.proofData,
+            verificationKey: raw.verificationKey || existing.verificationKey,
+            generationTimeMs: raw.generationTimeMs ?? existing.generationTimeMs,
+            verifiedAt: raw.verifiedAt || existing.verifiedAt,
+            status: raw.status === 'verified' || existing.status !== 'verified' ? (raw.status || existing.status) : existing.status,
+          } : {
+            id: raw.id,
+            projectId: raw.projectId || '',
+            paymentId: raw.paymentId || '',
+            proofSystem: raw.proofSystem || 'Groth16',
+            status: raw.status || 'queued',
+            verificationKey: raw.verificationKey ?? null,
+            proofData: raw.proofData ?? null,
+            generationTimeMs: raw.generationTimeMs ?? null,
+            createdAt: Number(raw.createdAt) || Date.now(),
+            verifiedAt: raw.verifiedAt ? Number(raw.verifiedAt) : null,
+          });
+        }
+        useZer0Store.setState({
+          proofs: Array.from(byId.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)),
+        });
+      } catch (e) {
+        console.error('Proof sync failed:', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [workspaceId, pid]);
+
+  const proofs = useMemo(
+    () => allProofs.filter(p =>
+      !p.projectId || p.projectId === pid || p.projectId === workspaceId || p.projectId === projectId,
+    ),
+    [allProofs, pid, workspaceId, projectId],
+  );
+  const payments = useMemo(
+    () => allPayments.filter(p =>
+      !p.projectId || p.projectId === pid || p.projectId === workspaceId || p.projectId === projectId,
+    ),
+    [allPayments, pid, workspaceId, projectId],
+  );
   const getPaymentForProof = (paymentId: string) => payments.find(p => p.id === paymentId);
 
   const selectedProof = useMemo(() => allProofs.find(p => p.id === selectedProofId) || null, [allProofs, selectedProofId]);

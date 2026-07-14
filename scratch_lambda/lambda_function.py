@@ -28,12 +28,20 @@ employees_table = dynamodb.Table(EMPLOYEES_TABLE_NAME)
 payroll_runs_table = dynamodb.Table(PAYROLL_TABLE_NAME)
 payroll_taxonomy_table = dynamodb.Table(PAYROLL_TAXONOMY_TABLE_NAME)
 ses = boto3.client("ses", region_name=os.environ.get("AWS_REGION", "us-east-1"))
+ec2 = boto3.client("ec2", region_name=os.environ.get("AWS_REGION", "us-east-1"))
 
 # GSI Name for querying by user_code
 USER_CODE_GSI = os.environ.get("USER_CODE_GSI", "user_code-index")
 
 # Expiry duration in seconds
 CODE_EXPIRY_SECONDS = 300
+
+# On-demand RapidSNARK / prove worker (EC2). Optional — if unset, API reports unconfigured.
+ZK_WORKER_INSTANCE_ID = (os.environ.get("ZK_WORKER_INSTANCE_ID") or "").strip()
+# Prefer fixed URL (ALB / Elastic IP / Lightsail). Else use instance public IP + port.
+ZK_PROVER_URL = (os.environ.get("ZK_PROVER_URL") or "").strip().rstrip("/")
+ZK_PROVER_PORT = int(os.environ.get("ZK_PROVER_PORT") or "8787")
+ZK_PROVER_SHARED_SECRET = (os.environ.get("ZK_PROVER_SHARED_SECRET") or "").strip()
 
 
 def json_default(value):
@@ -76,6 +84,369 @@ def parse_csv_rows(csv_text):
         if any(cleaned.values()):
             rows.append(cleaned)
     return rows
+
+
+def _zk_worker_configured():
+    return bool(ZK_WORKER_INSTANCE_ID or ZK_PROVER_URL)
+
+
+def get_zk_worker_status():
+    """Return EC2 worker power state + resolved prove base URL."""
+    if not ZK_WORKER_INSTANCE_ID and not ZK_PROVER_URL:
+        return {
+            "configured": False,
+            "provider": None,
+            "state": "unconfigured",
+            "online": False,
+            "instanceId": None,
+            "publicIp": None,
+            "proverUrl": None,
+            "message": "Set ZK_WORKER_INSTANCE_ID and/or ZK_PROVER_URL on Lambda to enable remote proving.",
+        }
+
+    if ZK_WORKER_INSTANCE_ID:
+        try:
+            res = ec2.describe_instances(InstanceIds=[ZK_WORKER_INSTANCE_ID])
+            reservations = res.get("Reservations") or []
+            instances = (reservations[0].get("Instances") if reservations else None) or []
+            if not instances:
+                return {
+                    "configured": True,
+                    "provider": "ec2",
+                    "state": "not_found",
+                    "online": False,
+                    "instanceId": ZK_WORKER_INSTANCE_ID,
+                    "publicIp": None,
+                    "proverUrl": ZK_PROVER_URL or None,
+                    "message": f"Instance {ZK_WORKER_INSTANCE_ID} not found",
+                }
+            inst = instances[0]
+            state = (inst.get("State") or {}).get("Name") or "unknown"
+            public_ip = inst.get("PublicIpAddress")
+            private_ip = inst.get("PrivateIpAddress")
+            base = ZK_PROVER_URL
+            if not base and public_ip:
+                base = f"http://{public_ip}:{ZK_PROVER_PORT}"
+            online = state == "running"
+            return {
+                "configured": True,
+                "provider": "ec2",
+                "state": state,
+                "online": online,
+                "instanceId": ZK_WORKER_INSTANCE_ID,
+                "publicIp": public_ip,
+                "privateIp": private_ip,
+                "proverUrl": base,
+                "message": "running" if online else f"instance is {state}",
+            }
+        except Exception as exc:
+            return {
+                "configured": True,
+                "provider": "ec2",
+                "state": "error",
+                "online": False,
+                "instanceId": ZK_WORKER_INSTANCE_ID,
+                "publicIp": None,
+                "proverUrl": ZK_PROVER_URL or None,
+                "message": str(exc),
+            }
+
+    # Fixed URL only (e.g. Lightsail convenience box)
+    return {
+        "configured": True,
+        "provider": "url",
+        "state": "external",
+        "online": True,
+        "instanceId": None,
+        "publicIp": None,
+        "proverUrl": ZK_PROVER_URL,
+        "message": "Using fixed ZK_PROVER_URL (manage power in AWS console if needed)",
+    }
+
+
+def start_zk_worker():
+    if not ZK_WORKER_INSTANCE_ID:
+        if ZK_PROVER_URL:
+            return {
+                "status": "ok",
+                "state": "external",
+                "online": True,
+                "message": "Fixed prover URL configured — no EC2 start needed",
+                **{k: get_zk_worker_status()[k] for k in ("configured", "provider", "proverUrl", "instanceId")},
+            }
+        return {
+            "status": "error",
+            "state": "unconfigured",
+            "online": False,
+            "message": "ZK_WORKER_INSTANCE_ID not set on Lambda",
+        }
+    try:
+        ec2.start_instances(InstanceIds=[ZK_WORKER_INSTANCE_ID])
+        st = get_zk_worker_status()
+        st["status"] = "ok"
+        st["message"] = "Start requested — wait until state is running (30s–2min cold start)"
+        return st
+    except Exception as exc:
+        return {
+            "status": "error",
+            "state": "error",
+            "online": False,
+            "instanceId": ZK_WORKER_INSTANCE_ID,
+            "message": str(exc),
+        }
+
+
+def stop_zk_worker():
+    if not ZK_WORKER_INSTANCE_ID:
+        if ZK_PROVER_URL:
+            return {
+                "status": "ok",
+                "state": "external",
+                "online": True,
+                "message": "Fixed prover URL — stop the Lightsail/EC2 box in AWS console manually",
+            }
+        return {
+            "status": "error",
+            "state": "unconfigured",
+            "online": False,
+            "message": "ZK_WORKER_INSTANCE_ID not set on Lambda",
+        }
+    try:
+        ec2.stop_instances(InstanceIds=[ZK_WORKER_INSTANCE_ID])
+        st = get_zk_worker_status()
+        st["status"] = "ok"
+        st["message"] = "Stop requested — EBS volume may still incur a small charge while stopped"
+        return st
+    except Exception as exc:
+        return {
+            "status": "error",
+            "state": "error",
+            "online": False,
+            "instanceId": ZK_WORKER_INSTANCE_ID,
+            "message": str(exc),
+        }
+
+
+def _zk_worker_base(auto_start=False):
+    """Resolve worker base URL or a structured browser_fallback/error payload.
+
+    auto_start=True will request EC2 start when the instance is stopped/stopping.
+    Caller still must wait for /health (cold start can take 30–90s).
+    """
+    st = get_zk_worker_status()
+    if not st.get("configured"):
+        return None, {
+            "mode": "browser_fallback",
+            "reason": "worker_unconfigured",
+            "message": st.get("message"),
+            "worker": st,
+        }
+
+    state = (st.get("state") or "").lower()
+    if auto_start and st.get("provider") == "ec2" and state in (
+        "stopped", "stopping", "pending", "shutting-down",
+    ):
+        try:
+            if state in ("stopped", "stopping"):
+                start_zk_worker()
+            # re-read after start request
+            st = get_zk_worker_status()
+            state = (st.get("state") or "").lower()
+        except Exception as exc:
+            return None, {
+                "mode": "browser_fallback",
+                "reason": "worker_start_failed",
+                "message": f"Failed to start prover EC2: {exc}",
+                "worker": st,
+            }
+
+    if not st.get("online") and st.get("provider") == "ec2":
+        return None, {
+            "mode": "browser_fallback",
+            "reason": "worker_offline",
+            "message": (
+                "Prover EC2 is starting — retry in ~30–90s, or wait for auto-wake."
+                if state in ("pending", "running")
+                else "Prover EC2 is not running. Auto-start requested; wait ~1 min and retry."
+            ),
+            "worker": st,
+            "starting": True,
+        }
+    base = st.get("proverUrl")
+    if not base:
+        return None, {
+            "mode": "browser_fallback",
+            "reason": "no_prover_url",
+            "message": "Worker has no public IP / ZK_PROVER_URL yet (still starting?)",
+            "worker": st,
+            "starting": True,
+        }
+    return base, st
+
+
+def _wait_worker_ready(base, max_wait_s=75):
+    """Poll worker /health until ok or timeout. Returns (ok, detail)."""
+    import urllib.request
+    import urllib.error
+
+    deadline = time.time() + max_wait_s
+    last_err = "not_tried"
+    while time.time() < deadline:
+        try:
+            req = urllib.request.Request(
+                f"{base.rstrip('/')}/health",
+                headers={"User-Agent": "ZexvroZkProxy/1.0"},
+                method="GET",
+            )
+            with urllib.request.urlopen(req, timeout=4) as res:
+                body = json.loads(res.read().decode("utf-8"))
+                if body.get("ok"):
+                    return True, body
+                last_err = f"health_not_ok:{body}"
+        except Exception as e:
+            last_err = str(e)
+        time.sleep(2)
+    return False, last_err
+
+
+def _proxy_zk_post(path, body_obj, timeout=180, auto_start=False, wait_ready_s=0):
+    """POST JSON to worker path. Returns parsed JSON with mode tags."""
+    import urllib.request
+    import urllib.error
+
+    base, st_or_err = _zk_worker_base(auto_start=auto_start)
+    if base is None:
+        # If we requested start, optionally wait for instance+health
+        if auto_start and wait_ready_s > 0 and ZK_PROVER_URL:
+            # Prefer fixed EIP URL while instance is coming up
+            ready_base = ZK_PROVER_URL
+            ok, detail = _wait_worker_ready(ready_base, max_wait_s=wait_ready_s)
+            if ok:
+                base = ready_base
+                st = get_zk_worker_status()
+            else:
+                st_or_err = dict(st_or_err or {})
+                st_or_err["healthWait"] = detail
+                return st_or_err
+        else:
+            return st_or_err
+    st = st_or_err if isinstance(st_or_err, dict) else get_zk_worker_status()
+
+    if wait_ready_s > 0:
+        ok, detail = _wait_worker_ready(base, max_wait_s=min(wait_ready_s, 75))
+        if not ok:
+            return {
+                "mode": "browser_fallback",
+                "reason": "worker_not_ready",
+                "message": f"Worker health not ready: {detail}",
+                "worker": st,
+                "starting": True,
+            }
+
+    url = f"{base}{path}"
+    payload = json.dumps(body_obj).encode("utf-8")
+    headers_out = {"Content-Type": "application/json", "User-Agent": "ZexvroZkProxy/1.0"}
+    if ZK_PROVER_SHARED_SECRET:
+        headers_out["X-Zexvro-Prover-Secret"] = ZK_PROVER_SHARED_SECRET
+
+    req = urllib.request.Request(url, data=payload, headers=headers_out, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as res:
+            data = json.loads(res.read().decode("utf-8"))
+            data["mode"] = data.get("mode") or "remote"
+            data["worker"] = {"state": st.get("state"), "proverUrl": base}
+            return data
+    except urllib.error.HTTPError as e:
+        try:
+            err_body = json.loads(e.read().decode("utf-8"))
+        except Exception:
+            err_body = {"error": f"HTTP {e.code}"}
+        return {
+            "mode": "error",
+            "error": err_body.get("error") or err_body.get("message") or f"HTTP {e.code}",
+            "detail": err_body,
+            "worker": st,
+        }
+    except Exception as e:
+        return {
+            "mode": "browser_fallback",
+            "reason": "proxy_failed",
+            "message": str(e),
+            "worker": st,
+        }
+
+
+def proxy_zk_prove(circuit_input):
+    """Forward Groth16 fullProve input to the worker HTTP service."""
+    return _proxy_zk_post("/prove", {"input": circuit_input}, timeout=120, auto_start=True, wait_ready_s=60)
+
+
+def proxy_zk_merkle(contract, commitments):
+    """Forward merkle snapshot / path build to worker (server-side RPC + poseidon)."""
+    return _proxy_zk_post(
+        "/merkle",
+        {"contract": contract, "commitments": commitments or []},
+        timeout=180,
+        auto_start=True,
+        wait_ready_s=60,
+    )
+
+
+def proxy_zk_settle(body):
+    """Start async settle job on worker (returns jobId immediately). Auto-wakes EC2."""
+    return _proxy_zk_post(
+        "/settle",
+        body or {},
+        timeout=30,
+        auto_start=True,
+        wait_ready_s=75,
+    )
+
+
+def proxy_zk_job(job_id):
+    """Poll async worker job status."""
+    import urllib.request
+    import urllib.error
+
+    base, st_or_err = _zk_worker_base(auto_start=False)
+    if base is None:
+        # During brief restarts still try fixed URL
+        if ZK_PROVER_URL:
+            base = ZK_PROVER_URL
+            st = get_zk_worker_status()
+        else:
+            return st_or_err
+    else:
+        st = st_or_err
+    url = f"{base}/jobs/{job_id}"
+    headers_out = {"User-Agent": "ZexvroZkProxy/1.0"}
+    if ZK_PROVER_SHARED_SECRET:
+        headers_out["X-Zexvro-Prover-Secret"] = ZK_PROVER_SHARED_SECRET
+    req = urllib.request.Request(url, headers=headers_out, method="GET")
+    try:
+        with urllib.request.urlopen(req, timeout=20) as res:
+            data = json.loads(res.read().decode("utf-8"))
+            data["mode"] = data.get("mode") or "remote"
+            data["worker"] = {"state": st.get("state"), "proverUrl": base}
+            return data
+    except urllib.error.HTTPError as e:
+        try:
+            err_body = json.loads(e.read().decode("utf-8"))
+        except Exception:
+            err_body = {"error": f"HTTP {e.code}"}
+        return {
+            "mode": "error",
+            "error": err_body.get("error") or f"HTTP {e.code}",
+            "detail": err_body,
+            "worker": st,
+        }
+    except Exception as e:
+        return {
+            "mode": "browser_fallback",
+            "reason": "proxy_failed",
+            "message": str(e),
+            "worker": st,
+        }
 
 
 def create_id(prefix):
@@ -1211,6 +1582,100 @@ def lambda_handler(event, context):
             return respond(200, {"status": "success", "messageId": send_res.get("MessageId")})
         except Exception as exc:
             return respond(502, {"error": "email_send_failed", "error_description": str(exc)})
+
+    # ─── ZK prover worker (EC2 on-demand / fixed URL) ───
+    # GET /api/zk-worker/status
+    elif path == "/api/zk-worker/status" and http_method == "GET":
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        return respond(200, get_zk_worker_status())
+
+    # POST /api/zk-worker/start  — turn EC2 ON (for testing / before payroll)
+    elif path == "/api/zk-worker/start" and http_method == "POST":
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        result = start_zk_worker()
+        code = 200 if result.get("status") != "error" else 400
+        return respond(code, result)
+
+    # POST /api/zk-worker/stop  — turn EC2 OFF after testing (EBS may still bill a little)
+    elif path == "/api/zk-worker/stop" and http_method == "POST":
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        result = stop_zk_worker()
+        code = 200 if result.get("status") != "error" else 400
+        return respond(code, result)
+
+    # POST /api/zk-worker/prove  — proxy fullProve input to RapidSNARK/snarkjs worker
+    elif path == "/api/zk-worker/prove" and http_method == "POST":
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        circuit_input = body.get("input")
+        if not isinstance(circuit_input, dict):
+            return respond(400, {
+                "error": "invalid_request",
+                "error_description": "body.input (circuit public/private signals object) is required",
+            })
+        result = proxy_zk_prove(circuit_input)
+        if result.get("mode") == "error":
+            return respond(502, result)
+        # browser_fallback is 200 so client can fall back without treating as hard failure
+        return respond(200, result)
+
+    # POST /api/zk-worker/merkle — server-side leaf fetch + path build
+    elif path == "/api/zk-worker/merkle" and http_method == "POST":
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        contract = body.get("contract") or body.get("poolContract")
+        if not contract:
+            return respond(400, {
+                "error": "invalid_request",
+                "error_description": "body.contract is required",
+            })
+        result = proxy_zk_merkle(contract, body.get("commitments") or body.get("wanted") or [])
+        if result.get("mode") == "error":
+            return respond(502, result)
+        return respond(200, result)
+
+    # POST /api/zk-worker/settle — start async fund+deposit+prove+withdraw on relayer
+    elif path == "/api/zk-worker/settle" and http_method == "POST":
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        if not body.get("toAddress") or not (body.get("poolContract") or body.get("contract")):
+            return respond(400, {
+                "error": "invalid_request",
+                "error_description": "toAddress, poolContract, amountStroops, notes[] required",
+            })
+        settle_body = {
+            "toAddress": body.get("toAddress"),
+            "poolContract": body.get("poolContract") or body.get("contract"),
+            "amountStroops": body.get("amountStroops") or body.get("amount"),
+            "notes": body.get("notes") or [],
+        }
+        result = proxy_zk_settle(settle_body)
+        if result.get("mode") == "error":
+            return respond(502, result)
+        # 202-style async accepted (still 200 for simple clients)
+        return respond(200, result)
+
+    # GET /api/zk-worker/jobs/{id} — poll async settle/prove job
+    elif path.startswith("/api/zk-worker/jobs/") and http_method == "GET":
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        job_id = path.split("/")[-1]
+        if not job_id:
+            return respond(400, {"error": "invalid_request", "error_description": "job id required"})
+        result = proxy_zk_job(job_id)
+        if result.get("mode") == "error":
+            return respond(502, result)
+        return respond(200, result)
 
     # Route: POST /api/chat (Proxy for OpenCode completions to avoid CORS)
     elif path == "/api/chat" and http_method == "POST":
