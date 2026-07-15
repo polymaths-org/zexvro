@@ -1,4 +1,5 @@
 import type { CollectionStatus } from '../../types';
+import { ensureValidAccessToken, isAccessTokenExpired } from '../../auth/cognito';
 
 const NFT_API_BASE = (import.meta.env.VITE_NFT_API_URL || '/api/nft').replace(/\/$/, '');
 
@@ -50,7 +51,15 @@ export interface ApiNftCollection {
 export type PublicNftCollection = Omit<
   ApiNftCollection,
   'workspaceId' | 'ownerAddress' | 'royaltyRecipient'
->;
+> & {
+  /** Convenience aliases for game/SDK clients. */
+  logo?: string;
+  logoUri?: string;
+};
+
+export function collectionLogo(collection: Pick<PublicNftCollection, 'logo' | 'logoUri' | 'coverImageUri'>) {
+  return collection.logo || collection.logoUri || collection.coverImageUri || '';
+}
 
 export interface CreateNftCollectionInput {
   workspaceId: string;
@@ -156,22 +165,51 @@ async function readJson(response: Response): Promise<unknown> {
   return response.json().catch(() => undefined);
 }
 
+async function resolveAccessToken(accessToken?: string): Promise<string | undefined> {
+  if (!accessToken) return undefined;
+  try {
+    // Always prefer a non-expired Cognito access token (refresh when needed).
+    if (isAccessTokenExpired(accessToken)) {
+      return await ensureValidAccessToken();
+    }
+    return accessToken;
+  } catch {
+    return accessToken;
+  }
+}
+
 async function requestJson<T>(
   path: string,
   init: RequestInit = {},
   accessToken?: string,
 ): Promise<T> {
-  const headers: Record<string, string> = {
-    Accept: 'application/json',
-    ...(init.headers as Record<string, string> | undefined),
-    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+  let token = await resolveAccessToken(accessToken);
+
+  const doFetch = async (bearer?: string) => {
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+      ...(init.headers as Record<string, string> | undefined),
+      ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
+    };
+    const response = await fetch(`${NFT_API_BASE}${path}`, {
+      ...init,
+      headers,
+    });
+    const payload = await readJson(response);
+    return { response, payload };
   };
 
-  const response = await fetch(`${NFT_API_BASE}${path}`, {
-    ...init,
-    headers,
-  });
-  const payload = await readJson(response);
+  let { response, payload } = await doFetch(token);
+
+  // Expired / wrong token: refresh once and retry (common after long dashboard sessions).
+  if (response.status === 401 && accessToken) {
+    try {
+      token = await ensureValidAccessToken();
+      ({ response, payload } = await doFetch(token));
+    } catch {
+      // fall through with original 401
+    }
+  }
 
   if (!response.ok) {
     const apiError = payload as ApiErrorPayload | undefined;
@@ -195,12 +233,12 @@ export async function listNftCollections(
   accessToken: string,
   signal?: AbortSignal,
 ) {
-  const result = await requestJson<{ collections: ApiNftCollection[] }>(
+  const result = await requestJson<{ collections?: ApiNftCollection[] }>(
     `/v1/collections?workspaceId=${encodeURIComponent(workspaceId)}`,
     { signal },
     accessToken,
   );
-  return result.collections;
+  return Array.isArray(result?.collections) ? result.collections : [];
 }
 
 export async function uploadNftMedia(file: File, accessToken: string) {
@@ -303,6 +341,19 @@ export async function getPublicNftCollection(
     { signal },
   );
   return result;
+}
+
+/** Lightweight public fields games can poll for branding (name + logo). */
+export async function getPublicNftBranding(collectionId: string, signal?: AbortSignal) {
+  const result = await getPublicNftCollection(collectionId, signal);
+  return {
+    id: result.collection.id,
+    name: result.collection.name,
+    logo: collectionLogo(result.collection),
+    symbol: result.collection.symbol,
+    description: result.collection.description,
+    priceAtomic: result.collection.primarySale?.priceAtomic,
+  };
 }
 
 export async function getPublicCollectionInventory(
