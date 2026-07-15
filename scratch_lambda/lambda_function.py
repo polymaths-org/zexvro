@@ -628,7 +628,7 @@ def respond(status_code, body):
 def lambda_handler(event, context):
     path = event.get("rawPath", event.get("path", ""))
     http_method = event.get("httpMethod", event.get("requestContext", {}).get("http", {}).get("method", "")).upper()
-    
+
     headers = event.get("headers", {})
 
     # Body parser
@@ -666,7 +666,7 @@ def lambda_handler(event, context):
         )
 
         frontend_url = os.environ.get("FRONTEND_URL", "https://zexvro.pages.dev")
-        
+
         return respond(
             200,
             {
@@ -753,20 +753,20 @@ def lambda_handler(event, context):
 
         if action == "approve":
             username = get_username_from_auth(event)
-            
+
             # Extract Bearer token to pass back to the CLI agent
             auth_header = headers.get("authorization", headers.get("Authorization", "")) or headers.get("Authorization") or headers.get("authorization")
             token_val = ""
             if auth_header and auth_header.startswith("Bearer "):
                 token_val = auth_header.split(" ")[1]
-            
+
             # Update status to authorized
             devices_table.update_item(
                 Key={"device_code": device_code},
                 UpdateExpression="set #s = :status, #u = :username, tokens = :tokens",
                 ExpressionAttributeNames={"#s": "status", "#u": "username"},
                 ExpressionAttributeValues={
-                    ":status": "authorized", 
+                    ":status": "authorized",
                     ":username": username,
                     ":tokens": {
                         "AccessToken": token_val or ("cli_token_" + str(uuid.uuid4()).replace("-", ""))
@@ -774,7 +774,7 @@ def lambda_handler(event, context):
                 }
             )
             return respond(200, {"status": "success", "message": f"Successfully authorized device for {username}"})
-        
+
         else:
             # Update status to rejected
             devices_table.update_item(
@@ -790,12 +790,12 @@ def lambda_handler(event, context):
         auth_header = headers.get("authorization", headers.get("Authorization", "")) or headers.get("Authorization") or headers.get("authorization")
         if not auth_header:
             return respond(401, {"error": "unauthorized", "error_description": "Authorization header missing"})
-            
+
         if not auth_header.startswith("Bearer "):
             return respond(401, {"error": "unauthorized", "error_description": "Invalid authorization scheme"})
-            
+
         token = auth_header.split(" ")[1]
-        
+
         # Identify user
         if token.startswith("cli_token_") or token.startswith("prod_jwt_token_"):
             username = "stellar_dev"
@@ -806,14 +806,14 @@ def lambda_handler(event, context):
             res = memory_table.get_item(Key={"username": username})
             memory_data = res.get("Item", {}).get("memory", {})
             return respond(200, {"username": username, "memory": memory_data})
-            
+
         elif http_method == "POST":
             memory_update = body.get("memory", {})
-            
+
             # Fetch existing
             res = memory_table.get_item(Key={"username": username})
             current_memory = res.get("Item", {}).get("memory", {})
-            
+
             # Merge and save
             current_memory.update(memory_update)
             memory_table.put_item(Item={
@@ -1682,35 +1682,35 @@ def lambda_handler(event, context):
     elif path == "/api/chat" and http_method == "POST":
         import urllib.request
         import urllib.error
-        
+
         api_url = "https://opencode.ai/zen/v1/chat/completions"
         api_key = os.environ.get("OPENCODE_API_KEY", "")
-        
+
         messages = body.get("messages", [])
         model = body.get("model", "big-pickle")
         provider = body.get("provider", "opencode zen")
         metadata = body.get("metadata", {})
-        
+
         payload = {
             "model": model,
             "provider": provider,
             "messages": messages,
             "metadata": metadata
         }
-        
+
         headers_to_send = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {api_key}",
             "User-Agent": "ZexvroProxy/1.0"
         }
-        
+
         req = urllib.request.Request(
             api_url,
             data=json.dumps(payload).encode("utf-8"),
             headers=headers_to_send,
             method="POST"
         )
-        
+
         try:
             with urllib.request.urlopen(req, timeout=20) as res:
                 response_data = json.loads(res.read().decode("utf-8"))

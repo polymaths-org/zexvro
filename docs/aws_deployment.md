@@ -2,6 +2,18 @@
 
 This guide details how to update and deploy the ZEXVRO CLI Device Authorization backend to your AWS environment.
 
+## NFT service (related)
+
+Hosted NFT API must inject `STELLAR_SPONSOR_SECRET` from **AWS Secrets Manager**
+(or equivalent task secrets) and set `NFT_COLLECTION_WASM_HASH`. With
+`NODE_ENV=production` (or `NFT_REQUIRE_SPONSOR=1`), the process exits at startup
+if either value is missing. Local `npm run dev` may still load the secret from
+Stellar CLI identity — that path is not for managed hosts. See
+`services/nft-service/README.md` → **Managed sponsor secret**.
+
+Live account resources (table, S3, CloudFront, secret names) are documented in
+[aws_nft_production.md](./aws_nft_production.md).
+
 ---
 
 ## 1. DynamoDB Table Setup

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
   BadgeCheck,
@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { Service } from '../../types';
 import { motion, AnimatePresence } from 'motion/react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 interface ServicesProps {
   services: Service[];
@@ -66,19 +67,19 @@ const serviceBlueprints: Record<Service['category'], {
   },
   nft: {
     icon: Blocks,
-    state: 'Needs product flow',
+    state: 'Frontend draft ready',
     purpose: 'Help non-Web3 creators create, deploy, and manage NFT drops without understanding low-level chain tooling.',
-    inputs: ['Collection metadata', 'Media storage choice', 'Minting rules', 'Checkout and ownership workflow'],
-    setup: ['Draft collection wizard', 'Choose storage provider', 'Create preview and publish review'],
-    checklist: ['Metadata can be previewed', 'Fees are visible before publish', 'Creator owns final approval'],
+    inputs: ['Collection metadata', 'IPFS media package', 'Creator-controlled minting rules', 'USDC checkout configuration'],
+    setup: ['Open collection workspace', 'Prepare contract deployment', 'Review metadata and royalty preference'],
+    checklist: ['Metadata can be previewed', 'No deployment happens without approval', 'Creator owns final approval'],
   },
   depin: {
     icon: Radio,
-    state: 'Scope pending',
-    purpose: 'Reserved for the De-pin service once the product boundary, target user, and data model are defined.',
-    inputs: ['Target user', 'Network/resource model', 'Telemetry requirements', 'MVP success criteria'],
-    setup: ['Capture service brief', 'Define data contract', 'Create first setup screen only after scope approval'],
-    checklist: ['Scope is approved', 'No implementation exists without requirements', 'Docs are updated before UI build'],
+    state: 'Gateway scaffold ready',
+    purpose: 'Protect HTTP API and compute resources with exact per-request USDC payments using the Stellar x402 protocol.',
+    inputs: ['Protected route and upstream URL', 'USDC price and recipient', 'Stellar network', 'Timeout and rate-limit policy'],
+    setup: ['Create provider configuration', 'Run testnet gateway', 'Verify payment and settlement flow'],
+    checklist: ['Uses standard x402 v2 headers', 'No user funds are held by ZEXVRO', 'Physical hardware adapters remain out of v1'],
   },
 };
 
@@ -89,6 +90,8 @@ function stateTone(status: Service['status']) {
 }
 
 export default function Services({ services }: ServicesProps) {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [selectedServiceId, setSelectedServiceId] = useState<string>(services[0]?.id || '');
   const [panelServiceId, setPanelServiceId] = useState<string | null>(null);
 
@@ -101,6 +104,12 @@ export default function Services({ services }: ServicesProps) {
   const selectedBlueprint = selectedService ? serviceBlueprints[selectedService.category] : null;
   const SelectedIcon = selectedBlueprint?.icon || Blocks;
 
+  useEffect(() => {
+    const category = searchParams.get('service');
+    const requestedService = services.find(service => service.category === category);
+    if (requestedService) setSelectedServiceId(requestedService.id);
+  }, [searchParams, services]);
+
   return (
     <div className="space-y-6">
       {/* AI NOTE: Services screen is a setup/workflow surface. Keep it empty-state honest; do not add metrics, owners, balances, or live usage. */}
@@ -111,7 +120,7 @@ export default function Services({ services }: ServicesProps) {
             Services
           </h1>
           <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-500 dark:text-zinc-400">
-            Configure MVP services with required inputs, approval rules, and setup drafts before any backend integration is connected.
+            Configure MVP services with required inputs, approval rules, and setup drafts before a service is connected to this workspace.
           </p>
         </div>
         <button className="inline-flex items-center justify-center gap-2 rounded-md border border-zinc-200 px-3 py-2 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900">
@@ -174,10 +183,12 @@ export default function Services({ services }: ServicesProps) {
                   </div>
                 </div>
                 <button
-                  onClick={() => setPanelServiceId(selectedService.id)}
+                  onClick={() => selectedService.category === 'nft'
+                    ? navigate('/services/nft')
+                    : setPanelServiceId(selectedService.id)}
                   className="inline-flex items-center justify-center gap-2 rounded-md bg-zinc-950 px-3.5 py-2 text-xs font-medium text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
                 >
-                  Open setup
+                  {selectedService.category === 'nft' ? 'Open collections' : 'Open setup'}
                   <ArrowRight className="h-4 w-4" />
                 </button>
               </div>
@@ -239,7 +250,7 @@ export default function Services({ services }: ServicesProps) {
       <section className="grid gap-4 md:grid-cols-3">
         {[
           { icon: BadgeCheck, title: 'Approval-first', text: 'Every service action should become a review card before it can affect infrastructure, wallets, contracts, or user data.' },
-          { icon: Cpu, title: 'Backend disconnected', text: 'No live telemetry is shown here. The interface stays honest until Stellar, AWS, auth, and service APIs exist.' },
+          { icon: Cpu, title: 'Workspace disconnected', text: 'No live telemetry is shown here. Local service scaffolds are not presented as deployed or connected integrations.' },
           { icon: ShieldCheck, title: 'User controls', text: 'Users need clear inputs, permission levels, secrets handling, and rollback paths before enabling a service.' },
         ].map((item) => (
           <div key={item.title} className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-[#0A0A0B]">

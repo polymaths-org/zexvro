@@ -86,6 +86,8 @@ The repository currently contains:
 - Shared memory workflow.
 - `frontend/`, the Vite + React frontend workspace.
 - `services/transformation-agent/` (Morph CLI skeleton) — first service scaffolded.
+- `services/nft-service/`, containing the Soroban NFT collection contract and its TypeScript API.
+- `services/depin/`, containing the TypeScript/Express x402 reverse proxy.
 
 The frontend application is scaffolded in `frontend/`. Run frontend commands from that folder.
 
@@ -99,9 +101,14 @@ Current and expected stack:
 Frontend workspace notes:
 
 - Path: `frontend/`.
-- Run locally: `cd frontend && npm run dev`.
-- Validate before handoff: `cd frontend && npm run lint && npm run build`.
-- The UI is still prototype/frontend-only. Do not claim live backend, auth, wallet, blockchain, deployment provider, or secrets-manager integrations until those are implemented.
+- Preferred local stack: from the repository root, `cp .env.example .env` then `npm run dev` (NFT API + frontend) or `npm run dev:all` (also De-pin).
+- Run frontend only: `cd frontend && npm run dev` or root `npm run dev:frontend`.
+- Legacy combined launcher from the frontend folder: `cd frontend && npm run dev:stack`.
+- Validate before handoff: `cd frontend && npm run lint && npm run build`, or root `npm run lint:frontend` / `npm run build:frontend`.
+- NFT collection creation is wired to the Cognito-protected NFT API for local Stellar testnet runs; browser-local drafts remain only for migration and fallback visibility.
+- The project De-pin screen reads the local gateway health/status manifest and can probe an unpaid x402 `402` challenge through the Vite proxy.
+- Cognito/session and Morph polling behavior predate Nabil's services and must be preserved when changing the shell.
+- Code paths exist for S3 media, DynamoDB NFT records, managed sponsor secret gates, and multi-instance De-pin file state. Do not claim a live production deployment until AWS roles/buckets/tables/secrets are configured and a managed end-to-end run is recorded in `memory.md`.
 
 ## Team Ownership
 
@@ -271,34 +278,95 @@ MVP intent:
 - Support checkout or purchase flows from the platform.
 - Hide wallet, metadata, and chain complexity behind clear UI and APIs.
 
+Architecture decisions:
+
+- Chain: Stellar Network with Soroban smart contracts. No multi-chain in v1.
+- NFT contract: one Soroban contract per collection using OpenZeppelin Stellar's `NonFungibleToken` Base implementation. There is no on-chain factory in v1.
+- Collection configuration: studio owner, name, symbol, immutable base metadata URI, royalty recipient, and royalty basis points capped at 10%.
+- Minting: creator-controlled through the studio owner or an explicitly delegated minter role.
+- Metadata / media (production): AWS **S3** for object storage + **CloudFront** (or public HTTPS base URL) for delivery. Local content-addressed HTTP storage is development-only and is not IPFS.
+- Metadata / media (optional legacy): Pinata public IPFS remains supported only when explicitly required (`NFT_STORAGE_MODE=pinata`); default production path is AWS.
+- API records (production): AWS **DynamoDB** for collections, inventory, checkout intents (pluggable repository; local JSON file for single-process dev).
+- Secrets: AWS **Secrets Manager** (or IAM role env injection) for `STELLAR_SPONSOR_SECRET` and similar; never commit secrets.
+- A versioned ZEXVRO `external_url` may point to clearly mutable gameplay attributes.
+- Royalties: expose marketplace-compatible royalty information, but never claim arbitrary transfers enforce payment.
+- Primary checkout: fixed-price SEP-41 USDC transfer and NFT mint happen atomically in the collection contract. The buyer signs Soroban authorization entries while a ZEXVRO sponsor signs and pays the transaction envelope fee.
+- Token IDs: always auto-allocated server-side when omitted (mint + checkout); UI does not require manual token ID entry.
+- Game / indie integration: public REST checkout, hosted embed popup (`/nft/embed/checkout`), and copy-ready SDK snippets in the NFT Studio **Integrate SDK** panel (`packages/nft-checkout-sdk`).
+- Secondary sales, auctions, fiat checkout, and multi-chain support are outside v1.
+
 Agent boundaries:
 
-- Do not assume a final NFT standard, storage provider, marketplace model, or checkout provider without a recorded decision.
+- Do not change the chain decision (Stellar + Soroban) without team coordination.
+- Prefer AWS for storage/persistence/secrets; do not add new third-party storage without documenting why AWS is insufficient.
 - Keep the user experience non-Web3 friendly.
-- Any metadata, royalty, minting, or ownership assumptions must be documented.
+- Any metadata schema, royalty logic, minting permission, or storage provider must be documented before implementation.
+- Do not build multi-chain support in v1.
 
-Unknowns:
+Remaining integration work:
 
-- Target chain or Stellar asset model.
-- Metadata storage.
-- Payment and checkout flow.
-- Minting permissions.
-- Game/studio workflow requirements.
+- Record managed end-to-end smoke (Cognito + Freighter mint/sale/buy, auto token IDs, SDK embed) in `memory.md`.
+- Hosted NFT API (ECS/Lambda) + least-privilege IAM remain ops.
+- Partner game origins must be listed in `CORS_ALLOWED_ORIGINS`.
+- New collection deploys use WASM hash with instance TTL bumps; older collections keep prior WASM until redeployed.
 
-### 6. De-pin
+### 6. De-pin (x402 Agentic Resource Gateway) + Access Shield direction
 
 Owner: Nabil / `n4bi10p`
 
-Status:
+Problem (shipping MVP):
 
-- Scope not defined yet.
-- Needs brainstorming and written context from Nabil.
+- Physical hardware networks and API compute nodes cannot easily conduct commerce with autonomous AI agents because traditional Web2 billing platforms require human identity verification and credit cards.
 
-Rules:
+Problem (strategic / big-tech USP — **Proposed** product framing):
 
-- Do not invent final De-pin scope.
-- Do not build De-pin code before scope is recorded.
-- When Nabil provides the idea, update this section and add a memory entry.
+- Large AI and data platforms (Grok/xAI-class, OpenAI-class, internal LLM APIs) lose unbounded COGS when free tiers and weak Web2 gates (email, phone, CAPTCHA, flat API keys) are industrialized: account farms, residential proxies, multi-account rotation, and agent tool-loops resell or burn free capacity.
+- ZEXVRO’s Web2→Web3 migration pitch for those buyers is **economic access control**: make free-capacity resale and agent spam unprofitable without rewriting their model stack.
+
+MVP intent (implemented gateway):
+
+- Provide a lightweight proxy layer sitting in front of idempotent HTTP APIs and compute resources.
+- Intercept agent requests and issue an HTTP 402 "Payment Required" challenge.
+- Verify signed Soroban authorization entries and settle an exact USDC payment per successful request.
+- Fail closed: unpaid traffic never receives the upstream body; settlement failures withhold the resource.
+
+Strategic intent (**Proposed** — document for teammates; not fully productized UI):
+
+- Position De-pin as the enforcement plane of **ZEXVRO Access Shield**: an edge economic firewall big platforms put in front of expensive APIs.
+- Combine with (future) Agent Auth classification (Rushi), policy/rate cards, and settlement receipts—not as a WAF clone and not as offensive anti-farm tooling.
+- Full product one-pager: `docs/access_shield.md`.
+
+Architecture decisions:
+
+- Protocol: official x402 v2 flow and payloads, using `PAYMENT-REQUIRED`, `PAYMENT-SIGNATURE`, and `PAYMENT-RESPONSE`; do not introduce a parallel 402 schema.
+- Payment rail: `exact` scheme with SEP-41 USDC on `stellar:testnet` in v1, using the official `@x402/stellar` implementation and facilitator-sponsored fees.
+- Proxy order: verify payment, fulfill and buffer a successful upstream result, settle, then release the result. Upstream or settlement failures withhold the resource.
+- Provider model: validated local configuration for concrete `GET`/`HEAD` routes, upstream URL, description, price, recipient, network, timeout, and optional environment-secret reference.
+- Recipient (`payTo`) is always a classic Stellar **G…** account (needs USDC trustline). Do not put the USDC SAC **C…** address in `recipient`.
+- Facilitator: local unpaid 402 probes may use public facilitators (e.g. `https://x402.org/facilitator`). Real Stellar settle via OpenZeppelin Channels should use Channels facilitator URLs and process env `OZ_API_KEY` (or `X402_FACILITATOR_API_KEY`) as Bearer auth.
+- Abuse controls: request IDs, authorization replay protection, unpaid-request rate limits, bounded response buffering, structured redacted audit logs, and upstream timeouts.
+- Multi-instance: `DEPIN_STATE_BACKEND=memory|file` (redis reserved); managed config via `DEPIN_CONFIG_JSON` → `DEPIN_CONFIG_URL` → `DEPIN_CONFIG_PATH`.
+- Streaming payments, time-based sessions, custom facilitators, provider marketplace UI, and physical-device adapters are deferred.
+- POST/completions and streaming chat gateways are **roadmap** for Access Shield (v1 remains GET/HEAD exact).
+
+Agent boundaries:
+
+- Do not implement payment flows without documenting the 402 challenge/response contract.
+- Do not handle custody of user funds without explicit authorization design.
+- Do not build the proxy without defining the resource provider registration model.
+- Keep the gateway lightweight and composable.
+- Do not build offensive farm tooling (OTP bots, credential theft, ban evasion). Platform **defense** only.
+- Do not claim Access Shield is fully shipped; keep product expansion marked Proposed until accepted by the team.
+- Coordinate Agent Auth identity/challenge design with Rushi; do not fork a second classifier under De-pin.
+
+Remaining integration work:
+
+- Use `DEPIN_STATE_BACKEND=file` (or future redis) for multi-instance hosts; do not run multiple processes on memory defaults.
+- Prefer managed config via `DEPIN_CONFIG_JSON` or `DEPIN_CONFIG_URL` in containers; local file remains the dev default.
+- Provider onboarding UI and richer ownership model remain product follow-ups.
+- Optional OZ Channels facilitator + `OZ_API_KEY` for production-like settle.
+- Access Shield roadmap: rate cards, POST/stream patterns, platform control-plane UI, multi-region anti-replay.
+- Add an agent client SDK only after the standard x402 client path is exercised in more environments.
 
 ## Shared Platform Areas
 
@@ -306,9 +374,9 @@ These are not primary MVP services yet, but they will likely become shared modul
 
 | Area | Current status | Agent rule |
 | --- | --- | --- |
-| Auth | Not designed | Do not create permanent auth architecture without documenting the flow |
-| Accounts/workspaces | Not designed | Keep future multi-user needs in mind |
-| Billing | Not designed | Do not add payment logic until product scope requires it |
+| Auth | Cognito frontend flow exists; shared architecture is not finalized | Preserve the current flow and document cross-service changes |
+| Accounts/workspaces | Browser-local prototype | Keep future multi-user and server authorization needs in mind |
+| Billing | Service-specific prototypes | Keep NFT checkout and De-pin payments inside their documented trust boundaries |
 | Deployment | Not designed | Prefer service-driven needs over generic deploy features |
 | Database | Not designed | Choose storage after data models are clearer |
 | Connectors | Not designed | Add only when a service needs one |
@@ -409,16 +477,10 @@ cat context.md
 cat memory.md
 ```
 
-Current verification:
+Current verification entry points:
 
-- There are no app tests yet because no application has been scaffolded.
-- Documentation changes should be reviewed by reading the rendered Markdown.
-
-Future setup instructions should be added when the app is scaffolded:
-
-- Install command.
-- Dev command.
-- Build command.
-- Test command.
-- Required environment variables, without secrets.
-- Local service dependencies.
+- Frontend: `cd frontend && npm run lint && npm test && npm run build && npm run test:e2e`.
+- NFT contract: commands in `services/nft-service/README.md`.
+- NFT API: `cd services/nft-service/api && npm run lint && npm test && npm run build`.
+- De-pin: `cd services/depin && npm run lint && npm test && npm run build`.
+- Required environment variables are documented in the repository-root `.env.example`. Folder-level `.env.example` files are pointers only. Never commit real `.env` values.

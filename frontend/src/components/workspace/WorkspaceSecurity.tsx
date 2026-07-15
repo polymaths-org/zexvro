@@ -150,7 +150,7 @@ export default function WorkspaceSecurity() {
                       <span>Last used {k.lastUsedAt ? formatDate(k.lastUsedAt) : 'Never'}</span>
                     </div>
                   </div>
-                  
+
                   <button
                     onClick={() => handleDeleteKey(k.id)}
                     className="p-1.5 text-zinc-400 hover:text-red-500 transition-colors"

@@ -1,0 +1,30 @@
+import { describe, expect, it } from 'vitest';
+import { router } from './routes/router';
+
+describe('dashboard routing', () => {
+  const routePaths = Object.keys(router.routesByPath);
+
+  it('registers the project NFT dashboard route', () => {
+    expect(routePaths).toContain('/dashboard/w/$workspaceId/p/$projectId/nft');
+  });
+
+  it('registers the collection creation deep link', () => {
+    expect(routePaths).toContain('/dashboard/w/$workspaceId/p/$projectId/nft/collections/new');
+  });
+
+  it('registers the public NFT collection route', () => {
+    expect(routePaths).toContain('/nft/collections/$collectionId');
+  });
+
+  it('registers the embed NFT checkout popup route', () => {
+    expect(routePaths).toContain('/nft/embed/checkout');
+  });
+
+  it('registers the project De-pin gateway route', () => {
+    expect(routePaths).toContain('/dashboard/w/$workspaceId/p/$projectId/depin');
+  });
+
+  it('keeps the public marketing entry route', () => {
+    expect(routePaths).toContain('/');
+  });
+});
