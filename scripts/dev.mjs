@@ -8,7 +8,7 @@ const frontendDirectory = path.join(rootDirectory, 'frontend');
 const nftApiDirectory = path.join(rootDirectory, 'services/nft-service/api');
 const depinDirectory = path.join(rootDirectory, 'services/depin');
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-const defaultWasmHash = 'a8a5f637131c4f5db91d682008b68f21ab2f4f87e0844866ac80fad9faab6bad';
+const defaultWasmHash = 'df42dfceaf2036be527561f313392cee4b756d34745d7cc5f7a1c96936543710';
 
 const args = new Set(process.argv.slice(2));
 const onlyArg = [...args].find((arg) => arg.startsWith('--only='));

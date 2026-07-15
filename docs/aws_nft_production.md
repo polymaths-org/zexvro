@@ -29,7 +29,7 @@ NFT_DYNAMO_TABLE=zexvro-nft
 NFT_DYNAMO_REGION=us-east-1
 NFT_DYNAMO_GSI_WORKSPACE=workspace-index
 NFT_DYNAMO_GSI_IDEMPOTENCY=idempotency-index
-NFT_COLLECTION_WASM_HASH=a8a5f637131c4f5db91d682008b68f21ab2f4f87e0844866ac80fad9faab6bad
+NFT_COLLECTION_WASM_HASH=df42dfceaf2036be527561f313392cee4b756d34745d7cc5f7a1c96936543710
 ```
 
 Load sponsor secret **into process env** (do not commit):

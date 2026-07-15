@@ -103,14 +103,21 @@ The root command starts the NFT API and frontend together. If
 (`zexvro-provider` by default) from Stellar CLI at runtime and passes the secret
 only to the API process.
 
-The testnet collection WASM is installed with hash
-`a8a5f637131c4f5db91d682008b68f21ab2f4f87e0844866ac80fad9faab6bad`.
+The testnet collection WASM (with instance TTL bumps on mint/sale/purchase) is
+installed with hash
+`df42dfceaf2036be527561f313392cee4b756d34745d7cc5f7a1c96936543710`.
+**New** collection deploys use this hash. Collections already deployed against the
+previous hash keep their on-chain WASM until you redeploy them.
+
+Partner game embeds must list their browser origin in `CORS_ALLOWED_ORIGINS`
+(comma-separated absolute origins, no trailing slash).
+
 The service-local command still works when you need to run only the API:
 
 ```bash
 cd services/nft-service/api
 STELLAR_SPONSOR_SECRET="$(stellar keys secret zexvro-provider)" \
-NFT_COLLECTION_WASM_HASH=a8a5f637131c4f5db91d682008b68f21ab2f4f87e0844866ac80fad9faab6bad \
+NFT_COLLECTION_WASM_HASH=df42dfceaf2036be527561f313392cee4b756d34745d7cc5f7a1c96936543710 \
 NFT_STORAGE_MODE=local \
 npm run dev
 ```

@@ -32,6 +32,12 @@ describe('stellarWallet', () => {
     freighterApi.requestAccess.mockReset();
     freighterApi.getAddress.mockReset();
     freighterApi.signTransaction.mockReset();
+    freighterApi.getNetwork.mockReset();
+    freighterApi.getNetworkDetails.mockReset();
+    freighterApi.getNetwork.mockResolvedValue({
+      network: 'TESTNET',
+      networkPassphrase: 'Test SDF Network ; September 2015',
+    });
   });
 
   afterEach(() => {
@@ -104,6 +110,22 @@ describe('stellarWallet', () => {
     freighterApi.isConnected.mockResolvedValue({ isConnected: false });
     await expect(getPublicKey()).rejects.toBeInstanceOf(StellarWalletError);
     await expect(getPublicKey()).rejects.toMatchObject({ code: 'wallet_unavailable' });
+  });
+
+  it('rejects when Freighter is not on testnet', async () => {
+    freighterApi.isConnected.mockResolvedValue({ isConnected: true });
+    freighterApi.requestAccess.mockResolvedValue({
+      address: 'GCD4SBBOLPUM7UYWLPRKOP6IYKOZ6FX5YQOJHVVE7RKC2QGZYNUHKRCZ',
+    });
+    freighterApi.getNetwork.mockResolvedValue({
+      network: 'PUBLIC',
+      networkPassphrase: 'Public Global Stellar Network ; September 2015',
+    });
+
+    await expect(getPublicKey()).rejects.toMatchObject({
+      name: 'StellarWalletError',
+      code: 'wallet_network_mismatch',
+    });
   });
 
   it('maps Freighter rejection errors', async () => {

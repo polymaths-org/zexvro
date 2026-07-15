@@ -75,6 +75,25 @@ describe('Stellar simulation failure mapping', () => {
     })
   })
 
+  it('maps owner-only and unauthorized minter contract errors', () => {
+    expect(
+      simulationFailureToApiError(
+        new Error('Transaction simulation failed: "HostError: Error(Contract, #1)"'),
+      ),
+    ).toMatchObject({
+      status: 403,
+      code: 'collection_owner_required',
+    })
+    expect(
+      simulationFailureToApiError(
+        new Error('Transaction simulation failed: "HostError: Error(Contract, #2)"'),
+      ),
+    ).toMatchObject({
+      status: 403,
+      code: 'unauthorized_minter',
+    })
+  })
+
   it('detects missing trustline errors from SAC token transfers', () => {
     const error = simulationFailureToApiError(
       new Error('Transaction simulation failed: "HostError: missing entry for trustline"'),

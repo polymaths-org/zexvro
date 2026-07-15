@@ -237,13 +237,20 @@ function presentPublicIntent(intent: CheckoutIntentRecord) {
 export function createApp(service: NftService, options: CreateAppOptions) {
   const app = express()
   app.disable('x-powered-by')
+  // Fail-closed CORS allowlist. Public checkout + game SDK embeds need each partner
+  // origin listed in CORS_ALLOWED_ORIGINS (comma-separated). No Origin (curl/server) is allowed.
+  const allowedOriginSet = new Set(
+    options.allowedOrigins.map((origin) => origin.replace(/\/$/, '')),
+  )
   app.use(
     cors({
       origin: (origin, callback) => {
-        callback(
-          null,
-          origin === undefined || options.allowedOrigins.includes(origin),
-        )
+        if (origin === undefined) {
+          callback(null, true)
+          return
+        }
+        const normalized = origin.replace(/\/$/, '')
+        callback(null, allowedOriginSet.has(normalized))
       },
       methods: ['GET', 'HEAD', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Authorization', 'Content-Type', 'Idempotency-Key'],
