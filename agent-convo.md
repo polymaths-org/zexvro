@@ -588,3 +588,22 @@ Completed full live AWS + local API smoke after unit green. NFT API running on 4
 - Next: Optional commit/push of this slice; partner CORS; live Freighter buy with auto IDs; hosted API
 - Verify: `npm --prefix services/nft-service/api test` (62); FE nft tests; lint
 - Do not touch: Morph, Trade/Agent Auth
+
+## Handoff after Stellar skills audit polish
+- Done: Freighter network check; contract error mapping #1–#6; instance TTL; De-pin OZ facilitator Bearer auth; docs
+- Tests green (FE 32, API 63, De-pin 34, contract 10)
+- Uncommitted with SDK UI polish; no PR
+- Next: user review UI + commit when ready; WASM rebuild if TTL needed on chain
+
+## Handoff — remaining implementable ops done (no commit)
+- WASM rebuilt + installed testnet: `df42dfceaf2036be527561f313392cee4b756d34745d7cc5f7a1c96936543710` (tx 7481b865…)
+- CORS allowlist polish + test; partner origins via CORS_ALLOWED_ORIGINS
+- Checklist: `docs/nft_local_test_checklist.md`
+- Still user-gated: browser Freighter E2E, commit of uncommitted polish, hosted API/IAM
+- Restart `npm run dev` so API picks up new WASM hash from .env
+
+## Handoff — Access Shield docs for teammates
+- Added `docs/access_shield.md` (problem, architecture, De-pin role, non-goals, ownership)
+- Updated `context.md` De-pin + NFT sections; `planning.md` MVP table + Access Shield proposal; `pages.md` NFT SDK/embed routes
+- Tell Paris/Rushi: Access Shield economic gate = Nabil/De-pin; Agent Auth classification stays Rushi; no Morph touch
+- Still uncommitted code polish (SDK UI, skills, WASM hash) — user testing first

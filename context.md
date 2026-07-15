@@ -291,6 +291,8 @@ Architecture decisions:
 - A versioned ZEXVRO `external_url` may point to clearly mutable gameplay attributes.
 - Royalties: expose marketplace-compatible royalty information, but never claim arbitrary transfers enforce payment.
 - Primary checkout: fixed-price SEP-41 USDC transfer and NFT mint happen atomically in the collection contract. The buyer signs Soroban authorization entries while a ZEXVRO sponsor signs and pays the transaction envelope fee.
+- Token IDs: always auto-allocated server-side when omitted (mint + checkout); UI does not require manual token ID entry.
+- Game / indie integration: public REST checkout, hosted embed popup (`/nft/embed/checkout`), and copy-ready SDK snippets in the NFT Studio **Integrate SDK** panel (`packages/nft-checkout-sdk`).
 - Secondary sales, auctions, fiat checkout, and multi-chain support are outside v1.
 
 Agent boundaries:
@@ -303,23 +305,36 @@ Agent boundaries:
 
 Remaining integration work:
 
-- Provision live AWS S3 (+ CDN), DynamoDB `zexvro-nft`, and Secrets Manager sponsor injection for hosted NFT API (code paths already land with env switches).
-- Record managed end-to-end smoke (Cognito + Freighter mint/sale/buy) in `memory.md`.
-- Finalize game/studio onboarding details and operational status reconciliation.
+- Record managed end-to-end smoke (Cognito + Freighter mint/sale/buy, auto token IDs, SDK embed) in `memory.md`.
+- Hosted NFT API (ECS/Lambda) + least-privilege IAM remain ops.
+- Partner game origins must be listed in `CORS_ALLOWED_ORIGINS`.
+- New collection deploys use WASM hash with instance TTL bumps; older collections keep prior WASM until redeployed.
 
-### 6. De-pin (x402 Agentic Resource Gateway)
+### 6. De-pin (x402 Agentic Resource Gateway) + Access Shield direction
 
 Owner: Nabil / `n4bi10p`
 
-Problem:
+Problem (shipping MVP):
 
 - Physical hardware networks and API compute nodes cannot easily conduct commerce with autonomous AI agents because traditional Web2 billing platforms require human identity verification and credit cards.
 
-MVP intent:
+Problem (strategic / big-tech USP — **Proposed** product framing):
+
+- Large AI and data platforms (Grok/xAI-class, OpenAI-class, internal LLM APIs) lose unbounded COGS when free tiers and weak Web2 gates (email, phone, CAPTCHA, flat API keys) are industrialized: account farms, residential proxies, multi-account rotation, and agent tool-loops resell or burn free capacity.
+- ZEXVRO’s Web2→Web3 migration pitch for those buyers is **economic access control**: make free-capacity resale and agent spam unprofitable without rewriting their model stack.
+
+MVP intent (implemented gateway):
 
 - Provide a lightweight proxy layer sitting in front of idempotent HTTP APIs and compute resources.
 - Intercept agent requests and issue an HTTP 402 "Payment Required" challenge.
 - Verify signed Soroban authorization entries and settle an exact USDC payment per successful request.
+- Fail closed: unpaid traffic never receives the upstream body; settlement failures withhold the resource.
+
+Strategic intent (**Proposed** — document for teammates; not fully productized UI):
+
+- Position De-pin as the enforcement plane of **ZEXVRO Access Shield**: an edge economic firewall big platforms put in front of expensive APIs.
+- Combine with (future) Agent Auth classification (Rushi), policy/rate cards, and settlement receipts—not as a WAF clone and not as offensive anti-farm tooling.
+- Full product one-pager: `docs/access_shield.md`.
 
 Architecture decisions:
 
@@ -327,8 +342,12 @@ Architecture decisions:
 - Payment rail: `exact` scheme with SEP-41 USDC on `stellar:testnet` in v1, using the official `@x402/stellar` implementation and facilitator-sponsored fees.
 - Proxy order: verify payment, fulfill and buffer a successful upstream result, settle, then release the result. Upstream or settlement failures withhold the resource.
 - Provider model: validated local configuration for concrete `GET`/`HEAD` routes, upstream URL, description, price, recipient, network, timeout, and optional environment-secret reference.
+- Recipient (`payTo`) is always a classic Stellar **G…** account (needs USDC trustline). Do not put the USDC SAC **C…** address in `recipient`.
+- Facilitator: local unpaid 402 probes may use public facilitators (e.g. `https://x402.org/facilitator`). Real Stellar settle via OpenZeppelin Channels should use Channels facilitator URLs and process env `OZ_API_KEY` (or `X402_FACILITATOR_API_KEY`) as Bearer auth.
 - Abuse controls: request IDs, authorization replay protection, unpaid-request rate limits, bounded response buffering, structured redacted audit logs, and upstream timeouts.
+- Multi-instance: `DEPIN_STATE_BACKEND=memory|file` (redis reserved); managed config via `DEPIN_CONFIG_JSON` → `DEPIN_CONFIG_URL` → `DEPIN_CONFIG_PATH`.
 - Streaming payments, time-based sessions, custom facilitators, provider marketplace UI, and physical-device adapters are deferred.
+- POST/completions and streaming chat gateways are **roadmap** for Access Shield (v1 remains GET/HEAD exact).
 
 Agent boundaries:
 
@@ -336,12 +355,17 @@ Agent boundaries:
 - Do not handle custody of user funds without explicit authorization design.
 - Do not build the proxy without defining the resource provider registration model.
 - Keep the gateway lightweight and composable.
+- Do not build offensive farm tooling (OTP bots, credential theft, ban evasion). Platform **defense** only.
+- Do not claim Access Shield is fully shipped; keep product expansion marked Proposed until accepted by the team.
+- Coordinate Agent Auth identity/challenge design with Rushi; do not fork a second classifier under De-pin.
 
 Remaining integration work:
 
 - Use `DEPIN_STATE_BACKEND=file` (or future redis) for multi-instance hosts; do not run multiple processes on memory defaults.
 - Prefer managed config via `DEPIN_CONFIG_JSON` or `DEPIN_CONFIG_URL` in containers; local file remains the dev default.
 - Provider onboarding UI and richer ownership model remain product follow-ups.
+- Optional OZ Channels facilitator + `OZ_API_KEY` for production-like settle.
+- Access Shield roadmap: rate cards, POST/stream patterns, platform control-plane UI, multi-region anti-replay.
 - Add an agent client SDK only after the standard x402 client path is exercised in more environments.
 
 ## Shared Platform Areas

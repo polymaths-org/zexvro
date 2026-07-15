@@ -781,3 +781,33 @@ Use `None` for empty fields. Do not delete fields.
 - Follow-ups: Publish npm package when ready; partner CORS allowlist; Cognito/Freighter full E2E; optional commit of this slice.
 - Blockers: Browser Freighter E2E still manual.
 - Verification: NFT API 62/62 lint/build; FE nft+routing 34 tests expected after route test; FE lint green.
+
+## 2026-07-14 - Codex with Nabil - Stellar skills audit polish (NFT + De-pin)
+
+- Service or area: NFT wallet/gateway/contract, De-pin x402 facilitator auth.
+- Files changed: `frontend/src/services/nft/stellarWallet.ts` (+tests), `services/nft-service/api/src/stellarGateway.ts` (+tests), `services/nft-service/contracts/collection/src/lib.rs`, `services/depin/src/payment.ts`, depin README/example, `.env.example`.
+- Summary: Skill-aligned fixes after installing skills.stellar.org. Freighter network mismatch fail-fast; full collection contract error map (#1–#6); instance TTL bumps on mint/sale/purchase; De-pin optional OZ_API_KEY Bearer for Channels facilitator; docs for payTo G-address vs SAC C-address.
+- Decisions: Accepted - Keep x402.org as local unpaid-probe default; OZ Channels + OZ_API_KEY for real Stellar settle. Accepted - Contract TTL bump is source change; existing testnet WASM hash still current until rebuild/redeploy.
+- Follow-ups: Rebuild/redeploy collection WASM if TTL bumps required on-chain for new collections; optional switch depin.config facilitatorUrl to OZ Channels when key available; commit polish + SDK UI when user asks.
+- Blockers: None for unit matrix.
+- Verification: FE NFT 32/32; NFT API 63/63; De-pin 34/34; contract tests 10/10; lints green.
+
+## 2026-07-14 - Codex with Nabil - Remaining ops: WASM TTL install + CORS + test checklist
+
+- Service or area: NFT contract WASM, API CORS, local test docs.
+- Files changed: rebuilt `zexvro_nft_collection.wasm`, installed on testnet hash `df42dfce…`, updated `.env`/`.env.example`/`scripts/dev.mjs`/README/aws_nft_production; CORS allowlist normalize + preflight test; `docs/nft_local_test_checklist.md`; SDK README CORS note.
+- Summary: New collections deploy with TTL-bump WASM. CORS fail-closed allowlist (trailing slash normalized). Local browser checklist written for Nabil smoke without claiming E2E done.
+- Decisions: Accepted - Old collections keep old WASM until redeployed. Accepted - No commit yet (user testing first).
+- Follow-ups: User browser smoke via checklist; restart dev stack for new hash; optional OZ_API_KEY for De-pin settle; commit when user asks.
+- Blockers: Hosted ECS/IAM still open (ops).
+- Verification: NFT API 64/64; FE NFT 32/32; contract tests previously 10/10; install tx on testnet recorded in install log.
+
+## 2026-07-15 - Codex with Nabil - Docs: Access Shield + teammate MD sync
+
+- Service or area: Shared product docs (context, planning, pages, access_shield).
+- Files changed: `context.md`, `planning.md`, `pages.md`, `docs/access_shield.md` (new), `memory.md`, `agent-convo.md`.
+- Summary: Documented De-pin strategic framing as **Access Shield** (big-tech free-tier/agent API abuse defense) for teammates. Updated NFT rows for auto token IDs + Integrate SDK + embed routes. Clarified OZ_API_KEY / G vs C recipient rules. No code claims of full Access Shield GA.
+- Decisions: Proposed - Access Shield is the product name for economic firewall built on De-pin + future Agent Auth/policy. Accepted - Platform defense only; no offensive farm tooling. Accepted - Keep shipping MVP as De-pin gateway while narrative expands.
+- Follow-ups: Team review of `docs/access_shield.md`; coordinate with Rushi on Agent Auth binding; Nabil browser smoke checklist still open; commit when user asks.
+- Blockers: None for docs.
+- Verification: Docs only (no test matrix required).
