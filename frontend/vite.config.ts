@@ -1,5 +1,6 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
+import { nodePolyfills } from 'vite-plugin-node-polyfills';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import path from 'path';
 import {defineConfig, loadEnv, type Plugin} from 'vite';
@@ -155,7 +156,32 @@ export default defineConfig(({ mode }) => {
     ),
   };
   return {
-    plugins: [opencodeAgentApi(env), react(), tailwindcss()],
+    plugins: [
+      opencodeAgentApi(env),
+      react(),
+      tailwindcss(),
+      // Polyfill Node builtins for stellar-sdk / snarkjs imports.
+      // Do NOT inject a global `crypto` shim — that can wipe browser WebCrypto
+      // (`crypto.subtle`) and break stealth PIN claims (importKey / AES-GCM).
+      // App code must not `import { createHash } from 'crypto'` in the browser.
+      nodePolyfills({
+        include: ['buffer', 'events', 'util', 'stream', 'process'],
+        globals: {
+          Buffer: true,
+          global: true,
+          process: true,
+        },
+      }),
+    ],
+    // Freighter module is not loaded from the kit — primary Freighter button uses freighter-api@6.
+    optimizeDeps: {
+      include: [
+        '@stellar/js-xdr',
+        '@stellar/stellar-base',
+        'stellar-sdk',
+        '@creit.tech/stellar-wallets-kit',
+      ],
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
