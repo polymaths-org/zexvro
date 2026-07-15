@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+test-results/
+playwright-report/
+.DS_Store
+*.log
+
+# Local machine secrets/config. Keep `.env.example` committed as the template.
+.env*
+!.env.example
+

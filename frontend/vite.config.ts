@@ -143,7 +143,17 @@ function opencodeAgentApi(env: Record<string, string>): Plugin {
 }
 
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), '');
+  // Prefer repository-root env when present so frontend-only `npm run dev`
+  // still picks up the unified template without a per-folder `.env`.
+  const env = {
+    ...loadEnv(mode, path.resolve(__dirname, '..'), ''),
+    ...loadEnv(mode, process.cwd(), ''),
+    ...Object.fromEntries(
+      Object.entries(process.env).filter((entry): entry is [string, string] => (
+        typeof entry[1] === 'string'
+      )),
+    ),
+  };
   return {
     plugins: [opencodeAgentApi(env), react(), tailwindcss()],
     resolve: {
@@ -154,6 +164,18 @@ export default defineConfig(({ mode }) => {
     server: {
       hmr: process.env.DISABLE_HMR !== 'true',
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      proxy: {
+        '/api/nft': {
+          target: env.NFT_API_PROXY_TARGET || 'http://127.0.0.1:4101',
+          changeOrigin: false,
+          rewrite: (requestPath) => requestPath.replace(/^\/api\/nft/, ''),
+        },
+        '/api/depin': {
+          target: env.DEPIN_API_PROXY_TARGET || 'http://127.0.0.1:4102',
+          changeOrigin: false,
+          rewrite: (requestPath) => requestPath.replace(/^\/api\/depin/, ''),
+        },
+      },
     },
   };
 });

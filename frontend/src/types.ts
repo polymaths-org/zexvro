@@ -92,3 +92,25 @@ export interface SecurityKey {
 
 export type ThemeType = 'system' | 'light' | 'dark';
 export type DensityType = 'comfortable' | 'compact';
+
+export type CollectionStatus = 'draft' | 'deploying' | 'live' | 'failed' | 'archived';
+
+export interface NftCollectionDraft {
+  name: string;
+  symbol: string;
+  description: string;
+  coverName: string;
+  royaltyBps: number;
+  ownerAddress?: string;
+  royaltyRecipient?: string;
+  baseMetadataUri?: string;
+  externalUrl?: string;
+}
+
+export interface NftCollection extends NftCollectionDraft {
+  id: string;
+  workspaceId: string;
+  itemCount: number;
+  status: CollectionStatus;
+  createdAt: string;
+}

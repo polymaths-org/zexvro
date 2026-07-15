@@ -1,0 +1,16 @@
+<svg width="900" height="640" viewBox="0 0 900 640" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Static ZEXVRO node network background">
+  <rect width="900" height="640" fill="#050505"/>
+  <g opacity=".34" stroke="#FAFAFA" stroke-width="1.5">
+    <path d="M146 132l186 118 144-86 180 168 94-148M332 250l-62 188 206-54 180-52M476 164v220M656 332l94 176M146 132l124 306"/>
+  </g>
+  <g fill="#FAFAFA" opacity=".56">
+    <rect x="124" y="110" width="44" height="44" rx="6"/>
+    <rect x="310" y="228" width="44" height="44" rx="6"/>
+    <rect x="454" y="142" width="44" height="44" rx="6"/>
+    <rect x="634" y="310" width="44" height="44" rx="6"/>
+    <rect x="728" y="162" width="44" height="44" rx="6"/>
+    <rect x="248" y="416" width="44" height="44" rx="6"/>
+    <rect x="454" y="362" width="44" height="44" rx="6"/>
+    <rect x="728" y="486" width="44" height="44" rx="6"/>
+  </g>
+</svg>

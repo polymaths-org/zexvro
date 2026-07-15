@@ -1,0 +1,156 @@
+import * as React from "react";
+import type { SVGProps } from "react";
+const SvgAgentAuth = (props: SVGProps<SVGSVGElement>) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    fill="none"
+    aria-labelledby="auth-title auth-desc"
+    viewBox="0 0 640 460"
+    {...props}
+  >
+    <desc>
+      {
+        "Scattered identity points resolve into human and agent clusters under an access boundary."
+      }
+    </desc>
+    <rect
+      width={638}
+      height={458}
+      x={1}
+      y={1}
+      fill="#050505"
+      stroke="#27272a"
+      strokeWidth={2}
+      rx={8}
+    />
+    <path
+      stroke="#3f3f46"
+      strokeDasharray="8 12"
+      strokeWidth={2}
+      d="M320 74v312"
+    />
+    <g opacity={0.9}>
+      <rect
+        width={206}
+        height={284}
+        x={76}
+        y={88}
+        fill="#0a0a0b"
+        stroke="#3b82f6"
+        strokeWidth={2}
+        rx={8}
+      />
+      <text
+        x={114}
+        y={342}
+        fill="#a1a1aa"
+        fontFamily="JetBrains Mono, monospace"
+        fontSize={16}
+      >
+        {"HUMAN"}
+      </text>
+    </g>
+    <g opacity={0.9}>
+      <rect
+        width={206}
+        height={284}
+        x={358}
+        y={88}
+        fill="#0a0a0b"
+        stroke="#22c55e"
+        strokeWidth={2}
+        rx={8}
+      />
+      <text
+        x={408}
+        y={342}
+        fill="#a1a1aa"
+        fontFamily="JetBrains Mono, monospace"
+        fontSize={16}
+      >
+        {"AGENT"}
+      </text>
+    </g>
+    <g fill="#fafafa">
+      <circle
+        cx={124}
+        cy={144}
+        r={7}
+        className="agent-auth_svg__auth-dot agent-auth_svg__human-dot"
+      />
+      <circle
+        cx={178}
+        cy={136}
+        r={5}
+        className="agent-auth_svg__auth-dot agent-auth_svg__human-dot"
+      />
+      <circle
+        cx={222}
+        cy={164}
+        r={6}
+        className="agent-auth_svg__auth-dot agent-auth_svg__human-dot"
+      />
+      <circle
+        cx={144}
+        cy={218}
+        r={6}
+        className="agent-auth_svg__auth-dot agent-auth_svg__human-dot"
+      />
+      <circle
+        cx={214}
+        cy={230}
+        r={8}
+        className="agent-auth_svg__auth-dot agent-auth_svg__human-dot"
+      />
+      <circle
+        cx={176}
+        cy={276}
+        r={5}
+        className="agent-auth_svg__auth-dot agent-auth_svg__human-dot"
+      />
+      <circle
+        cx={412}
+        cy={146}
+        r={6}
+        className="agent-auth_svg__auth-dot agent-auth_svg__agent-dot"
+      />
+      <circle
+        cx={474}
+        cy={142}
+        r={7}
+        className="agent-auth_svg__auth-dot agent-auth_svg__agent-dot"
+      />
+      <circle
+        cx={512}
+        cy={188}
+        r={5}
+        className="agent-auth_svg__auth-dot agent-auth_svg__agent-dot"
+      />
+      <circle
+        cx={426}
+        cy={226}
+        r={7}
+        className="agent-auth_svg__auth-dot agent-auth_svg__agent-dot"
+      />
+      <circle
+        cx={492}
+        cy={246}
+        r={6}
+        className="agent-auth_svg__auth-dot agent-auth_svg__agent-dot"
+      />
+      <circle
+        cx={462}
+        cy={290}
+        r={5}
+        className="agent-auth_svg__auth-dot agent-auth_svg__agent-dot"
+      />
+    </g>
+    <path
+      stroke="#fafafa"
+      strokeDasharray="9 13"
+      strokeWidth={2}
+      d="M108 402h424"
+    />
+  </svg>
+);
+export default SvgAgentAuth;
