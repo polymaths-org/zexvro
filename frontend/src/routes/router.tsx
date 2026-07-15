@@ -21,6 +21,8 @@ import Zer0PayParty from '../components/zer0/Zer0PayParty';
 import Zer0History from '../components/zer0/Zer0History';
 import Zer0Proofs from '../components/zer0/Zer0Proofs';
 import Zer0Settings from '../components/zer0/Zer0Settings';
+import Zer0DataPreview from '../components/zer0/Zer0DataPreview';
+import Zer0Stealth from '../components/zer0/Zer0Stealth';
 import PlaceholderScreen from '../components/PlaceholderScreen';
 import Services from '../components/services/Services';
 import AgentStudio from '../components/dashboard/AgentStudio';
@@ -52,6 +54,7 @@ import PublicCollection from '../services/nft/PublicCollection';
 import EmbedCheckout from '../services/nft/EmbedCheckout';
 
 const MarketingPage = React.lazy(() => import('../marketing/MarketingPage'));
+const WithdrawPage = React.lazy(() => import('../components/withdraw/WithdrawPage'));
 
 function AppFallback() {
   return <div className="min-h-screen bg-[#050505] text-zinc-100" />;
@@ -61,6 +64,14 @@ function MarketingRoute() {
   return (
     <React.Suspense fallback={<AppFallback />}>
       <MarketingPage />
+    </React.Suspense>
+  );
+}
+
+function WithdrawRoute() {
+  return (
+    <React.Suspense fallback={<AppFallback />}>
+      <WithdrawPage />
     </React.Suspense>
   );
 }
@@ -192,6 +203,13 @@ const indexRoute = createRoute({
   component: MarketingRoute,
 });
 
+/** Public stealth claim / withdraw — no dashboard login required */
+const withdrawRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/withdraw',
+  component: WithdrawRoute,
+});
+
 const agentShortcutRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/agent',
@@ -288,6 +306,18 @@ const wsZer0ProofsRoute = createRoute({
   getParentRoute: () => wsZer0LayoutRoute,
   path: 'proofs',
   component: Zer0Proofs,
+});
+
+const wsZer0DataPreviewRoute = createRoute({
+  getParentRoute: () => wsZer0LayoutRoute,
+  path: 'data-preview',
+  component: Zer0DataPreview,
+});
+
+const wsZer0StealthRoute = createRoute({
+  getParentRoute: () => wsZer0LayoutRoute,
+  path: 'stealth',
+  component: Zer0Stealth,
 });
 
 const wsZer0SettingsRoute = createRoute({
@@ -422,6 +452,18 @@ const projectZer0ProofsRoute = createRoute({
   getParentRoute: () => projectZer0LayoutRoute,
   path: 'proofs',
   component: Zer0Proofs,
+});
+
+const projectZer0DataPreviewRoute = createRoute({
+  getParentRoute: () => projectZer0LayoutRoute,
+  path: 'data-preview',
+  component: Zer0DataPreview,
+});
+
+const projectZer0StealthRoute = createRoute({
+  getParentRoute: () => projectZer0LayoutRoute,
+  path: 'stealth',
+  component: Zer0Stealth,
 });
 
 const projectZer0SettingsRoute = createRoute({
@@ -571,6 +613,7 @@ const embedNftCheckoutRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
+  withdrawRoute,
   agentShortcutRoute,
   servicesShortcutRoute,
   misspelledServicesShortcutRoute,
@@ -591,6 +634,8 @@ const routeTree = rootRoute.addChildren([
       wsZer0HistoryRoute,
       wsZer0PayrollRoute,
       wsZer0ProofsRoute,
+      wsZer0StealthRoute,
+      wsZer0DataPreviewRoute,
       wsZer0SettingsRoute,
     ]),
     wsAuditRoute,
@@ -613,6 +658,8 @@ const routeTree = rootRoute.addChildren([
       projectZer0HistoryRoute,
       projectZer0PayrollRoute,
       projectZer0ProofsRoute,
+      projectZer0StealthRoute,
+      projectZer0DataPreviewRoute,
       projectZer0SettingsRoute,
     ]),
     projectAgentRoute,

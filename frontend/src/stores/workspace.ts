@@ -22,6 +22,8 @@ interface WorkspaceState {
   workspaces: Workspace[];
   currentWorkspaceId: string | null;
   currentWorkspace: () => Workspace | null;
+  isHydrated: boolean;
+  setHydrated: (val: boolean) => void;
   createWorkspace: (name: string, ownerId: string) => Workspace;
   selectWorkspace: (id: string) => void;
   updateWorkspace: (id: string, updates: Partial<Pick<Workspace, 'name' | 'plan' | 'settings'>>) => void;
@@ -35,6 +37,9 @@ export const useWorkspaceStore = create<WorkspaceState>()(
   (set, get) => ({
     workspaces: [],
     currentWorkspaceId: null,
+    isHydrated: false,
+
+    setHydrated: (val) => set({ isHydrated: val }),
 
     currentWorkspace: () => {
       const { workspaces, currentWorkspaceId } = get();

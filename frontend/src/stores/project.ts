@@ -31,8 +31,8 @@ interface ProjectState {
     name: string;
     description: string;
     purpose: string;
-    framework: string;
-    branch: string;
+    framework?: string;
+    branch?: string;
     network: string;
     enabledServices?: string[];
   }) => Project;
@@ -103,8 +103,8 @@ export const useProjectStore = create<ProjectState>()(
         createdAt: now,
         updatedAt: now,
         owner: 'current-user',
-        framework: input.framework,
-        branch: input.branch,
+        framework: input.framework || undefined,
+        branch: input.branch || undefined,
         network: input.network,
         enabledServices: input.enabledServices || [],
       };
@@ -113,7 +113,7 @@ export const useProjectStore = create<ProjectState>()(
         projects: [...state.projects, project],
         currentProjectId: project.id,
       }));
-      projectApi.create({ ...project, environments: [], serviceInstances: [] })
+      projectApi.create({ ...project, projectId: project.id, environments: [], serviceInstances: [] })
         .catch(err => console.error('Failed to save project to AWS:', err));
       return project;
     },
@@ -174,9 +174,18 @@ export const useProjectStore = create<ProjectState>()(
         network: input.network,
         createdAt: Date.now(),
       };
-      set(state => ({
-        environments: [...state.environments, env],
-      }));
+      set(state => {
+        const nextEnvironments = [...state.environments, env];
+        const project = state.projects.find(p => p.id === input.projectId);
+        if (project) {
+          const projectEnvs = nextEnvironments.filter(e => e.projectId === input.projectId);
+          projectApi.update(project.id, {
+            workspaceId: project.workspaceId,
+            environments: projectEnvs,
+          }).catch(err => console.error('Failed to sync environments to project in AWS:', err));
+        }
+        return { environments: nextEnvironments };
+      });
       return env;
     },
 
@@ -193,18 +202,39 @@ export const useProjectStore = create<ProjectState>()(
         createdAt: Date.now(),
         updatedAt: Date.now(),
       };
-      set(state => ({
-        serviceInstances: [...state.serviceInstances, instance],
-      }));
+      set(state => {
+        const nextInstances = [...state.serviceInstances, instance];
+        const project = state.projects.find(p => p.id === input.projectId);
+        if (project) {
+          const projectInstances = nextInstances.filter(i => i.projectId === input.projectId);
+          projectApi.update(project.id, {
+            workspaceId: project.workspaceId,
+            serviceInstances: projectInstances,
+          }).catch(err => console.error('Failed to sync service instances to project in AWS:', err));
+        }
+        return { serviceInstances: nextInstances };
+      });
       return instance;
     },
 
     updateServiceInstance: (id, updates) =>
-      set(state => ({
-        serviceInstances: state.serviceInstances.map(i =>
+      set(state => {
+        const nextInstances = state.serviceInstances.map(i =>
           i.id === id ? { ...i, ...updates, updatedAt: Date.now() } : i
-        ),
-      })),
+        );
+        const targetInstance = nextInstances.find(i => i.id === id);
+        if (targetInstance) {
+          const project = state.projects.find(p => p.id === targetInstance.projectId);
+          if (project) {
+            const projectInstances = nextInstances.filter(i => i.projectId === project.id);
+            projectApi.update(project.id, {
+              workspaceId: project.workspaceId,
+              serviceInstances: projectInstances,
+            }).catch(err => console.error('Failed to sync updated service instances to AWS:', err));
+          }
+        }
+        return { serviceInstances: nextInstances };
+      }),
 
     createDeployment: (input) => {
       const deployment: Deployment = {

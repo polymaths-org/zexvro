@@ -1,0 +1,16 @@
+[package]
+name = "zer0-pool"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["lib", "cdylib"]
+doctest = false
+
+[dependencies]
+soroban-sdk = { workspace = true, features = ["hazmat-crypto"] }
+soroban-poseidon = "27"
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils", "hazmat-crypto"] }
