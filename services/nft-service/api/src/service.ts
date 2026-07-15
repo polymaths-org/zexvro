@@ -53,8 +53,9 @@ interface CollectionMetadataInput {
   externalUrl?: string
 }
 
-const DEFAULT_TESTNET_USDC_CONTRACT =
-  'CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA'
+/** Native XLM SAC on Stellar testnet (no trustline). */
+const DEFAULT_TESTNET_PAYMENT_TOKEN =
+  'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC'
 
 export class NftService {
   constructor(
@@ -63,7 +64,7 @@ export class NftService {
     private readonly chain: NftChainGateway,
     private readonly checkoutTtlSeconds: number,
     private readonly now: () => Date = () => new Date(),
-    private readonly paymentTokenAddress: string = DEFAULT_TESTNET_USDC_CONTRACT,
+    private readonly paymentTokenAddress: string = DEFAULT_TESTNET_PAYMENT_TOKEN,
     private readonly localMetadataBaseUrl?: string,
   ) {}
 
@@ -461,13 +462,35 @@ export class NftService {
     collectionId: string
     preparedTransaction: string
     signedTransaction: string
+    price: bigint
   }) {
     const collection = await this.requireLiveCollection(input.collectionId)
-    return this.chain.submitSaleConfig({
+    // Idempotent: if sale already recorded at this price, return current state.
+    if (
+      collection.primarySale !== undefined &&
+      collection.primarySale.priceAtomic === input.price.toString()
+    ) {
+      return {
+        transactionHash: collection.primarySale.transactionHash,
+        status: 'confirmed' as const,
+        collection,
+      }
+    }
+    const result = await this.chain.submitSaleConfig({
       contractId: collection.contractId,
       expectedSerializedTransaction: input.preparedTransaction,
       serializedTransaction: input.signedTransaction,
     })
+    await this.markPrimarySaleConfigured(
+      collection,
+      input.price,
+      result.transactionHash,
+    )
+    const updated = await this.repository.getCollection(collection.id)
+    return {
+      ...result,
+      collection: updated ?? collection,
+    }
   }
 
   async submitMint(input: {

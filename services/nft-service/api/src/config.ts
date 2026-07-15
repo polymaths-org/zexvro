@@ -84,10 +84,12 @@ const configSchema = z.object({
     .default('Test SDF Network ; September 2015'),
   STELLAR_SPONSOR_SECRET: optionalSecret,
   NFT_COLLECTION_WASM_HASH: optionalSecret,
+  // Payment token for primary sales. Default = native XLM SAC (testnet) — no trustline required.
+  // Override with USDC SAC if you need USDC checkout instead.
   STELLAR_USDC_CONTRACT: z
     .string()
     .regex(/^C[A-Z2-7]{55}$/)
-    .default('CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA'),
+    .default('CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC'),
   NFT_CHECKOUT_TTL_SECONDS: z.coerce.number().int().min(30).max(900).default(300),
 })
 

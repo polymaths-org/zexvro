@@ -1,17 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from '@tanstack/react-router';
 import {
-  ArrowLeft,
   CircleAlert,
-  CircleDollarSign,
-  Copy,
   ExternalLink,
-  Gamepad2,
   LoaderCircle,
   ShieldCheck,
   ShoppingCart,
 } from 'lucide-react';
 import {
+  collectionLogo,
   createPublicCheckoutIntent,
   getPublicNftCollection,
   NftApiError,
@@ -32,40 +29,15 @@ function errorMessage(error: unknown) {
   return 'The NFT service could not complete this request.';
 }
 
-function reportCheckoutError(error: unknown, setCheckoutError: (message: string) => void) {
-  const message = errorMessage(error);
-  // Help local debugging when Freighter/signing fails outside the network tab.
-  console.error('[nft/checkout]', message, error);
-  setCheckoutError(message);
-}
-
-function shortAddress(value: string) {
-  return value.length > 18 ? `${value.slice(0, 9)}...${value.slice(-7)}` : value;
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  }).format(new Date(value));
-}
-
-function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(value));
-}
-
 function atomicToUsdc(value: string) {
   const atomic = BigInt(value);
   const whole = atomic / 10_000_000n;
   const fraction = (atomic % 10_000_000n).toString().padStart(7, '0').replace(/0+$/, '');
   return fraction ? `${whole.toString()}.${fraction}` : whole.toString();
+}
+
+function shortAddress(value: string) {
+  return value.length > 18 ? `${value.slice(0, 9)}...${value.slice(-7)}` : value;
 }
 
 export default function PublicCollection() {
@@ -79,8 +51,9 @@ export default function PublicCollection() {
   const [checkoutError, setCheckoutError] = useState('');
   const [preparing, setPreparing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [connecting, setConnecting] = useState(false);
   const [confirmedHash, setConfirmedHash] = useState('');
-  const [copied, setCopied] = useState('');
+  const [statusNote, setStatusNote] = useState('');
 
   useEffect(() => {
     if (!collectionId) return;
@@ -90,9 +63,7 @@ export default function PublicCollection() {
     getPublicNftCollection(collectionId, controller.signal)
       .then((result) => {
         setCollection(result.collection);
-        if (result.inventory) {
-          setInventory(result.inventory);
-        }
+        if (result.inventory) setInventory(result.inventory);
       })
       .catch((error: unknown) => {
         if (!controller.signal.aborted) setLoadError(errorMessage(error));
@@ -103,23 +74,66 @@ export default function PublicCollection() {
     return () => controller.abort();
   }, [collectionId]);
 
-  const publicUrl = useMemo(() => {
-    if (typeof window === 'undefined') return '';
-    return window.location.href.split('?')[0] || window.location.href;
-  }, []);
+  const logo = useMemo(
+    () => (collection ? collectionLogo(collection) : ''),
+    [collection],
+  );
 
+  const priceLabel = useMemo(() => {
+    if (!collection?.primarySale) return null;
+    return `${atomicToUsdc(collection.primarySale.priceAtomic)} XLM`;
+  }, [collection]);
 
   const connectBuyerWallet = async () => {
     setCheckoutError('');
+    setConnecting(true);
     try {
-      if (!(await isWalletAvailable())) {
-        throw new Error('Freighter is not available in this browser. Unlock Freighter, allow this site, or paste a buyer address manually.');
+      const available = await isWalletAvailable();
+      if (!available) {
+        throw new Error(
+          'Freighter not detected. Install Freighter, unlock it, set network to Testnet, allow this site, then retry.',
+        );
       }
       const address = await getPublicKey();
       setBuyerAddress(address);
-      setCopied('Wallet connected.');
+      setStatusNote('Wallet connected.');
     } catch (error) {
-      reportCheckoutError(error, setCheckoutError);
+      console.error('[nft/checkout] connect', error);
+      setCheckoutError(errorMessage(error));
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  const prepareCheckout = async () => {
+    if (!collection || !collectionId) return;
+    setCheckoutError('');
+    setCheckoutIntent(null);
+    setStatusNote('');
+    let address = buyerAddress.trim();
+    if (!STELLAR_ADDRESS.test(address)) {
+      // Auto-connect if user skipped the connect button.
+      try {
+        address = await getPublicKey();
+        setBuyerAddress(address);
+      } catch (error) {
+        setCheckoutError(errorMessage(error));
+        return;
+      }
+    }
+
+    setPreparing(true);
+    try {
+      const intent = await createPublicCheckoutIntent({
+        collectionId,
+        buyerAddress: address,
+      });
+      setCheckoutIntent(intent);
+      setStatusNote(`Token #${intent.tokenId} reserved.`);
+    } catch (error) {
+      setCheckoutError(errorMessage(error));
+    } finally {
+      setPreparing(false);
     }
   };
 
@@ -129,13 +143,9 @@ export default function PublicCollection() {
     setCheckoutError('');
     setConfirmedHash('');
     try {
-      if (!(await isWalletAvailable())) {
-        throw new Error('Freighter is not available in this browser. Unlock Freighter, allow this site on Testnet, then try again.');
-      }
       const walletAddress = await getPublicKey();
       if (walletAddress !== checkoutIntent.buyerAddress) {
-        setCheckoutError(`Connected wallet must match buyer address ${checkoutIntent.buyerAddress}.`);
-        return;
+        throw new Error(`Connected wallet must be ${checkoutIntent.buyerAddress}`);
       }
       const signedTransaction = await signTransaction(checkoutIntent.serializedTransaction);
       const result = await submitPublicCheckoutIntent({
@@ -148,46 +158,12 @@ export default function PublicCollection() {
       }
       setConfirmedHash(hash);
       setCheckoutIntent({ ...result.intent, status: 'confirmed', transactionHash: hash });
-      setCopied('Purchase confirmed on Stellar testnet.');
+      setStatusNote('Purchase confirmed on Stellar testnet.');
     } catch (error) {
-      reportCheckoutError(error, setCheckoutError);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const prepareCheckout = async () => {
-    if (!collection || !collectionId) return;
-    setCheckoutError('');
-    setCheckoutIntent(null);
-    setCopied('');
-    if (!STELLAR_ADDRESS.test(buyerAddress.trim())) {
-      setCheckoutError('Enter a valid Stellar buyer wallet address.');
-      return;
-    }
-
-    setPreparing(true);
-    try {
-      // API allocates the next free token ID automatically.
-      const intent = await createPublicCheckoutIntent({
-        collectionId,
-        buyerAddress: buyerAddress.trim(),
-      });
-      setCheckoutIntent(intent);
-      setCopied(`Token #${intent.tokenId} reserved for checkout.`);
-    } catch (error) {
+      console.error('[nft/checkout] sign', error);
       setCheckoutError(errorMessage(error));
     } finally {
-      setPreparing(false);
-    }
-  };
-
-  const copyText = async (label: string, value: string) => {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(`${label} copied.`);
-    } catch {
-      setCopied(value);
+      setSubmitting(false);
     }
   };
 
@@ -212,140 +188,98 @@ export default function PublicCollection() {
 
   return (
     <main className="min-h-dvh bg-[#050506] text-zinc-100">
-      <div className="mx-auto grid min-h-dvh max-w-7xl gap-8 px-6 py-8 lg:grid-cols-[minmax(0,1fr)_400px] lg:items-start lg:py-12">
-        <section className="min-w-0">
-          <a href="/dashboard" className="mb-8 inline-flex items-center gap-2 text-sm text-zinc-400 transition hover:text-white">
-            <ArrowLeft className="h-4 w-4" />
-            ZEXVRO
-          </a>
-          <div className="grid gap-6 md:grid-cols-[280px_minmax(0,1fr)] md:items-start">
-            <div className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950">
-              {collection.coverImageUri.startsWith('http') ? (
-                <img src={collection.coverImageUri} alt="" className="aspect-square w-full object-cover" />
-              ) : (
-                <div className="flex aspect-square items-center justify-center text-zinc-600">
-                  <Gamepad2 className="h-12 w-12" />
+      <div className="mx-auto max-w-lg px-5 py-8">
+        <header className="mb-6 flex items-center justify-start">
+          <img
+            src="/brand/wordmark-transparent.png"
+            alt="ZEXVRO"
+            className="h-7 w-auto max-w-[160px] object-contain opacity-90"
+            onError={(event) => {
+              (event.currentTarget as HTMLImageElement).src = '/brand/typo-logo.png';
+            }}
+          />
+        </header>
+
+        <div className="mb-5 flex justify-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-zinc-700/80 ring-1 ring-zinc-600/50">
+            <img
+              src="/brand/logo-transparent.png"
+              alt=""
+              className="h-9 w-9 object-contain"
+            />
+          </div>
+        </div>
+
+        <section className="overflow-hidden rounded-2xl border border-zinc-800 bg-[#0A0A0B]">
+          <div className="space-y-3 p-5">
+            <div className="flex items-center gap-4 border-b border-zinc-800 pb-4">
+              <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-zinc-700 bg-zinc-900">
+                {logo.startsWith('http') || logo.startsWith('/') ? (
+                  <img src={logo} alt={collection.name} className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-[10px] text-zinc-600">NFT</div>
+                )}
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Checkout</p>
+                <h1 className="mt-1 truncate text-xl font-semibold text-white">{collection.name}</h1>
+                <p className="mt-0.5 font-mono text-xs text-zinc-500">{collection.symbol}</p>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-zinc-800 bg-[#050506] p-4">
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <span className="text-zinc-500">Amount</span>
+                <span className="font-semibold tabular-nums text-white">
+                  {priceLabel || 'Sale not configured'}
+                </span>
+              </div>
+              <div className="mt-3 flex items-center justify-between gap-3 text-sm">
+                <span className="text-zinc-500">Minted</span>
+                <span className="tabular-nums text-zinc-200">{inventory?.mintedCount ?? 0}</span>
+              </div>
+              <div className="mt-3 flex items-center justify-between gap-3 text-sm">
+                <span className="text-zinc-500">Network</span>
+                <span className="text-zinc-200">Stellar testnet</span>
+              </div>
+              {collection.contractId && (
+                <div className="mt-3 flex items-center justify-between gap-3 text-sm">
+                  <span className="text-zinc-500">Contract</span>
+                  <a
+                    href={`https://stellar.expert/explorer/testnet/contract/${collection.contractId}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 font-mono text-xs text-brand-blue"
+                  >
+                    {shortAddress(collection.contractId)}
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
                 </div>
               )}
             </div>
-            <div className="min-w-0">
-              <div className="mb-3 flex items-center gap-2 text-xs font-medium text-brand-blue">
-                <Gamepad2 className="h-4 w-4" />
-                {collection.symbol}
-              </div>
-              <h1 className="text-balance text-4xl font-semibold text-white">{collection.name}</h1>
-              <p className="mt-4 max-w-2xl text-pretty text-sm leading-6 text-zinc-400">{collection.description}</p>
 
-              <div className="mt-8 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-zinc-800 bg-zinc-800">
-                <div className="bg-[#080809] p-4">
-                  <span className="text-xs text-zinc-500">Royalty</span>
-                  <span className="mt-1 flex items-center gap-1.5 text-sm font-medium tabular-nums text-white">
-                    <CircleDollarSign className="h-4 w-4 shrink-0 text-zinc-500" />
-                    {(collection.royaltyBps / 100).toFixed(2)}%
-                  </span>
-                </div>
-                <div className="bg-[#080809] p-4">
-                  <span className="text-xs text-zinc-500">Minted items</span>
-                  <span className="mt-1 block text-sm font-medium tabular-nums text-white">
-                    {inventory?.mintedCount ?? 0}
-                  </span>
-                </div>
-                <div className="bg-[#080809] p-4">
-                  <span className="text-xs text-zinc-500">Created</span>
-                  <span className="mt-1 block text-sm font-medium text-white">{formatDate(collection.createdAt)}</span>
-                </div>
-                <div className="bg-[#080809] p-4">
-                  <span className="text-xs text-zinc-500">Primary sale</span>
-                  <span className="mt-1 block text-sm font-medium tabular-nums text-white">
-                    {collection.primarySale ? `${atomicToUsdc(collection.primarySale.priceAtomic)} USDC` : 'Not configured'}
-                  </span>
-                </div>
-                <div className="col-span-2 bg-[#080809] p-4">
-                  <span className="text-xs text-zinc-500">Contract</span>
-                  {collection.contractId ? (
-                    <a
-                      href={`https://stellar.expert/explorer/testnet/contract/${collection.contractId}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      title={collection.contractId}
-                      className="mt-1 inline-flex max-w-full items-center gap-1.5 font-mono text-sm text-brand-blue hover:underline"
-                    >
-                      <span className="truncate">{shortAddress(collection.contractId)}</span>
-                      <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-                    </a>
-                  ) : (
-                    <span className="mt-1 block text-sm text-zinc-500">Pending</span>
-                  )}
-                </div>
-              </div>
+            <p className="text-sm leading-6 text-zinc-400">{collection.description}</p>
 
-              <div className="mt-5 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => void copyText('Collection URL', publicUrl)}
-                  className="inline-flex h-10 items-center gap-2 rounded-md border border-zinc-800 px-3 text-sm font-medium text-zinc-300 transition hover:border-zinc-700 hover:text-white"
-                >
-                  <Copy className="h-4 w-4" />
-                  Copy URL
-                </button>
-                <a
-                  href={collection.collectionMetadataUri}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex h-10 items-center gap-2 rounded-md border border-zinc-800 px-3 text-sm font-medium text-zinc-300 transition hover:border-zinc-700 hover:text-white"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                  Metadata
-                </a>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <aside className="min-w-0 rounded-lg border border-zinc-800 bg-[#080809] p-5">
-          <div className="flex items-start gap-3">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-zinc-800 text-brand-blue">
-              <ShoppingCart className="h-5 w-5" />
-            </span>
-            <div className="min-w-0">
-              <h2 className="text-base font-semibold text-white">Buy item</h2>
-              <p className="mt-1 text-pretty text-sm leading-6 text-zinc-400">
-                Prepare the Stellar checkout for your wallet signature.
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-5 space-y-4">
             <label className="block text-sm font-medium text-zinc-200">
               Buyer wallet
               <input
                 value={buyerAddress}
-                onChange={event => setBuyerAddress(event.target.value.trim().toUpperCase())}
+                onChange={(event) => setBuyerAddress(event.target.value.trim().toUpperCase())}
                 placeholder="G..."
                 spellCheck={false}
-                className="mt-2 w-full rounded-md border border-zinc-800 bg-[#050506] px-3 py-2.5 font-mono text-xs text-white outline-none transition focus:border-brand-blue sm:text-sm"
+                className="mt-2 w-full rounded-md border border-zinc-800 bg-[#050506] px-3 py-2.5 font-mono text-xs text-white outline-none focus:border-brand-blue"
               />
             </label>
+
             <button
               type="button"
+              disabled={connecting}
               onClick={() => void connectBuyerWallet()}
-              className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md border border-zinc-800 px-3 text-sm font-medium text-zinc-300 transition hover:border-zinc-700 hover:text-white"
+              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-zinc-700 text-sm font-medium text-zinc-200 transition hover:border-zinc-500 hover:text-white disabled:opacity-60"
             >
-              Connect wallet
+              {connecting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
+              Connect Freighter
             </button>
-            <div className="rounded-md border border-zinc-800 bg-[#050506] p-3 text-sm text-zinc-400">
-              Token ID is assigned automatically at checkout.
-              {inventory && (
-                <p className="mt-1 tabular-nums text-zinc-500">
-                  {inventory.mintedCount} minted · next free suggestion #{inventory.nextTokenId}
-                </p>
-              )}
-              {checkoutIntent && (
-                <p className="mt-1 font-medium tabular-nums text-zinc-100">
-                  Reserved for this purchase: #{checkoutIntent.tokenId}
-                </p>
-              )}
-            </div>
 
             {checkoutError && (
               <div className="flex gap-2 rounded-md border border-red-500/25 bg-red-500/5 p-3 text-sm text-red-300">
@@ -353,92 +287,64 @@ export default function PublicCollection() {
                 <span className="min-w-0 break-words">{checkoutError}</span>
               </div>
             )}
-            {copied && (
+            {statusNote && (
               <div className="flex gap-2 rounded-md border border-emerald-500/25 bg-emerald-500/5 p-3 text-sm text-emerald-300">
                 <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
-                <span className="min-w-0 break-words">{copied}</span>
+                <span>{statusNote}</span>
               </div>
             )}
 
-            <button
-              type="button"
-              disabled={preparing || !collection.primarySale}
-              onClick={() => void prepareCheckout()}
-              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-white px-4 text-sm font-medium text-zinc-950 transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {preparing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShoppingCart className="h-4 w-4" />}
-              Prepare checkout
-            </button>
-          </div>
-
-          {checkoutIntent && (
-            <div className="mt-5 min-w-0 space-y-3 border-t border-zinc-800 pt-5">
-              <div className="grid grid-cols-1 gap-3">
-                <div className="min-w-0">
-                  <div className="text-xs text-zinc-500">Required signer</div>
-                  <div className="mt-1 flex min-w-0 items-center gap-2">
-                    <code
-                      title={checkoutIntent.requiredSigners.join(', ')}
-                      className="min-w-0 flex-1 truncate font-mono text-xs text-zinc-300"
-                    >
-                      {checkoutIntent.requiredSigners.map(shortAddress).join(', ')}
-                    </code>
-                    <button
-                      type="button"
-                      aria-label="Copy required signer"
-                      onClick={() => void copyText('Required signer', checkoutIntent.requiredSigners.join(', '))}
-                      className="inline-flex size-7 shrink-0 items-center justify-center rounded-md border border-zinc-800 text-zinc-400 transition hover:border-zinc-700 hover:text-white"
-                    >
-                      <Copy className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </div>
-                <div>
-                  <div className="text-xs text-zinc-500">Expires</div>
-                  <div className="mt-1 text-sm tabular-nums text-zinc-300">
-                    {formatDateTime(checkoutIntent.expiresAt)}
-                  </div>
-                </div>
+            {!checkoutIntent && !collection.primarySale && (
+              <div className="rounded-md border border-amber-500/25 bg-amber-500/5 p-3 text-sm text-amber-200">
+                Primary sale is not live yet. The collection owner must open the NFT dashboard and activate sale (or re-create and sign the sale step) before buyers can purchase.
               </div>
-              <textarea
-                readOnly
-                value={checkoutIntent.serializedTransaction}
-                rows={4}
-                className="w-full resize-none break-all rounded-md border border-zinc-800 bg-[#050506] p-3 font-mono text-[11px] leading-4 text-zinc-400 outline-none"
-              />
+            )}
+
+            {!checkoutIntent && (
               <button
                 type="button"
-                onClick={() => void copyText('Prepared transaction', checkoutIntent.serializedTransaction)}
-                className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md border border-zinc-800 px-3 text-sm font-medium text-zinc-300 transition hover:border-zinc-700 hover:text-white"
+                disabled={preparing || !collection.primarySale || !buyerAddress}
+                onClick={() => void prepareCheckout()}
+                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-white text-sm font-medium text-zinc-950 transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <Copy className="h-4 w-4" />
-                Copy transaction
+                {preparing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShoppingCart className="h-4 w-4" />}
+                {!collection.primarySale
+                  ? 'Sale not live yet'
+                  : !buyerAddress
+                    ? 'Connect wallet to continue'
+                    : 'Prepare purchase'}
               </button>
-              {checkoutIntent.status !== 'confirmed' && (
-                <button
-                  type="button"
-                  disabled={submitting}
-                  onClick={() => void signAndSubmitCheckout()}
-                  className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-white px-4 text-sm font-medium text-zinc-950 transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {submitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-                  Sign & submit
-                </button>
-              )}
-              {confirmedHash && (
-                <a
-                  href={`https://stellar.expert/explorer/testnet/tx/${confirmedHash}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex max-w-full items-center gap-2 text-sm text-emerald-300 hover:text-emerald-200"
-                >
-                  <ExternalLink className="h-4 w-4 shrink-0" />
-                  <span className="truncate">Confirmed {shortAddress(confirmedHash)}</span>
-                </a>
-              )}
-            </div>
-          )}
-        </aside>
+            )}
+
+            {checkoutIntent && checkoutIntent.status !== 'confirmed' && (
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => void signAndSubmitCheckout()}
+                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-white text-sm font-medium text-zinc-950 transition hover:bg-zinc-200 disabled:opacity-60"
+              >
+                {submitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+                Sign & buy token #{checkoutIntent.tokenId}
+              </button>
+            )}
+
+            {confirmedHash && (
+              <a
+                href={`https://stellar.expert/explorer/testnet/tx/${confirmedHash}`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex w-full items-center justify-center gap-2 text-sm text-emerald-300"
+              >
+                <ExternalLink className="h-4 w-4" />
+                View confirmation
+              </a>
+            )}
+          </div>
+        </section>
+
+        <p className="mt-6 text-center text-[11px] text-zinc-600">
+          Powered by ZEXVRO · Freighter Testnet · sponsored network fees
+        </p>
       </div>
     </main>
   );

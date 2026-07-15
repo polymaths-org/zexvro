@@ -41,6 +41,7 @@ function buildSnippets(input: {
   const { collectionId, appOrigin, apiBase } = input;
   const embedUrl = `${appOrigin}/nft/embed/checkout?collectionId=${collectionId}`;
   const publicUrl = `${appOrigin}/nft/collections/${collectionId}`;
+  const brandingUrl = `${apiBase}/v1/public/collections/${collectionId}`;
 
   const popup = `// ZEXVRO NFT — popup checkout (Razorpay-style)
 // Call openCheckout when the player buys an item.
@@ -104,8 +105,9 @@ export NFT_API='${apiBase}'
 export COLLECTION_ID='${collectionId}'
 export BUYER='G...YOUR_PLAYER_STELLAR_ADDRESS'
 
-# 1) Collection + inventory
-curl -s "$NFT_API/v1/public/collections/$COLLECTION_ID" | jq .
+# 1) Collection branding (name + logo for in-game UI)
+curl -s "$NFT_API/v1/public/collections/$COLLECTION_ID" | jq '{name, logo, logoUri, coverImageUri, symbol, description, primarySale}'
+# branding URL: ${brandingUrl}
 
 # 2) Create checkout intent (auto token id)
 curl -s -X POST "$NFT_API/v1/public/checkout/intents" \\
@@ -432,11 +434,11 @@ export default function NftSdkPanel({
           <ul className="mt-2 space-y-1.5 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
             <li className="flex gap-2">
               <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-zinc-400" />
-              <span>Collection must be <span className="font-medium text-zinc-700 dark:text-zinc-200">live</span> with primary sale configured (USDC).</span>
+              <span>Collection must be <span className="font-medium text-zinc-700 dark:text-zinc-200">live</span> with primary sale configured (XLM).</span>
             </li>
             <li className="flex gap-2">
               <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-zinc-400" />
-              <span>Player needs Freighter (testnet), USDC trustline, and enough USDC. Network fees are sponsored.</span>
+              <span>Player needs Freighter (testnet) and enough XLM. Network fees are sponsored.</span>
             </li>
             <li className="flex gap-2">
               <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-zinc-400" />
