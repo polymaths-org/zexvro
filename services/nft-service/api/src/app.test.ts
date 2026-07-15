@@ -232,6 +232,22 @@ describe('NFT service API', () => {
     })
   })
 
+  it('allows configured partner origins for public checkout CORS preflight', async () => {
+    await request(app)
+      .options('/v1/public/checkout/intents')
+      .set('Origin', 'http://127.0.0.1:3000')
+      .set('Access-Control-Request-Method', 'POST')
+      .expect(204)
+      .expect('Access-Control-Allow-Origin', 'http://127.0.0.1:3000')
+
+    const blocked = await request(app)
+      .options('/v1/public/checkout/intents')
+      .set('Origin', 'https://evil.example')
+      .set('Access-Control-Request-Method', 'POST')
+    // cors package omits allow-origin when callback returns false
+    expect(blocked.headers['access-control-allow-origin']).toBeUndefined()
+  })
+
   it('uploads supported media and surfaces upload failures', async () => {
     const uploaded = await request(app)
       .post('/v1/media')

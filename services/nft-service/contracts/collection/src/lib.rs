@@ -7,6 +7,10 @@ use soroban_sdk::{
 use stellar_tokens::non_fungible::{Base, NFTStorageKey};
 
 const MAX_ROYALTY_BPS: u32 = 1_000;
+/// Keep instance storage live: threshold ~120 ledgers/day * 120 days, extend to ~180 days.
+/// (Stellar storage is rented; without bumps, collection config can archive.)
+const INSTANCE_TTL_THRESHOLD: u32 = 120 * 17_280;
+const INSTANCE_TTL_EXTEND_TO: u32 = 180 * 17_280;
 
 #[contracttype]
 #[derive(Clone)]
@@ -110,6 +114,7 @@ impl NftCollectionContract {
         require_minter(&e, &operator);
         ensure_token_available(&e, token_id);
         Base::mint(&e, &to, token_id);
+        bump_instance(&e);
     }
 
     pub fn balance(e: Env, account: Address) -> u32 {
@@ -209,11 +214,13 @@ impl NftCollectionContract {
                 price,
             },
         );
+        bump_instance(&e);
     }
 
     pub fn disable_sale(e: Env, operator: Address) {
         require_owner(&e, &operator);
         e.storage().instance().remove(&DataKey::SaleConfig);
+        bump_instance(&e);
     }
 
     pub fn sale_config(e: Env) -> Option<SaleConfig> {
@@ -238,6 +245,7 @@ impl NftCollectionContract {
             price: config.price,
         }
         .publish(&e);
+        bump_instance(&e);
     }
 }
 
@@ -280,6 +288,12 @@ fn validate_royalty(e: &Env, basis_points: u32) {
     if basis_points > MAX_ROYALTY_BPS {
         panic_with_error!(e, CollectionError::InvalidRoyalty);
     }
+}
+
+fn bump_instance(e: &Env) {
+    e.storage()
+        .instance()
+        .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_EXTEND_TO);
 }
 
 #[cfg(test)]

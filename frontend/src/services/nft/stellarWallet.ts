@@ -132,6 +132,40 @@ export function isWalletAvailableSync(): boolean {
   );
 }
 
+/**
+ * Ensure Freighter is on the network ZEXVRO expects (testnet by default).
+ * Stellar dapp skill: surface network mismatch before signing.
+ */
+export async function assertWalletNetwork(
+  networkPassphrase: string = TESTNET_PASSPHRASE,
+): Promise<void> {
+  if (typeof window === 'undefined') {
+    throw new StellarWalletError('wallet_unavailable', 'Wallet APIs are only available in the browser.');
+  }
+  const network = await freighterApi.getNetwork();
+  throwIfFreighterError(
+    network,
+    'wallet_network_mismatch',
+    'Could not read Freighter network. Unlock Freighter and try again.',
+  );
+  const passphrase = (network.networkPassphrase || '').trim();
+  const label = (network.network || '').trim().toUpperCase();
+  if (passphrase && passphrase !== networkPassphrase) {
+    const expected =
+      networkPassphrase === TESTNET_PASSPHRASE ? 'Testnet' : 'the required Stellar network';
+    throw new StellarWalletError(
+      'wallet_network_mismatch',
+      `Freighter is on ${label || passphrase}, but ZEXVRO expects ${expected}. Open Freighter → switch network, then retry.`,
+    );
+  }
+  if (!passphrase && label && networkPassphrase === TESTNET_PASSPHRASE && label !== 'TESTNET') {
+    throw new StellarWalletError(
+      'wallet_network_mismatch',
+      `Freighter is on ${label}, but ZEXVRO expects Testnet. Open Freighter → switch network, then retry.`,
+    );
+  }
+}
+
 export async function getPublicKey(): Promise<string> {
   if (typeof window === 'undefined') {
     throw new StellarWalletError('wallet_unavailable', 'Wallet APIs are only available in the browser.');
@@ -157,7 +191,10 @@ export async function getPublicKey(): Promise<string> {
     'wallet_permission_denied',
     'Freighter did not grant access. Approve this site in the Freighter popup and try again.',
   );
-  if (access.address?.trim()) return access.address.trim();
+  if (access.address?.trim()) {
+    await assertWalletNetwork();
+    return access.address.trim();
+  }
 
   // Fallback if requestAccess returned empty but site was previously allowed.
   const allowed = await freighterApi.isAllowed();
@@ -176,7 +213,10 @@ export async function getPublicKey(): Promise<string> {
     'wallet_address_failed',
     'Freighter did not return a public key.',
   );
-  if (addressResult.address?.trim()) return addressResult.address.trim();
+  if (addressResult.address?.trim()) {
+    await assertWalletNetwork();
+    return addressResult.address.trim();
+  }
 
   throw new StellarWalletError('wallet_address_failed', 'Freighter did not return a public key.');
 }
@@ -211,11 +251,17 @@ export async function signTransaction(
     await freighterApi.requestAccess();
   }
 
+  // Fail fast on wrong Freighter network (skill UX checklist).
+  await assertWalletNetwork(networkPassphrase);
+
   let address: string | undefined;
   try {
     address = await getPublicKey();
-  } catch {
-    // Signing can still prompt; address is optional for freighter-api opts.
+  } catch (error) {
+    // Network mismatch from getPublicKey must surface; other address issues can still prompt.
+    if (error instanceof StellarWalletError && error.code === 'wallet_network_mismatch') {
+      throw error;
+    }
   }
 
   const network = networkPassphrase === TESTNET_PASSPHRASE ? 'TESTNET' : undefined;

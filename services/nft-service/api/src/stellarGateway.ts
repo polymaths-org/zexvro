@@ -76,12 +76,37 @@ export function simulationFailureToApiError(error: unknown): ApiError | undefine
   }
 
   // --- Collection contract errors (#1-#6) ---
+  // Keep messages actionable for Freighter/studio UX (stellar dapp skill checklist).
   const contractError = /Error\(Contract, #(\d+)\)/.exec(message)?.[1]
+  if (contractError === '1') {
+    return new ApiError(
+      403,
+      'collection_owner_required',
+      'Only the collection owner can perform this operation. Connect the owner wallet and try again.',
+      { simulationError: message },
+    )
+  }
+  if (contractError === '2') {
+    return new ApiError(
+      403,
+      'unauthorized_minter',
+      'This wallet is not an authorized minter for the collection. Use the owner wallet or enable the minter role on-chain.',
+      { simulationError: message },
+    )
+  }
   if (contractError === '3') {
     return new ApiError(
       409,
       'token_already_minted',
       'That token ID is already minted. Choose another token ID.',
+    )
+  }
+  if (contractError === '4') {
+    return new ApiError(
+      400,
+      'invalid_royalty',
+      'Royalty basis points exceed the collection maximum (10%).',
+      { simulationError: message },
     )
   }
   if (contractError === '5') {
