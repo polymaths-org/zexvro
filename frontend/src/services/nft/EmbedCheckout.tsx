@@ -31,9 +31,12 @@ function errorMessage(error: unknown) {
 
 function postToOpener(type: 'success' | 'error' | 'close', payload?: Record<string, unknown>) {
   if (typeof window === 'undefined' || !window.opener) return;
+  // Games embed from other origins (localhost, itch.io, etc.). Restricting
+  // targetOrigin to this site silently drops success events for those parents.
+  // Payload is a non-secret purchase receipt; the parent still validates event.origin.
   window.opener.postMessage(
     { source: 'zexvro-nft-checkout', type, payload },
-    window.location.origin,
+    '*',
   );
 }
 
