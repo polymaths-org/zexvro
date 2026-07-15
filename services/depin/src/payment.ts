@@ -47,7 +47,27 @@ export class X402PaymentProtocol implements PaymentProtocol {
       this.server = server
       return
     }
-    const facilitator = new HTTPFacilitatorClient({ url: config.facilitatorUrl })
+    // OZ Channels (recommended for Stellar x402) requires Bearer auth on testnet/mainnet.
+    // Keep unauthenticated clients for public facilitators such as x402.org when no key is set.
+    const facilitatorApiKey =
+      process.env.OZ_API_KEY?.trim() ||
+      process.env.X402_FACILITATOR_API_KEY?.trim() ||
+      ''
+    const facilitator = new HTTPFacilitatorClient({
+      url: config.facilitatorUrl,
+      ...(facilitatorApiKey === ''
+        ? {}
+        : {
+            createAuthHeaders: async () => {
+              const headers = { Authorization: `Bearer ${facilitatorApiKey}` }
+              return {
+                verify: headers,
+                settle: headers,
+                supported: headers,
+              }
+            },
+          }),
+    })
     const resourceServer = new x402ResourceServer(facilitator).register(
       'stellar:testnet',
       new ExactStellarScheme(),

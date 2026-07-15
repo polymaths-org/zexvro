@@ -449,6 +449,8 @@ Never claim live AWS media/tables, multi-instance De-pin on memory defaults, or 
 
 Phases 1–11 code/docs complete on branch. Remaining: live AWS/Freighter ops gates + user-confirmed commit/PR.
 
+**Product narrative (2026-07-15):** De-pin is also framed for teammates as the enforcement plane of **Access Shield** (big-tech free-tier/agent API abuse defense). See `docs/access_shield.md` and `planning.md`. That framing is **Proposed** and does not reopen Phases 1–11 as incomplete.
+
 ---
 
 ## Out of scope (do not pull into this plan)

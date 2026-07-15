@@ -1,6 +1,6 @@
 # ZEXVRO Pages And Completion Map
 
-Last updated: 2026-07-13
+Last updated: 2026-07-15
 
 This file is for the next model and team members. It explains which pages work, which pages are partial, where data is stored, and what must be finished.
 
@@ -79,9 +79,11 @@ This file is for the next model and team members. It explains which pages work, 
 | Morph Transformation | `/transformation` | Partial | UI/service component and agent backend | 55% | Needs real repository scan execution wiring. |
 | A-2-A Trade Pipeline | `/trade` | UI partial | Frontend component | 35% | Needs protocol, wallet policy, and settlement API. |
 | Agent Auth Service | `/agent-auth` | UI partial | Frontend component | 35% | Needs classifier API, SDK credentials, and telemetry. |
-| NFT Studio | `/nft` (project scope under `/dashboard/w/.../p/.../nft`) | Working partial | Cognito NFT API (`services/nft-service`), Soroban collection contract, local JSON or Dynamo records, local/S3/Pinata media | 85% | Create/deploy/sale/mint/public buy/inventory/archive work on local/testnet. Live production needs AWS bucket/table/role + managed sponsor secret + Freighter smoke. |
-| De-pin Gateway | `/depin` (project scope under `/dashboard/w/.../p/.../depin`) | Working partial | Local/managed De-pin gateway (`services/depin`) via Vite proxy | 80% | Health/status, unpaid 402 probe, exact x402 settle path verified on testnet. Multi-instance needs `DEPIN_STATE_BACKEND=file` (or future redis); managed config via JSON/URL/path. |
-| Docs | `/docs` | Working partial | Static docs component | 60% | Needs current service documentation and integration examples. |
+| NFT Studio | `/nft` (project scope under `/dashboard/w/.../p/.../nft`) | Working partial | Cognito NFT API (`services/nft-service`), Soroban collection contract, local JSON or Dynamo records, local/S3/Pinata media | 88% | Create/deploy/sale/mint/public buy/inventory/archive; **auto token IDs**; **Integrate SDK** copy panel; embed checkout at `/nft/embed/checkout`. Live production needs hosted API + Freighter E2E recorded. |
+| Public NFT collection | `/nft/collections/$collectionId` | Working partial | Public NFT API | 85% | Buyer prepare/sign/submit; no manual token ID. |
+| NFT embed checkout | `/nft/embed/checkout` | Working partial | Public NFT API + Freighter | 75% | Game popup surface; partner origins need `CORS_ALLOWED_ORIGINS`. |
+| De-pin Gateway | `/depin` (project scope under `/dashboard/w/.../p/.../depin`) | Working partial | Local/managed De-pin gateway (`services/depin`) via Vite proxy | 80% | Health/status, unpaid 402 probe, exact x402 settle path verified on testnet. Multi-instance file backend; managed config. Product narrative expanding toward **Access Shield** (see `docs/access_shield.md`)—UI still gateway-focused. |
+| Docs | `/docs` | Working partial | Static docs component | 60% | Needs current service documentation and integration examples (Access Shield + NFT SDK still mostly in repo MD). |
 
 ## Legacy Or Removed Pages
 
@@ -102,3 +104,5 @@ This file is for the next model and team members. It explains which pages work, 
 3. Persist project role/member management with a project membership table or workspace-role scoping.
 4. Add service telemetry APIs for Analytics and Security pages.
 5. Remove unused legacy dashboard and Web2 deployment components once routes are fully stable.
+6. Nabil: record Cognito/Freighter NFT smoke (auto IDs + SDK); commit pending polish when ready; Access Shield control-plane UI remains proposed.
+7. Team: review `docs/access_shield.md` for big-tech anti-abuse positioning; coordinate Agent Auth (Rushi) with De-pin economic gate (Nabil).

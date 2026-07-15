@@ -2,6 +2,8 @@
 
 De-pin is a fail-closed reverse proxy for idempotent HTTP APIs. It uses x402 v2 `exact` payments over Stellar testnet USDC and the official `@x402/stellar` server implementation.
 
+**Product framing for teammates:** De-pin is the economic enforcement plane of **ZEXVRO Access Shield**—helping platforms stop industrial free-tier farming and agent spam by requiring pay-per-request access. Full narrative, architecture, and non-goals: [`docs/access_shield.md`](../../docs/access_shield.md). The gateway MVP below is what is implemented today; Access Shield control-plane UI is proposed.
+
 ## Request flow
 
 1. An unpaid request receives the standard x402 `402` response and `PAYMENT-REQUIRED` header.
@@ -23,6 +25,15 @@ npm run dev:all
 ```
 
 Copy `depin.config.example.json` to `depin.config.json`, replace the recipient with the provider's Stellar G-address, and set any referenced secrets in the environment. Secret values are injected as `Authorization: Bearer ...` upstream and are never accepted from or returned to clients.
+
+### Facilitator (Stellar x402)
+
+- Local unpaid `402` probes can keep `facilitatorUrl: "https://x402.org/facilitator"`.
+- For **real Stellar settlement** (testnet/mainnet), prefer OpenZeppelin Channels:
+  - Testnet: `https://channels.openzeppelin.com/x402/testnet`
+  - Mainnet: `https://channels.openzeppelin.com/x402`
+- Set `OZ_API_KEY` (or `X402_FACILITATOR_API_KEY`) in the process environment. The gateway sends `Authorization: Bearer …` on facilitator `supported` / `verify` / `settle` calls. Generate a testnet key at [channels.openzeppelin.com/testnet/gen](https://channels.openzeppelin.com/testnet/gen).
+- `payTo` is always a classic **G…** account (needs a USDC trustline). Do not put the USDC SAC **C…** address in `recipient`.
 
 ### Config sources (boot only)
 

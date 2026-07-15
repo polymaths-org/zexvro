@@ -2,7 +2,7 @@
 
 Status: Proposed product planning context. This file is for humans and models planning future screens or architecture. Do not treat proposed flows as implemented backend behavior.
 
-Last updated: 2026-07-10 (decisions added: TanStack Router, Zustand, multi-step wizard, /w/:wid/p/:pid/ routes)
+Last updated: 2026-07-15 (Nabil: NFT auto token IDs + game SDK; De-pin Access Shield product framing for teammates)
 
 ## How To Use This File
 
@@ -59,10 +59,49 @@ Branch note for `updates-routing-and-zer0`:
 | Transformation Agent, Morph | Paris | CLI built | CLI/TUI exists. Web panel and deeper frontend integration are future work. |
 | A-2-A Trade Pipeline | Rushi | Planned | Agent negotiation, identity, offer schema, wallet authorization, and settlement are undecided. |
 | Captcha-like Agent Authentication | Rushi | Planned | Must avoid claims of perfect detection. Needs confidence score, appeal, and privacy model. |
-| NFT Service | Nabil | Working local/testnet MVP | Contract + API + FE for deploy, sale, mint, public buy, inventory/archive. Production media/records/secrets code ready (S3/Dynamo/Secrets Manager gates); live AWS still ops. |
-| De-pin | Nabil | Working local/testnet MVP | Exact x402 Stellar testnet gateway with pluggable replay/rate-limit stores and multi-source provider config. Multi-instance file backend available; redis not implemented. |
+| NFT Service | Nabil | Working local/testnet MVP | Contract + API + FE for deploy, sale, mint, public buy, inventory/archive, auto token IDs, Integrate SDK panel + embed checkout. Production media/records/secrets code ready (S3/Dynamo/Secrets Manager); live AWS + Freighter E2E still ops/manual. |
+| De-pin | Nabil | Working local/testnet MVP | Exact x402 Stellar testnet gateway with pluggable replay/rate-limit stores and multi-source provider config. Multi-instance file backend available; redis not implemented. Strategic framing: **Access Shield** economic firewall for big-tech API abuse (see below + `docs/access_shield.md`). |
 
 Secondary PaaS features like deploy, DB, hosting, security, connectors, and billing should support the MVP services, not overtake them.
+
+## Proposed: Access Shield (big-tech API anti-abuse)
+
+Status: **Proposed** product direction from Nabil (owner of De-pin). Not a shipped multi-tenant control plane. Teammates should treat this as planning context for ZEXVRO’s Web2→Web3 USP.
+
+### Problem (what we are solving for platforms)
+
+Industrial free-tier and agent abuse (account farms, residential IPs, multi-account rotation, agent tool-loops) turns weak Web2 gates (email/phone/CAPTCHA/flat API keys) into unbounded COGS for AI/data APIs. ZEXVRO does **not** build offensive farming tools. We sell **platform defense**.
+
+### Solution shape
+
+| Plane | Role | Owner / service |
+| --- | --- | --- |
+| Economic gate | Per-request (or session) payment; unpaid → 402; settle before release | **De-pin** (x402 exact USDC) — shipping MVP |
+| Agent classification | Challenge / score / short-lived capability (not “perfect bot detection”) | **Agent Auth** (Rushi) — planned; coordinate |
+| Policy / rate card | Prices, concurrency, free-demo isolation | Future Access Shield control plane |
+| Receipts / audit | Prove paid access for finops and partners | De-pin settle proofs + future ledger UX |
+
+### What De-pin already contributes
+
+- Fail-closed reverse proxy for configured `GET`/`HEAD` routes.
+- Official x402 v2 exact Stellar testnet USDC; facilitator-sponsored fees when using a proper Stellar facilitator path.
+- Replay protection, unpaid rate limits, multi-source config, multi-instance file state.
+- Optional `OZ_API_KEY` for OpenZeppelin Channels Bearer auth on settle.
+
+### Roadmap (not v1 claims)
+
+- POST/completions metering and later streaming/session pay (MPP channel patterns).
+- Platform rate cards (price per model / 1k tokens / tool call).
+- Hybrid Web2 API keys (identity) + Web3 settle (abuse brake).
+- Free-tier isolation: demo surface never shares production inference capacity.
+
+### Non-goals
+
+- Replacing Cloudflare/WAF as the only story.
+- Building account farms, OTP bots, or ban-evasion.
+- Claiming perfect bot detection (that belongs to Agent Auth design constraints).
+
+Detail: `docs/access_shield.md`.
 
 ## Recent User Direction
 
