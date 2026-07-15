@@ -7,6 +7,7 @@ import {
   CircleAlert,
   CircleDollarSign,
   CloudUpload,
+  Code2,
   Copy,
   Edit3,
   ExternalLink,
@@ -45,6 +46,7 @@ import {
   type PreparedNftTransaction,
 } from './nftApi';
 import { formatWalletError, getPublicKey, isWalletAvailable, signTransaction } from './stellarWallet';
+import NftSdkPanel from './NftSdkPanel';
 
 interface CollectionDashboardProps {
   workspaceId: string;
@@ -146,6 +148,10 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
     collection: ApiNftCollection;
     items: NftMintedItem[];
     nextTokenId: number;
+  } | null>(null);
+  const [sdkPanel, setSdkPanel] = useState<{
+    collectionId?: string;
+    collectionName?: string;
   } | null>(null);
 
   const loadRemoteData = useCallback(async (signal?: AbortSignal, isRefresh = false) => {
@@ -594,7 +600,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
             Deploy and inspect creator-controlled game asset collections on Stellar testnet.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             aria-label="Refresh collections"
@@ -606,6 +612,22 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
             className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-zinc-200 text-zinc-500 transition hover:bg-zinc-50 hover:text-zinc-950 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-800 dark:hover:bg-zinc-900 dark:hover:text-white"
           >
             <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const live = collections.find((entry) => entry.status === 'live');
+              setSdkPanel(
+                live
+                  ? { collectionId: live.id, collectionName: live.name }
+                  : {},
+              );
+            }}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-zinc-200 px-4 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900"
+            title="Copy SDK snippets for in-game purchase"
+          >
+            <Code2 className="h-4 w-4" />
+            Integrate SDK
           </button>
           <button
             type="button"
@@ -794,6 +816,19 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
                                   className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-zinc-200 text-zinc-500 transition hover:border-zinc-300 hover:text-zinc-950 dark:border-zinc-800 dark:hover:border-zinc-700 dark:hover:text-white"
                                 >
                                   <Copy className="h-4 w-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setSdkPanel({
+                                      collectionId: collection.id,
+                                      collectionName: collection.name,
+                                    })
+                                  }
+                                  title="Copy game SDK snippets"
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-zinc-200 text-zinc-500 transition hover:border-zinc-300 hover:text-zinc-950 dark:border-zinc-800 dark:hover:border-zinc-700 dark:hover:text-white"
+                                >
+                                  <Code2 className="h-4 w-4" />
                                 </button>
                                 <button
                                   type="button"
@@ -1341,6 +1376,14 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
             </div>
           </section>
         </div>
+      )}
+
+      {sdkPanel && (
+        <NftSdkPanel
+          collectionId={sdkPanel.collectionId}
+          collectionName={sdkPanel.collectionName}
+          onClose={() => setSdkPanel(null)}
+        />
       )}
     </div>
   );
