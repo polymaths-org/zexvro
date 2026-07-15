@@ -62,7 +62,7 @@ const configuredCollection = {
   ...remoteCollection,
   id: '6a0dc446-4f57-4cf2-94ec-257b41b786a1',
   primarySale: {
-    paymentTokenAddress: 'CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA',
+    paymentTokenAddress: 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC',
     priceAtomic: '12500000',
     transactionHash: 'sale-config-auto-hash',
     configuredAt: '2026-07-12T00:00:00.000Z',
@@ -283,6 +283,7 @@ describe('CollectionDashboard', () => {
       collectionId: remoteCollection.id,
       preparedTransaction: 'prepared-sale',
       signedTransaction: 'signed-sale',
+      priceAtomic: expect.any(String),
       accessToken: 'access-token',
     });
     expect(await screen.findByText(/signed and confirmed/i)).toBeInTheDocument();

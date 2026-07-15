@@ -94,6 +94,7 @@ export default function CollectionStudio({
   const [mintRecipient, setMintRecipient] = useState('');
   const [mintIntent, setMintIntent] = useState<PreparedNftTransaction | null>(null);
   const [showSdk, setShowSdk] = useState(false);
+  const [tab, setTab] = useState<'overview' | 'sale' | 'mint' | 'ledger' | 'integrate'>('overview');
 
   const dashboardUrl = useMemo(() => {
     if (typeof window === 'undefined') return '';
@@ -212,15 +213,25 @@ export default function CollectionStudio({
       }
       const ownerAddress = await getPublicKey();
       const priceAtomic = usdcToAtomic(salePrice);
-      if (!priceAtomic) throw new Error('Enter a valid USDC price.');
+      if (!priceAtomic) throw new Error('Enter a valid XLM price.');
       const intent = await prepareNftSaleConfig({
         collectionId: collection.id,
         ownerAddress,
         priceAtomic,
         accessToken,
       });
+      if (intent.autoSubmitted?.transactionHash) {
+        setMessage('Primary sale activated on-chain (auto-submitted).');
+        setSaleIntent(null);
+        await load();
+        return;
+      }
       setSaleIntent(intent);
-      setMessage('Sale config prepared — sign with Freighter to go live.');
+      setMessage(
+        intent.requiredSigners?.length
+          ? 'Sale config prepared — sign with Freighter to go live.'
+          : 'Sale config prepared — confirm to activate.',
+      );
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -233,11 +244,23 @@ export default function CollectionStudio({
     setBusy(true);
     setError('');
     try {
-      const signedTransaction = await signTransaction(saleIntent.serializedTransaction);
+      const priceAtomic = usdcToAtomic(salePrice);
+      if (!priceAtomic) throw new Error('Enter a valid XLM price.');
+      if (saleIntent.autoSubmitted?.transactionHash) {
+        setSaleIntent(null);
+        setMessage('Primary sale already activated on-chain.');
+        await load();
+        return;
+      }
+      const signedTransaction =
+        saleIntent.requiredSigners?.length
+          ? await signTransaction(saleIntent.serializedTransaction)
+          : saleIntent.serializedTransaction;
       await submitNftSaleConfig({
         collectionId: collection.id,
         preparedTransaction: saleIntent.serializedTransaction,
         signedTransaction,
+        priceAtomic,
         accessToken,
       });
       setSaleIntent(null);
@@ -399,8 +422,8 @@ export default function CollectionStudio({
       <section className="grid gap-px overflow-hidden rounded-xl border border-zinc-200 bg-zinc-200 dark:border-zinc-800 dark:bg-zinc-800 sm:grid-cols-4">
         {[
           ['Minted', String(items.length)],
-          ['Primary sale', collection.primarySale ? `${atomicToUsdc(collection.primarySale.priceAtomic)} USDC` : 'Not live'],
-          ['Est. revenue', collection.primarySale ? `${revenueUsdc.toFixed(2)} USDC` : '—'],
+          ['Primary sale', collection.primarySale ? `${atomicToUsdc(collection.primarySale.priceAtomic)} XLM` : 'Not live'],
+          ['Est. revenue', collection.primarySale ? `${revenueUsdc.toFixed(2)} XLM` : '—'],
           ['API', health ? 'Connected' : 'Checking'],
         ].map(([label, value]) => (
           <div key={label} className="bg-white p-4 dark:bg-[#050506]">
@@ -410,166 +433,227 @@ export default function CollectionStudio({
         ))}
       </section>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className="space-y-4 rounded-xl border border-zinc-200 p-5 dark:border-zinc-800">
-          <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Go live & integrations</h2>
-          <div className="space-y-2 text-sm">
-            <div className="flex items-center justify-between gap-3 rounded-md border border-zinc-200 px-3 py-2 dark:border-zinc-800">
-              <span className="text-zinc-500">Dashboard URL</span>
-              <button type="button" onClick={() => void copy('Dashboard URL', dashboardUrl)} className="inline-flex items-center gap-1 text-xs text-brand-blue">
-                <Copy className="h-3.5 w-3.5" /> Copy
-              </button>
-            </div>
-            <div className="flex items-center justify-between gap-3 rounded-md border border-zinc-200 px-3 py-2 dark:border-zinc-800">
-              <span className="text-zinc-500">Public buy URL</span>
-              <button type="button" onClick={() => void copy('Public URL', publicUrl)} className="inline-flex items-center gap-1 text-xs text-brand-blue">
-                <Copy className="h-3.5 w-3.5" /> Copy
-              </button>
-            </div>
-            {collection.contractId && (
-              <a
-                href={`https://stellar.expert/explorer/testnet/contract/${collection.contractId}`}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center justify-between gap-3 rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800"
-              >
-                <span className="text-zinc-500">Contract</span>
-                <span className="inline-flex items-center gap-1 font-mono text-xs text-brand-blue">
-                  {shortAddress(collection.contractId)} <ExternalLink className="h-3.5 w-3.5" />
-                </span>
-              </a>
-            )}
-          </div>
-
-          {collection.status === 'failed' && (
-            <div className="flex flex-wrap gap-2">
-              <button type="button" disabled={busy} onClick={() => void retryDeploy()} className="inline-flex h-9 items-center gap-2 rounded-md border border-zinc-200 px-3 text-sm dark:border-zinc-800">
-                <RotateCcw className="h-4 w-4" /> Retry deploy
-              </button>
-              <button type="button" disabled={busy} onClick={() => void removeFailed()} className="inline-flex h-9 items-center gap-2 rounded-md border border-red-500/30 px-3 text-sm text-red-600">
-                <Trash2 className="h-4 w-4" /> Delete record
-              </button>
-            </div>
-          )}
-
-          {(collection.status === 'live' || collection.status === 'archived') && (
-            <button type="button" disabled={busy} onClick={() => void toggleArchive()} className="inline-flex h-9 items-center gap-2 rounded-md border border-zinc-200 px-3 text-sm dark:border-zinc-800">
-              <Archive className="h-4 w-4" />
-              {collection.status === 'archived' ? 'Unarchive' : 'Archive'}
-            </button>
-          )}
-        </section>
-
-        <section className="space-y-4 rounded-xl border border-zinc-200 p-5 dark:border-zinc-800">
-          <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Primary sale (USDC)</h2>
-          <p className="text-xs leading-5 text-zinc-500">
-            Set the on-chain fixed USDC price buyers pay. Requires Freighter as the owner wallet.
-          </p>
-          <label className="block text-sm font-medium text-zinc-800 dark:text-zinc-200">
-            Price (USDC)
-            <input
-              value={salePrice}
-              onChange={(event) => setSalePrice(event.target.value)}
-              className="mt-2 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-[#0A0A0B]"
-            />
-          </label>
-          {!saleIntent ? (
+      <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-[#0A0A0B]">
+        <div className="flex gap-1 overflow-x-auto border-b border-zinc-200 p-2 dark:border-zinc-800">
+          {([
+            ['overview', 'Overview'],
+            ['sale', 'Sale'],
+            ['mint', 'Mint'],
+            ['ledger', 'Ledger'],
+            ['integrate', 'Integrate'],
+          ] as const).map(([id, label]) => (
             <button
+              key={id}
               type="button"
-              disabled={busy || collection.status !== 'live'}
-              onClick={() => void prepareSale()}
-              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-zinc-950 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-zinc-950"
+              onClick={() => setTab(id)}
+              className={`shrink-0 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                tab === id
+                  ? 'bg-zinc-950 text-white dark:bg-white dark:text-zinc-950'
+                  : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950 dark:hover:bg-zinc-900 dark:hover:text-white'
+              }`}
             >
-              <ShoppingCart className="h-4 w-4" />
-              Prepare sale config
+              {label}
             </button>
-          ) : (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void submitSale()}
-              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-emerald-600 text-sm font-medium text-white disabled:opacity-50"
-            >
-              <ShieldCheck className="h-4 w-4" />
-              Sign & activate sale
-            </button>
-          )}
-        </section>
+          ))}
+        </div>
 
-        <section className="space-y-4 rounded-xl border border-zinc-200 p-5 dark:border-zinc-800">
-          <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Creator mint</h2>
-          <label className="block text-sm font-medium text-zinc-800 dark:text-zinc-200">
-            Recipient (optional — defaults to connected wallet)
-            <input
-              value={mintRecipient}
-              onChange={(event) => setMintRecipient(event.target.value.toUpperCase().trim())}
-              placeholder="G..."
-              className="mt-2 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 font-mono text-xs dark:border-zinc-800 dark:bg-[#0A0A0B]"
-            />
-          </label>
-          {!mintIntent ? (
-            <button
-              type="button"
-              disabled={busy || collection.status !== 'live'}
-              onClick={() => void prepareMint()}
-              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-zinc-200 text-sm dark:border-zinc-800"
-            >
-              <Sparkles className="h-4 w-4" />
-              Prepare mint
-            </button>
-          ) : (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void submitMint()}
-              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-zinc-950 text-sm font-medium text-white dark:bg-white dark:text-zinc-950"
-            >
-              Sign & mint
-            </button>
-          )}
-        </section>
-
-        <section className="space-y-3 rounded-xl border border-zinc-200 p-5 dark:border-zinc-800">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Mint ledger</h2>
-            <span className="text-xs text-zinc-500">{items.length} items</span>
-          </div>
-          {items.length === 0 ? (
-            <p className="text-sm text-zinc-500">No mints yet.</p>
-          ) : (
-            <ul className="max-h-64 space-y-2 overflow-y-auto text-sm">
-              {items.map((item) => (
-                <li key={item.id} className="flex items-center justify-between gap-3 rounded-md border border-zinc-200 px-3 py-2 dark:border-zinc-800">
-                  <span className="font-medium tabular-nums">#{item.tokenId}</span>
-                  <span className="truncate font-mono text-xs text-zinc-500">{shortAddress(item.ownerAddress)}</span>
+        <div className="p-5">
+          {tab === 'overview' && (
+            <div className="space-y-4">
+              <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Collection controls</h2>
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center justify-between gap-3 rounded-md border border-zinc-200 px-3 py-2 dark:border-zinc-800">
+                  <span className="text-zinc-500">Dashboard URL</span>
+                  <button type="button" onClick={() => void copy('Dashboard URL', dashboardUrl)} className="inline-flex items-center gap-1 text-xs text-brand-blue">
+                    <Copy className="h-3.5 w-3.5" /> Copy
+                  </button>
+                </div>
+                <div className="flex items-center justify-between gap-3 rounded-md border border-zinc-200 px-3 py-2 dark:border-zinc-800">
+                  <span className="text-zinc-500">Public buy URL</span>
+                  <button type="button" onClick={() => void copy('Public URL', publicUrl)} className="inline-flex items-center gap-1 text-xs text-brand-blue">
+                    <Copy className="h-3.5 w-3.5" /> Copy
+                  </button>
+                </div>
+                {collection.contractId && (
                   <a
-                    href={`https://stellar.expert/explorer/testnet/tx/${item.transactionHash}`}
+                    href={`https://stellar.expert/explorer/testnet/contract/${collection.contractId}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-brand-blue"
+                    className="flex items-center justify-between gap-3 rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800"
                   >
-                    <ExternalLink className="h-3.5 w-3.5" />
+                    <span className="text-zinc-500">Contract</span>
+                    <span className="inline-flex items-center gap-1 font-mono text-xs text-brand-blue">
+                      {shortAddress(collection.contractId)} <ExternalLink className="h-3.5 w-3.5" />
+                    </span>
                   </a>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      </div>
+                )}
+              </div>
 
-      <section className="grid gap-px overflow-hidden rounded-xl border border-zinc-200 bg-zinc-200 text-xs dark:border-zinc-800 dark:bg-zinc-800 sm:grid-cols-3">
-        <div className="flex items-center gap-2 bg-white px-3 py-2.5 dark:bg-[#050506]">
-          <RadioTower className={`h-4 w-4 ${health ? 'text-emerald-500' : 'text-zinc-400'}`} />
-          API {health ? 'ready' : '…'}
+              <div className="flex flex-wrap gap-2 pt-2">
+                {collection.status === 'failed' && (
+                  <>
+                    <button type="button" disabled={busy} onClick={() => void retryDeploy()} className="inline-flex h-9 items-center gap-2 rounded-md border border-zinc-200 px-3 text-sm dark:border-zinc-800">
+                      <RotateCcw className="h-4 w-4" /> Retry deploy
+                    </button>
+                    <button type="button" disabled={busy} onClick={() => void removeFailed()} className="inline-flex h-9 items-center gap-2 rounded-md border border-red-500/30 px-3 text-sm text-red-600">
+                      <Trash2 className="h-4 w-4" /> Delete record
+                    </button>
+                  </>
+                )}
+                {(collection.status === 'live' || collection.status === 'archived') && (
+                  <button type="button" disabled={busy} onClick={() => void toggleArchive()} className="inline-flex h-9 items-center gap-2 rounded-md border border-zinc-200 px-3 text-sm dark:border-zinc-800">
+                    <Archive className="h-4 w-4" />
+                    {collection.status === 'archived' ? 'Unarchive' : 'Archive'}
+                  </button>
+                )}
+                <button type="button" onClick={() => setTab('sale')} className="inline-flex h-9 items-center gap-2 rounded-md bg-zinc-950 px-3 text-sm font-medium text-white dark:bg-white dark:text-zinc-950">
+                  <ShoppingCart className="h-4 w-4" /> Manage sale
+                </button>
+              </div>
+
+              <div className="grid gap-px overflow-hidden rounded-xl border border-zinc-200 bg-zinc-200 text-xs dark:border-zinc-800 dark:bg-zinc-800 sm:grid-cols-3">
+                <div className="flex items-center gap-2 bg-white px-3 py-2.5 dark:bg-[#050506]">
+                  <RadioTower className={`h-4 w-4 ${health ? 'text-emerald-500' : 'text-zinc-400'}`} />
+                  API {health ? 'ready' : '…'}
+                </div>
+                <div className="flex items-center gap-2 bg-white px-3 py-2.5 dark:bg-[#050506]">
+                  <ShieldCheck className={`h-4 w-4 ${health?.capabilities?.stellarConfigured ? 'text-emerald-500' : 'text-zinc-400'}`} />
+                  Stellar testnet
+                </div>
+                <div className="flex items-center gap-2 bg-white px-3 py-2.5 dark:bg-[#050506]">
+                  Storage {health?.capabilities?.storageMode || '—'}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {tab === 'sale' && (
+            <div className="mx-auto max-w-lg space-y-4">
+              <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Primary sale (XLM)</h2>
+              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                Activate the fixed XLM price so checkout “Prepare purchase” is enabled. Buyers pay with native XLM (no USDC trustline). Use Freighter as the owner wallet when signing is required.
+              </p>
+              {collection.primarySale && (
+                <p className="mt-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                  Live at {atomicToUsdc(collection.primarySale.priceAtomic)} XLM
+                </p>
+              )}
+              <label className="mt-4 block text-xs font-medium text-zinc-600 dark:text-zinc-300">
+                Price (XLM)
+                <input
+                  value={salePrice}
+                  onChange={(event) => setSalePrice(event.target.value)}
+                  className="mt-2 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-[#050506]"
+                />
+              </label>
+              {!saleIntent ? (
+                <button
+                  type="button"
+                  disabled={busy || collection.status !== 'live'}
+                  onClick={() => void prepareSale()}
+                  className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-zinc-950 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-zinc-950"
+                >
+                  <ShoppingCart className="h-4 w-4" />
+                  {collection.primarySale ? 'Update sale config' : 'Prepare sale config'}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void submitSale()}
+                  className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-emerald-600 text-sm font-medium text-white disabled:opacity-50"
+                >
+                  <ShieldCheck className="h-4 w-4" />
+                  Sign & activate sale
+                </button>
+              )}
+            </div>
+          )}
+
+          {tab === 'mint' && (
+            <div className="mx-auto max-w-lg space-y-4">
+              <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Creator mint</h2>
+              <label className="block text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                Recipient (optional — defaults to connected wallet)
+                <input
+                  value={mintRecipient}
+                  onChange={(event) => setMintRecipient(event.target.value.toUpperCase().trim())}
+                  placeholder="G..."
+                  className="mt-2 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 font-mono text-xs dark:border-zinc-800 dark:bg-[#050506]"
+                />
+              </label>
+              {!mintIntent ? (
+                <button
+                  type="button"
+                  disabled={busy || collection.status !== 'live'}
+                  onClick={() => void prepareMint()}
+                  className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-zinc-200 text-sm dark:border-zinc-800"
+                >
+                  <Sparkles className="h-4 w-4" />
+                  Prepare mint
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void submitMint()}
+                  className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-zinc-950 text-sm font-medium text-white dark:bg-white dark:text-zinc-950"
+                >
+                  Sign & mint
+                </button>
+              )}
+            </div>
+          )}
+
+          {tab === 'ledger' && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Mint ledger</h2>
+                <span className="text-xs text-zinc-500">{items.length} items</span>
+              </div>
+              {items.length === 0 ? (
+                <p className="text-sm text-zinc-500">No mints yet.</p>
+              ) : (
+                <ul className="max-h-80 space-y-2 overflow-y-auto text-sm">
+                  {items.map((item) => (
+                    <li key={item.id} className="flex items-center justify-between gap-3 rounded-md border border-zinc-200 px-3 py-2 dark:border-zinc-800">
+                      <span className="font-medium tabular-nums">#{item.tokenId}</span>
+                      <span className="truncate font-mono text-xs text-zinc-500">{shortAddress(item.ownerAddress)}</span>
+                      <a
+                        href={`https://stellar.expert/explorer/testnet/tx/${item.transactionHash}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-brand-blue"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {tab === 'integrate' && (
+            <div className="space-y-4">
+              <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Game / SDK integration</h2>
+              <p className="text-sm text-zinc-500">
+                Copy checkout snippets, public branding URL, and embed links for your game.
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowSdk(true)}
+                className="inline-flex h-10 items-center gap-2 rounded-md bg-zinc-950 px-4 text-sm font-medium text-white dark:bg-white dark:text-zinc-950"
+              >
+                <Code2 className="h-4 w-4" /> Open SDK panel
+              </button>
+              <div className="rounded-md border border-zinc-200 px-3 py-2 text-xs text-zinc-500 dark:border-zinc-800">
+                Public collection API: <code className="break-all">/v1/public/collections/{collection.id}</code>
+              </div>
+            </div>
+          )}
         </div>
-        <div className="flex items-center gap-2 bg-white px-3 py-2.5 dark:bg-[#050506]">
-          <ShieldCheck className={`h-4 w-4 ${health?.capabilities?.stellarConfigured ? 'text-emerald-500' : 'text-zinc-400'}`} />
-          Stellar testnet
-        </div>
-        <div className="flex items-center gap-2 bg-white px-3 py-2.5 dark:bg-[#050506]">
-          Storage {health?.capabilities?.storageMode || '—'}
-        </div>
-      </section>
+      </div>
 
       {showSdk && (
         <NftSdkPanel

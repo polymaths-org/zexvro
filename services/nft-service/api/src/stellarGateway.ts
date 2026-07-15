@@ -135,7 +135,7 @@ export function simulationFailureToApiError(error: unknown): ApiError | undefine
     return new ApiError(
       422,
       'buyer_missing_trustline',
-      'The buyer wallet does not have a trustline for the payment token (e.g. USDC). The buyer must add a trustline before purchasing.',
+      'The buyer wallet cannot transfer the payment token (missing trustline or token balance entry). For XLM sales this is unusual — ensure Freighter is on Testnet and the wallet has enough XLM. For SAC assets, add a trustline first.',
       { simulationError: message },
     )
   }
@@ -536,17 +536,24 @@ export class StellarNftChainGateway implements NftChainGateway {
     }
 
     const signedInvocation = this.readInvocation(signed)
+    // Sale/mint args can include BigInt (i128 prices). JSON.stringify throws on BigInt
+    // and was causing HTTP 500 on sale-config/submit after Freighter sign.
+    const stableSerialize = (value: unknown) =>
+      JSON.stringify(value, (_key, current) =>
+        typeof current === 'bigint' ? current.toString() : current,
+      )
+
     const stableEnvelopeMatches =
       signedTransaction.source === this.sponsor.publicKey() &&
       signedTransaction.source === expectedTransaction.source &&
       signedTransaction.sequence === expectedTransaction.sequence &&
       signedTransaction.fee === expectedTransaction.fee &&
-      JSON.stringify(signedTransaction.timeBounds) ===
-        JSON.stringify(expectedTransaction.timeBounds) &&
+      stableSerialize(signedTransaction.timeBounds) ===
+        stableSerialize(expectedTransaction.timeBounds) &&
       signedInvocation.contractId === expectedInvocation.contractId &&
       signedInvocation.method === expectedInvocation.method &&
-      JSON.stringify(signedInvocation.arguments) ===
-        JSON.stringify(expectedInvocation.arguments)
+      stableSerialize(signedInvocation.arguments) ===
+        stableSerialize(expectedInvocation.arguments)
 
     if (!stableEnvelopeMatches) {
       throw new ApiError(

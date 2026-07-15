@@ -471,7 +471,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
     if (!saleCollection) return;
     const priceAtomic = usdcToAtomic(salePrice);
     if (priceAtomic === undefined) {
-      setActionError('Enter a USDC price greater than 0 with up to 7 decimals.');
+      setActionError('Enter an XLM price greater than 0 with up to 7 decimals.');
       return;
     }
     setBusyCollectionId(saleCollection.id);
@@ -528,15 +528,17 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
         setActionMessage(`Connected wallet ${walletAddress.slice(0, 6)}... differs from required signers. Continue only if this key is authorized.`);
       }
       const signedTransaction = await signTransaction(saleIntent.serializedTransaction);
+      const priceAtomic = usdcToAtomic(salePrice) || '0';
       const result = await submitNftSaleConfig({
         collectionId: saleCollection.id,
         preparedTransaction: saleIntent.serializedTransaction,
         signedTransaction,
+        priceAtomic,
         accessToken,
       });
       const configuredSale = {
         paymentTokenAddress: '',
-        priceAtomic: usdcToAtomic(salePrice) || '0',
+        priceAtomic,
         transactionHash: result.transaction.transactionHash,
         configuredAt: new Date().toISOString(),
       };
@@ -1066,8 +1068,8 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
                 </h2>
                 <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
                   {saleCollection.primarySale
-                    ? 'This collection has an active primary USDC sale. Update the price only if you want to change the on-chain sale configuration.'
-                    : 'Prepare the owner-signed USDC sale configuration.'}
+                    ? 'This collection has an active primary XLM sale. Update the price only if you want to change the on-chain sale configuration.'
+                    : 'Prepare the owner-signed XLM sale configuration.'}
                 </p>
               </div>
               <button
@@ -1097,7 +1099,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
                     onChange={event => setSalePrice(event.target.value)}
                     className="w-full rounded-md bg-transparent px-3 py-2.5 text-sm text-zinc-950 outline-none dark:text-white"
                   />
-                  <span className="text-sm text-zinc-500">USDC</span>
+                  <span className="text-sm text-zinc-500">XLM</span>
                 </div>
               </label>
             </div>
@@ -1160,7 +1162,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
               <div className="mt-5 space-y-2 border-t border-zinc-200 pt-5 dark:border-zinc-800">
                 <span className="text-xs text-zinc-500 dark:text-zinc-400">Current sale</span>
                 <p className="text-sm font-medium text-zinc-950 dark:text-white">
-                  {atomicToUsdc(saleCollection.primarySale.priceAtomic)} USDC
+                  {atomicToUsdc(saleCollection.primarySale.priceAtomic)} XLM
                 </p>
                 <a
                   href={`https://stellar.expert/explorer/testnet/tx/${saleCollection.primarySale.transactionHash}`}

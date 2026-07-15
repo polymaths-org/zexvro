@@ -231,13 +231,25 @@ export default function CollectionCreate({
 
     setSubmitError('');
     try {
-      const currentHealth = health || await getNftServiceHealth();
-      setHealth(currentHealth);
+      let currentHealth = health;
+      try {
+        currentHealth = currentHealth || await getNftServiceHealth();
+        setHealth(currentHealth);
+      } catch (healthError) {
+        throw new Error(
+          healthError instanceof Error
+            ? healthError.message
+            : 'Could not reach the NFT API health endpoint. Check VITE_NFT_API_URL.',
+        );
+      }
       const caps = currentHealth?.capabilities;
-      if (!caps?.stellarConfigured) {
+      if (!currentHealth || !caps) {
+        throw new Error('NFT API health is unavailable. Refresh and try again.');
+      }
+      if (!caps.stellarConfigured) {
         throw new Error('Stellar deployment is not configured on the NFT service.');
       }
-      if (!caps?.pinningConfigured) {
+      if (!caps.pinningConfigured) {
         throw new Error('Media storage is not configured on the NFT service.');
       }
 
@@ -268,14 +280,31 @@ export default function CollectionCreate({
             priceAtomic,
             accessToken,
           });
-          const signedTransaction = await signTransaction(saleIntent.serializedTransaction);
-          const saleResult = await submitNftSaleConfig({
-            collectionId: created.id,
-            preparedTransaction: saleIntent.serializedTransaction,
-            signedTransaction,
-            accessToken,
-          });
-          if (saleResult.collection) created = saleResult.collection;
+          // Some sponsor setups auto-submit set_sale_config during prepare.
+          if (saleIntent.autoSubmitted?.transactionHash) {
+            // Persist via submit path is not needed; reload collection if API already marked sale.
+            // Fall through — dashboard/public will reflect primarySale after prepare's server mark.
+          } else if (saleIntent.requiredSigners?.length) {
+            const signedTransaction = await signTransaction(saleIntent.serializedTransaction);
+            const saleResult = await submitNftSaleConfig({
+              collectionId: created.id,
+              preparedTransaction: saleIntent.serializedTransaction,
+              signedTransaction,
+              priceAtomic,
+              accessToken,
+            });
+            if (saleResult.collection) created = saleResult.collection;
+          } else {
+            // No signers required and no autoSubmitted — still record via submit with sponsor-only envelope.
+            const saleResult = await submitNftSaleConfig({
+              collectionId: created.id,
+              preparedTransaction: saleIntent.serializedTransaction,
+              signedTransaction: saleIntent.serializedTransaction,
+              priceAtomic,
+              accessToken,
+            });
+            if (saleResult.collection) created = saleResult.collection;
+          }
         } catch (saleError) {
           // Collection exists; sale can still be activated from the dashboard.
           console.warn('[nft/create] primary sale activation deferred', saleError);
@@ -459,7 +488,7 @@ export default function CollectionCreate({
             </div>
             {errors.unitPriceXlm && <p className="mt-2 text-xs text-red-500">{errors.unitPriceXlm}</p>}
             <p className="mt-3 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
-              After deploy, Freighter will ask you to activate the primary sale so buyers can purchase immediately (Stellar testnet USDC, same unit amount).
+              After deploy, Freighter will ask you to activate the primary sale so buyers can purchase immediately (Stellar testnet XLM, same unit amount).
             </p>
           </div>
         </section>
