@@ -47,7 +47,7 @@ import type { MemoryEntry } from '../types';
 import TransformationAgent from '../components/services/TransformationAgent';
 import TradePipeline from '../components/services/TradePipeline';
 import AgentAuth from '../components/services/AgentAuth';
-import NftService, { NftCollectionCreate } from '../components/services/NftService';
+import NftService, { NftCollectionCreate, NftCollectionStudio } from '../components/services/NftService';
 import DepinService from '../components/services/DepinService';
 import DocsLibrary from '../components/docs/DocsLibrary';
 import PublicCollection from '../services/nft/PublicCollection';
@@ -557,6 +557,12 @@ const projectNftCreateRoute = createRoute({
   component: NftCollectionCreate,
 });
 
+const projectNftStudioRoute = createRoute({
+  getParentRoute: () => dashboardLayoutRoute,
+  path: '/dashboard/w/$workspaceId/p/$projectId/nft/collections/$collectionId',
+  component: NftCollectionStudio,
+});
+
 const projectDepinRoute = createRoute({
   getParentRoute: () => dashboardLayoutRoute,
   path: '/dashboard/w/$workspaceId/p/$projectId/depin',
@@ -676,6 +682,7 @@ const routeTree = rootRoute.addChildren([
     projectAgentAuthRoute,
     projectNftRoute,
     projectNftCreateRoute,
+    projectNftStudioRoute,
     projectDepinRoute,
   ]),
 ]);

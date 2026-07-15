@@ -6,16 +6,18 @@ import {
   readStoredSession,
 } from '../../auth/cognito';
 import CollectionCreate from '../../services/nft/CollectionCreate';
-import CollectionDashboard from '../../services/nft/CollectionDashboard';
+import CollectionList from '../../services/nft/CollectionList';
+import CollectionStudio from '../../services/nft/CollectionStudio';
 
 function useNftRouteContext() {
-  const { workspaceId, projectId } = useParams({ strict: false });
+  const { workspaceId, projectId, collectionId } = useParams({ strict: false });
   if (!workspaceId || !projectId) {
     throw new Error('NFT routes require a workspace and project');
   }
   return {
     workspaceId,
     projectId,
+    collectionId: typeof collectionId === 'string' ? collectionId : undefined,
     storageScope: `${workspaceId}:${projectId}`,
   };
 }
@@ -90,7 +92,7 @@ export default function NftService() {
   return (
     <NftAuthGate>
       {(accessToken) => (
-        <CollectionDashboard
+        <CollectionList
           workspaceId={context.storageScope}
           accessToken={accessToken}
           onCreate={() => navigate({
@@ -98,6 +100,14 @@ export default function NftService() {
             params: {
               workspaceId: context.workspaceId,
               projectId: context.projectId,
+            },
+          })}
+          onOpenDashboard={(collectionId) => navigate({
+            to: '/dashboard/w/$workspaceId/p/$projectId/nft/collections/$collectionId',
+            params: {
+              workspaceId: context.workspaceId,
+              projectId: context.projectId,
+              collectionId,
             },
           })}
         />
@@ -123,6 +133,42 @@ export function NftCollectionCreate() {
               projectId: context.projectId,
             },
             replace: true,
+          })}
+          onCreated={(collection) => navigate({
+            to: '/dashboard/w/$workspaceId/p/$projectId/nft/collections/$collectionId',
+            params: {
+              workspaceId: context.workspaceId,
+              projectId: context.projectId,
+              collectionId: collection.id,
+            },
+            replace: true,
+          })}
+        />
+      )}
+    </NftAuthGate>
+  );
+}
+
+export function NftCollectionStudio() {
+  const navigate = useNavigate();
+  const context = useNftRouteContext();
+  if (!context.collectionId) {
+    throw new Error('Collection studio requires a collection id');
+  }
+
+  return (
+    <NftAuthGate>
+      {(accessToken) => (
+        <CollectionStudio
+          workspaceId={context.storageScope}
+          accessToken={accessToken}
+          collectionId={context.collectionId!}
+          onBack={() => navigate({
+            to: '/dashboard/w/$workspaceId/p/$projectId/nft',
+            params: {
+              workspaceId: context.workspaceId,
+              projectId: context.projectId,
+            },
           })}
         />
       )}
