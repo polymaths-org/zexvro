@@ -150,10 +150,27 @@ export default defineConfig(({ mode }) => {
       opencodeAgentApi(env),
       react(),
       tailwindcss(),
-      nodePolyfills({ include: ['buffer', 'events', 'util', 'stream', 'crypto', 'process'] }),
+      // Polyfill Node builtins for stellar-sdk / snarkjs imports.
+      // Do NOT inject a global `crypto` shim — that can wipe browser WebCrypto
+      // (`crypto.subtle`) and break stealth PIN claims (importKey / AES-GCM).
+      // App code must not `import { createHash } from 'crypto'` in the browser.
+      nodePolyfills({
+        include: ['buffer', 'events', 'util', 'stream', 'process'],
+        globals: {
+          Buffer: true,
+          global: true,
+          process: true,
+        },
+      }),
     ],
+    // Freighter module is not loaded from the kit — primary Freighter button uses freighter-api@6.
     optimizeDeps: {
-      include: ['@stellar/js-xdr', '@stellar/stellar-base', 'stellar-sdk'],
+      include: [
+        '@stellar/js-xdr',
+        '@stellar/stellar-base',
+        'stellar-sdk',
+        '@creit.tech/stellar-wallets-kit',
+      ],
     },
     resolve: {
       alias: {

@@ -14,15 +14,18 @@
  */
 
 import nacl from 'tweetnacl';
-import { createHash } from 'crypto';
+import { sha256 as nobleSha256 } from '@noble/hashes/sha256';
 import { Keypair } from 'stellar-sdk';
 
 const META_PREFIX = 'z0st1';
 const DOMAIN = new TextEncoder().encode('zexvro-stealth-v1');
 
-/** Sync SHA-256 via the Vite crypto polyfill (avoids @noble/hashes subpath resolve issues). */
+/**
+ * Sync SHA-256 in the browser (no Node `crypto` / Vite externalized module).
+ * Pure JS via @noble/hashes — keeps stealth meta encode/decode working client-side.
+ */
 function sha256(data: Uint8Array): Uint8Array {
-  return new Uint8Array(createHash('sha256').update(Buffer.from(data)).digest());
+  return nobleSha256(data);
 }
 
 export interface StealthIdentity {

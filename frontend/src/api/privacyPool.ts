@@ -152,8 +152,8 @@ export function planShieldPay(amountXlm: number): ShieldPayPlan {
   }
   const totalNotes = notes.reduce((s, n) => s + n.count, 0);
   const settledXlm = notes.reduce((s, n) => s + n.xlm, 0);
-  // Server settle (EC2 relayer): ~4–6s/note chain time; prove ~0.4s parallel
-  const estimatedSeconds = Math.max(12, 8 + totalNotes * 6);
+  // Server settle (EC2 relayer): ~3–5s/note chain; prove ~0.4s parallel. UI estimate only.
+  const estimatedSeconds = Math.max(8, 5 + totalNotes * 5);
   const parts = notes.map(n => `${n.count}×${n.tier.xlm} XLM`).join(' + ');
   return {
     amountXlm: target,
@@ -762,7 +762,7 @@ type ReadyProof = {
 };
 
 /** Wake EC2 prover if stopped; poll status until online or timeout. */
-async function ensureZkWorkerOnline(onProgress: (label: string) => void, maxWaitMs = 90_000): Promise<boolean> {
+async function ensureZkWorkerOnline(onProgress: (label: string) => void, maxWaitMs = 60_000): Promise<boolean> {
   try {
     let st = await zkWorkerApi.status();
     if (st.online) return true;
@@ -772,10 +772,16 @@ async function ensureZkWorkerOnline(onProgress: (label: string) => void, maxWait
     } catch (e) {
       console.warn('[zk] worker start request failed:', e);
     }
+    // If start() already reported online, skip the wait loop
+    if (st?.online) {
+      onProgress('ZK worker online');
+      return true;
+    }
     const deadline = Date.now() + maxWaitMs;
     let n = 0;
     while (Date.now() < deadline) {
-      await new Promise(r => setTimeout(r, 2500));
+      // Faster poll: 1.2s (was 2.5s) — cold start still ~30–90s total but UI feels snappier
+      await new Promise(r => setTimeout(r, 1200));
       n += 1;
       try {
         st = await zkWorkerApi.status();
@@ -786,7 +792,7 @@ async function ensureZkWorkerOnline(onProgress: (label: string) => void, maxWait
         onProgress('ZK worker online');
         return true;
       }
-      onProgress(`Waiting for ZK worker… ${st.state || 'starting'} (${n * 2.5 | 0}s)`);
+      onProgress(`Waiting for ZK worker… ${st.state || 'starting'} (~${Math.round(n * 1.2)}s)`);
     }
     return false;
   } catch (e) {
@@ -881,7 +887,8 @@ async function settleTierServer(args: {
     let stallTicks = 0;
     let netFailStreak = 0;
     while (Date.now() < deadline) {
-      await new Promise(r => setTimeout(r, 1200));
+      // Tighter poll for faster completion UX (was 1200ms)
+      await new Promise(r => setTimeout(r, 700));
       let job: Awaited<ReturnType<typeof zkWorkerApi.job>>;
       try {
         job = await zkWorkerApi.job(jobId);

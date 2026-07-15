@@ -11,8 +11,10 @@ export default function Zer0Proofs() {
   const allProofs = useZer0Store(s => s.proofs);
   const allPayments = useZer0Store(s => s.payments);
   const updateProofStatus = useZer0Store(s => s.updateProofStatus);
+  const reconcileStalePayments = useZer0Store(s => s.reconcileStalePayments);
 
   const [selectedProofId, setSelectedProofId] = useState<string | null>(null);
+  const [reconcileMsg, setReconcileMsg] = useState<string | null>(null);
 
   // Re-merge proofs from AWS so Payment proofs survive reload / server restart
   useEffect(() => {
@@ -51,6 +53,7 @@ export default function Zer0Proofs() {
         useZer0Store.setState({
           proofs: Array.from(byId.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)),
         });
+        useZer0Store.getState().reconcileStalePayments({ maxAgeMs: 60_000 });
       } catch (e) {
         console.error('Proof sync failed:', e);
       }
@@ -92,12 +95,40 @@ export default function Zer0Proofs() {
   }), [proofs]);
 
   const handleRetry = (proofId: string) => {
+    const proof = useZer0Store.getState().proofs.find(p => p.id === proofId);
     updateProofStatus(proofId, 'queued', {
       generationTimeMs: null,
       proofData: null,
       verifiedAt: null,
     });
+    // Real retry = re-run the linked payment settle (proof rows are audit records)
+    if (proof?.paymentId) {
+      const pay = useZer0Store.getState().payments.find(p => p.id === proof.paymentId);
+      if (pay && pay.status !== 'completed') {
+        if (pay.status === 'processing') {
+          useZer0Store.getState().updatePaymentStatus(pay.id, 'failed', {
+            lastError: 'Retrying from proofs page…',
+          });
+        }
+        void useZer0Store.getState().processPayment(proof.paymentId);
+      }
+    }
   };
+
+  const handleClearStuckProofs = () => {
+    const r = reconcileStalePayments({ forceAll: true, maxAgeMs: 0 });
+    setReconcileMsg(
+      r.proofsFixed || r.paymentsFixed
+        ? `Cleared ${r.proofsFixed} stuck proof(s) + ${r.paymentsFixed} payment(s).`
+        : 'No stuck proofs found.',
+    );
+    window.setTimeout(() => setReconcileMsg(null), 4000);
+  };
+
+  const stuckProofs = useMemo(
+    () => proofs.filter(p => p.status === 'queued' || p.status === 'generating').length,
+    [proofs],
+  );
 
   const downloadProof = (proof: any, payment?: any) => {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({
@@ -128,12 +159,29 @@ export default function Zer0Proofs() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-lg font-bold text-zinc-900 dark:text-white">Payment proofs</h1>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
-          Audit trail for private payroll — each shielded payment produces a verifiable proof record for your books.
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-lg font-bold text-zinc-900 dark:text-white">Payment proofs</h1>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
+            Audit trail for private payroll — each shielded payment produces a verifiable proof record for your books.
+          </p>
+        </div>
+        {stuckProofs > 0 && (
+          <button
+            type="button"
+            onClick={handleClearStuckProofs}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300/70 bg-amber-500/10 px-3.5 py-2 text-xs font-semibold text-amber-800 dark:border-amber-500/30 dark:text-amber-200 shrink-0"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            Clear stuck proofs ({stuckProofs})
+          </button>
+        )}
       </div>
+      {reconcileMsg && (
+        <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-[11px] text-emerald-700 dark:text-emerald-300">
+          {reconcileMsg}
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-4">
@@ -204,11 +252,22 @@ export default function Zer0Proofs() {
                         <Download className="h-3 w-3" /> Download
                       </button>
                     )}
-                    {proof.status === 'failed' && (
-                      <button onClick={() => handleRetry(proof.id)}
-                        className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-800 px-2.5 py-1.5 text-[10px] font-semibold text-blue-500 hover:text-blue-600 transition">
-                        <RefreshCw className="h-3 w-3" /> Retry
-                      </button>
+                    {(proof.status === 'failed' || proof.status === 'queued' || proof.status === 'generating') && (
+                      <>
+                        {(proof.status === 'queued' || proof.status === 'generating') && (
+                          <button
+                            type="button"
+                            onClick={() => updateProofStatus(proof.id, 'failed')}
+                            className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-800 px-2.5 py-1.5 text-[10px] font-semibold text-zinc-500 hover:text-zinc-700 transition"
+                          >
+                            Mark failed
+                          </button>
+                        )}
+                        <button onClick={() => handleRetry(proof.id)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-800 px-2.5 py-1.5 text-[10px] font-semibold text-blue-500 hover:text-blue-600 transition">
+                          <RefreshCw className="h-3 w-3" /> {proof.status === 'failed' ? 'Retry pay' : 'Retry'}
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>

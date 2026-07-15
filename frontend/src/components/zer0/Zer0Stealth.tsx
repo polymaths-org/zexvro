@@ -286,7 +286,7 @@ export default function Zer0Stealth() {
           value={importJson}
           onChange={e => setImportJson(e.target.value)}
           rows={4}
-          placeholder='Paste backup JSON from "Generate" on Team directory…'
+          placeholder='Paste backup JSON from "Generate" on Wallets directory…'
           className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 p-3 text-[11px] font-mono outline-none focus:border-violet-500"
         />
         {importError && <p className="text-[11px] text-red-500">{importError}</p>}
@@ -339,6 +339,7 @@ export default function Zer0Stealth() {
                   <th className="px-4 py-2">Ephemeral</th>
                   <th className="px-4 py-2 text-right">XLM</th>
                   <th className="px-4 py-2">Tx</th>
+                  <th className="px-4 py-2">Secret</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
@@ -362,6 +363,17 @@ export default function Zer0Stealth() {
                           {shortAddr(r.txHash, 4)}
                         </a>
                       ) : '—'}
+                    </td>
+                    <td className="px-4 py-2">
+                      <button
+                        type="button"
+                        onClick={() => copy(`out-sec-${r.id}`, r.oneTimeSecret)}
+                        className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 dark:text-amber-300 hover:underline"
+                        title="Copy one-time spend secret"
+                      >
+                        {copied === `out-sec-${r.id}` ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+                        Copy S…
+                      </button>
                     </td>
                   </tr>
                 ))}
