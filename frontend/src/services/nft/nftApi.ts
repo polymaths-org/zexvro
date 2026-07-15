@@ -161,8 +161,21 @@ export class NftApiError extends Error {
 
 async function readJson(response: Response): Promise<unknown> {
   const contentType = response.headers.get('content-type') || '';
-  if (!contentType.includes('application/json')) return undefined;
+  if (!contentType.includes('application/json')) {
+    // Pages SPA fallback serves HTML for unknown paths — never treat as API JSON.
+    return undefined;
+  }
   return response.json().catch(() => undefined);
+}
+
+function assertJsonPayload(payload: unknown, path: string): asserts payload is object {
+  if (payload === null || payload === undefined || typeof payload !== 'object') {
+    throw new NftApiError(
+      502,
+      'invalid_nft_api_response',
+      `NFT API returned a non-JSON response for ${path}. Check VITE_NFT_API_URL points at the NFT service (not the static site).`,
+    );
+  }
 }
 
 async function resolveAccessToken(accessToken?: string): Promise<string | undefined> {
@@ -221,11 +234,25 @@ async function requestJson<T>(
     );
   }
 
+  // 204 / empty success bodies are valid (e.g. DELETE).
+  if (response.status === 204 || payload === undefined) {
+    return undefined as T;
+  }
+
+  assertJsonPayload(payload, path);
   return payload as T;
 }
 
-export function getNftServiceHealth(signal?: AbortSignal) {
-  return requestJson<NftServiceHealth>('/health', { signal });
+export async function getNftServiceHealth(signal?: AbortSignal) {
+  const health = await requestJson<NftServiceHealth>('/health', { signal });
+  if (!health?.capabilities || typeof health.capabilities !== 'object') {
+    throw new NftApiError(
+      502,
+      'invalid_nft_health',
+      'NFT health payload is missing capabilities. Is VITE_NFT_API_URL set to the App Runner NFT API?',
+    );
+  }
+  return health;
 }
 
 export async function listNftCollections(

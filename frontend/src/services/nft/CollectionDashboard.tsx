@@ -647,14 +647,14 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
           <span className="ml-auto font-medium text-zinc-800 dark:text-zinc-200">{health ? 'Connected' : 'Unavailable'}</span>
         </div>
         <div className="flex items-center gap-2 bg-white px-3 py-2.5 text-xs dark:bg-[#050506]">
-          <ShieldCheck className={`h-4 w-4 ${health?.capabilities.stellarConfigured ? 'text-emerald-500' : 'text-zinc-400'}`} />
+          <ShieldCheck className={`h-4 w-4 ${health?.capabilities?.stellarConfigured ? 'text-emerald-500' : 'text-zinc-400'}`} />
           <span className="text-zinc-500 dark:text-zinc-400">Stellar</span>
-          <span className="ml-auto font-medium text-zinc-800 dark:text-zinc-200">{health?.capabilities.stellarConfigured ? 'Testnet ready' : 'Not configured'}</span>
+          <span className="ml-auto font-medium text-zinc-800 dark:text-zinc-200">{health?.capabilities?.stellarConfigured ? 'Testnet ready' : 'Not configured'}</span>
         </div>
         <div className="flex items-center gap-2 bg-white px-3 py-2.5 text-xs dark:bg-[#050506]">
-          <CloudUpload className={`h-4 w-4 ${health?.capabilities.pinningConfigured ? 'text-emerald-500' : 'text-zinc-400'}`} />
+          <CloudUpload className={`h-4 w-4 ${health?.capabilities?.pinningConfigured ? 'text-emerald-500' : 'text-zinc-400'}`} />
           <span className="text-zinc-500 dark:text-zinc-400">Storage</span>
-          <span className="ml-auto font-medium capitalize text-zinc-800 dark:text-zinc-200">{health?.capabilities.storageMode || 'Unavailable'}</span>
+          <span className="ml-auto font-medium capitalize text-zinc-800 dark:text-zinc-200">{health?.capabilities?.storageMode || 'Unavailable'}</span>
         </div>
       </section>
 
