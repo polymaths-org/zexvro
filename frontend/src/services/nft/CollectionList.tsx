@@ -141,36 +141,38 @@ export default function CollectionList({
       ) : (
         <ul className="divide-y divide-zinc-200 border-y border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
           {collections.map((collection) => (
-            <li key={collection.id} className="flex flex-col gap-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex min-w-0 items-center gap-3">
-                {collection.coverImageUri.startsWith('http') ? (
-                  <img
-                    src={collection.coverImageUri}
-                    alt=""
-                    className="h-12 w-12 shrink-0 rounded-xl border border-zinc-200 object-cover dark:border-zinc-800"
-                  />
-                ) : (
-                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-zinc-200 text-zinc-400 dark:border-zinc-800">
-                    <Image className="h-5 w-5" />
-                  </span>
-                )}
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="truncate font-medium text-zinc-950 dark:text-white">{collection.name}</p>
-                    <span className={`inline-flex rounded-md border px-2 py-0.5 text-[11px] font-medium capitalize ${STATUS_STYLE[collection.status]}`}>
-                      {collection.status}
-                    </span>
-                  </div>
-                  <p className="mt-0.5 truncate text-xs text-zinc-500">{collection.symbol} · {collection.id}</p>
-                </div>
-              </div>
+            <li key={collection.id}>
               <button
                 type="button"
                 onClick={() => onOpenDashboard(collection.id)}
-                className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md bg-zinc-950 px-4 text-sm font-medium text-white dark:bg-white dark:text-zinc-950"
+                className="flex w-full flex-col gap-4 py-4 text-left transition hover:bg-zinc-50 dark:hover:bg-zinc-900/40 sm:flex-row sm:items-center sm:justify-between"
               >
-                Open NFT dashboard
-                <ArrowRight className="h-4 w-4" />
+                <div className="flex min-w-0 items-center gap-3">
+                  {collection.coverImageUri.startsWith('http') ? (
+                    <img
+                      src={collection.coverImageUri}
+                      alt=""
+                      className="h-12 w-12 shrink-0 rounded-xl border border-zinc-200 object-cover dark:border-zinc-800"
+                    />
+                  ) : (
+                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-zinc-200 text-zinc-400 dark:border-zinc-800">
+                      <Image className="h-5 w-5" />
+                    </span>
+                  )}
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="truncate font-medium text-zinc-950 dark:text-white">{collection.name}</p>
+                      <span className={`inline-flex rounded-md border px-2 py-0.5 text-[11px] font-medium capitalize ${STATUS_STYLE[collection.status]}`}>
+                        {collection.status}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 truncate text-xs text-zinc-500">{collection.symbol} · {collection.id}</p>
+                  </div>
+                </div>
+                <span className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md bg-zinc-950 px-4 text-sm font-medium text-white dark:bg-white dark:text-zinc-950">
+                  NFT Dashboard
+                  <ArrowRight className="h-4 w-4" />
+                </span>
               </button>
             </li>
           ))}
