@@ -52,6 +52,7 @@ import DepinService from '../components/services/DepinService';
 import DocsLibrary from '../components/docs/DocsLibrary';
 
 const MarketingPage = React.lazy(() => import('../marketing/MarketingPage'));
+const WithdrawPage = React.lazy(() => import('../components/withdraw/WithdrawPage'));
 
 function AppFallback() {
   return <div className="min-h-screen bg-[#050505] text-zinc-100" />;
@@ -61,6 +62,14 @@ function MarketingRoute() {
   return (
     <React.Suspense fallback={<AppFallback />}>
       <MarketingPage />
+    </React.Suspense>
+  );
+}
+
+function WithdrawRoute() {
+  return (
+    <React.Suspense fallback={<AppFallback />}>
+      <WithdrawPage />
     </React.Suspense>
   );
 }
@@ -190,6 +199,13 @@ const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
   component: MarketingRoute,
+});
+
+/** Public stealth claim / withdraw — no dashboard login required */
+const withdrawRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/withdraw',
+  component: WithdrawRoute,
 });
 
 const agentShortcutRoute = createRoute({
@@ -574,6 +590,7 @@ const docsRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
+  withdrawRoute,
   agentShortcutRoute,
   servicesShortcutRoute,
   misspelledServicesShortcutRoute,

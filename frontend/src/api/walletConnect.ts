@@ -8,12 +8,15 @@
  */
 import { isConnected, requestAccess } from '@stellar/freighter-api';
 
-export type WalletProvider = 'freighter' | 'albedo' | 'xbull' | 'manual';
+export type WalletProvider = 'freighter' | 'albedo' | 'xbull' | 'manual' | 'kit';
 
 export interface WalletConnection {
   publicKey: string;
   provider: WalletProvider;
   network: 'TESTNET' | 'PUBLIC';
+  /** When provider is kit — original module id / display name */
+  kitWalletId?: string;
+  kitWalletName?: string;
 }
 
 /** Check if Freighter wallet extension is available */

@@ -5,12 +5,14 @@ import type {
   Zer0Currency, Zer0PaymentStatus, Zer0ProofSystem, Zer0SecurityEvent,
   Zer0PrivacyPreset,
 } from './types';
-import { proofApi, payrollApi, stellar } from '../api/api';
+import { proofApi, payrollApi, stellar, zkWorkerApi } from '../api/api';
 import { shieldPayAmount as zkShieldPayAmount, planShieldPay, getNotes as getZkNotes } from '../api/privacyPool';
 import { useWorkspaceStore } from './workspace';
-import { usePaymentSession } from './paymentSession';
+import { isPaymentInFlight, usePaymentSession } from './paymentSession';
 import { useStealthStore } from './stealth';
+import { useStealthClaimsStore } from './stealthClaims';
 import { isStealthMetaAddress } from '../lib/stealth';
+import { createStealthClaim, networkFromHorizon } from '../lib/stealthClaim';
 
 function createId(prefix: string) {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -45,16 +47,17 @@ const DEFAULT_SETTINGS: Zer0Settings = {
   contractAddress: 'CDQSV7I3FRQ6EBQOOE6MQSJHPCPQNHPWRK2G75DYYOOOGHDVIQGOZF4I',
   obfuscateOrgName: false,
   proxyOrgName: '',
-  privacyPreset: 'balanced',
-  privacyDelaySec: 45,
-  privacyJitterSec: 30,
-  decoyDepositsEnabled: true,
-  decoyDepositCount: 1,
+  /** Default to Fast so demos don't sit on 45–75s timing delays. */
+  privacyPreset: 'fast',
+  privacyDelaySec: 0,
+  privacyJitterSec: 0,
+  decoyDepositsEnabled: false,
+  decoyDepositCount: 0,
   dailySpendLimitXlm: 500,
-  batchDepositThenWithdraw: true,
+  batchDepositThenWithdraw: false,
   shieldedUnitsPerPay: 1,
   preferFreighterSigning: true,
-  stealthPaymentsEnabled: true,
+  stealthPaymentsEnabled: false,
   postPayDecoyEnabled: false,
 };
 
@@ -73,8 +76,20 @@ export function privacyPresetValues(
   | 'postPayDecoyEnabled'
 > {
   switch (preset) {
+    case 'ultra_fast':
+      // Absolute minimum: ZK settle only, skip every optional privacy hop
+      return {
+        privacyPreset: 'ultra_fast',
+        privacyDelaySec: 0,
+        privacyJitterSec: 0,
+        decoyDepositsEnabled: false,
+        decoyDepositCount: 0,
+        batchDepositThenWithdraw: false,
+        stealthPaymentsEnabled: false,
+        postPayDecoyEnabled: false,
+      };
     case 'fast':
-      // Just ZK proof + pool contract: no delay, no decoys, no stealth
+      // ZK + pool only (same knobs as ultra; name kept for existing users)
       return {
         privacyPreset: 'fast',
         privacyDelaySec: 0,
@@ -86,11 +101,11 @@ export function privacyPresetValues(
         postPayDecoyEnabled: false,
       };
     case 'balanced':
-      // Default production tradeoff
+      // Lighter than before — still stealth, short delay, one decoy
       return {
         privacyPreset: 'balanced',
-        privacyDelaySec: 45,
-        privacyJitterSec: 30,
+        privacyDelaySec: 12,
+        privacyJitterSec: 8,
         decoyDepositsEnabled: true,
         decoyDepositCount: 1,
         batchDepositThenWithdraw: true,
@@ -101,8 +116,8 @@ export function privacyPresetValues(
       // Max privacy profile we support in-app today
       return {
         privacyPreset: 'secured',
-        privacyDelaySec: 120,
-        privacyJitterSec: 60,
+        privacyDelaySec: 90,
+        privacyJitterSec: 45,
         decoyDepositsEnabled: true,
         decoyDepositCount: 3,
         batchDepositThenWithdraw: true,
@@ -145,6 +160,14 @@ interface Zer0State {
   depositToPool: (currency: Zer0Currency, amount: number) => void;
   withdrawFromPool: (currency: Zer0Currency, amount: number) => boolean;
   processPayment: (paymentId: string) => Promise<void>;
+  /**
+   * Mark orphan Processing / Queued rows as failed (or heal proofs when pay already completed).
+   * Safe to call often — only touches stale non-terminal rows.
+   */
+  reconcileStalePayments: (opts?: { maxAgeMs?: number; forceAll?: boolean }) => {
+    paymentsFixed: number;
+    proofsFixed: number;
+  };
   logSecurityEvent: (event: Omit<Zer0SecurityEvent, 'id' | 'createdAt'>) => void;
   clearSecurityEvents: () => void;
 
@@ -283,28 +306,150 @@ export const useZer0Store = create<Zer0State>()(
 
     clearSecurityEvents: () => set({ securityEvents: [] }),
 
+    reconcileStalePayments: (opts = {}) => {
+      const maxAgeMs = opts.maxAgeMs ?? 90_000; // 90s without progress → stale
+      const forceAll = !!opts.forceAll;
+      const now = Date.now();
+      const live = usePaymentSession.getState().session;
+      const liveInFlight =
+        live && isPaymentInFlight(live) ? live.paymentId : null;
+
+      let paymentsFixed = 0;
+      let proofsFixed = 0;
+
+      const payments = get().payments.map((p) => {
+        // Heal: completed pay but still "processing" shouldn't happen — keep completed
+        if (p.status === 'completed') return p;
+
+        const age = now - (p.processedAt || p.createdAt || 0);
+        const isLive = liveInFlight === p.id;
+
+        if (p.status === 'processing' || p.status === 'approved') {
+          // Never kill a payment that currently owns the live settle modal
+          if (isLive && !forceAll) return p;
+          if (!forceAll && age < maxAgeMs) return p;
+
+          // If we already have a txHash, treat as completed (resume edge case)
+          if (p.txHash) {
+            paymentsFixed += 1;
+            return {
+              ...p,
+              status: 'completed' as const,
+              processedAt: p.processedAt || now,
+              lastError: null,
+            };
+          }
+
+          paymentsFixed += 1;
+          return {
+            ...p,
+            status: 'failed' as const,
+            lastError:
+              p.lastError
+              || (p.status === 'approved'
+                ? 'Approved but never settled — click Retry to run again.'
+                : 'Settle interrupted or stuck (marked failed automatically). Retry from the ledger.'),
+          };
+        }
+        return p;
+      });
+
+      const paymentsById = new Map(payments.map(p => [p.id, p]));
+
+      const proofs = get().proofs.map((pr) => {
+        if (pr.status === 'verified' || pr.status === 'failed') return pr;
+
+        const pay = pr.paymentId ? paymentsById.get(pr.paymentId) : undefined;
+        const age = now - (pr.createdAt || 0);
+        const isLive = !!(pay && liveInFlight === pay.id);
+
+        // Payment already completed → mark proof verified for books
+        if (pay?.status === 'completed') {
+          proofsFixed += 1;
+          return {
+            ...pr,
+            status: 'verified' as const,
+            proofData: pr.proofData || (pay.txHash ? `zk_${pay.txHash.slice(0, 16)}_healed` : `zk_healed_${pr.id.slice(-8)}`),
+            verificationKey: pr.verificationKey || (pay.stealth ? 'stealth_healed' : 'vk_healed'),
+            verifiedAt: pr.verifiedAt || now,
+            generationTimeMs: pr.generationTimeMs ?? Math.max(0, (pay.processedAt || now) - (pr.createdAt || now)),
+          };
+        }
+
+        // Payment failed / cancelled → fail the proof
+        if (pay && (pay.status === 'failed' || pay.status === 'cancelled')) {
+          proofsFixed += 1;
+          return {
+            ...pr,
+            status: 'failed' as const,
+            proofData: pr.proofData,
+          };
+        }
+
+        // Orphan queued/generating with no live settle
+        if ((pr.status === 'queued' || pr.status === 'generating') && !isLive) {
+          if (!forceAll && age < maxAgeMs) return pr;
+          // No payment, or payment not in-flight → stale
+          if (!pay || pay.status !== 'processing') {
+            proofsFixed += 1;
+            return {
+              ...pr,
+              status: 'failed' as const,
+              proofData: pr.proofData,
+            };
+          }
+        }
+
+        return pr;
+      });
+
+      if (paymentsFixed > 0 || proofsFixed > 0) {
+        set({ payments, proofs });
+        get().logSecurityEvent({
+          type: 'batch_window',
+          message: `Reconciled stale rows: ${paymentsFixed} payment(s), ${proofsFixed} proof(s)`,
+        });
+      }
+
+      return { paymentsFixed, proofsFixed };
+    },
+
     processPayment: async (paymentId) => {
       const state = get();
       const payment = state.payments.find(p => p.id === paymentId);
-      if (!payment) return;
+      if (!payment) {
+        usePaymentSession.getState().failSession('Payment not found — refresh and try again.');
+        return;
+      }
       const log = get().logSecurityEvent;
       const session = usePaymentSession.getState();
 
-      // Already finished — do not re-open Freighter / re-settle
+      // Already finished — re-open receipt if we still have a session, else no-op
       if (payment.status === 'completed') {
+        if (session.session?.paymentId === paymentId) session.openModal();
         return;
       }
 
-      // If already processing, re-surface the live popup instead of starting a second settle
+      // If already processing: re-open live popup when still in flight; otherwise unstick + retry
       if (payment.status === 'processing') {
-        if (session.session?.paymentId === paymentId) {
+        const live = session.session;
+        if (live?.paymentId === paymentId && isPaymentInFlight(live)) {
           session.openModal();
+          return;
         }
-        return;
+        // Orphaned "processing" (reload / lost session) — allow a clean retry
+        state.updatePaymentStatus(paymentId, 'failed', {
+          lastError: 'Previous settle was interrupted. Retrying…',
+        });
       }
 
-      if (payment.status === 'pending_approval') {
+      // Re-read after possible unstick (stale `payment` object may still say processing)
+      const freshStatus = get().payments.find(p => p.id === paymentId)?.status;
+      if (freshStatus === 'pending_approval' || payment.status === 'pending_approval') {
         log({ type: 'approval_required', message: 'Payment still awaiting approval', paymentId });
+        usePaymentSession.getState().failSession(
+          'This payment still needs approval before it can settle.',
+        );
         return;
       }
 
@@ -313,16 +458,10 @@ export const useZer0Store = create<Zer0State>()(
       let needAmount = payment.amount;
       let planDesc: string | undefined;
       let etaSeconds: number | undefined;
-      let totalSteps = 3;
-      if (payment.shielded) {
-        const plan = planShieldPay(payment.amount || 0);
-        needAmount = plan.settledXlm;
-        planDesc = plan.description;
-        etaSeconds = plan.estimatedSeconds;
-        totalSteps = Math.max(8, plan.totalNotes * 4 + plan.notes.length * 2);
-      }
+      let totalSteps = payment.shielded ? 12 : 3;
 
-      // Open non-dismissible progress modal FIRST so the user always sees secure settle UX
+      // Open non-dismissible progress modal FIRST (public, private ZK, stealth)
+      // so planning errors still show in the popup instead of failing silently.
       session.startSession({
         paymentId,
         recipientName: payment.recipientName,
@@ -333,6 +472,28 @@ export const useZer0Store = create<Zer0State>()(
         etaSeconds,
         totalSteps,
       });
+
+      try {
+        if (payment.shielded) {
+          const plan = planShieldPay(payment.amount || 0);
+          needAmount = plan.settledXlm;
+          planDesc = plan.description;
+          etaSeconds = plan.estimatedSeconds;
+          totalSteps = Math.max(8, plan.totalNotes * 4 + plan.notes.length * 2);
+          session.updateProgress({
+            paymentId,
+            label: `Plan: ${plan.description}`,
+            phase: 'settling',
+            step: 1,
+            totalSteps,
+          });
+        }
+      } catch (planErr) {
+        const msg = planErr instanceof Error ? planErr.message : 'Could not plan private payment';
+        state.updatePaymentStatus(paymentId, 'failed', { lastError: msg });
+        session.failSession(msg);
+        return;
+      }
 
       // Claim after modal so concurrent clicks re-open the same session
       state.updatePaymentStatus(paymentId, 'processing');
@@ -345,40 +506,53 @@ export const useZer0Store = create<Zer0State>()(
         return;
       }
 
-      const hasFunds = (state.pool.balances[fundCurrency] || 0) >= needAmount;
-      if (!hasFunds) {
-        const msg = `Insufficient ${fundCurrency} in funding wallet (need ${needAmount})`;
+      const senderAddress = state.settings.walletAddress?.trim() || '';
+      if (!senderAddress) {
+        const msg = 'No funding wallet configured. Open Payroll → Settings → Wallet and connect Freighter / Albedo / xBull.';
+        state.updatePaymentStatus(paymentId, 'failed', { lastError: msg });
+        log({ type: 'payment_blocked', message: msg, paymentId });
+        session.failSession(msg);
+        return;
+      }
+      if (!stellar.isValidPublicKey(senderAddress)) {
+        const msg = `Funding wallet is not a valid Stellar address (need G…, 56 chars). Got: ${senderAddress.slice(0, 12)}…`;
         state.updatePaymentStatus(paymentId, 'failed', { lastError: msg });
         log({ type: 'payment_blocked', message: msg, paymentId });
         session.failSession(msg);
         return;
       }
 
-      const senderAddress = state.settings.walletAddress?.trim();
-      if (!senderAddress) {
-        const msg = 'No funding wallet';
-        state.updatePaymentStatus(paymentId, 'failed', { lastError: msg });
-        log({ type: 'payment_blocked', message: 'No funding wallet configured', paymentId });
-        session.failSession(msg);
-        return;
-      }
-
-      // Long-term G… is optional when stealth meta will produce a one-time receive address
+      // Long-term G… is optional when stealth meta will produce a one-time receive address.
+      // Per-payment useStealth wins over workspace stealthPaymentsEnabled.
       const recipientAddress = payment.recipientWallet?.trim() || '';
       const employeeForMeta = payment.employeeId
         ? get().employees.find(e => e.id === payment.employeeId)
         : null;
+      const wantStealthForPay =
+        payment.useStealth === true
+        || (payment.useStealth !== false && !!state.settings.stealthPaymentsEnabled);
       const metaForPayee = (
         payment.recipientStealthMeta
-        || employeeForMeta?.stealthMetaAddress
-        || (payment.employeeId ? useStealthStore.getState().employeeMeta[payment.employeeId] : '')
+        || (wantStealthForPay
+          ? (employeeForMeta?.stealthMetaAddress
+            || (payment.employeeId ? useStealthStore.getState().employeeMeta[payment.employeeId] : '')
+            || '')
+          : '')
         || ''
       ).trim();
       const stealthCanCover =
         !!payment.shielded
-        && !!state.settings.stealthPaymentsEnabled
+        && wantStealthForPay
         && !!metaForPayee
         && isStealthMetaAddress(metaForPayee);
+
+      if (recipientAddress && !stellar.isValidPublicKey(recipientAddress)) {
+        const msg = `Recipient wallet is invalid (need G…, 56 characters). Got: ${recipientAddress.slice(0, 12) || '(empty)'}…`;
+        state.updatePaymentStatus(paymentId, 'failed', { lastError: msg });
+        log({ type: 'payment_blocked', message: msg, paymentId });
+        session.failSession(msg);
+        return;
+      }
 
       if (!recipientAddress && !stealthCanCover) {
         const msg = payment.shielded
@@ -392,6 +566,89 @@ export const useZer0Store = create<Zer0State>()(
 
       const workspaceId = useWorkspaceStore.getState().currentWorkspaceId || 'default';
       const horizonUrl = state.settings.horizonUrl || 'https://horizon-testnet.stellar.org';
+
+      // ── Preflight: re-read wallets from Horizon BEFORE any settle work ──
+      session.updateProgress({
+        paymentId,
+        label: 'Checking funding wallet on Stellar…',
+        phase: 'starting',
+        step: 0,
+      });
+      try {
+        const funder = await stellar.accountExists(senderAddress, horizonUrl);
+        if (!funder.exists) {
+          const msg = `Funding wallet ${senderAddress.slice(0, 6)}… is not funded on this network. `
+            + (horizonUrl.includes('testnet')
+              ? 'Use Friendbot / “Fund from faucet” on testnet, then retry.'
+              : 'Send XLM to the funding wallet, then retry.');
+          state.updatePaymentStatus(paymentId, 'failed', { lastError: msg });
+          log({ type: 'payment_blocked', message: msg, paymentId });
+          session.failSession(msg);
+          return;
+        }
+        // Prefer live Horizon balance over stale UI pool cache
+        if (funder.balances) {
+          const live = funder.balances[fundCurrency as 'XLM' | 'USDC' | 'EURC'] ?? funder.balances.XLM;
+          if ((live || 0) < needAmount) {
+            const msg = `Insufficient ${fundCurrency} on-chain (have ${live}, need ${needAmount}). Top up the funding wallet.`;
+            state.updatePaymentStatus(paymentId, 'failed', { lastError: msg });
+            log({ type: 'payment_blocked', message: msg, paymentId });
+            session.failSession(msg);
+            return;
+          }
+          useZer0Store.setState(s => ({
+            pool: {
+              ...s.pool,
+              balances: {
+                USDC: funder.balances!.USDC,
+                XLM: funder.balances!.XLM,
+                EURC: funder.balances!.EURC,
+              },
+              lastUpdated: Date.now(),
+            },
+          }));
+        }
+
+        if (recipientAddress && !stealthCanCover) {
+          session.updateProgress({
+            paymentId,
+            label: 'Checking recipient wallet…',
+            phase: 'starting',
+          });
+          const dest = await stellar.accountExists(recipientAddress, horizonUrl);
+          if (!dest.exists && fundCurrency !== 'XLM') {
+            const msg = `Recipient ${recipientAddress.slice(0, 6)}… does not exist on Stellar. `
+              + `Create/fund it with XLM first, then send ${fundCurrency}.`;
+            state.updatePaymentStatus(paymentId, 'failed', { lastError: msg });
+            session.failSession(msg);
+            return;
+          }
+          if (!dest.exists && !payment.shielded && fundCurrency === 'XLM' && needAmount < 1) {
+            const msg = 'Recipient wallet is new — public XLM pays need at least 1 XLM to create the account.';
+            state.updatePaymentStatus(paymentId, 'failed', { lastError: msg });
+            session.failSession(msg);
+            return;
+          }
+        }
+      } catch (preErr) {
+        const msg = preErr instanceof Error
+          ? `Wallet preflight failed: ${preErr.message}`
+          : 'Wallet preflight failed (Horizon unreachable).';
+        state.updatePaymentStatus(paymentId, 'failed', { lastError: msg });
+        log({ type: 'payment_blocked', message: msg, paymentId });
+        session.failSession(msg);
+        return;
+      }
+
+      // Soft pool-cache check (Horizon already validated above)
+      const hasFunds = (get().pool.balances[fundCurrency] || 0) >= needAmount;
+      if (!hasFunds) {
+        const msg = `Insufficient ${fundCurrency} in funding wallet (need ${needAmount})`;
+        state.updatePaymentStatus(paymentId, 'failed', { lastError: msg });
+        log({ type: 'payment_blocked', message: msg, paymentId });
+        session.failSession(msg);
+        return;
+      }
 
       const logRunStart = async (shielded: boolean) => {
         try {
@@ -542,7 +799,7 @@ export const useZer0Store = create<Zer0State>()(
             step: 2,
           });
 
-          // ── Stealth: derive one-time receive address when enabled ──
+          // ── Stealth: only when THIS payment asked for it (not just workspace default) ──
           let settleTo = recipientAddress;
           let stealthRecordId: string | null = null;
           let stealthEphemeralPub: string | null = null;
@@ -552,15 +809,28 @@ export const useZer0Store = create<Zer0State>()(
           const employee = payment.employeeId
             ? get().employees.find(e => e.id === payment.employeeId)
             : null;
-          const metaFromPayment = payment.recipientStealthMeta?.trim() || '';
-          const metaFromEmployee = employee?.stealthMetaAddress?.trim() || '';
-          const metaFromStore = payment.employeeId
-            ? useStealthStore.getState().employeeMeta[payment.employeeId]
-            : '';
-          const metaCandidate = metaFromPayment || metaFromEmployee || metaFromStore || '';
-          const wantStealth = !!state.settings.stealthPaymentsEnabled;
+          // Per-payment flag is authoritative. false = never stealth, even if employee has meta.
+          const wantStealth =
+            payment.useStealth === true
+            || (payment.useStealth !== false && !!state.settings.stealthPaymentsEnabled);
 
-          if (wantStealth && metaCandidate && isStealthMetaAddress(metaCandidate)) {
+          // Only pull employee/store meta when stealth is actually wanted for this pay
+          const metaFromPayment = payment.recipientStealthMeta?.trim() || '';
+          const metaFromEmployee = wantStealth ? (employee?.stealthMetaAddress?.trim() || '') : '';
+          const metaFromStore = wantStealth && payment.employeeId
+            ? (useStealthStore.getState().employeeMeta[payment.employeeId] || '')
+            : '';
+          const metaCandidate = wantStealth
+            ? (metaFromPayment || metaFromEmployee || metaFromStore || '')
+            : '';
+
+          if (!wantStealth) {
+            log({
+              type: 'batch_window',
+              message: 'Stealth off for this payment — settling to long-term wallet',
+              paymentId,
+            });
+          } else if (metaCandidate && isStealthMetaAddress(metaCandidate)) {
             try {
               const record = useStealthStore.getState().prepareOutbound({
                 metaAddress: metaCandidate,
@@ -608,9 +878,138 @@ export const useZer0Store = create<Zer0State>()(
             return;
           }
 
+          if (!stellar.isValidPublicKey(settleTo)) {
+            const msg = `Settle destination is not a valid Stellar G… address: ${String(settleTo).slice(0, 12)}…`;
+            state.updatePaymentStatus(paymentId, 'failed', { lastError: msg, proofId: proof.id });
+            get().updateProofStatus(proof.id, 'failed');
+            session.failSession(msg);
+            return;
+          }
+
+          // Per-payment privacy overrides (details "View more") win over workspace settings
+          const ov = payment.privacyOverrides || null;
+          const effDelay = ov?.privacyDelaySec ?? state.settings.privacyDelaySec ?? 0;
+          const effJitter = ov?.privacyJitterSec ?? state.settings.privacyJitterSec ?? 0;
+          const effDecoyOn = ov?.decoyDepositsEnabled ?? !!state.settings.decoyDepositsEnabled;
+          const effDecoyCount = ov?.decoyDepositCount ?? state.settings.decoyDepositCount ?? 0;
+          const effBatch = ov?.batchDepositThenWithdraw ?? !!state.settings.batchDepositThenWithdraw;
+          const effPostDecoy = ov?.postPayDecoyEnabled ?? !!state.settings.postPayDecoyEnabled;
+
+          // Worker preflight only when multi-note + no auto-sign (single-note 1 XLM skips this hop)
+          const isUltraFast =
+            (effDelay === 0 && !effDecoyOn && !effPostDecoy && !usedStealth)
+            || (
+              !ov
+              && (
+                state.settings.privacyPreset === 'ultra_fast'
+                || state.settings.privacyPreset === 'fast'
+              )
+            );
+          if (!isUltraFast && noteCount > 2) {
+            session.updateProgress({
+              paymentId,
+              label: 'Checking private settle worker…',
+              phase: 'waking',
+            });
+            try {
+              const { isAutoSignEnabled: autoSignOn } = await import('../api/privacyPool');
+              if (!autoSignOn()) {
+                let workerOk = false;
+                try {
+                  const st = await zkWorkerApi.status();
+                  workerOk = !!(st && (st as any).online !== false && (st as any).status !== 'stopped');
+                  const s = String((st as any)?.status || (st as any)?.state || '').toLowerCase();
+                  if (s.includes('run') || s.includes('ready') || s.includes('online') || s.includes('active')) {
+                    workerOk = true;
+                  }
+                  if ((st as any)?.online === false || s.includes('stop') || s.includes('offline')) {
+                    workerOk = false;
+                  }
+                } catch {
+                  workerOk = false;
+                }
+                if (!workerOk) {
+                  session.updateProgress({
+                    paymentId,
+                    label: 'ZK worker may be offline — attempting settle…',
+                    phase: 'waking',
+                  });
+                }
+              }
+            } catch {
+              /* non-fatal */
+            }
+          } else {
+            session.updateProgress({
+              paymentId,
+              label: isUltraFast ? 'Ultra-fast private settle…' : 'Starting private settle…',
+              phase: 'settling',
+            });
+          }
+
+          // Stealth one-time G… must exist before pool withdraw (SAC transfer fails on uncreated accounts)
+          if (usedStealth && stealthOneTime) {
+            session.updateProgress({
+              paymentId,
+              label: 'Creating stealth receive account on Stellar…',
+              phase: 'settling',
+            });
+            try {
+              const ensured = await stellar.ensureAccount(senderAddress, stealthOneTime, horizonUrl, 1.5);
+              if (ensured.created) {
+                log({
+                  type: 'batch_window',
+                  message: `Funded stealth one-time account ${stealthOneTime.slice(0, 8)}… (createAccount)`,
+                  paymentId,
+                });
+                session.updateProgress({
+                  paymentId,
+                  label: 'Stealth account created — continuing private settle…',
+                  phase: 'settling',
+                });
+              } else {
+                session.updateProgress({
+                  paymentId,
+                  label: 'Stealth account already on-chain…',
+                  phase: 'settling',
+                });
+              }
+            } catch (fundErr) {
+              const msg = fundErr instanceof Error
+                ? `Could not create stealth receive account: ${fundErr.message}`
+                : 'Could not create stealth receive account';
+              state.updatePaymentStatus(paymentId, 'failed', { lastError: msg, proofId: proof.id });
+              get().updateProofStatus(proof.id, 'failed');
+              log({ type: 'payment_failed', message: msg, paymentId });
+              session.failSession(msg);
+              return;
+            }
+          } else if (settleTo) {
+            // Non-stealth private pay: ensure long-term destination exists (create with min reserve)
+            try {
+              const dest = await stellar.accountExists(settleTo, horizonUrl);
+              if (!dest.exists) {
+                session.updateProgress({
+                  paymentId,
+                  label: 'Recipient wallet missing — creating on Stellar…',
+                  phase: 'settling',
+                });
+                await stellar.ensureAccount(senderAddress, settleTo, horizonUrl, 1.5);
+              }
+            } catch (fundErr) {
+              const msg = fundErr instanceof Error
+                ? `Recipient account setup failed: ${fundErr.message}`
+                : 'Recipient account setup failed';
+              state.updatePaymentStatus(paymentId, 'failed', { lastError: msg, proofId: proof.id });
+              get().updateProofStatus(proof.id, 'failed');
+              session.failSession(msg);
+              return;
+            }
+          }
+
           // ── Timing privacy: delay before settle (breaks deposit/withdraw timing) ──
-          const baseDelay = Math.max(0, state.settings.privacyDelaySec || 0);
-          const jitterMax = Math.max(0, state.settings.privacyJitterSec || 0);
+          const baseDelay = Math.max(0, effDelay);
+          const jitterMax = Math.max(0, effJitter);
           const jitter = jitterMax > 0 ? Math.floor(Math.random() * (jitterMax + 1)) : 0;
           const delaySec = baseDelay + jitter;
           if (delaySec > 0) {
@@ -637,10 +1036,8 @@ export const useZer0Store = create<Zer0State>()(
             amountXlm: payment.amount,
             privacy: {
               delaySec: 0, // already applied above (pre-settle)
-              decoyCount: state.settings.decoyDepositsEnabled
-                ? Math.max(0, state.settings.decoyDepositCount || 0)
-                : 0,
-              batchDepositThenWithdraw: !!state.settings.batchDepositThenWithdraw,
+              decoyCount: effDecoyOn ? Math.max(0, effDecoyCount || 0) : 0,
+              batchDepositThenWithdraw: !!effBatch,
             },
             onProgress: (label, cur, total) => {
               log({
@@ -662,10 +1059,42 @@ export const useZer0Store = create<Zer0State>()(
 
           if (stealthRecordId) {
             useStealthStore.getState().attachTxHash(stealthRecordId, lastTxHash);
+            // Mint PIN claim BEFORE completeSession so the popup can show PIN + link
+            const outbound = useStealthStore.getState().outbound.find(r => r.id === stealthRecordId);
+            if (outbound?.oneTimeSecret) {
+              session.updateProgress({
+                paymentId,
+                label: 'Creating withdraw PIN for recipient…',
+                phase: 'finalizing',
+              });
+              try {
+                const claim = await createStealthClaim({
+                  oneTimeSecret: outbound.oneTimeSecret,
+                  oneTimePublicKey: outbound.oneTimePublicKey,
+                  amountXlm: paid,
+                  note: payment.recipientName,
+                  paymentId,
+                  network: networkFromHorizon(state.settings.horizonUrl || ''),
+                });
+                useStealthClaimsStore.getState().addIssued(claim);
+                log({
+                  type: 'batch_window',
+                  message: `Stealth withdraw PIN ready (PIN ${claim.pin})`,
+                  paymentId,
+                });
+              } catch (claimErr) {
+                console.warn('[stealth] claim mint failed (non-fatal):', claimErr);
+                log({
+                  type: 'batch_window',
+                  message: 'PIN claim mint failed — use ledger Advanced secret if needed',
+                  paymentId,
+                });
+              }
+            }
           }
 
           // Optional post-pay decoy deposit (browser path only; best-effort)
-          if (state.settings.postPayDecoyEnabled) {
+          if (effPostDecoy && !isUltraFast) {
             try {
               session.updateProgress({
                 paymentId,
@@ -814,7 +1243,18 @@ export const useZer0Store = create<Zer0State>()(
     },
 
     updateSettings: (updates) => {
-      set(s => ({ settings: { ...s.settings, ...updates } }));
+      set(s => {
+        const next = { ...s.settings, ...updates };
+        // Normalize currency so bad/missing values never wipe a saved default
+        if (updates.defaultCurrency !== undefined) {
+          const c = String(updates.defaultCurrency || '').toUpperCase();
+          next.defaultCurrency =
+            c === 'USDC' || c === 'EURC' || c === 'XLM'
+              ? (c as Zer0Currency)
+              : s.settings.defaultCurrency || 'XLM';
+        }
+        return { settings: next };
+      });
       if (typeof updates.preferFreighterSigning === 'boolean') {
         import('../api/privacyPool').then(m => m.setForceFreighterSigning(updates.preferFreighterSigning!));
       }
@@ -836,7 +1276,17 @@ export const useZer0Store = create<Zer0State>()(
     }),
     merge: (persisted, current) => {
       const p = (persisted || {}) as Partial<Zer0State>;
-      const mergedSettings = { ...DEFAULT_SETTINGS, ...(p.settings || {}) };
+      const rawSettings = { ...(p.settings || {}) } as Partial<Zer0Settings>;
+      // Preserve user default currency across reloads (do not let DEFAULT overwrite a saved value)
+      const savedCurrency = String(rawSettings.defaultCurrency || '').toUpperCase();
+      const mergedSettings: Zer0Settings = {
+        ...DEFAULT_SETTINGS,
+        ...rawSettings,
+        defaultCurrency:
+          savedCurrency === 'USDC' || savedCurrency === 'EURC' || savedCurrency === 'XLM'
+            ? (savedCurrency as Zer0Currency)
+            : DEFAULT_SETTINGS.defaultCurrency,
+      };
       if (typeof mergedSettings.preferFreighterSigning !== 'boolean') {
         mergedSettings.preferFreighterSigning = true;
       }
@@ -844,6 +1294,14 @@ export const useZer0Store = create<Zer0State>()(
       import('../api/privacyPool').then(m =>
         m.setForceFreighterSigning(!!mergedSettings.preferFreighterSigning),
       );
+      // After rehydrate, clear orphan Processing / Queued rows from prior sessions
+      queueMicrotask(() => {
+        try {
+          useZer0Store.getState().reconcileStalePayments({ maxAgeMs: 60_000 });
+        } catch (e) {
+          console.warn('[zer0] reconcile after rehydrate failed', e);
+        }
+      });
       return {
         ...current,
         ...p,
@@ -855,3 +1313,12 @@ export const useZer0Store = create<Zer0State>()(
   },
   )
 );
+
+/** Boot helper — also called from main.tsx */
+export function reconcileStaleZer0State() {
+  try {
+    return useZer0Store.getState().reconcileStalePayments({ maxAgeMs: 60_000 });
+  } catch {
+    return { paymentsFixed: 0, proofsFixed: 0 };
+  }
+}

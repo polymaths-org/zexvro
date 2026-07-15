@@ -174,19 +174,38 @@ export const usePaymentSession = create<PaymentSessionState>()(
 
       completeSession: ({ txHash, label }) => {
         const cur = get().session;
-        if (!cur) return;
         const text = label || 'Payment completed';
+        const now = Date.now();
+        // Always show success even if session was lost (reload / race)
+        const base = cur || {
+          paymentId: 'unknown',
+          recipientName: 'Recipient',
+          amount: 0,
+          currency: 'XLM',
+          shielded: false,
+          phase: 'done' as PaymentSessionPhase,
+          label: text,
+          step: 1,
+          totalSteps: 1,
+          log: [] as PaymentSessionLog[],
+          jobIds: [] as string[],
+          startedAt: now,
+          updatedAt: now,
+          error: null,
+          txHash: null,
+          dismissible: true,
+        };
         set({
           session: {
-            ...cur,
+            ...base,
             phase: 'done',
             label: text,
-            step: cur.totalSteps,
-            txHash: txHash || cur.txHash,
+            step: base.totalSteps || 1,
+            txHash: txHash || base.txHash,
             error: null,
             dismissible: true,
-            updatedAt: Date.now(),
-            log: pushLog(cur.log, text),
+            updatedAt: now,
+            log: pushLog(base.log || [], text),
           },
           modalOpen: true,
         });
@@ -194,16 +213,35 @@ export const usePaymentSession = create<PaymentSessionState>()(
 
       failSession: (error) => {
         const cur = get().session;
-        if (!cur) return;
+        const now = Date.now();
+        // Always surface errors in the popup (never silent)
+        const base = cur || {
+          paymentId: 'unknown',
+          recipientName: 'Payment',
+          amount: 0,
+          currency: 'XLM',
+          shielded: true,
+          phase: 'error' as PaymentSessionPhase,
+          label: 'Payment failed',
+          step: 0,
+          totalSteps: 1,
+          log: [] as PaymentSessionLog[],
+          jobIds: [] as string[],
+          startedAt: now,
+          updatedAt: now,
+          error: null,
+          txHash: null,
+          dismissible: true,
+        };
         set({
           session: {
-            ...cur,
+            ...base,
             phase: 'error',
             label: 'Payment failed',
             error,
             dismissible: true,
-            updatedAt: Date.now(),
-            log: pushLog(cur.log, error),
+            updatedAt: now,
+            log: pushLog(base.log || [], error),
           },
           modalOpen: true,
         });

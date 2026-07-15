@@ -4,6 +4,7 @@ import { RouterProvider } from '@tanstack/react-router';
 import { router } from './routes/router';
 import { prefetchZkArtifacts, syncNotesFromAws, syncSigningPreferenceFromStorage } from './api/privacyPool';
 import { startPaymentResumeWatcher } from './lib/paymentResume';
+import { reconcileStaleZer0State } from './stores/zer0';
 import PaymentSessionHost from './components/zer0/PaymentSessionHost';
 import './index.css';
 
@@ -11,6 +12,8 @@ import './index.css';
 syncSigningPreferenceFromStorage();
 syncNotesFromAws();
 prefetchZkArtifacts();
+// Clear orphan Processing / Queued ledger rows from interrupted settles
+setTimeout(() => reconcileStaleZer0State(), 400);
 // Re-open processing modal + resume worker job poll after reload
 startPaymentResumeWatcher();
 

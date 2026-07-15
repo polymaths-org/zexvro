@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import {
   Settings, Shield, Wallet, Eye, AlertTriangle, Save, RotateCcw, CheckCircle2,
-  Check, Loader2, X, Info, Server, Power, PowerOff, RefreshCw, Zap, Scale, Lock, SlidersHorizontal,
+  Check, Loader2, X, Info, Server, Power, PowerOff, RefreshCw, Zap, Scale, Lock,
+  SlidersHorizontal, Rocket,
 } from 'lucide-react';
 import { useZer0Store, privacyPresetValues } from '../../stores/zer0';
 import type { Zer0ProofSystem, Zer0Currency, Zer0PrivacyPreset } from '../../stores/types';
@@ -9,6 +10,7 @@ import { stellar, zkWorkerApi, type ZkWorkerStatus } from '../../api/api';
 import {
   connectFreighter, connectAlbedo, connectXBull, isValidStellarPublicKey,
 } from '../../api/walletConnect';
+import { connectWithWalletsKit } from '../../api/stellarWalletsKit';
 import {
   getContractRoot, getCommitmentCount, POOL_CONTRACT, DENOMINATION_XLM,
   isAutoSignEnabled, isTreasuryKeyConfigured, setForceFreighterSigning, getTreasuryPublicKey,
@@ -24,6 +26,20 @@ const PRIVACY_PRESETS: Record<Zer0PrivacyPreset, {
   bullets: string[];
   wait: string;
 }> = {
+  ultra_fast: {
+    name: 'Ultra Fast',
+    tagline: 'Minimum hops · demos',
+    icon: Rocket,
+    accent: 'text-rose-600 dark:text-rose-400',
+    ring: 'border-rose-400 bg-rose-500/5 dark:border-rose-500/50',
+    bullets: [
+      'Zero artificial delay / jitter',
+      'No decoys · no stealth',
+      'Skips optional preflight stalls',
+      'ZK pool settle only (still private)',
+    ],
+    wait: 'chain + prover only',
+  },
   fast: {
     name: 'Fast',
     tagline: 'ZK proof + pool only',
@@ -36,21 +52,21 @@ const PRIVACY_PRESETS: Record<Zer0PrivacyPreset, {
       'No stealth one-time receives',
       'Just proof generation + contract settle',
     ],
-    wait: '~seconds',
+    wait: 'chain + prover only',
   },
   balanced: {
     name: 'Balanced',
-    tagline: 'Recommended default',
+    tagline: 'Stealth + light delay',
     icon: Scale,
     accent: 'text-blue-600 dark:text-blue-400',
     ring: 'border-blue-400 bg-blue-500/5 dark:border-blue-500/50',
     bullets: [
-      '45s delay + 30s jitter',
+      '12s delay + 8s jitter',
       '1 pre-pay decoy note',
       'Batch deposit → delay → withdraw',
       'Stealth one-time receives on',
     ],
-    wait: '~45–75s extra',
+    wait: '~12–20s extra',
   },
   secured: {
     name: 'Secured',
@@ -59,12 +75,12 @@ const PRIVACY_PRESETS: Record<Zer0PrivacyPreset, {
     accent: 'text-violet-600 dark:text-violet-400',
     ring: 'border-violet-400 bg-violet-500/5 dark:border-violet-500/50',
     bullets: [
-      '120s delay + 60s jitter',
+      '90s delay + 45s jitter',
       '3 pre-pay decoys + post-pay decoy',
       'Batch deposit → delay → withdraw',
       'Stealth one-time receives on',
     ],
-    wait: '~2–3 min extra',
+    wait: '~1.5–2.5 min extra',
   },
   custom: {
     name: 'Custom',
@@ -212,9 +228,22 @@ export default function Zer0Settings() {
     }
   };
 
+  // Keep local form in sync after rehydrate / save / external settings updates.
+  // Include defaultCurrency so a saved XLM/USDC/EURC choice never looks "stuck" after reload.
   useEffect(() => {
     setLocal({ ...settings });
-  }, [settings.walletAddress, settings.horizonUrl, settings.contractAddress, settings.proofSystem]);
+  }, [
+    settings.walletAddress,
+    settings.horizonUrl,
+    settings.contractAddress,
+    settings.proofSystem,
+    settings.defaultCurrency,
+    settings.timezone,
+    settings.allowTransparentPayments,
+    settings.privacyPreset,
+    settings.stealthPaymentsEnabled,
+    settings.preferFreighterSigning,
+  ]);
 
   useEffect(() => {
     if (activeTab === 'security') {
@@ -260,11 +289,28 @@ export default function Zer0Settings() {
   };
 
   const handleSave = async () => {
-    // Re-assert preset values on save so Fast/Balanced/Secured stay exact
+    // Re-assert preset values on save so Fast/Balanced/Secured stay exact —
+    // but never let privacy presets clobber general settings like defaultCurrency.
     const preset = local.privacyPreset || 'balanced';
+    const currency = (['XLM', 'USDC', 'EURC'] as const).includes(local.defaultCurrency as any)
+      ? local.defaultCurrency
+      : 'XLM';
     const payload = preset === 'custom'
-      ? local
-      : { ...local, ...privacyPresetValues(preset) };
+      ? { ...local, defaultCurrency: currency }
+      : {
+          ...local,
+          ...privacyPresetValues(preset),
+          // Privacy preset must not wipe General tab fields
+          defaultCurrency: currency,
+          timezone: local.timezone,
+          allowTransparentPayments: local.allowTransparentPayments,
+          walletAddress: local.walletAddress,
+          horizonUrl: local.horizonUrl,
+          sorobanRpcUrl: local.sorobanRpcUrl,
+          contractAddress: local.contractAddress,
+          proofSystem: local.proofSystem,
+          preferFreighterSigning: local.preferFreighterSigning,
+        };
     setLocal(payload);
     updateSettings(payload);
     setForceFreighterSigning(!!payload.preferFreighterSigning);
@@ -288,7 +334,7 @@ export default function Zer0Settings() {
     setTimeout(() => setSaved(false), 2000);
   };
 
-  const connectWallet = async (provider: 'Freighter' | 'Albedo' | 'xBull') => {
+  const connectWallet = async (provider: 'Freighter' | 'Albedo' | 'xBull' | 'Others') => {
     setWalletLoading(true);
     setWalletError(null);
     try {
@@ -297,15 +343,23 @@ export default function Zer0Settings() {
         ? await connectFreighter(net)
         : provider === 'Albedo'
           ? await connectAlbedo(net)
-          : await connectXBull(net);
+          : provider === 'xBull'
+            ? await connectXBull(net)
+            : await connectWithWalletsKit(net);
       const next = { ...local, walletAddress: conn.publicKey };
       setLocal(next);
-      setConnectedProvider(provider);
+      const label = provider === 'Others'
+        ? (conn.kitWalletName || 'Other wallet')
+        : provider;
+      setConnectedProvider(label);
       updateSettings(next);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (err: any) {
-      setWalletError(err.message || `${provider} connection failed`);
+      const msg = err?.message || `${provider} connection failed`;
+      if (!/cancel/i.test(msg)) {
+        setWalletError(msg);
+      }
     } finally {
       setWalletLoading(false);
     }
@@ -363,14 +417,22 @@ export default function Zer0Settings() {
             <div className="grid gap-6 sm:grid-cols-2">
               <div>
                 <label className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 block mb-1.5">Default Currency</label>
-                <select value={local.defaultCurrency}
-                  onChange={e => setLocal(l => ({ ...l, defaultCurrency: e.target.value as Zer0Currency }))}
+                <select
+                  value={local.defaultCurrency || 'XLM'}
+                  onChange={e => {
+                    const v = e.target.value as Zer0Currency;
+                    setLocal(l => ({ ...l, defaultCurrency: v }));
+                  }}
                   className="h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm outline-none dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
                   <option value="XLM">XLM (native Stellar)</option>
                   <option value="USDC">USDC</option>
                   <option value="EURC">EURC</option>
                 </select>
-                <p className="text-[10px] text-zinc-400 mt-1">Shielded pool currently settles in XLM units of {denomXlm} XLM each.</p>
+                <p className="text-[10px] text-zinc-400 mt-1">
+                  Used as the default for <strong>public</strong> pays and team forms.
+                  Private (shielded) pays always settle in XLM pool units ({denomXlm} XLM).
+                  Click <strong>Save Changes</strong> to keep this after reload.
+                </p>
               </div>
               <div>
                 <label className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 block mb-1.5">Timezone</label>
@@ -521,15 +583,27 @@ export default function Zer0Settings() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    {(['Freighter', 'Albedo', 'xBull'] as const).map(p => (
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    {(['Freighter', 'Albedo', 'xBull', 'Others'] as const).map(p => (
                       <button key={p} type="button" disabled={walletLoading} onClick={() => connectWallet(p)}
-                        className="h-11 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs font-bold flex items-center justify-center gap-2 hover:bg-zinc-50 dark:hover:bg-zinc-900">
-                        {walletLoading && connectedProvider === p ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4 text-blue-500" />}
-                        {p}
+                        className={`h-11 rounded-lg border text-xs font-bold flex items-center justify-center gap-2 hover:bg-zinc-50 dark:hover:bg-zinc-900 ${
+                          p === 'Others'
+                            ? 'border-violet-300 dark:border-violet-500/40 bg-violet-500/5 text-violet-700 dark:text-violet-300'
+                            : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950'
+                        }`}>
+                        {walletLoading ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Wallet className={`h-4 w-4 ${p === 'Others' ? 'text-violet-500' : 'text-blue-500'}`} />
+                        )}
+                        {p === 'Others' ? 'Others…' : p}
                       </button>
                     ))}
                   </div>
+                  <p className="text-[10px] text-zinc-400">
+                    <strong>Others</strong> opens the Stellar Wallets Kit (Rabet, LOBSTR, Hana, HOT, Klever, Ledger, …).
+                    Freighter, Albedo, and xBull stay as one-click buttons.
+                  </p>
                   {walletError && (
                     <div className="text-xs font-semibold text-rose-600 bg-rose-500/10 rounded-lg p-3">{walletError}</div>
                   )}
@@ -579,13 +653,13 @@ export default function Zer0Settings() {
                   Privacy profile
                 </h3>
                 <p className="text-[11px] text-zinc-500 mt-0.5">
-                  Pick a preset for every private pay. <strong>Fast</strong> is ZK + contract only;
+                  Pick a preset for every private pay. <strong>Ultra Fast / Fast</strong> = ZK + contract only;
                   <strong> Balanced</strong> / <strong>Secured</strong> add delay, decoys, and stealth.
-                  Choose <strong>Custom</strong> to tune knobs yourself.
+                  Choose <strong>Custom</strong> to tune knobs yourself. Then <strong>Save Changes</strong>.
                 </p>
               </div>
-              <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-2.5">
-                {(['fast', 'balanced', 'secured', 'custom'] as Zer0PrivacyPreset[]).map((id) => {
+              <div className="grid sm:grid-cols-2 xl:grid-cols-5 gap-2.5">
+                {(['ultra_fast', 'fast', 'balanced', 'secured', 'custom'] as Zer0PrivacyPreset[]).map((id) => {
                   const p = PRIVACY_PRESETS[id];
                   const Icon = p.icon;
                   const active = (local.privacyPreset || 'balanced') === id;
@@ -622,10 +696,11 @@ export default function Zer0Settings() {
                   );
                 })}
               </div>
-              {(local.privacyPreset || 'balanced') === 'fast' && (
+              {((local.privacyPreset || 'fast') === 'fast' || (local.privacyPreset || '') === 'ultra_fast') && (
                 <div className="rounded-lg border border-amber-200/70 dark:border-amber-500/25 bg-amber-500/5 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-200/90 leading-relaxed">
-                  <strong>Fast</strong> still uses the privacy pool + Groth16 ZK proof on the contract — it just skips
-                  timing delay, decoys, and stealth. Pays settle as quickly as the chain + prover allow.
+                  <strong>{(local.privacyPreset || '') === 'ultra_fast' ? 'Ultra Fast' : 'Fast'}</strong> still uses the
+                  privacy pool + Groth16 ZK proof — it skips timing delay, decoys, and stealth.
+                  Remaining time is real chain + prover work (often ~15–35s for 1 XLM on testnet), not artificial wait.
                 </div>
               )}
             </div>

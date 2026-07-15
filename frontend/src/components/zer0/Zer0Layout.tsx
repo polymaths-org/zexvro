@@ -1,12 +1,12 @@
 import { Link, Outlet, useParams, useRouterState } from '@tanstack/react-router';
 import {
-  LayoutDashboard, Users, SendHorizontal, History, ShieldCheck,
+  LayoutDashboard, Wallet, SendHorizontal, History, ShieldCheck,
   Settings, ChevronLeft, BookOpen, Banknote, Eye, Ghost,
 } from 'lucide-react';
 
 const ZER0_NAV = [
   { id: 'overview', path: 'zer0', label: 'Overview', icon: LayoutDashboard },
-  { id: 'people', path: 'zer0/people', label: 'Team directory', icon: Users },
+  { id: 'people', path: 'zer0/people', label: 'Wallets directory', icon: Wallet },
   { id: 'pay', path: 'zer0/pay', label: 'Send payment', icon: SendHorizontal },
   { id: 'payroll', path: 'zer0/payroll', label: 'Payroll runs', icon: Banknote },
   { id: 'history', path: 'zer0/history', label: 'Payment ledger', icon: History },
@@ -45,8 +45,8 @@ export default function Zer0Layout() {
 
         {/* Brand */}
         <div className="mb-6">
-          <h2 className="text-sm font-bold text-zinc-900 dark:text-white tracking-tight">Payroll</h2>
-          <p className="text-[10px] text-zinc-400 mt-0.5">Private & public disbursements</p>
+          <h2 className="text-sm font-bold text-zinc-900 dark:text-white tracking-tight">Zer0 Pay</h2>
+          <p className="text-[10px] text-zinc-400 mt-0.5">Wallets · private & public pays</p>
         </div>
 
         {/* Nav Items */}

@@ -273,31 +273,72 @@ function getStellarAsset(currency: string, horizonUrl: string): Asset {
   return new Asset(currency, issuer);
 }
 
+const STELLAR_G_RE = /^G[A-Z2-7]{55}$/;
+
+async function signAndSubmitHorizonTx(
+  transactionXdr: string,
+  passphrase: string,
+  horizonUrl: string,
+): Promise<{ txHash: string }> {
+  const signedResult = await freighterSign(transactionXdr, { networkPassphrase: passphrase });
+  if (signedResult.error) {
+    const errMsg = typeof signedResult.error === 'object'
+      ? (signedResult.error as any).message || JSON.stringify(signedResult.error)
+      : signedResult.error;
+    throw new Error(`Transaction signing failed: ${errMsg}`);
+  }
+  if (!signedResult.signedTxXdr) {
+    throw new Error('Transaction was not signed. Did you approve in Freighter?');
+  }
+  const submitResponse = await fetch(`${horizonUrl.replace(/\/$/, '')}/transactions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ tx: signedResult.signedTxXdr }).toString(),
+  });
+  const submitData = await submitResponse.json();
+  if (!submitResponse.ok || submitData.status === 'ERROR') {
+    const detail = submitData.extras?.result_codes
+      ? JSON.stringify(submitData.extras.result_codes)
+      : (submitData.extras?.result_xdr || submitData.detail || submitData.title || 'Unknown error');
+    throw new Error(`Transaction submission failed: ${detail}`);
+  }
+  return { txHash: submitData.hash };
+}
+
 export const stellar = {
-  getPoolBalance: async (walletAddress: string, horizonUrl = 'https://horizon-testnet.stellar.org') => {
+  isValidPublicKey: (key: string) => STELLAR_G_RE.test((key || '').trim()),
+
+  /** Horizon account probe — does not throw on 404. */
+  accountExists: async (
+    walletAddress: string,
+    horizonUrl = 'https://horizon-testnet.stellar.org',
+  ): Promise<{ exists: boolean; balances?: { USDC: number; XLM: number; EURC: number } }> => {
+    const cleanUrl = horizonUrl.replace(/\/$/, '');
+    const addr = (walletAddress || '').trim();
+    if (!STELLAR_G_RE.test(addr)) return { exists: false };
     try {
-      const cleanUrl = horizonUrl.replace(/\/$/, '');
-      const response = await fetch(`${cleanUrl}/accounts/${walletAddress}`);
-      if (!response.ok) {
-        if (response.status === 404) {
-          return { USDC: 0, XLM: 0, EURC: 0 };
-        }
-        throw new Error(`Horizon error: ${response.statusText}`);
-      }
+      const response = await fetch(`${cleanUrl}/accounts/${addr}`);
+      if (response.status === 404) return { exists: false };
+      if (!response.ok) throw new Error(`Horizon error: ${response.statusText}`);
       const data = await response.json();
       const balances = { USDC: 0, XLM: 0, EURC: 0 };
       if (Array.isArray(data.balances)) {
         for (const bal of data.balances) {
-          if (bal.asset_type === 'native') {
-            balances.XLM = parseFloat(bal.balance) || 0;
-          } else if (bal.asset_code === 'USDC') {
-            balances.USDC = parseFloat(bal.balance) || 0;
-          } else if (bal.asset_code === 'EURC') {
-            balances.EURC = parseFloat(bal.balance) || 0;
-          }
+          if (bal.asset_type === 'native') balances.XLM = parseFloat(bal.balance) || 0;
+          else if (bal.asset_code === 'USDC') balances.USDC = parseFloat(bal.balance) || 0;
+          else if (bal.asset_code === 'EURC') balances.EURC = parseFloat(bal.balance) || 0;
         }
       }
-      return balances;
+      return { exists: true, balances };
+    } catch (err) {
+      throw new Error(err instanceof Error ? err.message : 'Failed to probe Stellar account');
+    }
+  },
+
+  getPoolBalance: async (walletAddress: string, horizonUrl = 'https://horizon-testnet.stellar.org') => {
+    try {
+      const probe = await stellar.accountExists(walletAddress, horizonUrl);
+      return probe.balances || { USDC: 0, XLM: 0, EURC: 0 };
     } catch (err) {
       console.error('Failed to fetch Stellar balance:', err);
       throw new Error(err instanceof Error ? err.message : 'Failed to retrieve account details from Horizon API');
@@ -305,8 +346,50 @@ export const stellar = {
   },
 
   /**
+   * Ensure a G… account exists on-chain (CreateAccount). Required before pool withdraw
+   * to a fresh stealth one-time address. Signs with Freighter from `fromAddress`.
+   */
+  ensureAccount: async (
+    fromAddress: string,
+    toAddress: string,
+    horizonUrl: string,
+    startingBalanceXlm = 1.5,
+  ): Promise<{ txHash: string | null; created: boolean }> => {
+    const cleanUrl = horizonUrl.replace(/\/$/, '');
+    const from = fromAddress.trim();
+    const to = toAddress.trim();
+    if (!STELLAR_G_RE.test(from)) throw new Error('Funding wallet address is invalid (need G… 56 chars).');
+    if (!STELLAR_G_RE.test(to)) throw new Error('Destination wallet address is invalid (need G… 56 chars).');
+
+    const destProbe = await stellar.accountExists(to, cleanUrl);
+    if (destProbe.exists) return { txHash: null, created: false };
+
+    const accountResponse = await fetch(`${cleanUrl}/accounts/${from}`);
+    if (!accountResponse.ok) {
+      throw new Error(`Funding wallet not found or unfunded on Horizon: ${from.slice(0, 8)}…`);
+    }
+    const accountData = await accountResponse.json();
+    const passphrase = getNetworkPassphrase(horizonUrl);
+    const sourceAccount = new Account(from, accountData.sequence);
+    const startBal = Math.max(1, startingBalanceXlm).toFixed(7);
+    const transaction = new TransactionBuilder(sourceAccount, {
+      fee: BASE_FEE,
+      networkPassphrase: passphrase,
+    })
+      .addOperation(Operation.createAccount({
+        destination: to,
+        startingBalance: startBal,
+      }))
+      .setTimeout(180)
+      .build();
+
+    const { txHash } = await signAndSubmitHorizonTx(transaction.toXDR(), passphrase, cleanUrl);
+    return { txHash, created: true };
+  },
+
+  /**
    * Build, sign (via Freighter), and submit a real Stellar payment transaction.
-   * Returns the on-chain transaction hash on success.
+   * Auto-createAccount when destination is missing (XLM only).
    */
   submitPayment: async (
     fromAddress: string,
@@ -319,65 +402,70 @@ export const stellar = {
     const cleanUrl = horizonUrl.replace(/\/$/, '');
     const passphrase = getNetworkPassphrase(horizonUrl);
     const asset = getStellarAsset(currency, horizonUrl);
+    const from = fromAddress.trim();
+    const to = toAddress.trim();
+
+    if (!STELLAR_G_RE.test(from)) {
+      throw new Error('Funding wallet is not a valid Stellar public key (G…, 56 chars).');
+    }
+    if (!STELLAR_G_RE.test(to)) {
+      throw new Error('Recipient wallet is not a valid Stellar public key (G…, 56 chars).');
+    }
+    if (!(amount > 0)) {
+      throw new Error('Payment amount must be greater than zero.');
+    }
 
     // 1. Fetch source account sequence number from Horizon
-    const accountResponse = await fetch(`${cleanUrl}/accounts/${fromAddress}`);
+    const accountResponse = await fetch(`${cleanUrl}/accounts/${from}`);
     if (!accountResponse.ok) {
-      throw new Error(`Source account not found or unfunded: ${fromAddress}`);
+      throw new Error(`Source account not found or unfunded: ${from}`);
     }
     const accountData = await accountResponse.json();
     const sequence = accountData.sequence;
 
+    // Destination existence (XLM can create; other assets require trustline/account)
+    const dest = await stellar.accountExists(to, cleanUrl);
+    if (!dest.exists && currency !== 'XLM') {
+      throw new Error(
+        `Recipient account ${to.slice(0, 6)}… does not exist on Stellar yet. `
+        + `Fund it with XLM first, then retry ${currency}.`,
+      );
+    }
+
     // 2. Build the transaction
-    const sourceAccount = new Account(fromAddress, sequence);
+    const sourceAccount = new Account(from, sequence);
     const txBuilder = new TransactionBuilder(sourceAccount, {
       fee: BASE_FEE,
       networkPassphrase: passphrase,
     });
 
-    txBuilder.addOperation(
-      Operation.payment({
-        destination: toAddress,
-        asset,
-        amount: amount.toFixed(7),
-      }),
-    );
+    if (!dest.exists && currency === 'XLM') {
+      // createAccount requires >= 1 XLM starting balance
+      if (amount < 1) {
+        throw new Error('Recipient wallet is new — send at least 1 XLM to create the account.');
+      }
+      txBuilder.addOperation(
+        Operation.createAccount({
+          destination: to,
+          startingBalance: amount.toFixed(7),
+        }),
+      );
+    } else {
+      txBuilder.addOperation(
+        Operation.payment({
+          destination: to,
+          asset,
+          amount: amount.toFixed(7),
+        }),
+      );
+    }
 
     if (memo) {
       txBuilder.addMemo(Memo.text(memo.slice(0, 28)));
     }
 
     const transaction = txBuilder.setTimeout(180).build();
-
-    // 3. Sign via Freighter
-    const txXdr = transaction.toXDR();
-    const signedResult = await freighterSign(txXdr, { networkPassphrase: passphrase });
-
-    if (signedResult.error) {
-      const errMsg = typeof signedResult.error === 'object'
-        ? (signedResult.error as any).message || JSON.stringify(signedResult.error)
-        : signedResult.error;
-      throw new Error(`Transaction signing failed: ${errMsg}`);
-    }
-
-    if (!signedResult.signedTxXdr) {
-      throw new Error('Transaction was not signed. Did you approve in Freighter?');
-    }
-
-    // 4. Submit signed transaction to Horizon
-    const submitResponse = await fetch(`${cleanUrl}/transactions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ tx: signedResult.signedTxXdr }).toString(),
-    });
-
-    const submitData = await submitResponse.json();
-
-    if (!submitResponse.ok || submitData.status === 'ERROR') {
-      const detail = submitData.extras?.result_xdr || submitData.detail || submitData.title || 'Unknown error';
-      throw new Error(`Transaction submission failed: ${detail}`);
-    }
-
-    return { txHash: submitData.hash, success: true };
+    const { txHash } = await signAndSubmitHorizonTx(transaction.toXDR(), passphrase, cleanUrl);
+    return { txHash, success: true };
   },
 };

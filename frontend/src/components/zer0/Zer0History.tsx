@@ -1,11 +1,20 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useParams } from '@tanstack/react-router';
 import {
-  Search, Filter, Download, ChevronDown, ExternalLink, Shield, ShieldOff, Calendar, Eye, X, ShieldCheck
+  Search, Filter, Download, ChevronDown, ExternalLink, Shield, ShieldOff, Calendar, Eye, X, ShieldCheck, Copy, Check, Ghost, BookOpen, RefreshCw,
 } from 'lucide-react';
 import { useZer0Store } from '../../stores/zer0';
+import { useStealthStore } from '../../stores/stealth';
+import { useStealthClaimsStore } from '../../stores/stealthClaims';
 import { payrollApi } from '../../api/api';
-import { getExplorerTxUrl, truncateKey } from '../../api/walletConnect';
+import { getExplorerTxUrl, getExplorerAccountUrl, truncateKey } from '../../api/walletConnect';
+import {
+  buildWithdrawUrl,
+  createStealthClaim,
+  networkFromHorizon,
+  type IssuedClaim,
+} from '../../lib/stealthClaim';
+import StealthRedeemGuideModal from './StealthRedeemGuideModal';
 import type { Zer0PaymentStatus, Zer0PaymentType } from '../../stores/types';
 
 export default function Zer0History() {
@@ -14,6 +23,10 @@ export default function Zer0History() {
   const allPayments = useZer0Store(s => s.payments);
   const allProofs = useZer0Store(s => s.proofs);
   const settings = useZer0Store(s => s.settings);
+  const outbound = useStealthStore(s => s.outbound);
+  const scanEphemeral = useStealthStore(s => s.scanEphemeral);
+  const issuedClaims = useStealthClaimsStore(s => s.issued);
+  const addIssuedClaim = useStealthClaimsStore(s => s.addIssued);
 
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<Zer0PaymentStatus | 'all'>('all');
@@ -21,6 +34,21 @@ export default function Zer0History() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedProofId, setSelectedProofId] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+  const [recoverMsg, setRecoverMsg] = useState<string | null>(null);
+  const [guideClaim, setGuideClaim] = useState<{ claim: IssuedClaim; name?: string } | null>(null);
+  const [reconcileMsg, setReconcileMsg] = useState<string | null>(null);
+  const reconcileStalePayments = useZer0Store(s => s.reconcileStalePayments);
+
+  const copyText = async (key: string, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(key);
+      window.setTimeout(() => setCopied(null), 1500);
+    } catch {
+      window.prompt('Copy:', text);
+    }
+  };
 
   // Pull payroll runs from AWS into store so history survives reload
   useEffect(() => {
@@ -89,6 +117,8 @@ export default function Zer0History() {
             (a, b) => (b.createdAt || 0) - (a.createdAt || 0),
           ),
         });
+        // After AWS merge, clear orphan Processing / Queued leftovers
+        useZer0Store.getState().reconcileStalePayments({ maxAgeMs: 60_000 });
       } catch (e) {
         console.error('History sync failed:', e);
       } finally {
@@ -105,6 +135,22 @@ export default function Zer0History() {
     ),
     [allPayments, pid, workspaceId, projectId],
   );
+
+  const stuckCount = useMemo(
+    () => payments.filter(p => p.status === 'processing' || p.status === 'approved').length
+      + allProofs.filter(pr => pr.status === 'queued' || pr.status === 'generating').length,
+    [payments, allProofs],
+  );
+
+  const handleClearStuck = () => {
+    const r = reconcileStalePayments({ forceAll: true, maxAgeMs: 0 });
+    setReconcileMsg(
+      r.paymentsFixed || r.proofsFixed
+        ? `Cleared ${r.paymentsFixed} payment(s) + ${r.proofsFixed} proof(s). Failed rows can be retried.`
+        : 'Nothing stuck — all rows look terminal.',
+    );
+    window.setTimeout(() => setReconcileMsg(null), 4000);
+  };
 
   const filtered = useMemo(() => {
     return payments.filter(p => {
@@ -192,11 +238,28 @@ export default function Zer0History() {
             {syncing ? ' · syncing…' : ' · saved locally + AWS'}
           </p>
         </div>
-        <button onClick={handleExportCSV}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 px-3.5 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition">
-          <Download className="h-3.5 w-3.5" /> Export CSV
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {stuckCount > 0 && (
+            <button
+              type="button"
+              onClick={handleClearStuck}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300/70 bg-amber-500/10 px-3.5 py-2 text-xs font-semibold text-amber-800 dark:border-amber-500/30 dark:text-amber-200 hover:bg-amber-500/15 transition"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              Clear stuck ({stuckCount})
+            </button>
+          )}
+          <button onClick={handleExportCSV}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 px-3.5 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition">
+            <Download className="h-3.5 w-3.5" /> Export CSV
+          </button>
+        </div>
       </div>
+      {reconcileMsg && (
+        <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-[11px] text-emerald-700 dark:text-emerald-300">
+          {reconcileMsg}
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap gap-2">
@@ -310,18 +373,170 @@ export default function Zer0History() {
                       )}
                       {p.stealth && (
                         <>
-                          <div>
-                            <span className="text-zinc-400 font-semibold uppercase block mb-0.5">Stealth one-time</span>
-                            <span className="font-mono text-violet-600 dark:text-violet-400 break-all">
-                              {p.stealthOneTimeAddress || '—'}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-zinc-400 font-semibold uppercase block mb-0.5">Ephemeral pub (scan)</span>
-                            <span className="font-mono text-zinc-600 dark:text-zinc-400 break-all">
-                              {p.stealthEphemeralPub || '—'}
-                            </span>
-                          </div>
+                          <div className="col-span-2 sm:col-span-4 rounded-lg border border-violet-500/20 bg-violet-500/5 p-3 space-y-2">
+                            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-violet-600 dark:text-violet-400">
+                              <Ghost className="h-3 w-3" /> Stealth destination — not your Freighter wallet
+                            </div>
+                            <p className="text-[10px] text-zinc-500 leading-relaxed">
+                               XLM went to a one-time address. Prefer the PIN + /withdraw link for non-tech recipients.
+                             </p>
+                             {(() => {
+                               const claim = issuedClaims.find(c =>
+                                 c.paymentId === p.id
+                                 || (p.stealthOneTimeAddress && c.oneTimePublicKey === p.stealthOneTimeAddress),
+                               );
+                               const rec = outbound.find(r => r.paymentId === p.id)
+                                 || (p.stealthOneTimeAddress
+                                   ? outbound.find(r => r.oneTimePublicKey === p.stealthOneTimeAddress)
+                                   : undefined);
+                               if (!claim) {
+                                 if (!rec?.oneTimeSecret || !p.stealthOneTimeAddress) return null;
+                                 return (
+                                   <button
+                                     type="button"
+                                     onClick={() => {
+                                       void (async () => {
+                                         try {
+                                           const minted = await createStealthClaim({
+                                             oneTimeSecret: rec.oneTimeSecret,
+                                             oneTimePublicKey: p.stealthOneTimeAddress!,
+                                             amountXlm: p.amount,
+                                             note: p.recipientName,
+                                             paymentId: p.id,
+                                             network: networkFromHorizon(settings?.horizonUrl || ''),
+                                           });
+                                           addIssuedClaim(minted);
+                                           setGuideClaim({ claim: minted, name: p.recipientName });
+                                         } catch (e: any) {
+                                           setRecoverMsg(e?.message || 'Could not mint PIN claim');
+                                         }
+                                       })();
+                                     }}
+                                     className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-violet-600 text-white text-[10px] font-bold"
+                                   >
+                                     <BookOpen className="h-3.5 w-3.5" />
+                                     Create withdraw PIN + instructions
+                                   </button>
+                                 );
+                               }
+                               return (
+                                 <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-2.5 space-y-2">
+                                   <div className="flex flex-wrap items-center justify-between gap-2">
+                                     <div>
+                                       <span className="text-[10px] font-semibold uppercase text-zinc-400">Withdraw PIN</span>
+                                       <p className="font-mono text-base font-bold tracking-widest text-zinc-900 dark:text-white">{claim.pin}</p>
+                                     </div>
+                                     <button
+                                       type="button"
+                                       onClick={() => setGuideClaim({ claim, name: p.recipientName })}
+                                       className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-violet-600 text-white text-[10px] font-bold"
+                                     >
+                                       <BookOpen className="h-3.5 w-3.5" />
+                                       Instructions
+                                     </button>
+                                   </div>
+                                   <div className="flex items-start gap-1.5">
+                                     <span className="font-mono text-[9px] break-all text-zinc-600 dark:text-zinc-300">
+                                       {buildWithdrawUrl(claim.claimCode)}
+                                     </span>
+                                     <button type="button" onClick={() => void copyText(`wurl-${p.id}`, buildWithdrawUrl(claim.claimCode))} className="shrink-0 text-zinc-400">
+                                       {copied === `wurl-${p.id}` ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+                                     </button>
+                                   </div>
+                                 </div>
+                               );
+                             })()}
+                             <div className="grid sm:grid-cols-2 gap-3">
+                               <div>
+                                 <span className="text-zinc-400 font-semibold uppercase block mb-0.5">One-time address</span>
+                                 <div className="flex items-start gap-1.5">
+                                   <span className="font-mono text-violet-600 dark:text-violet-400 break-all text-[10px]">
+                                     {p.stealthOneTimeAddress || '—'}
+                                   </span>
+                                   {p.stealthOneTimeAddress && (
+                                     <>
+                                       <button type="button" onClick={() => void copyText(`ota-${p.id}`, p.stealthOneTimeAddress!)} className="shrink-0 text-zinc-400 hover:text-zinc-700">
+                                         {copied === `ota-${p.id}` ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+                                       </button>
+                                       <a
+                                         href={getExplorerAccountUrl(
+                                           p.stealthOneTimeAddress,
+                                           (settings?.horizonUrl || '').includes('testnet') ? 'TESTNET' : 'PUBLIC',
+                                         )}
+                                         target="_blank"
+                                         rel="noreferrer"
+                                         className="shrink-0 text-blue-500"
+                                       >
+                                         <ExternalLink className="h-3 w-3" />
+                                       </a>
+                                     </>
+                                   )}
+                                 </div>
+                               </div>
+                               <div>
+                                 <span className="text-zinc-400 font-semibold uppercase block mb-0.5">Ephemeral pub (scan)</span>
+                                 <div className="flex items-start gap-1.5">
+                                   <span className="font-mono text-zinc-600 dark:text-zinc-400 break-all text-[10px]">
+                                     {p.stealthEphemeralPub || '—'}
+                                   </span>
+                                   {p.stealthEphemeralPub && (
+                                     <button type="button" onClick={() => void copyText(`eph-${p.id}`, p.stealthEphemeralPub!)} className="shrink-0 text-zinc-400 hover:text-zinc-700">
+                                       {copied === `eph-${p.id}` ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+                                     </button>
+                                   )}
+                                 </div>
+                               </div>
+                             </div>
+                             {(() => {
+                               const rec = outbound.find(r => r.paymentId === p.id)
+                                 || (p.stealthOneTimeAddress
+                                   ? outbound.find(r => r.oneTimePublicKey === p.stealthOneTimeAddress)
+                                   : undefined);
+                               if (!rec?.oneTimeSecret) {
+                                 return (
+                                   <div className="flex flex-wrap items-center gap-2">
+                                     <button
+                                       type="button"
+                                       onClick={() => {
+                                         if (!p.stealthEphemeralPub) {
+                                           setRecoverMsg('Missing ephemeral key on this payment.');
+                                           return;
+                                         }
+                                         const found = scanEphemeral(p.stealthEphemeralPub, p.id);
+                                         setRecoverMsg(
+                                           found
+                                             ? `Recovered one-time secret for ${found.oneTimePublicKey} — open Stealth → Recovered inbound`
+                                             : 'No match. Import the payee scan identity first, then retry (salt = payment id).',
+                                         );
+                                       }}
+                                       className="h-7 px-2.5 rounded-md bg-violet-600 text-white text-[10px] font-bold"
+                                     >
+                                       Try recover with scan keys
+                                     </button>
+                                     {recoverMsg && expandedId === p.id && (
+                                       <span className="text-[10px] text-zinc-500">{recoverMsg}</span>
+                                     )}
+                                   </div>
+                                 );
+                               }
+                               return (
+                                 <details className="text-[10px]">
+                                   <summary className="cursor-pointer font-semibold text-zinc-500">Advanced — one-time secret (S…)</summary>
+                                   <div className="mt-1.5 flex items-start gap-1.5">
+                                     <span className="font-mono text-amber-700 dark:text-amber-300 break-all text-[10px]">
+                                       {rec.oneTimeSecret}
+                                     </span>
+                                     <button type="button" onClick={() => void copyText(`sec-${p.id}`, rec.oneTimeSecret)} className="shrink-0 text-zinc-400 hover:text-zinc-700">
+                                       {copied === `sec-${p.id}` ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+                                     </button>
+                                   </div>
+                                   <p className="text-[10px] text-zinc-400 mt-1">
+                                     Only for tech users. Prefer PIN + /withdraw for teammates.
+                                   </p>
+                                 </details>
+                               );
+                             })()}
+                           </div>
                         </>
                       )}
                       {p.shielded && (
@@ -354,6 +569,45 @@ export default function Zer0History() {
                         </div>
                       )}
 
+                      {(p.status === 'failed' || p.status === 'processing' || p.status === 'approved') && (
+                        <div className="col-span-2 sm:col-span-4 mt-3 pt-3 border-t border-zinc-100 dark:border-zinc-800/80 flex flex-wrap items-center justify-end gap-2">
+                          {(p.status === 'processing' || p.status === 'approved') && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                useZer0Store.getState().updatePaymentStatus(p.id, 'failed', {
+                                  lastError: 'Manually marked failed (was stuck processing).',
+                                });
+                                const proof = allProofs.find(pr => pr.paymentId === p.id);
+                                if (proof && (proof.status === 'queued' || proof.status === 'generating')) {
+                                  useZer0Store.getState().updateProofStatus(proof.id, 'failed');
+                                }
+                              }}
+                              className="inline-flex h-8 items-center justify-center px-3.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 text-xs font-medium hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors"
+                            >
+                              Mark failed
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              // Unstick then re-run settle (processPayment already handles orphan processing)
+                              if (p.status === 'processing') {
+                                useZer0Store.getState().updatePaymentStatus(p.id, 'failed', {
+                                  lastError: 'Retrying after stuck processing…',
+                                });
+                              } else if (p.status === 'approved') {
+                                // leave approved — processPayment accepts it
+                              }
+                              void useZer0Store.getState().processPayment(p.id);
+                            }}
+                            className="inline-flex h-8 items-center justify-center gap-1.5 px-3.5 rounded-lg bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 text-xs font-semibold hover:bg-zinc-800 dark:hover:bg-zinc-100 transition-colors shadow-sm"
+                          >
+                            <RefreshCw className="h-3.5 w-3.5" />
+                            {p.status === 'failed' ? 'Retry payment' : 'Resume / retry'}
+                          </button>
+                        </div>
+                      )}
                       {p.status === 'pending_approval' && (
                         <div className="col-span-2 sm:col-span-4 mt-3 pt-3 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-end gap-2">
                           <button
@@ -514,6 +768,14 @@ export default function Zer0History() {
             </div>
           </div>
         </div>
+      )}
+
+      {guideClaim && (
+        <StealthRedeemGuideModal
+          claim={guideClaim.claim}
+          recipientName={guideClaim.name}
+          onClose={() => setGuideClaim(null)}
+        />
       )}
     </div>
   );

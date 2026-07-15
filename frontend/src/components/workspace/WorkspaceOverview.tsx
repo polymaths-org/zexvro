@@ -115,8 +115,8 @@ export default function WorkspaceOverview() {
               </div>
             </div>
             <button
-              onClick={() => goTo(`/dashboard/w/${workspaceId}/payroll`)}
-              className="inline-flex items-center justify-center gap-1.5 h-8 rounded-lg bg-amber-650 px-4 text-xs font-semibold text-white hover:bg-amber-650 transition shadow-sm shrink-0"
+              onClick={() => goTo(`/dashboard/w/${workspaceId}/zer0/settings`)}
+              className="inline-flex items-center justify-center gap-1.5 h-8 rounded-lg bg-amber-600 px-4 text-xs font-semibold text-white hover:bg-amber-500 transition shadow-sm shrink-0"
             >
               <Wallet className="h-3.5 w-3.5" />
               Configure Wallet
@@ -198,7 +198,7 @@ export default function WorkspaceOverview() {
                 Active
               </span>
               <button
-                onClick={() => goTo(`/dashboard/w/${workspaceId}/payroll`)}
+                onClick={() => goTo(`/dashboard/w/${workspaceId}/zer0/settings`)}
                 className="text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors font-medium border border-zinc-200 dark:border-zinc-800 px-3.5 py-1.5 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-900"
               >
                 Manage Wallet

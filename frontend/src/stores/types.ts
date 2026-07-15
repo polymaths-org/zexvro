@@ -117,13 +117,17 @@ export type Zer0ProofStatus = 'queued' | 'generating' | 'verified' | 'failed';
 export type Zer0ProofSystem = 'Groth16' | 'PLONK' | 'Halo2';
 export type Zer0Currency = 'USDC' | 'XLM' | 'EURC';
 export type Zer0PayFrequency = 'weekly' | 'bi-weekly' | 'monthly' | 'one-time';
+/** Contact tag in Wallets directory (payees / team) */
+export type Zer0ContactTag = 'employee' | 'contractor' | 'vendor' | 'freelancer' | 'partner' | 'other';
 
 export interface Zer0Employee {
   id: string;
   projectId: string;
   name: string;
   email: string;
+  /** @deprecated prefer contactTag — kept for payroll/API compat */
   role: string;
+  /** @deprecated optional grouping — free-form notes often used instead */
   department: string;
   walletAddress: string;
   /**
@@ -139,6 +143,14 @@ export interface Zer0Employee {
   startDate: number;
   createdAt: number;
   updatedAt: number;
+  /** Wallets directory tag (employee / contractor / …) */
+  contactTag?: Zer0ContactTag;
+  /** Custom label when contactTag === 'other' */
+  customTag?: string;
+  /** Optional phone / chat / social handle */
+  contactInfo?: string;
+  /** Free-form notes */
+  notes?: string;
 }
 
 export interface Zer0Payment {
@@ -165,6 +177,25 @@ export interface Zer0Payment {
    * even without an employeeId row.
    */
   recipientStealthMeta?: string | null;
+  /**
+   * Explicit per-payment stealth intent.
+   * false = never use stealth for this pay (even if workspace stealth is on / employee has meta).
+   * true = try stealth when meta is available.
+   * undefined = fall back to workspace settings.stealthPaymentsEnabled (legacy).
+   */
+  useStealth?: boolean | null;
+  /**
+   * Optional per-payment privacy knobs (delay / decoys).
+   * When set, override workspace settings for this settle only.
+   */
+  privacyOverrides?: {
+    privacyDelaySec?: number;
+    privacyJitterSec?: number;
+    decoyDepositsEnabled?: boolean;
+    decoyDepositCount?: number;
+    batchDepositThenWithdraw?: boolean;
+    postPayDecoyEnabled?: boolean;
+  } | null;
   /** True when this pay used a one-time stealth receive address */
   stealth?: boolean;
   /** On-chain one-time G… destination (if stealth) */
@@ -211,7 +242,7 @@ export interface Zer0SecurityEvent {
 }
 
 /** Privacy profile for private payroll settles */
-export type Zer0PrivacyPreset = 'fast' | 'balanced' | 'secured' | 'custom';
+export type Zer0PrivacyPreset = 'ultra_fast' | 'fast' | 'balanced' | 'secured' | 'custom';
 
 export interface Zer0Settings {
   proofSystem: Zer0ProofSystem;

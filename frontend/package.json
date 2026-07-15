@@ -11,6 +11,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@creit.tech/stellar-wallets-kit": "^1.9.5",
     "@google/genai": "^2.4.0",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.6.1",
