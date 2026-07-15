@@ -348,6 +348,22 @@ describe('CollectionDashboard', () => {
     expect(await screen.findByText('Token is already minted')).toBeInTheDocument();
   });
 
+  it('opens SDK integrate panel from the dashboard header', async () => {
+    const user = userEvent.setup();
+    api.listNftCollections.mockResolvedValue([remoteCollection]);
+
+    render(
+      <MemoryRouter>
+        <CollectionDashboard workspaceId="studio-a" accessToken="access-token" onCreate={() => undefined} />
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByRole('button', { name: /Integrate SDK/i }));
+    expect(await screen.findByRole('heading', { name: /NFT SDK/i })).toBeInTheDocument();
+    expect(screen.getByDisplayValue(remoteCollection.id)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Copy code/i })).toBeInTheDocument();
+  });
+
   it('surfaces API failures without hiding browser drafts', async () => {
     api.listNftCollections.mockRejectedValue(new Error('NFT API unavailable'));
     createCollection('studio-a', {

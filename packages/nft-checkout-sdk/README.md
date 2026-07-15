@@ -87,4 +87,4 @@ curl -s -X POST "$NFT_API/v1/public/checkout/intents/$INTENT_ID/submit" \
 - Buyer pays **USDC** on Stellar testnet; ZEXVRO **sponsor** pays network fees.
 - Buyer must have USDC trustline + balance ≥ sale price.
 - Wallet signing is **auth entries only** (not full fee-paying envelope).
-- CORS: partner origins must be allowlisted on the NFT API host.
+- CORS: add each game origin to NFT API `CORS_ALLOWED_ORIGINS` (comma-separated), e.g. `https://mygame.example,http://127.0.0.1:3000`.
