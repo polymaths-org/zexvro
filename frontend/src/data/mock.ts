@@ -55,18 +55,18 @@ export const mockServices: Service[] = [
     owner: 'Unassigned',
     status: 'inactive',
     description: 'Simple NFT deployment and management flow for non-Web3 users such as indie game developers and small studios.',
-    progress: 0,
-    lastActivity: 'Needs chain/storage decision',
+    progress: 20,
+    lastActivity: 'Local collection, contract, and API scaffolds verified',
     category: 'nft'
   },
   {
     id: 'srv-depin',
     name: 'De-pin',
     owner: 'Unassigned',
-    status: 'inactive',
-    description: 'Scope not defined yet. Do not implement until the service concept, target user, and boundaries are accepted.',
-    progress: 0,
-    lastActivity: 'Needs product scope',
+    status: 'configuring',
+    description: 'Stellar x402 gateway for exact USDC payments that unlock HTTP API and compute resources for autonomous agents.',
+    progress: 15,
+    lastActivity: 'Local gateway scaffold verified',
     category: 'depin'
   }
 ];

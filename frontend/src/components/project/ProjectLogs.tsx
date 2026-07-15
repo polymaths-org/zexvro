@@ -102,7 +102,7 @@ export default function ProjectLogs() {
           <Terminal className="h-4 w-4" />
           <span>DEPLOYMENT EVENT STREAM ({currentProject.name})</span>
         </div>
-        
+
         <div className="flex-1 space-y-1">
           {filteredLogs.map((log, idx) => (
             <div key={idx} className="flex items-start gap-3 hover:bg-zinc-900/40 p-0.5 rounded transition-all">

@@ -47,9 +47,11 @@ import type { MemoryEntry } from '../types';
 import TransformationAgent from '../components/services/TransformationAgent';
 import TradePipeline from '../components/services/TradePipeline';
 import AgentAuth from '../components/services/AgentAuth';
-import NftService from '../components/services/NftService';
+import NftService, { NftCollectionCreate } from '../components/services/NftService';
 import DepinService from '../components/services/DepinService';
 import DocsLibrary from '../components/docs/DocsLibrary';
+import PublicCollection from '../services/nft/PublicCollection';
+import EmbedCheckout from '../services/nft/EmbedCheckout';
 
 const MarketingPage = React.lazy(() => import('../marketing/MarketingPage'));
 const WithdrawPage = React.lazy(() => import('../components/withdraw/WithdrawPage'));
@@ -549,6 +551,12 @@ const projectNftRoute = createRoute({
   component: NftService,
 });
 
+const projectNftCreateRoute = createRoute({
+  getParentRoute: () => dashboardLayoutRoute,
+  path: '/dashboard/w/$workspaceId/p/$projectId/nft/collections/new',
+  component: NftCollectionCreate,
+});
+
 const projectDepinRoute = createRoute({
   getParentRoute: () => dashboardLayoutRoute,
   path: '/dashboard/w/$workspaceId/p/$projectId/depin',
@@ -588,6 +596,21 @@ const docsRoute = createRoute({
   component: DocsLibrary,
 });
 
+const publicNftCollectionRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/nft/collections/$collectionId',
+  component: PublicCollection,
+});
+
+const embedNftCheckoutRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/nft/embed/checkout',
+  validateSearch: (search: Record<string, unknown>) => ({
+    collectionId: typeof search.collectionId === 'string' ? search.collectionId : '',
+  }),
+  component: EmbedCheckout,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   withdrawRoute,
@@ -597,6 +620,8 @@ const routeTree = rootRoute.addChildren([
   dashboardAgentShortcutRoute,
   dashboardServicesShortcutRoute,
   docsRoute,
+  publicNftCollectionRoute,
+  embedNftCheckoutRoute,
   dashboardLayoutRoute.addChildren([
     dashboardIndexRoute,
     wsOverviewRoute,
@@ -650,6 +675,7 @@ const routeTree = rootRoute.addChildren([
     projectTradeRoute,
     projectAgentAuthRoute,
     projectNftRoute,
+    projectNftCreateRoute,
     projectDepinRoute,
   ]),
 ]);

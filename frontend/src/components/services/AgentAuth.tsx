@@ -79,7 +79,7 @@ export default function AgentAuth() {
                 <span>Override high-value payouts</span>
               </label>
             </div>
-            
+
             <div className="border-t border-zinc-100 dark:border-zinc-850 pt-3">
               <span className="text-zinc-450 block mb-1">Rate Limit Threshold</span>
               <span className="font-semibold text-zinc-700 dark:text-zinc-300">120 requests / minute</span>

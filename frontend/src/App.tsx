@@ -4,9 +4,7 @@ const MarketingPage = lazy(() => import('./marketing/MarketingPage'));
 const DashboardApp = lazy(() => import('./DashboardApp'));
 
 function AppFallback() {
-  return (
-    <div className="min-h-screen bg-[#050505] text-zinc-100" />
-  );
+  return <div className="min-h-screen bg-[#050505] text-zinc-100" />;
 }
 
 export default function App() {

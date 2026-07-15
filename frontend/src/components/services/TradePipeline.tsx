@@ -67,7 +67,7 @@ export default function TradePipeline() {
                     <ArrowLeftRight className="h-3 w-3 text-zinc-400" />
                     <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300 font-mono">{t.receiverAgent}</span>
                   </div>
-                  
+
                   <div className="mt-1 text-[11px] text-zinc-500 font-semibold flex gap-2">
                     <span>Swapping {t.assetSent} ➔ {t.assetRecv}</span>
                     <span>•</span>

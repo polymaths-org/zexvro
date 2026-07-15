@@ -1,6 +1,6 @@
 /**
  * ZEXVRO API Client
- * 
+ *
  * Centralized HTTP client for AWS Lambda backend.
  * Stellar transaction building, signing (Freighter), and submission via Horizon.
  */
