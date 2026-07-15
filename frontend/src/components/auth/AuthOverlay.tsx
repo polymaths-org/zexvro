@@ -6,6 +6,7 @@ import {
   confirmForgotPassword,
   confirmSignUp,
   forgotPassword,
+  persistSession,
   signInUser,
   signUpUser,
   type UserSession,
@@ -60,7 +61,7 @@ export default function AuthOverlay({ onSuccess }: AuthOverlayProps) {
       if (isSignIn) {
         if (!password) throw new Error('Password is required.');
         const session = await signInUser(cleanUsername, password);
-        localStorage.setItem('zexvro_user_session', JSON.stringify(session));
+        persistSession(session);
         onSuccess(session);
         return;
       }

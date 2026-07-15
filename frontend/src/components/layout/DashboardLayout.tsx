@@ -9,7 +9,15 @@ import { Outlet, useNavigate, useParams, Link, useRouterState } from '@tanstack/
 import { useWorkspaceStore } from '../../stores/workspace';
 import { useProjectStore } from '../../stores/project';
 import { useUIStore } from '../../stores/ui';
-import { globalSignOut, type UserSession } from '../../auth/cognito';
+import {
+  clearStoredSession,
+  ensureValidAccessToken,
+  globalSignOut,
+  isAccessTokenExpired,
+  persistSession,
+  readStoredSession,
+  type UserSession,
+} from '../../auth/cognito';
 import { buildAgentChatPayload, loadAgentSettingsFromAWS } from '../../agent/settings';
 import CliActivation from '../auth/CliActivation';
 import { initializeAWSSync, pullFromAWS } from '../../stores/awsSync';
@@ -52,16 +60,7 @@ function makeWorkspaceInitials(name: string) {
   return parts.slice(0, 2).map(part => part.charAt(0).toUpperCase()).join('') || 'ZX';
 }
 
-function isUsableSession(value: unknown): value is UserSession {
-  if (!value || typeof value !== 'object') return false;
-  const session = value as Partial<UserSession>;
-  return (
-    typeof session.username === 'string' &&
-    typeof session.token === 'string' &&
-    session.token.split('.').length === 3 &&
-    !session.token.startsWith('prod_jwt_token_')
-  );
-}
+
 
 type CustomIconName =
   | 'overview' | 'projects' | 'deployments' | 'services' | 'agent'
@@ -293,19 +292,7 @@ export default function DashboardLayout() {
   const deleteWorkspace = useWorkspaceStore(s => s.deleteWorkspace);
   const addMember = useWorkspaceStore(s => s.addMember);
 
-  const [userSession, setUserSession] = useState<UserSession | null>(() => {
-    const saved = localStorage.getItem('zexvro_user_session');
-    if (!saved) return null;
-    try {
-      const parsed = JSON.parse(saved);
-      if (isUsableSession(parsed)) return parsed;
-      localStorage.removeItem('zexvro_user_session');
-      return null;
-    } catch {
-      localStorage.removeItem('zexvro_user_session');
-      return null;
-    }
-  });
+  const [userSession, setUserSession] = useState<UserSession | null>(() => readStoredSession());
 
   const [cliConnected, setCliConnected] = useState(false);
   const [cliLastActive, setCliLastActive] = useState<number | null>(null);
@@ -529,13 +516,47 @@ export default function DashboardLayout() {
     }
   }, [theme]);
 
+  // Keep Cognito access token fresh for NFT dashboard + API calls.
+  useEffect(() => {
+    if (!userSession) return;
+    let cancelled = false;
+    const sync = async () => {
+      try {
+        if (isAccessTokenExpired(userSession.token)) {
+          await ensureValidAccessToken(userSession);
+          const next = readStoredSession();
+          if (!cancelled && next) setUserSession(next);
+        }
+      } catch {
+        if (!cancelled) {
+          clearStoredSession();
+          setUserSession(null);
+        }
+      }
+    };
+    void sync();
+    const interval = window.setInterval(() => {
+      void sync();
+    }, 5 * 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [userSession]);
+
   // CLI status check
   useEffect(() => {
     if (!userSession || !SHOULD_CHECK_CLI_STATUS) return;
     const check = async () => {
       try {
+        let token = userSession.token;
+        if (isAccessTokenExpired(token)) {
+          token = await ensureValidAccessToken(userSession);
+          const next = readStoredSession();
+          if (next) setUserSession(next);
+        }
         const response = await fetch(`${API_BASE_URL}/api/memory`, {
-          headers: { 'Authorization': `Bearer ${userSession.token}` }
+          headers: { 'Authorization': `Bearer ${token}` }
         });
         if (response.ok) {
           const data = await response.json();
@@ -701,9 +722,13 @@ export default function DashboardLayout() {
   if (!userSession) {
     // Lazy import auth overlay
     const AuthOverlay = React.lazy(() => import('../auth/AuthOverlay'));
+
     return (
-      <React.Suspense fallback={<div className="min-h-screen bg-[#050505]" />}>
-        <AuthOverlay onSuccess={setUserSession} />
+      <React.Suspense fallback={null}>
+        <AuthOverlay onSuccess={(session) => {
+          persistSession(session);
+          setUserSession(session);
+        }} />
       </React.Suspense>
     );
   }
@@ -1211,7 +1236,7 @@ export default function DashboardLayout() {
                             <span>Settings</span>
                           </Link>
                         )}
-                        <button onClick={() => { setUserMenuOpen(false); globalSignOut(userSession?.token).finally(() => { localStorage.removeItem('zexvro_user_session'); setUserSession(null); }); }} className="w-full text-left px-3.5 py-2 hover:bg-rose-50 dark:hover:bg-rose-950/20 text-rose-600 dark:text-rose-400 flex items-center gap-2 cursor-pointer transition-colors border-t border-zinc-100 dark:border-zinc-900 mt-1 pt-2">
+                        <button onClick={() => { setUserMenuOpen(false); globalSignOut(userSession?.token).finally(() => { clearStoredSession(); setUserSession(null); }); }} className="w-full text-left px-3.5 py-2 hover:bg-rose-50 dark:hover:bg-rose-950/20 text-rose-600 dark:text-rose-400 flex items-center gap-2 cursor-pointer transition-colors border-t border-zinc-100 dark:border-zinc-900 mt-1 pt-2">
                           <LogOut className="h-3.5 w-3.5" />
                           <span>Sign Out</span>
                         </button>
