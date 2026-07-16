@@ -26,6 +26,11 @@ export function createAccessTokenMiddleware(
   verifier: AccessTokenVerifier,
 ): RequestHandler {
   return (request, response, next) => {
+    // CORS preflight never carries Authorization; let the cors middleware answer OPTIONS.
+    if (request.method === 'OPTIONS') {
+      next()
+      return
+    }
     const authorization = request.header('Authorization')
     const match = /^Bearer ([^\s]+)$/.exec(authorization ?? '')
     if (match?.[1] === undefined) {

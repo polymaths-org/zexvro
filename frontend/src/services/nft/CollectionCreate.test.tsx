@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import CollectionCreate from './CollectionCreate';
-import CollectionDashboard from './CollectionDashboard';
+import CollectionList from './CollectionList';
 
 const api = vi.hoisted(() => ({
   createNftCollection: vi.fn(),
@@ -27,7 +27,7 @@ const liveCollection = {
   collectionMetadataUri: 'http://127.0.0.1:4101/v1/assets/metadata',
   coverImageUri: 'http://127.0.0.1:4101/v1/assets/cover',
   royaltyRecipient: ownerAddress,
-  royaltyBps: 500,
+  royaltyBps: 0,
   status: 'live' as const,
   contractId: `C${'A'.repeat(55)}`,
   deploymentTxHash: 'deployment-hash',
@@ -38,14 +38,24 @@ const liveCollection = {
 function FlowRoutes() {
   const navigate = useNavigate();
   return (
-      <Routes>
-        <Route path="/services/nft/collections/new" element={(
-          <CollectionCreate workspaceId="studio-a" accessToken="access-token" onClose={() => navigate('/services/nft')} />
-        )} />
-        <Route path="/services/nft" element={(
-          <CollectionDashboard workspaceId="studio-a" accessToken="access-token" onCreate={() => navigate('/services/nft/collections/new')} />
-        )} />
-      </Routes>
+    <Routes>
+      <Route path="/services/nft/collections/new" element={(
+        <CollectionCreate
+          workspaceId="studio-a"
+          accessToken="access-token"
+          onClose={() => navigate('/services/nft')}
+          onCreated={() => navigate('/services/nft')}
+        />
+      )} />
+      <Route path="/services/nft" element={(
+        <CollectionList
+          workspaceId="studio-a"
+          accessToken="access-token"
+          onCreate={() => navigate('/services/nft/collections/new')}
+          onOpenDashboard={() => undefined}
+        />
+      )} />
+    </Routes>
   );
 }
 
@@ -86,29 +96,30 @@ describe('CollectionCreate', () => {
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
     expect(screen.getByText('Use 3–64 characters.')).toBeInTheDocument();
-    expect(screen.getByText('Use 2–10 uppercase letters or numbers.')).toBeInTheDocument();
     expect(screen.getByText('Use 10–500 characters.')).toBeInTheDocument();
+    expect(screen.getByText('Upload an NFT logo / cover image.')).toBeInTheDocument();
   });
 
-  it('uploads, deploys, and returns to the API-backed dashboard', async () => {
+  it('uploads, deploys, and returns to the collection list', async () => {
     const user = userEvent.setup();
     renderFlow();
 
-    await user.type(screen.getByLabelText('Name'), 'Astral Gear');
-    await user.type(screen.getByLabelText('Symbol'), 'gear');
+    await user.type(screen.getByLabelText('NFT name'), 'Astral Gear');
     await user.type(screen.getByLabelText(/^Description/), 'Equipment used throughout the Astral Gear game world.');
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
-
     const file = new File(['cover'], 'gear.webp', { type: 'image/webp' });
-    await user.upload(screen.getByLabelText(/Choose collection cover/), file);
-    await user.clear(screen.getByLabelText('Creator wallet'));
-    await user.type(screen.getByLabelText('Creator wallet'), ownerAddress);
+    await user.upload(screen.getByLabelText(/NFT logo/), file);
     await user.click(screen.getByRole('button', { name: 'Continue' }));
-    await user.click(screen.getByRole('button', { name: 'Deploy collection' }));
 
-    expect(await screen.findByRole('heading', { name: 'Collections' })).toBeInTheDocument();
+    await user.clear(screen.getByDisplayValue('1'));
+    await user.type(screen.getByDisplayValue(''), '10');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+    await user.clear(screen.getByLabelText('Wallet address'));
+    await user.type(screen.getByLabelText('Wallet address'), ownerAddress);
+    await user.click(screen.getByRole('button', { name: 'Create collection' }));
+
+    expect(await screen.findByRole('heading', { name: 'NFT Collections' })).toBeInTheDocument();
     expect(await screen.findByText('Astral Gear')).toBeInTheDocument();
-    expect(screen.getByText('GEAR')).toBeInTheDocument();
     expect(api.uploadNftMedia).toHaveBeenCalledWith(file, 'access-token');
     expect(api.createNftCollection).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -125,21 +136,20 @@ describe('CollectionCreate', () => {
     api.createNftCollection.mockRejectedValue(new Error('Deployment unavailable'));
     renderFlow();
 
-    await user.type(screen.getByLabelText('Name'), 'Astral Gear');
-    await user.type(screen.getByLabelText('Symbol'), 'gear');
+    await user.type(screen.getByLabelText('NFT name'), 'Astral Gear');
     await user.type(screen.getByLabelText(/^Description/), 'Equipment used throughout the Astral Gear game world.');
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
     await user.upload(
-      screen.getByLabelText(/Choose collection cover/),
+      screen.getByLabelText(/NFT logo/),
       new File(['cover'], 'gear.webp', { type: 'image/webp' }),
     );
-    await user.clear(screen.getByLabelText('Creator wallet'));
-    await user.type(screen.getByLabelText('Creator wallet'), ownerAddress);
     await user.click(screen.getByRole('button', { name: 'Continue' }));
-    await user.click(screen.getByRole('button', { name: 'Deploy collection' }));
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.clear(screen.getByLabelText('Wallet address'));
+    await user.type(screen.getByLabelText('Wallet address'), ownerAddress);
+    await user.click(screen.getByRole('button', { name: 'Create collection' }));
 
     expect(await screen.findByText('Deployment unavailable')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Deploy collection' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Create collection' })).toBeEnabled();
   });
 
   it('does not leak an in-progress form when the active workspace changes', async () => {
@@ -150,16 +160,14 @@ describe('CollectionCreate', () => {
       </MemoryRouter>,
     );
 
-    await user.type(screen.getByLabelText('Name'), 'Studio A Items');
-    await user.type(screen.getByLabelText('Symbol'), 'ITEM');
+    await user.type(screen.getByLabelText('NFT name'), 'Studio A Items');
 
     view.rerender(
       <MemoryRouter>
         <CollectionCreate workspaceId="studio-b" accessToken="access-token" onClose={() => undefined} />
       </MemoryRouter>,
     );
-    await waitFor(() => expect(screen.getByLabelText('Name')).toHaveValue(''));
-    expect(screen.getByLabelText('Symbol')).toHaveValue('');
+    await waitFor(() => expect(screen.getByLabelText('NFT name')).toHaveValue(''));
 
     view.rerender(
       <MemoryRouter>
@@ -167,8 +175,7 @@ describe('CollectionCreate', () => {
       </MemoryRouter>,
     );
     await waitFor(() =>
-      expect(screen.getByLabelText('Name')).toHaveValue('Studio A Items'),
+      expect(screen.getByLabelText('NFT name')).toHaveValue('Studio A Items'),
     );
-    expect(screen.getByLabelText('Symbol')).toHaveValue('ITEM');
   });
 });

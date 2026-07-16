@@ -235,10 +235,12 @@ async function requestJson<T>(
   }
 
   // 204 / empty success bodies are valid (e.g. DELETE).
-  if (response.status === 204 || payload === undefined) {
+  if (response.status === 204) {
     return undefined as T;
   }
 
+  // Never treat HTML/empty 200 as success — that previously returned undefined and
+  // crashed callers with "can't access property X of undefined" (e.g. capabilities).
   assertJsonPayload(payload, path);
   return payload as T;
 }
@@ -271,11 +273,18 @@ export async function listNftCollections(
 export async function uploadNftMedia(file: File, accessToken: string) {
   const body = new FormData();
   body.set('file', file);
-  const result = await requestJson<{ asset: NftMediaAsset }>(
+  const result = await requestJson<{ asset?: NftMediaAsset }>(
     '/v1/media',
     { method: 'POST', body },
     accessToken,
   );
+  if (!result?.asset) {
+    throw new NftApiError(
+      502,
+      'invalid_nft_api_response',
+      'NFT media upload response was empty. Check auth token and VITE_NFT_API_URL.',
+    );
+  }
   return result.asset;
 }
 
@@ -283,7 +292,7 @@ export async function createNftCollection(
   input: CreateNftCollectionInput,
   accessToken: string,
 ) {
-  const result = await requestJson<{ collection: ApiNftCollection }>(
+  const result = await requestJson<{ collection?: ApiNftCollection }>(
     '/v1/collections',
     {
       method: 'POST',
@@ -292,6 +301,13 @@ export async function createNftCollection(
     },
     accessToken,
   );
+  if (!result?.collection) {
+    throw new NftApiError(
+      502,
+      'invalid_nft_api_response',
+      'NFT create response did not include a collection. Check auth token and VITE_NFT_API_URL.',
+    );
+  }
   return result.collection;
 }
 
@@ -341,7 +357,7 @@ export async function prepareNftSaleConfig(input: {
   priceAtomic: string;
   accessToken: string;
 }) {
-  const result = await requestJson<{ intent: PreparedNftTransaction }>(
+  const result = await requestJson<{ intent?: PreparedNftTransaction }>(
     `/v1/collections/${encodeURIComponent(input.collectionId)}/sale-config/intent`,
     {
       method: 'POST',
@@ -353,6 +369,13 @@ export async function prepareNftSaleConfig(input: {
     },
     input.accessToken,
   );
+  if (!result?.intent) {
+    throw new NftApiError(
+      502,
+      'invalid_nft_api_response',
+      'Sale-config prepare response was empty. Sign in again and retry.',
+    );
+  }
   return result.intent;
 }
 
@@ -472,6 +495,7 @@ export async function submitNftSaleConfig(input: {
   collectionId: string;
   preparedTransaction: string;
   signedTransaction: string;
+  priceAtomic: string;
   accessToken: string;
 }) {
   const result = await requestJson<{
@@ -485,6 +509,7 @@ export async function submitNftSaleConfig(input: {
       body: JSON.stringify({
         preparedTransaction: input.preparedTransaction,
         signedTransaction: input.signedTransaction,
+        priceAtomic: input.priceAtomic,
       }),
     },
     input.accessToken,
