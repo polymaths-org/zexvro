@@ -9,11 +9,18 @@ import { Outlet, useNavigate, useParams, Link, useRouterState } from '@tanstack/
 import { useWorkspaceStore } from '../../stores/workspace';
 import { useProjectStore } from '../../stores/project';
 import { useUIStore } from '../../stores/ui';
-import { globalSignOut, type UserSession } from '../../auth/cognito';
+import {
+  clearStoredSession,
+  ensureValidAccessToken,
+  globalSignOut,
+  isAccessTokenExpired,
+  persistSession,
+  readStoredSession,
+  type UserSession,
+} from '../../auth/cognito';
 import { buildAgentChatPayload, loadAgentSettingsFromAWS } from '../../agent/settings';
 import CliActivation from '../auth/CliActivation';
 import { initializeAWSSync, pullFromAWS } from '../../stores/awsSync';
-
 const IS_LOCAL_HOST = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 const API_BASE_URL = import.meta.env.VITE_API_URL ||
   (IS_LOCAL_HOST
@@ -53,16 +60,7 @@ function makeWorkspaceInitials(name: string) {
   return parts.slice(0, 2).map(part => part.charAt(0).toUpperCase()).join('') || 'ZX';
 }
 
-function isUsableSession(value: unknown): value is UserSession {
-  if (!value || typeof value !== 'object') return false;
-  const session = value as Partial<UserSession>;
-  return (
-    typeof session.username === 'string' &&
-    typeof session.token === 'string' &&
-    session.token.split('.').length === 3 &&
-    !session.token.startsWith('prod_jwt_token_')
-  );
-}
+
 
 type CustomIconName =
   | 'overview' | 'projects' | 'deployments' | 'services' | 'agent'
@@ -244,15 +242,16 @@ const SIDEBAR_CATEGORIES: Array<{
   },
   {
     id: 'zer0-service',
-    label: 'Zer0 Privacy Pool',
+    label: 'Payroll',
     items: [
-      { to: 'zer0', label: 'Zer0 Dashboard', icon: 'privacy' },
-      { to: 'zer0/people', label: 'Employees / Payees', icon: 'team' },
-      { to: 'zer0/payroll', label: 'Payroll Runs', icon: 'payroll' },
-      { to: 'zer0/pay', label: 'Pay a Party', icon: 'payroll' },
-      { to: 'zer0/history', label: 'Payment History', icon: 'transactions' },
-      { to: 'zer0/proofs', label: 'Proof Management', icon: 'security' },
-      { to: 'zer0/settings', label: 'Zer0 Settings', icon: 'settings' },
+      { to: 'zer0', label: 'Overview', icon: 'privacy' },
+      { to: 'zer0/people', label: 'Team directory', icon: 'team' },
+      { to: 'zer0/payroll', label: 'Payroll runs', icon: 'payroll' },
+      { to: 'zer0/pay', label: 'Send payment', icon: 'payroll' },
+      { to: 'zer0/history', label: 'Payment ledger', icon: 'transactions' },
+      { to: 'zer0/proofs', label: 'Payment proofs', icon: 'security' },
+      { to: 'zer0/data-preview', label: 'What stays private', icon: 'security' },
+      { to: 'zer0/settings', label: 'Payroll settings', icon: 'settings' },
     ],
   },
   {
@@ -287,24 +286,13 @@ export default function DashboardLayout() {
 
   const { theme, density, reducedMotion, sidebarCollapsed, setTheme, toggleSidebar } = useUIStore();
   const workspaces = useWorkspaceStore(s => s.workspaces);
+  const isHydrated = useWorkspaceStore(s => s.isHydrated);
   const createWorkspace = useWorkspaceStore(s => s.createWorkspace);
   const selectWorkspace = useWorkspaceStore(s => s.selectWorkspace);
   const deleteWorkspace = useWorkspaceStore(s => s.deleteWorkspace);
   const addMember = useWorkspaceStore(s => s.addMember);
 
-  const [userSession, setUserSession] = useState<UserSession | null>(() => {
-    const saved = localStorage.getItem('zexvro_user_session');
-    if (!saved) return null;
-    try {
-      const parsed = JSON.parse(saved);
-      if (isUsableSession(parsed)) return parsed;
-      localStorage.removeItem('zexvro_user_session');
-      return null;
-    } catch {
-      localStorage.removeItem('zexvro_user_session');
-      return null;
-    }
-  });
+  const [userSession, setUserSession] = useState<UserSession | null>(() => readStoredSession());
 
   const [cliConnected, setCliConnected] = useState(false);
   const [cliLastActive, setCliLastActive] = useState<number | null>(null);
@@ -424,7 +412,7 @@ export default function DashboardLayout() {
     const digitalAssetItems: Array<{ to: string; label: string; icon: CustomIconName }> = [];
     const resourceGatewayItems: Array<{ to: string; label: string; icon: CustomIconName }> = [];
     if (enabled.includes('srv-privacy')) {
-      serviceItems.push({ to: 'zer0', label: 'Zer0 Privacy Pool', icon: 'privacy' as const });
+      serviceItems.push({ to: 'zer0', label: 'Payroll', icon: 'privacy' as const });
     }
     if (enabled.includes('srv-transformation')) {
       serviceItems.push({ to: 'transformation', label: 'Transformation Agent', icon: 'transform' as const });
@@ -528,13 +516,47 @@ export default function DashboardLayout() {
     }
   }, [theme]);
 
+  // Keep Cognito access token fresh for NFT dashboard + API calls.
+  useEffect(() => {
+    if (!userSession) return;
+    let cancelled = false;
+    const sync = async () => {
+      try {
+        if (isAccessTokenExpired(userSession.token)) {
+          await ensureValidAccessToken(userSession);
+          const next = readStoredSession();
+          if (!cancelled && next) setUserSession(next);
+        }
+      } catch {
+        if (!cancelled) {
+          clearStoredSession();
+          setUserSession(null);
+        }
+      }
+    };
+    void sync();
+    const interval = window.setInterval(() => {
+      void sync();
+    }, 5 * 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [userSession]);
+
   // CLI status check
   useEffect(() => {
     if (!userSession || !SHOULD_CHECK_CLI_STATUS) return;
     const check = async () => {
       try {
+        let token = userSession.token;
+        if (isAccessTokenExpired(token)) {
+          token = await ensureValidAccessToken(userSession);
+          const next = readStoredSession();
+          if (next) setUserSession(next);
+        }
         const response = await fetch(`${API_BASE_URL}/api/memory`, {
-          headers: { 'Authorization': `Bearer ${userSession.token}` }
+          headers: { 'Authorization': `Bearer ${token}` }
         });
         if (response.ok) {
           const data = await response.json();
@@ -557,11 +579,14 @@ export default function DashboardLayout() {
     initializeAWSSync();
   }, []);
 
-  // Load remote ZEXVRO state from AWS DynamoDB on login
+  // Load remote ZEXVRO state from AWS DynamoDB on login, with 10s periodic polling
   useEffect(() => {
-    if (userSession) {
+    if (!userSession) return;
+    pullFromAWS();
+    const interval = setInterval(() => {
       pullFromAWS();
-    }
+    }, 10000);
+    return () => clearInterval(interval);
   }, [userSession]);
 
   // Keyboard shortcut
@@ -585,11 +610,11 @@ export default function DashboardLayout() {
 
   // Create default workspace if none exists
   useEffect(() => {
-    if (workspaces.length === 0 && userSession) {
+    if (isHydrated && workspaces.length === 0 && userSession) {
       const name = `${getWorkspaceOwnerName(userSession)}'s Workspace`;
       createWorkspace(name, userSession.username || userSession.email || 'user');
     }
-  }, [userSession]);
+  }, [isHydrated, workspaces.length, userSession]);
 
   const handleSendWidgetMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -697,9 +722,13 @@ export default function DashboardLayout() {
   if (!userSession) {
     // Lazy import auth overlay
     const AuthOverlay = React.lazy(() => import('../auth/AuthOverlay'));
+
     return (
-      <React.Suspense fallback={<div className="min-h-screen bg-[#050505]" />}>
-        <AuthOverlay onSuccess={setUserSession} />
+      <React.Suspense fallback={null}>
+        <AuthOverlay onSuccess={(session) => {
+          persistSession(session);
+          setUserSession(session);
+        }} />
       </React.Suspense>
     );
   }
@@ -1207,7 +1236,7 @@ export default function DashboardLayout() {
                             <span>Settings</span>
                           </Link>
                         )}
-                        <button onClick={() => { setUserMenuOpen(false); globalSignOut(userSession?.token).finally(() => { localStorage.removeItem('zexvro_user_session'); setUserSession(null); }); }} className="w-full text-left px-3.5 py-2 hover:bg-rose-50 dark:hover:bg-rose-950/20 text-rose-600 dark:text-rose-400 flex items-center gap-2 cursor-pointer transition-colors border-t border-zinc-100 dark:border-zinc-900 mt-1 pt-2">
+                        <button onClick={() => { setUserMenuOpen(false); globalSignOut(userSession?.token).finally(() => { clearStoredSession(); setUserSession(null); }); }} className="w-full text-left px-3.5 py-2 hover:bg-rose-50 dark:hover:bg-rose-950/20 text-rose-600 dark:text-rose-400 flex items-center gap-2 cursor-pointer transition-colors border-t border-zinc-100 dark:border-zinc-900 mt-1 pt-2">
                           <LogOut className="h-3.5 w-3.5" />
                           <span>Sign Out</span>
                         </button>
@@ -1222,7 +1251,9 @@ export default function DashboardLayout() {
           {/* Main content with router outlet */}
           <main className="flex-1 p-4 sm:p-6 overflow-y-auto w-full">
             <div className="space-y-6">
-              {screenLoading ? (
+              {!isHydrated ? (
+                <ScreenSkeleton />
+              ) : screenLoading ? (
                 <ScreenSkeleton />
               ) : (
                 <AnimatePresence mode="wait">
@@ -1441,6 +1472,7 @@ export default function DashboardLayout() {
           )}
         </>
       )}
+
     </div>
   );
 }

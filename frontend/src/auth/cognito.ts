@@ -21,6 +21,10 @@ type CognitoTokenResponse = {
   ChallengeName?: string;
 };
 
+const SESSION_STORAGE_KEY = 'zexvro_user_session';
+/** Refresh a bit before Cognito access-token expiry (default ~1h). */
+const ACCESS_TOKEN_SKEW_MS = 60_000;
+
 function decodeJwtPayload(token?: string): Record<string, unknown> {
   if (!token) return {};
   const [, payload] = token.split('.');
@@ -31,6 +35,53 @@ function decodeJwtPayload(token?: string): Record<string, unknown> {
   } catch {
     return {};
   }
+}
+
+export function getAccessTokenExpiryMs(token?: string): number | null {
+  const exp = decodeJwtPayload(token).exp;
+  return typeof exp === 'number' ? exp * 1000 : null;
+}
+
+export function isAccessTokenExpired(token?: string, skewMs = ACCESS_TOKEN_SKEW_MS): boolean {
+  if (!token) return true;
+  const expMs = getAccessTokenExpiryMs(token);
+  if (expMs === null) return false;
+  return Date.now() >= expMs - skewMs;
+}
+
+export function readStoredSession(): UserSession | null {
+  try {
+    const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<UserSession>;
+    if (
+      typeof parsed.username === 'string' &&
+      typeof parsed.token === 'string' &&
+      parsed.token.split('.').length === 3 &&
+      !parsed.token.startsWith('prod_jwt_token_')
+    ) {
+      return {
+        username: parsed.username,
+        email: typeof parsed.email === 'string' ? parsed.email : '',
+        token: parsed.token,
+        idToken: typeof parsed.idToken === 'string' ? parsed.idToken : undefined,
+        refreshToken: typeof parsed.refreshToken === 'string' ? parsed.refreshToken : undefined,
+      };
+    }
+  } catch {
+    // ignore
+  }
+  // Invalid / legacy placeholder sessions must not stay in storage.
+  localStorage.removeItem(SESSION_STORAGE_KEY);
+  return null;
+}
+
+export function persistSession(session: UserSession) {
+  localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+}
+
+export function clearStoredSession() {
+  localStorage.removeItem(SESSION_STORAGE_KEY);
 }
 
 async function cognitoRequest<T>(target: string, payload: Record<string, unknown>): Promise<T> {
@@ -121,4 +172,78 @@ export async function globalSignOut(accessToken?: string) {
   await cognitoRequest('GlobalSignOut', {
     AccessToken: accessToken,
   });
+}
+
+/**
+ * Exchange a Cognito refresh token for a new access (+ id) token.
+ * Refresh tokens are long-lived; access tokens expire in ~1 hour.
+ */
+export async function refreshSessionTokens(session: UserSession): Promise<UserSession> {
+  if (!session.refreshToken) {
+    throw new Error('Session has no refresh token. Sign in again.');
+  }
+
+  const data = await cognitoRequest<CognitoTokenResponse>('InitiateAuth', {
+    AuthFlow: 'REFRESH_TOKEN_AUTH',
+    ClientId: COGNITO_CLIENT_ID,
+    AuthParameters: {
+      REFRESH_TOKEN: session.refreshToken,
+    },
+  });
+
+  if (data.ChallengeName) {
+    throw new Error(`Cognito challenge required: ${data.ChallengeName}`);
+  }
+
+  const accessToken = data.AuthenticationResult?.AccessToken;
+  if (!accessToken) {
+    throw new Error('Cognito did not return an access token on refresh.');
+  }
+
+  const idToken = data.AuthenticationResult?.IdToken || session.idToken;
+  const claims = decodeJwtPayload(idToken);
+  const next: UserSession = {
+    username:
+      String(claims['cognito:username'] || claims.preferred_username || session.username),
+    email: String(claims.email || session.email || ''),
+    token: accessToken,
+    idToken,
+    // Cognito usually omits RefreshToken on refresh — keep the existing one.
+    refreshToken: data.AuthenticationResult?.RefreshToken || session.refreshToken,
+  };
+  persistSession(next);
+  return next;
+}
+
+let refreshInFlight: Promise<UserSession> | null = null;
+
+/**
+ * Return a usable Cognito **access** token for API calls (NFT dashboard, etc.).
+ * Refreshes automatically when expired or near expiry.
+ */
+export async function ensureValidAccessToken(
+  session?: UserSession | null,
+): Promise<string> {
+  const current = session || readStoredSession();
+  if (!current?.token) {
+    throw new Error('Not signed in. Sign in to use the NFT dashboard.');
+  }
+
+  if (!isAccessTokenExpired(current.token)) {
+    return current.token;
+  }
+
+  if (!current.refreshToken) {
+    clearStoredSession();
+    throw new Error('Access token expired. Sign in again.');
+  }
+
+  if (!refreshInFlight) {
+    refreshInFlight = refreshSessionTokens(current).finally(() => {
+      refreshInFlight = null;
+    });
+  }
+
+  const refreshed = await refreshInFlight;
+  return refreshed.token;
 }

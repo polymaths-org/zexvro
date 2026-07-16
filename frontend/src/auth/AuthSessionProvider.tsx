@@ -2,7 +2,15 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { useLocation, useNavigate } from 'react-router-dom';
 import AuthOverlay from '../components/auth/AuthOverlay';
 import CliActivation from '../components/auth/CliActivation';
-import { globalSignOut, type UserSession } from './cognito';
+import {
+  clearStoredSession,
+  ensureValidAccessToken,
+  globalSignOut,
+  isAccessTokenExpired,
+  persistSession,
+  readStoredSession,
+  type UserSession,
+} from './cognito';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ||
   ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
@@ -18,30 +26,8 @@ interface AuthSessionContextValue {
 
 const AuthSessionContext = createContext<AuthSessionContextValue | null>(null);
 
-function isUsableSession(value: unknown): value is UserSession {
-  if (!value || typeof value !== 'object') return false;
-  const session = value as Partial<UserSession>;
-  return (
-    typeof session.username === 'string' &&
-    typeof session.token === 'string' &&
-    session.token.split('.').length === 3 &&
-    !session.token.startsWith('prod_jwt_token_')
-  );
-}
-
 function loadSession() {
-  const saved = localStorage.getItem('zexvro_user_session');
-  if (!saved) return null;
-
-  try {
-    const parsed: unknown = JSON.parse(saved);
-    if (isUsableSession(parsed)) return parsed;
-  } catch {
-    // Invalid local auth state is cleared below.
-  }
-
-  localStorage.removeItem('zexvro_user_session');
-  return null;
+  return readStoredSession();
 }
 
 export function AuthSessionProvider({ children }: { children: React.ReactNode }) {
@@ -57,6 +43,36 @@ export function AuthSessionProvider({ children }: { children: React.ReactNode })
     return code?.toUpperCase() || null;
   }, [location.search]);
 
+  // Keep Cognito access token fresh so NFT API never sees an expired JWT.
+  useEffect(() => {
+    if (!userSession) return;
+    let cancelled = false;
+
+    const sync = async () => {
+      try {
+        if (isAccessTokenExpired(userSession.token)) {
+          await ensureValidAccessToken(userSession);
+          const next = readStoredSession();
+          if (!cancelled && next) setUserSession(next);
+        }
+      } catch {
+        if (!cancelled) {
+          clearStoredSession();
+          setUserSession(null);
+        }
+      }
+    };
+
+    void sync();
+    const interval = window.setInterval(() => {
+      void sync();
+    }, 5 * 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [userSession]);
+
   useEffect(() => {
     if (!userSession) {
       setCliConnected(false);
@@ -67,8 +83,14 @@ export function AuthSessionProvider({ children }: { children: React.ReactNode })
     let cancelled = false;
     const checkCliStatus = async () => {
       try {
+        let token = userSession.token;
+        if (isAccessTokenExpired(token)) {
+          token = await ensureValidAccessToken(userSession);
+          const next = readStoredSession();
+          if (next && !cancelled) setUserSession(next);
+        }
         const response = await fetch(`${API_BASE_URL}/api/memory`, {
-          headers: { Authorization: `Bearer ${userSession.token}` },
+          headers: { Authorization: `Bearer ${token}` },
         });
         if (!response.ok || cancelled) return;
 
@@ -95,14 +117,19 @@ export function AuthSessionProvider({ children }: { children: React.ReactNode })
     try {
       await globalSignOut(userSession?.token);
     } finally {
-      localStorage.removeItem('zexvro_user_session');
+      clearStoredSession();
       setUserSession(null);
       navigate('/overview', { replace: true });
     }
   }, [navigate, userSession?.token]);
 
+  const handleAuthSuccess = useCallback((session: UserSession) => {
+    persistSession(session);
+    setUserSession(session);
+  }, []);
+
   if (!userSession) {
-    return <AuthOverlay onSuccess={setUserSession} />;
+    return <AuthOverlay onSuccess={handleAuthSuccess} />;
   }
 
   if (activationCode) {

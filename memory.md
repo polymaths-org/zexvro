@@ -524,6 +524,20 @@ Use `None` for empty fields. Do not delete fields.
 - Blockers: None.
 - Verification: `npm run lint` and `npm run build` pass from `frontend/`. Vite still reports the existing large dashboard chunk warning.
 
+## 2026-07-12 - Antigravity - ZKPP Project Persistence & Payroll Approval Workflows
+
+- Service or area: ZKPP Privacy Pool, Project Configuration Persistence, and Payment Approval Workflows
+- Files changed: `frontend/src/stores/project.ts`, `frontend/src/api/awsSync.ts`, `frontend/src/stores/zer0.ts`, `frontend/src/components/zer0/Zer0PayParty.tsx`, `frontend/src/components/zer0/Zer0Dashboard.tsx`, `frontend/src/components/zer0/Zer0History.tsx`
+- Summary: Implemented complete project config persistence to AWS DynamoDB (for environments and service instances), resolved initial mock pool balance issues (ensured fallback from Stellar query 0 USDC/EURC to default pool balances), and created the full payment approval workflow (auto-creating pending payroll runs on the backend, syncing approvals from AWS DynamoDB/Lambda, and adding direct approve/reject widgets and controls on the dashboard and history pages).
+- Decisions:
+  - Accepted - Fallback to mock balances when Stellar Horizon API returns 0 USDC/EURC/XLM on testnet.
+  - Accepted - Keep payment approvals synced with the backend payroll run statuses.
+- Follow-ups: None.
+- Blockers: None.
+- Verification:
+  - Successful build with `npm run build`.
+  - Full E2E verification of payment flow, settings toggle, dashboard card, history list, and approvals via Chromium browser tool.
+
 ## 2026-07-11 - Codex with Nabil - Routing and Zer0 branch integration
 
 - Service or area: Frontend routing, project service integration, NFT UI, and shared handoff documentation.
@@ -821,3 +835,23 @@ Use `None` for empty fields. Do not delete fields.
 - Follow-ups: User creates live collection, pastes collectionId, Freighter buy smoke; optional commit of test/ harness.
 - Blockers: Needs human Cognito/Freighter for full live proof.
 - Verification: Static server serves index/game/sdk/assets HTTP 200; NFT API health when running.
+
+## 2026-07-15 - Merge - Zer0 + NFT/De-pin into updates-routing-and-zer0
+
+- Service or area: Branch merge of `origin/main` (NFT/De-pin) into `updates-routing-and-zer0` (Zer0/routing).
+- Files changed: conflict resolutions in `frontend/.env.example`, `frontend/package.json`, `memory.md`, `scratch_lambda/lambda_function.py`; package-lock regenerated.
+- Summary: Kept Zer0 env vars and Cognito config, kept NFT/De-pin frontend + services, kept Lambda chat key from `OPENCODE_API_KEY` env (no hardcoded secret), kept both memory logs.
+- Decisions: Accepted - `@stellar/stellar-sdk` for NFT Freighter flows + existing `stellar-sdk` for Zer0; chat proxy uses env secret only.
+- Follow-ups: Deploy `zexvro-agent-backend` Lambda; merge PR #3.
+- Blockers: None.
+- Verification: Pending lint/build and Lambda deploy after conflict resolution.
+
+## 2026-07-16 - Codex with Nabil - Merge origin/main into feature/nft-service
+
+- Service or area: feature/nft-service merge of Paris main (Zer0 + NFT App Runner) + Nabil SVG media/RPG demo.
+- Files changed: conflict resolutions in `CollectionCreate.tsx`, `EmbedCheckout.tsx`, `memory.md`.
+- Summary: Kept main NFT create wizard (XLM price steps) with SVG/MIME-normalized cover upload; embed checkout uses openerOrigin when provided and `*` fallback; both memory entries retained.
+- Decisions: Accepted - Prefer main CollectionCreate flow; keep media.ts MIME normalization + SVG. Accepted - postMessage targetOrigin = openerOrigin or `*`.
+- Follow-ups: Push feature/nft-service; browser smoke RPG demo after pull.
+- Blockers: None.
+- Verification: Conflict markers cleared; commit merge.

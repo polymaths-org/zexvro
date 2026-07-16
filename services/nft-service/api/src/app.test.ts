@@ -607,7 +607,7 @@ describe('NFT service API', () => {
     expect(visible.body.intent.idempotencyKey).toBe('buyer-checkout')
   })
 
-  it('prepares and submits an owner-authorized USDC sale configuration', async () => {
+  it('prepares and submits an owner-authorized XLM sale configuration', async () => {
     const collection = await createCollection()
     const prepared = await request(app)
       .post(`/v1/collections/${collection.id}/sale-config/intent`)
@@ -623,6 +623,7 @@ describe('NFT service API', () => {
       .send({
         preparedTransaction: 'prepared-sale-config',
         signedTransaction: 'signed-sale-config',
+        priceAtomic: '250000',
       })
       .expect(201)
     expect(submitted.body.transaction.transactionHash).toBe('sale-config-hash')
@@ -716,7 +717,7 @@ describe('NFT service API', () => {
     })
     await expect(repository.getCollection(collection.id)).resolves.toMatchObject({
       primarySale: {
-        paymentTokenAddress: 'CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA',
+        paymentTokenAddress: 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC',
         priceAtomic: '250000',
         transactionHash: 'sale-config-auto-hash',
       },
