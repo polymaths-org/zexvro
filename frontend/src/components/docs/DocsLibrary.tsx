@@ -4,6 +4,7 @@ import {
   ChevronRight, Users, Wallet, Code, Settings, FileText, Key, Copy, Check
 } from 'lucide-react';
 import { Link } from '@tanstack/react-router';
+import { copyText } from '../../lib/clipboard';
 
 type DocSection = {
   id: string;
@@ -20,7 +21,11 @@ function CodeBlock({ code, lang = 'bash' }: { code: string; lang?: string }) {
       <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-900 border-b border-zinc-800">
         <span className="text-[9px] font-mono text-zinc-500 uppercase">{lang}</span>
         <button
-          onClick={() => { navigator.clipboard.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
+          onClick={async () => {
+            const ok = await copyText(code);
+            if (ok) { setCopied(true); setTimeout(() => setCopied(false), 1500); }
+            else window.prompt('Copy this value:', code);
+          }}
           className="text-zinc-500 hover:text-zinc-300 transition"
         >
           {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}

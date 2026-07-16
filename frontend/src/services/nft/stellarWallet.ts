@@ -113,11 +113,36 @@ function throwIfFreighterError(result: { error?: unknown } | null | undefined, f
 export async function isWalletAvailable(): Promise<boolean> {
   if (typeof window === 'undefined') return false;
   try {
-    const status = await freighterApi.isConnected();
-    if (status?.error) return false;
-    return Boolean(status?.isConnected);
+    // isConnected() can be false when Freighter is installed but locked / not yet
+    // allowed for this origin. Prefer "extension present" so Connect can call requestAccess.
+    if (typeof freighterApi.isConnected === 'function') {
+      const status = await freighterApi.isConnected();
+      if (status?.error) {
+        // Extension responded with an error payload but is present.
+        return true;
+      }
+      if (status?.isConnected) return true;
+      // Explicit false means the bridge answered — treat as not ready (locked/not installed path).
+      if (status && status.isConnected === false) return false;
+    }
+    // Fallback when isConnected is missing: probe getNetwork.
+    if (typeof freighterApi.getNetwork === 'function') {
+      try {
+        await freighterApi.getNetwork();
+        return true;
+      } catch {
+        // ignore
+      }
+    }
+    return Boolean(
+      (window as Window & { freighterApi?: unknown; freighter?: unknown }).freighterApi
+        || (window as Window & { freighter?: unknown }).freighter,
+    );
   } catch {
-    return false;
+    return Boolean(
+      (window as Window & { freighterApi?: unknown; freighter?: unknown }).freighterApi
+        || (window as Window & { freighter?: unknown }).freighter,
+    );
   }
 }
 

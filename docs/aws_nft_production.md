@@ -84,9 +84,13 @@ npm run dev:nft
 curl -s http://127.0.0.1:4101/health
 ```
 
+## Runtime hosting
+
+See [aws_nft_depin_runtime.md](./aws_nft_depin_runtime.md) for App Runner URLs.
+
 ## Not included yet
 
-- ECS/Fargate or Lambda hosting for the NFT Express API (still Node process / local).
+- Custom domain mapping for App Runner services.
 - IAM least-privilege task role (currently uses your CLI/root-equivalent user).
 - Custom domain on CloudFront.
 - Automated secret rotation.

@@ -185,6 +185,9 @@ function presentPublicCollection(collection: CollectionRecord) {
   return {
     id: collection.id,
     name: collection.name,
+    /** Alias for game/SDK clients that expect a logo field. */
+    logo: collection.coverImageUri,
+    logoUri: collection.coverImageUri,
     symbol: collection.symbol,
     description: collection.description,
     baseMetadataUri: collection.baseMetadataUri,
@@ -557,14 +560,50 @@ export function createApp(service: NftService, options: CreateAppOptions) {
       const { collectionId } = z
         .object({ collectionId: z.uuid() })
         .parse(request.params)
-      const input = transactionSubmissionSchema.parse(request.body)
+      const input = transactionSubmissionSchema
+        .extend({
+          priceAtomic: z
+            .string()
+            .regex(/^[1-9]\d{0,38}$/)
+            .optional()
+            .transform((value) => (value === undefined ? undefined : BigInt(value))),
+        })
+        .parse(request.body)
       await requireOwnedCollection(
         service,
         collectionId,
         response.locals.nftIdentity.subject,
       )
-      const transaction = await service.submitSaleConfig({ collectionId, ...input })
-      response.status(201).json({ transaction })
+      // Prefer explicit priceAtomic from the client; fall back to existing sale price if re-submit.
+      const existing = await service.getCollection(collectionId)
+      const price =
+        input.priceAtomic ??
+        (existing.primarySale !== undefined
+          ? BigInt(existing.primarySale.priceAtomic)
+          : undefined)
+      if (price === undefined) {
+        throw new ApiError(
+          400,
+          'price_required',
+          'priceAtomic is required when activating a primary sale',
+        )
+      }
+      const result = await service.submitSaleConfig({
+        collectionId,
+        preparedTransaction: input.preparedTransaction,
+        signedTransaction: input.signedTransaction,
+        price,
+      })
+      response.status(201).json({
+        transaction: {
+          transactionHash: result.transactionHash,
+          status: result.status,
+        },
+        collection: presentCollection(
+          result.collection,
+          response.locals.nftIdentity.subject,
+        ),
+      })
     }),
   )
 

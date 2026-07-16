@@ -101,6 +101,8 @@ export interface NftCollectionDraft {
   description: string;
   coverName: string;
   royaltyBps: number;
+  /** Unit price shown as 1 NFT = N XLM in the create wizard. */
+  unitPriceXlm?: string;
   ownerAddress?: string;
   royaltyRecipient?: string;
   baseMetadataUri?: string;

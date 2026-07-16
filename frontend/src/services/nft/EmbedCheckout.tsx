@@ -9,6 +9,7 @@ import {
   X,
 } from 'lucide-react';
 import {
+  collectionLogo,
   createPublicCheckoutIntent,
   getPublicNftCollection,
   NftApiError,
@@ -47,7 +48,12 @@ function postToOpener(
   openerOriginParam?: string,
 ) {
   if (typeof window === 'undefined' || !window.opener) return;
-  const targetOrigin = resolveOpenerTargetOrigin(openerOriginParam);
+  // Prefer explicit openerOrigin from SDK; fall back to '*' so game embeds
+  // (localhost/itch.io) still receive success when openerOrigin is missing.
+  // Payload is a non-secret purchase receipt; the parent still validates event.origin.
+  const targetOrigin = openerOriginParam
+    ? resolveOpenerTargetOrigin(openerOriginParam)
+    : '*';
   window.opener.postMessage(
     { source: 'zexvro-nft-checkout', type, payload },
     targetOrigin,
@@ -81,12 +87,18 @@ export default function EmbedCheckout() {
   const [error, setError] = useState('');
   const [preparing, setPreparing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [connecting, setConnecting] = useState(false);
   const [confirmedHash, setConfirmedHash] = useState('');
 
   const priceLabel = useMemo(() => {
     if (!collection?.primarySale) return null;
-    return `${atomicToUsdc(collection.primarySale.priceAtomic)} USDC`;
+    return `${atomicToUsdc(collection.primarySale.priceAtomic)} XLM`;
   }, [collection]);
+
+  const logo = useMemo(
+    () => (collection ? collectionLogo(collection) : ''),
+    [collection],
+  );
 
   useEffect(() => {
     if (!collectionId) {
@@ -114,14 +126,18 @@ export default function EmbedCheckout() {
 
   const connectWallet = async () => {
     setError('');
+    setConnecting(true);
     try {
       if (!(await isWalletAvailable())) {
         throw new Error('Install and unlock Freighter (Testnet), then allow this site.');
       }
       setBuyerAddress(await getPublicKey());
     } catch (err) {
-      setError(errorMessage(err));
-      postToOpener('error', { message: errorMessage(err) }, openerOrigin);
+      const message = errorMessage(err);
+      setError(message);
+      postToOpener('error', { message }, openerOrigin);
+    } finally {
+      setConnecting(false);
     }
   };
 
@@ -129,15 +145,23 @@ export default function EmbedCheckout() {
     if (!collectionId) return;
     setError('');
     setIntent(null);
-    if (!STELLAR_ADDRESS.test(buyerAddress.trim())) {
-      setError('Connect Freighter or enter a valid Stellar buyer address.');
-      return;
+    let address = buyerAddress.trim();
+    if (!STELLAR_ADDRESS.test(address)) {
+      try {
+        address = await getPublicKey();
+        setBuyerAddress(address);
+      } catch (err) {
+        const message = errorMessage(err);
+        setError(message);
+        postToOpener('error', { message }, openerOrigin);
+        return;
+      }
     }
     setPreparing(true);
     try {
       const next = await createPublicCheckoutIntent({
         collectionId,
-        buyerAddress: buyerAddress.trim(),
+        buyerAddress: address,
       });
       setIntent(next);
     } catch (err) {
@@ -154,9 +178,6 @@ export default function EmbedCheckout() {
     setSubmitting(true);
     setError('');
     try {
-      if (!(await isWalletAvailable())) {
-        throw new Error('Freighter is required to sign the purchase authorization.');
-      }
       const walletAddress = await getPublicKey();
       if (walletAddress !== intent.buyerAddress) {
         throw new Error('Connected wallet must match the buyer address used to prepare checkout.');
@@ -216,14 +237,15 @@ export default function EmbedCheckout() {
   return (
     <main className="min-h-screen bg-[#050506] text-zinc-100">
       <div className="mx-auto flex min-h-screen w-full max-w-md flex-col p-5">
-        <header className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-zinc-500">ZEXVRO Checkout</p>
-            <h1 className="mt-1 text-lg font-semibold text-white">{collection.name}</h1>
-            {priceLabel && (
-              <p className="mt-1 text-sm tabular-nums text-zinc-400">{priceLabel}</p>
-            )}
-          </div>
+        <header className="flex items-center justify-between gap-3">
+          <img
+            src="/brand/wordmark-transparent.png"
+            alt="ZEXVRO"
+            className="h-6 w-auto max-w-[150px] object-contain opacity-90"
+            onError={(event) => {
+              (event.currentTarget as HTMLImageElement).src = '/brand/typo-logo.png';
+            }}
+          />
           <button
             type="button"
             onClick={close}
@@ -234,77 +256,110 @@ export default function EmbedCheckout() {
           </button>
         </header>
 
-        <div className="mt-6 flex-1 space-y-4">
-          <p className="text-sm text-zinc-400">
-            Token ID is assigned automatically. You sign purchase authorization only; network fees are sponsored.
-          </p>
+        <div className="mt-5 flex justify-center">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-zinc-700/80 ring-1 ring-zinc-600/50">
+            <img src="/brand/logo-transparent.png" alt="" className="h-8 w-8 object-contain" />
+          </div>
+        </div>
 
-          <label className="block text-sm font-medium text-zinc-200">
-            Buyer wallet
-            <input
-              value={buyerAddress}
-              onChange={(event) => setBuyerAddress(event.target.value.trim().toUpperCase())}
-              placeholder="G..."
-              spellCheck={false}
-              className="mt-2 w-full rounded-md border border-zinc-800 bg-[#0A0A0B] px-3 py-2.5 font-mono text-xs text-white outline-none focus:border-brand-blue"
-            />
-          </label>
-          <button
-            type="button"
-            onClick={() => void connectWallet()}
-            className="inline-flex h-9 w-full items-center justify-center rounded-md border border-zinc-800 text-sm text-zinc-300 hover:border-zinc-700 hover:text-white"
-          >
-            Connect Freighter
-          </button>
-
-          {intent && (
-            <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm text-emerald-200">
-              Reserved token #{intent.tokenId}
+        <div className="mt-5 overflow-hidden rounded-2xl border border-zinc-800 bg-[#0A0A0B]">
+          <div className="flex items-center gap-4 border-b border-zinc-800 p-4">
+            <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-zinc-700 bg-zinc-900">
+              {logo.startsWith('http') || logo.startsWith('/') ? (
+                <img src={logo} alt={collection.name} className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full items-center justify-center text-[10px] text-zinc-600">NFT</div>
+              )}
             </div>
-          )}
-
-          {error && (
-            <div className="flex gap-2 rounded-md border border-red-500/25 bg-red-500/5 p-3 text-sm text-red-300">
-              <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>{error}</span>
+            <div className="min-w-0">
+              <h1 className="truncate text-lg font-semibold text-white">{collection.name}</h1>
+              {priceLabel && (
+                <p className="mt-1 text-sm tabular-nums text-zinc-300">{priceLabel}</p>
+              )}
+              <p className="mt-0.5 text-xs text-zinc-500">Stellar testnet · sponsored fees</p>
             </div>
-          )}
+          </div>
 
-          {!intent && (
+          <div className="space-y-3 p-4">
+            <label className="block text-sm font-medium text-zinc-200">
+              Buyer wallet
+              <input
+                value={buyerAddress}
+                onChange={(event) => setBuyerAddress(event.target.value.trim().toUpperCase())}
+                placeholder="G..."
+                spellCheck={false}
+                className="mt-2 w-full rounded-md border border-zinc-800 bg-[#050506] px-3 py-2.5 font-mono text-xs text-white outline-none focus:border-brand-blue"
+              />
+            </label>
             <button
               type="button"
-              disabled={preparing || !collection.primarySale}
-              onClick={() => void prepare()}
-              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-white text-sm font-medium text-zinc-950 hover:bg-zinc-200 disabled:opacity-60"
+              disabled={connecting}
+              onClick={() => void connectWallet()}
+              className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md border border-zinc-800 text-sm text-zinc-300 hover:border-zinc-700 hover:text-white disabled:opacity-60"
             >
-              {preparing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShoppingCart className="h-4 w-4" />}
-              Prepare purchase
+              {connecting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
+              Connect Freighter
             </button>
-          )}
 
-          {intent && intent.status !== 'confirmed' && (
-            <button
-              type="button"
-              disabled={submitting}
-              onClick={() => void signAndSubmit()}
-              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-white text-sm font-medium text-zinc-950 hover:bg-zinc-200 disabled:opacity-60"
-            >
-              {submitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-              Sign & submit
-            </button>
-          )}
+            {intent && (
+              <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm text-emerald-200">
+                Reserved token #{intent.tokenId}
+              </div>
+            )}
 
-          {confirmedHash && (
-            <a
-              href={`https://stellar.expert/explorer/testnet/tx/${confirmedHash}`}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-2 text-sm text-emerald-300"
-            >
-              <ExternalLink className="h-4 w-4" />
-              Purchase confirmed
-            </a>
-          )}
+            {error && (
+              <div className="flex gap-2 rounded-md border border-red-500/25 bg-red-500/5 p-3 text-sm text-red-300">
+                <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            {!intent && !collection.primarySale && (
+              <div className="rounded-md border border-amber-500/25 bg-amber-500/5 p-3 text-sm text-amber-200">
+                Primary sale is not live yet. Owner must activate sale from the NFT dashboard.
+              </div>
+            )}
+
+            {!intent && (
+              <button
+                type="button"
+                disabled={preparing || !collection.primarySale || !buyerAddress}
+                onClick={() => void prepare()}
+                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-white text-sm font-medium text-zinc-950 hover:bg-zinc-200 disabled:opacity-60"
+              >
+                {preparing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShoppingCart className="h-4 w-4" />}
+                {!collection.primarySale
+                  ? 'Sale not live yet'
+                  : !buyerAddress
+                    ? 'Connect wallet to continue'
+                    : 'Prepare purchase'}
+              </button>
+            )}
+
+            {intent && intent.status !== 'confirmed' && (
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => void signAndSubmit()}
+                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-white text-sm font-medium text-zinc-950 hover:bg-zinc-200 disabled:opacity-60"
+              >
+                {submitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+                Sign & submit
+              </button>
+            )}
+
+            {confirmedHash && (
+              <a
+                href={`https://stellar.expert/explorer/testnet/tx/${confirmedHash}`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 text-sm text-emerald-300"
+              >
+                <ExternalLink className="h-4 w-4" />
+                Purchase confirmed
+              </a>
+            )}
+          </div>
         </div>
       </div>
     </main>

@@ -1,4 +1,5 @@
 import type { CollectionStatus } from '../../types';
+import { ensureValidAccessToken, isAccessTokenExpired } from '../../auth/cognito';
 
 const NFT_API_BASE = (import.meta.env.VITE_NFT_API_URL || '/api/nft').replace(/\/$/, '');
 
@@ -50,7 +51,15 @@ export interface ApiNftCollection {
 export type PublicNftCollection = Omit<
   ApiNftCollection,
   'workspaceId' | 'ownerAddress' | 'royaltyRecipient'
->;
+> & {
+  /** Convenience aliases for game/SDK clients. */
+  logo?: string;
+  logoUri?: string;
+};
+
+export function collectionLogo(collection: Pick<PublicNftCollection, 'logo' | 'logoUri' | 'coverImageUri'>) {
+  return collection.logo || collection.logoUri || collection.coverImageUri || '';
+}
 
 export interface CreateNftCollectionInput {
   workspaceId: string;
@@ -152,8 +161,34 @@ export class NftApiError extends Error {
 
 async function readJson(response: Response): Promise<unknown> {
   const contentType = response.headers.get('content-type') || '';
-  if (!contentType.includes('application/json')) return undefined;
+  if (!contentType.includes('application/json')) {
+    // Pages SPA fallback serves HTML for unknown paths — never treat as API JSON.
+    return undefined;
+  }
   return response.json().catch(() => undefined);
+}
+
+function assertJsonPayload(payload: unknown, path: string): asserts payload is object {
+  if (payload === null || payload === undefined || typeof payload !== 'object') {
+    throw new NftApiError(
+      502,
+      'invalid_nft_api_response',
+      `NFT API returned a non-JSON response for ${path}. Check VITE_NFT_API_URL points at the NFT service (not the static site).`,
+    );
+  }
+}
+
+async function resolveAccessToken(accessToken?: string): Promise<string | undefined> {
+  if (!accessToken) return undefined;
+  try {
+    // Always prefer a non-expired Cognito access token (refresh when needed).
+    if (isAccessTokenExpired(accessToken)) {
+      return await ensureValidAccessToken();
+    }
+    return accessToken;
+  } catch {
+    return accessToken;
+  }
 }
 
 async function requestJson<T>(
@@ -161,17 +196,33 @@ async function requestJson<T>(
   init: RequestInit = {},
   accessToken?: string,
 ): Promise<T> {
-  const headers: Record<string, string> = {
-    Accept: 'application/json',
-    ...(init.headers as Record<string, string> | undefined),
-    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+  let token = await resolveAccessToken(accessToken);
+
+  const doFetch = async (bearer?: string) => {
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+      ...(init.headers as Record<string, string> | undefined),
+      ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
+    };
+    const response = await fetch(`${NFT_API_BASE}${path}`, {
+      ...init,
+      headers,
+    });
+    const payload = await readJson(response);
+    return { response, payload };
   };
 
-  const response = await fetch(`${NFT_API_BASE}${path}`, {
-    ...init,
-    headers,
-  });
-  const payload = await readJson(response);
+  let { response, payload } = await doFetch(token);
+
+  // Expired / wrong token: refresh once and retry (common after long dashboard sessions).
+  if (response.status === 401 && accessToken) {
+    try {
+      token = await ensureValidAccessToken();
+      ({ response, payload } = await doFetch(token));
+    } catch {
+      // fall through with original 401
+    }
+  }
 
   if (!response.ok) {
     const apiError = payload as ApiErrorPayload | undefined;
@@ -183,11 +234,27 @@ async function requestJson<T>(
     );
   }
 
+  // 204 / empty success bodies are valid (e.g. DELETE).
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  // Never treat HTML/empty 200 as success — that previously returned undefined and
+  // crashed callers with "can't access property X of undefined" (e.g. capabilities).
+  assertJsonPayload(payload, path);
   return payload as T;
 }
 
-export function getNftServiceHealth(signal?: AbortSignal) {
-  return requestJson<NftServiceHealth>('/health', { signal });
+export async function getNftServiceHealth(signal?: AbortSignal) {
+  const health = await requestJson<NftServiceHealth>('/health', { signal });
+  if (!health?.capabilities || typeof health.capabilities !== 'object') {
+    throw new NftApiError(
+      502,
+      'invalid_nft_health',
+      'NFT health payload is missing capabilities. Is VITE_NFT_API_URL set to the App Runner NFT API?',
+    );
+  }
+  return health;
 }
 
 export async function listNftCollections(
@@ -195,22 +262,29 @@ export async function listNftCollections(
   accessToken: string,
   signal?: AbortSignal,
 ) {
-  const result = await requestJson<{ collections: ApiNftCollection[] }>(
+  const result = await requestJson<{ collections?: ApiNftCollection[] }>(
     `/v1/collections?workspaceId=${encodeURIComponent(workspaceId)}`,
     { signal },
     accessToken,
   );
-  return result.collections;
+  return Array.isArray(result?.collections) ? result.collections : [];
 }
 
 export async function uploadNftMedia(file: File, accessToken: string) {
   const body = new FormData();
   body.set('file', file);
-  const result = await requestJson<{ asset: NftMediaAsset }>(
+  const result = await requestJson<{ asset?: NftMediaAsset }>(
     '/v1/media',
     { method: 'POST', body },
     accessToken,
   );
+  if (!result?.asset) {
+    throw new NftApiError(
+      502,
+      'invalid_nft_api_response',
+      'NFT media upload response was empty. Check auth token and VITE_NFT_API_URL.',
+    );
+  }
   return result.asset;
 }
 
@@ -218,7 +292,7 @@ export async function createNftCollection(
   input: CreateNftCollectionInput,
   accessToken: string,
 ) {
-  const result = await requestJson<{ collection: ApiNftCollection }>(
+  const result = await requestJson<{ collection?: ApiNftCollection }>(
     '/v1/collections',
     {
       method: 'POST',
@@ -227,6 +301,13 @@ export async function createNftCollection(
     },
     accessToken,
   );
+  if (!result?.collection) {
+    throw new NftApiError(
+      502,
+      'invalid_nft_api_response',
+      'NFT create response did not include a collection. Check auth token and VITE_NFT_API_URL.',
+    );
+  }
   return result.collection;
 }
 
@@ -276,7 +357,7 @@ export async function prepareNftSaleConfig(input: {
   priceAtomic: string;
   accessToken: string;
 }) {
-  const result = await requestJson<{ intent: PreparedNftTransaction }>(
+  const result = await requestJson<{ intent?: PreparedNftTransaction }>(
     `/v1/collections/${encodeURIComponent(input.collectionId)}/sale-config/intent`,
     {
       method: 'POST',
@@ -288,6 +369,13 @@ export async function prepareNftSaleConfig(input: {
     },
     input.accessToken,
   );
+  if (!result?.intent) {
+    throw new NftApiError(
+      502,
+      'invalid_nft_api_response',
+      'Sale-config prepare response was empty. Sign in again and retry.',
+    );
+  }
   return result.intent;
 }
 
@@ -303,6 +391,19 @@ export async function getPublicNftCollection(
     { signal },
   );
   return result;
+}
+
+/** Lightweight public fields games can poll for branding (name + logo). */
+export async function getPublicNftBranding(collectionId: string, signal?: AbortSignal) {
+  const result = await getPublicNftCollection(collectionId, signal);
+  return {
+    id: result.collection.id,
+    name: result.collection.name,
+    logo: collectionLogo(result.collection),
+    symbol: result.collection.symbol,
+    description: result.collection.description,
+    priceAtomic: result.collection.primarySale?.priceAtomic,
+  };
 }
 
 export async function getPublicCollectionInventory(
@@ -394,6 +495,7 @@ export async function submitNftSaleConfig(input: {
   collectionId: string;
   preparedTransaction: string;
   signedTransaction: string;
+  priceAtomic: string;
   accessToken: string;
 }) {
   const result = await requestJson<{
@@ -407,6 +509,7 @@ export async function submitNftSaleConfig(input: {
       body: JSON.stringify({
         preparedTransaction: input.preparedTransaction,
         signedTransaction: input.signedTransaction,
+        priceAtomic: input.priceAtomic,
       }),
     },
     input.accessToken,

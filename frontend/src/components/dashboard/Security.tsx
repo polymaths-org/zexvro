@@ -6,6 +6,7 @@ import {
 import { SecurityKey, AuditLog } from '../../types';
 import { mockSecurityKeys, mockAuditLogs } from '../../data/mock';
 import { motion, AnimatePresence } from 'motion/react';
+import { copyText } from '../../lib/clipboard';
 
 export default function Security() {
   const [keys, setKeys] = useState<SecurityKey[]>(mockSecurityKeys);
@@ -79,10 +80,14 @@ export default function Security() {
     setAuditLogs([newAudit, ...auditLogs]);
   };
 
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(generatedKeyValue);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const copyToClipboard = async () => {
+    const ok = await copyText(generatedKeyValue);
+    if (ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } else {
+      window.prompt('Copy this value:', generatedKeyValue);
+    }
   };
 
   return (

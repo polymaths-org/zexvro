@@ -1,15 +1,34 @@
 import { useNavigate, useParams } from '@tanstack/react-router';
-import { useMemo } from 'react';
-import { FolderKanban, Blocks, Users, Shield, Plus, ArrowRight, Activity } from 'lucide-react';
+import { useMemo, useState, useEffect } from 'react';
+import { FolderKanban, Blocks, Users, Shield, Plus, ArrowRight, Activity, AlertTriangle, Wallet } from 'lucide-react';
 import { useProjectStore } from '../../stores/project';
 import { useWorkspaceStore } from '../../stores/workspace';
+import { useZer0Store } from '../../stores/zer0';
 import { serviceCatalog } from '../../data/serviceCatalog';
+import { stellar } from '../../api/api';
+
+const CONVERSION_RATES: Record<'USDC' | 'XLM' | 'EURC', { rate: number; symbol: string; label: string }> = {
+  USDC: { rate: 1.00, symbol: '$', label: 'USD' },
+  EURC: { rate: 1.08, symbol: '$', label: 'USD' },
+  XLM: { rate: 0.12, symbol: '$', label: 'USD' },
+};
+
+function formatFiatConversion(amount: number, cryptoCurrency: 'USDC' | 'XLM' | 'EURC', preferredFiat: 'USD' | 'EUR' = 'USD'): string {
+  const usdVal = amount * (CONVERSION_RATES[cryptoCurrency]?.rate || 1);
+  if (preferredFiat === 'EUR') {
+    const eurVal = usdVal * 0.925; // 1 USD = 0.925 EUR approx
+    return `€${eurVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EUR`;
+  }
+  return `$${usdVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`;
+}
 
 export default function WorkspaceOverview() {
   const { workspaceId } = useParams({ strict: false });
   const navigate = useNavigate();
   const allProjects = useProjectStore(s => s.projects);
   const workspaces = useWorkspaceStore(s => s.workspaces);
+  const settingsState = useZer0Store(s => s.settings);
+
   const projects = useMemo(
     () => allProjects.filter(p => p.workspaceId === workspaceId),
     [allProjects, workspaceId],
@@ -24,10 +43,88 @@ export default function WorkspaceOverview() {
   const draftProjects = projects.filter(p => p.lifecycle === 'draft');
   const invitedMembers = workspace?.members.filter(member => member.status === 'invited' || member.status === 'pending').length || 0;
 
+  const preferredCurrency = ((workspace?.settings as any)?.preferredCurrency || 'USD') as 'USD' | 'EUR';
+
   const goTo = (path: string) => navigate({ to: path });
+  
+  const isWalletConnected = settingsState?.walletAddress && /^G[A-Z2-7]{55}$/.test(settingsState.walletAddress);
+
+  const [balances, setBalances] = useState<{ XLM: number; USDC: number; EURC: number } | null>(null);
+  const [balancesLoading, setBalancesLoading] = useState(false);
+  const [balancesError, setBalancesError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isWalletConnected || !settingsState.walletAddress) {
+      setBalances(null);
+      return;
+    }
+    let active = true;
+    setBalancesLoading(true);
+    setBalancesError(null);
+    
+    const horizonUrl = (settingsState as any).horizonUrl || 'https://horizon-testnet.stellar.org';
+
+    stellar.getPoolBalance(settingsState.walletAddress, horizonUrl)
+      .then(res => {
+        if (active) {
+          setBalances(res);
+          useZer0Store.setState(state => ({
+            pool: {
+              ...state.pool,
+              balances: {
+                USDC: Number(res.USDC || 0),
+                XLM: Number(res.XLM || 0),
+                EURC: Number(res.EURC || 0),
+              },
+              lastUpdated: Date.now(),
+            },
+          }));
+        }
+      })
+      .catch(err => {
+        if (active) {
+          setBalancesError(err.message || 'Failed to fetch balances');
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setBalancesLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isWalletConnected, settingsState.walletAddress, (settingsState as any).horizonUrl]);
 
   return (
     <div className="space-y-6">
+      {/* Wallet Warning Banner */}
+      {!isWalletConnected && (
+        <div className="relative overflow-hidden rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3 min-w-0">
+              <div className="h-8 w-8 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0 mt-0.5">
+                <AlertTriangle className="h-4 w-4" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-xs font-bold text-zinc-900 dark:text-white">Funding Wallet Disconnected</h3>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                  You must connect a Stellar funding wallet (Freighter, Albedo, or xBull) to process payroll runs and fund the privacy pool.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => goTo(`/dashboard/w/${workspaceId}/zer0/settings`)}
+              className="inline-flex items-center justify-center gap-1.5 h-8 rounded-lg bg-amber-600 px-4 text-xs font-semibold text-white hover:bg-amber-500 transition shadow-sm shrink-0"
+            >
+              <Wallet className="h-3.5 w-3.5" />
+              Configure Wallet
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Hero */}
       <div className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-[#080809]">
         <div className="flex items-start justify-between">
@@ -80,6 +177,77 @@ export default function WorkspaceOverview() {
           accent="amber"
         />
       </div>
+
+      {/* Wallet Status and ZK Pool Balances (if wallet is connected) */}
+      {isWalletConnected && (
+        <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-[#080809]">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-100 dark:border-zinc-800 pb-4 mb-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
+                <Wallet className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Funding Wallet Connected</h3>
+                <p className="text-xs text-zinc-500 font-mono mt-0.5 select-all">
+                  {settingsState.walletAddress}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-605 dark:bg-emerald-500/20 dark:text-emerald-400">
+                Active
+              </span>
+              <button
+                onClick={() => goTo(`/dashboard/w/${workspaceId}/zer0/settings`)}
+                className="text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors font-medium border border-zinc-200 dark:border-zinc-800 px-3.5 py-1.5 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-900"
+              >
+                Manage Wallet
+              </button>
+            </div>
+          </div>
+
+          <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">ZK Pool & Funding Balances</h4>
+          {balancesLoading ? (
+            <div className="flex items-center justify-center py-6">
+              <span className="text-xs text-zinc-500">Loading wallet balances...</span>
+            </div>
+          ) : balancesError ? (
+            <div className="text-xs font-semibold text-rose-650 bg-rose-500/10 dark:text-rose-400 rounded-lg p-3">
+              {balancesError}
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="rounded-lg bg-zinc-50 dark:bg-zinc-950 p-4 border border-zinc-100 dark:border-zinc-900/50">
+                <div className="text-xs text-zinc-505">XLM Balance</div>
+                <div className="text-lg font-bold text-zinc-900 dark:text-white mt-1">
+                  {(balances?.XLM || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} XLM
+                </div>
+                <div className="text-xs text-zinc-400 mt-0.5">
+                  ~ {formatFiatConversion(balances?.XLM || 0, 'XLM', preferredCurrency)}
+                </div>
+              </div>
+              <div className="rounded-lg bg-zinc-50 dark:bg-zinc-950 p-4 border border-zinc-100 dark:border-zinc-900/50">
+                <div className="text-xs text-zinc-505">USDC Balance</div>
+                <div className="text-lg font-bold text-zinc-900 dark:text-white mt-1">
+                  {(balances?.USDC || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} USDC
+                </div>
+                <div className="text-xs text-zinc-400 mt-0.5">
+                  ~ {formatFiatConversion(balances?.USDC || 0, 'USDC', preferredCurrency)}
+                </div>
+              </div>
+              <div className="rounded-lg bg-zinc-50 dark:bg-zinc-950 p-4 border border-zinc-100 dark:border-zinc-900/50">
+                <div className="text-xs text-zinc-505">EURC Balance</div>
+                <div className="text-lg font-bold text-zinc-900 dark:text-white mt-1">
+                  {(balances?.EURC || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} EURC
+                </div>
+                <div className="text-xs text-zinc-400 mt-0.5">
+                  ~ {formatFiatConversion(balances?.EURC || 0, 'EURC', preferredCurrency)}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Quick actions */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
