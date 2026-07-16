@@ -811,3 +811,13 @@ Use `None` for empty fields. Do not delete fields.
 - Follow-ups: Team review of `docs/access_shield.md`; coordinate with Rushi on Agent Auth binding; Nabil browser smoke checklist still open; commit when user asks.
 - Blockers: None for docs.
 - Verification: Docs only (no test matrix required).
+
+## 2026-07-15 - Codex with Nabil - NFT RPG demo harness for SDK E2E
+
+- Service or area: NFT SDK integration test game.
+- Files changed: `test/nft-rpg-demo/**` (canvas RPG shop, 5 SVG assets, vendored checkout SDK, serve script, README); `docs/nft_local_test_checklist.md` game section.
+- Summary: Built a small self-contained web RPG under test/ instead of cloning a large Pokemon repo. Shop buys via openCheckout popup; ownership unlocks in-game stats/VFX. Offline demo mode without collectionId.
+- Decisions: Accepted - Tiny custom harness > huge third-party RPG for controllable E2E. Accepted - Demo maps purchase success to clicked SKU (collection is sequential mints, not on-chain SKUs).
+- Follow-ups: User creates live collection, pastes collectionId, Freighter buy smoke; optional commit of test/ harness.
+- Blockers: Needs human Cognito/Freighter for full live proof.
+- Verification: Static server serves index/game/sdk/assets HTTP 200; NFT API health when running.

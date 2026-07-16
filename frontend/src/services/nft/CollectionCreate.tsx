@@ -21,6 +21,11 @@ import {
   saveCollectionDraft,
 } from './collectionStore';
 import {
+  NFT_MEDIA_ACCEPT,
+  NFT_MEDIA_MAX_BYTES,
+  normalizeNftImageFile,
+} from './media';
+import {
   createNftCollection,
   getNftServiceHealth,
   uploadNftMedia,
@@ -189,21 +194,25 @@ export default function CollectionCreate({ workspaceId, accessToken, onClose }: 
     setErrors(previous => ({ ...previous, ownerAddress: undefined, royaltyRecipient: undefined }));
   };
 
-  const selectCover = (file: File | null) => {
+  const selectCover = (file: File | null, input?: HTMLInputElement | null) => {
     if (!file) return;
-    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
-      setErrors(previous => ({ ...previous, cover: 'Choose a PNG, JPEG, or WebP image.' }));
+
+    const normalized = normalizeNftImageFile(file);
+    if (!normalized) {
+      setErrors(previous => ({ ...previous, cover: 'Choose a PNG, JPEG, WebP, or SVG image.' }));
+      if (input) input.value = '';
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
+    if (normalized.size > NFT_MEDIA_MAX_BYTES) {
       setErrors(previous => ({ ...previous, cover: 'Image must be 5 MB or smaller.' }));
+      if (input) input.value = '';
       return;
     }
 
     if (coverPreview) URL.revokeObjectURL(coverPreview);
-    setCoverFile(file);
-    setCoverPreview(URL.createObjectURL(file));
-    updateDraft('coverName', file.name);
+    setCoverFile(normalized);
+    setCoverPreview(URL.createObjectURL(normalized));
+    updateDraft('coverName', normalized.name);
     setErrors(previous => ({ ...previous, cover: undefined }));
   };
 
@@ -416,15 +425,15 @@ export default function CollectionCreate({ workspaceId, accessToken, onClose }: 
                   <span className="px-6 py-12">
                     <ImagePlus className="mx-auto h-7 w-7 text-zinc-400" />
                     <span className="mt-4 block text-sm font-medium text-zinc-800 dark:text-zinc-200">Choose collection cover</span>
-                    <span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">PNG, JPEG, or WebP up to 5 MB</span>
+                    <span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">PNG, JPEG, WebP, or SVG up to 5 MB</span>
                   </span>
                 )}
               </label>
               <input
                 id={uploadId}
                 type="file"
-                accept="image/png,image/jpeg,image/webp"
-                onChange={event => selectCover(event.target.files?.[0] || null)}
+                accept={NFT_MEDIA_ACCEPT}
+                onChange={event => selectCover(event.target.files?.[0] || null, event.target)}
                 className="sr-only"
               />
               <div className="mt-2 flex min-h-5 items-center justify-between gap-3 text-xs">

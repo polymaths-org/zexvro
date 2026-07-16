@@ -28,11 +28,29 @@ function errorMessage(error: unknown) {
   return 'Checkout could not complete.';
 }
 
-function postToOpener(type: 'success' | 'error' | 'close', payload?: Record<string, unknown>) {
+function resolveOpenerTargetOrigin(openerOriginParam?: string) {
+  // Prefer explicit opener origin from the SDK (cross-origin game embeds).
+  if (openerOriginParam) {
+    try {
+      return new URL(openerOriginParam).origin;
+    } catch {
+      // fall through
+    }
+  }
+  // Same-origin embeds (Studio itself) can target this origin.
+  return window.location.origin;
+}
+
+function postToOpener(
+  type: 'success' | 'error' | 'close',
+  payload?: Record<string, unknown>,
+  openerOriginParam?: string,
+) {
   if (typeof window === 'undefined' || !window.opener) return;
+  const targetOrigin = resolveOpenerTargetOrigin(openerOriginParam);
   window.opener.postMessage(
     { source: 'zexvro-nft-checkout', type, payload },
-    window.location.origin,
+    targetOrigin,
   );
 }
 
@@ -48,8 +66,12 @@ function atomicToUsdc(value: string) {
  * Route: /nft/embed/checkout?collectionId=...
  */
 export default function EmbedCheckout() {
-  const search = useSearch({ strict: false }) as { collectionId?: string };
+  const search = useSearch({ strict: false }) as {
+    collectionId?: string;
+    openerOrigin?: string;
+  };
   const collectionId = search.collectionId || '';
+  const openerOrigin = search.openerOrigin || '';
 
   const [collection, setCollection] = useState<PublicNftCollection | null>(null);
   const [loading, setLoading] = useState(true);
@@ -86,7 +108,7 @@ export default function EmbedCheckout() {
   }, [collectionId]);
 
   const close = () => {
-    postToOpener('close');
+    postToOpener('close', undefined, openerOrigin);
     window.close();
   };
 
@@ -99,7 +121,7 @@ export default function EmbedCheckout() {
       setBuyerAddress(await getPublicKey());
     } catch (err) {
       setError(errorMessage(err));
-      postToOpener('error', { message: errorMessage(err) });
+      postToOpener('error', { message: errorMessage(err) }, openerOrigin);
     }
   };
 
@@ -121,7 +143,7 @@ export default function EmbedCheckout() {
     } catch (err) {
       const message = errorMessage(err);
       setError(message);
-      postToOpener('error', { message });
+      postToOpener('error', { message }, openerOrigin);
     } finally {
       setPreparing(false);
     }
@@ -150,16 +172,20 @@ export default function EmbedCheckout() {
       }
       setConfirmedHash(hash);
       setIntent({ ...result.intent, status: 'confirmed', transactionHash: hash });
-      postToOpener('success', {
-        collectionId,
-        tokenId: result.intent.tokenId,
-        transactionHash: hash,
-        buyerAddress: result.intent.buyerAddress,
-      });
+      postToOpener(
+        'success',
+        {
+          collectionId,
+          tokenId: result.intent.tokenId,
+          transactionHash: hash,
+          buyerAddress: result.intent.buyerAddress,
+        },
+        openerOrigin,
+      );
     } catch (err) {
       const message = errorMessage(err);
       setError(message);
-      postToOpener('error', { message });
+      postToOpener('error', { message }, openerOrigin);
     } finally {
       setSubmitting(false);
     }
