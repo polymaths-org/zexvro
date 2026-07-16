@@ -37,10 +37,16 @@ describe('De-pin API client', () => {
         JSON.stringify({
           status: 'ok',
           service: 'depin',
+          multiInstanceSafe: false,
+          stateBackend: 'memory',
           capabilities: {
             scheme: 'exact',
             network: 'stellar:testnet',
             facilitatorUrl: 'https://x402.org/facilitator',
+            facilitatorAuthConfigured: false,
+            facilitatorOzChannels: false,
+            settleAuthRequired: false,
+            settleReady: true,
             settlement: 'after_upstream_success',
             fees: 'sponsored',
             replayTtlMs: 600000,
@@ -57,6 +63,8 @@ describe('De-pin API client', () => {
 
     expect(health.service).toBe('depin');
     expect(status.providers[0]?.route).toBe('/v1/nft-health');
+    expect(status.capabilities.settleReady).toBe(true);
+    expect(status.multiInstanceSafe).toBe(false);
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/depin/health', expect.any(Object));
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/depin/status', expect.any(Object));
   });

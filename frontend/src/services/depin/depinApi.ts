@@ -25,10 +25,17 @@ export interface DepinStatus {
     detail: string;
   };
   stateBackend?: 'memory' | 'file';
+  /** True when stateBackend is file (safe for multiple gateway processes). */
+  multiInstanceSafe?: boolean;
   capabilities: {
     scheme: 'exact';
     network: 'stellar:testnet';
     facilitatorUrl: string;
+    facilitatorAuthConfigured?: boolean;
+    facilitatorOzChannels?: boolean;
+    settleAuthRequired?: boolean;
+    /** False when OZ Channels is configured without OZ_API_KEY. */
+    settleReady?: boolean;
     settlement: 'after_upstream_success';
     fees: 'sponsored';
     replayTtlMs: number;

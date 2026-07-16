@@ -182,7 +182,7 @@ Use `None` for empty fields. Do not delete fields.
 | Blocker | Owner needed | Impact |
 | --- | --- | --- |
 | Live AWS S3/Dynamo/Secrets Manager not provisioned for NFT | Nabil / `n4bi10p` | Code/env modes ready; local/testnet defaults remain file + local media |
-| De-pin multi-instance needs non-memory state | Nabil / `n4bi10p` | Use `DEPIN_STATE_BACKEND=file` (redis reserved) before multiple gateway processes |
+| De-pin multi-instance needs non-memory state | Nabil / `n4bi10p` | Prefer `DEPIN_STATE_BACKEND=file` (redis reserved); status exposes `multiInstanceSafe` |
 
 ## Active Handoffs
 
@@ -855,3 +855,13 @@ Use `None` for empty fields. Do not delete fields.
 - Follow-ups: Push feature/nft-service; browser smoke RPG demo after pull.
 - Blockers: None.
 - Verification: Conflict markers cleared; commit merge.
+
+## 2026-07-16 - Codex with Nabil - De-pin Access Shield harden slice
+
+- Service or area: De-pin gateway (Access Shield enforcement plane).
+- Files changed: `services/depin/src/facilitator.ts` (+tests), `payment.ts`, `proxy.ts` (+status fields), `server.ts`, `scripts/smoke.mjs`, `depin.config.example.json`, `README.md`, `package.json`; `frontend` depinApi + DepinService readiness UI; `.env.example`; `docs/depin_local_smoke.md`; deploy script file-state default; `memory.md`.
+- Summary: Started focused De-pin work after NFT loop pause. Exposed facilitator settle readiness and multi-instance safety on `/status`; warn on production memory state and missing OZ key for Channels; added unpaid smoke script; dashboard shows settle/state banners; example config includes local NFT health route; docs runbook for unpaid + paid smoke.
+- Decisions: Accepted - Prefer file state for multi-process; unpaid probes remain valid without OZ key; paid settle via OZ Channels requires `OZ_API_KEY`. Accepted - Do not implement streaming/POST/redis in this slice.
+- Follow-ups: Live paid settle with OZ key when available; provider onboarding UI; redis store when multi-region needed; coordinate Access Shield control-plane with Agent Auth (Rushi).
+- Blockers: None for unpaid path. Paid settle needs human OZ_API_KEY + funded buyer for full proof.
+- Verification: `npm --prefix services/depin test` (expect 38+); FE depin unit tests; smoke script against running gateway when available.

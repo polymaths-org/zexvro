@@ -8,6 +8,7 @@
     "demo:client": "tsx src/demoClient.ts",
     "dev": "tsx watch src/server.ts",
     "lint": "eslint src --max-warnings=0",
+    "smoke": "node scripts/smoke.mjs",
     "start": "node dist/server.js",
     "test": "vitest run",
     "test:watch": "vitest"

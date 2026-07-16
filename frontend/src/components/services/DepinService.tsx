@@ -122,7 +122,8 @@ export default function DepinService() {
           </div>
           <h1 className="text-2xl font-semibold text-zinc-950 dark:text-white">x402 Gateway</h1>
           <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-500 dark:text-zinc-400">
-            Protect configured HTTP resources with exact per-request Stellar testnet USDC payments.
+            Access Shield enforcement plane: protect configured HTTP resources with exact per-request
+            Stellar testnet USDC payments. Unpaid probes return 402; paid settle needs a ready facilitator.
           </p>
         </div>
         <button
@@ -137,7 +138,7 @@ export default function DepinService() {
         </button>
       </header>
 
-      <section className="grid gap-px border-y border-zinc-200 bg-zinc-200 dark:border-zinc-800 dark:bg-zinc-800 sm:grid-cols-3" aria-label="De-pin gateway readiness">
+      <section className="grid gap-px border-y border-zinc-200 bg-zinc-200 dark:border-zinc-800 dark:bg-zinc-800 sm:grid-cols-2 lg:grid-cols-4" aria-label="De-pin gateway readiness">
         <div className="flex items-center gap-2 bg-white px-3 py-2.5 text-xs dark:bg-[#050506]">
           <RadioTower className={`h-4 w-4 ${health ? 'text-emerald-500' : 'text-zinc-400'}`} />
           <span className="text-zinc-500 dark:text-zinc-400">Gateway</span>
@@ -149,11 +150,49 @@ export default function DepinService() {
           <span className="ml-auto font-medium text-zinc-800 dark:text-zinc-200">{status?.capabilities?.scheme || 'Unknown'}</span>
         </div>
         <div className="flex items-center gap-2 bg-white px-3 py-2.5 text-xs dark:bg-[#050506]">
-          <ShieldCheck className={`h-4 w-4 ${status ? 'text-emerald-500' : 'text-zinc-400'}`} />
-          <span className="text-zinc-500 dark:text-zinc-400">Settlement</span>
-          <span className="ml-auto font-medium text-zinc-800 dark:text-zinc-200">{status ? 'Sponsored fees' : 'Unknown'}</span>
+          <ShieldCheck className={`h-4 w-4 ${status?.capabilities?.settleReady !== false ? 'text-emerald-500' : 'text-amber-500'}`} />
+          <span className="text-zinc-500 dark:text-zinc-400">Settle</span>
+          <span className="ml-auto font-medium text-zinc-800 dark:text-zinc-200">
+            {status
+              ? status.capabilities?.settleReady === false
+                ? 'Needs OZ key'
+                : 'Ready'
+              : 'Unknown'}
+          </span>
+        </div>
+        <div className="flex items-center gap-2 bg-white px-3 py-2.5 text-xs dark:bg-[#050506]">
+          <KeyRound className={`h-4 w-4 ${status?.multiInstanceSafe ? 'text-emerald-500' : 'text-amber-500'}`} />
+          <span className="text-zinc-500 dark:text-zinc-400">State</span>
+          <span className="ml-auto font-medium text-zinc-800 dark:text-zinc-200">
+            {status?.stateBackend
+              ? status.multiInstanceSafe
+                ? `${status.stateBackend} · multi-ok`
+                : `${status.stateBackend} · single`
+              : 'Unknown'}
+          </span>
         </div>
       </section>
+
+      {status && status.capabilities?.settleReady === false && (
+        <div className="flex items-start gap-2.5 border border-amber-500/25 bg-amber-500/5 px-3 py-2.5 text-sm text-amber-700 dark:text-amber-300" role="status">
+          <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            Facilitator requires auth for paid settle (OpenZeppelin Channels). Set{' '}
+            <code className="text-xs">OZ_API_KEY</code> in root <code className="text-xs">.env</code> and restart{' '}
+            <code className="text-xs">npm run dev:all</code>. Unpaid 402 probes still work.
+          </span>
+        </div>
+      )}
+
+      {status && status.multiInstanceSafe === false && (
+        <div className="flex items-start gap-2.5 border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950/40 dark:text-zinc-400" role="status">
+          <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            Replay/rate-limit state is in-memory (single process). For multi-instance hosts set{' '}
+            <code className="text-xs">DEPIN_STATE_BACKEND=file</code>.
+          </span>
+        </div>
+      )}
 
       {error && (
         <div className="flex items-center gap-2.5 border border-red-500/25 bg-red-500/5 px-3 py-2.5 text-sm text-red-600 dark:text-red-400" role="alert">
@@ -190,11 +229,12 @@ export default function DepinService() {
               <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Protected resources</h2>
               <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
                 {providers.length} configured route{providers.length === 1 ? '' : 's'} on {status?.capabilities?.network || 'stellar:testnet'}
+                {status?.configSource ? ` · config ${status.configSource.type}:${status.configSource.detail}` : ''}
               </p>
             </div>
-            <span className="inline-flex w-fit items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
-              <KeyRound className="h-3.5 w-3.5" />
-              Exact x402
+            <span className="inline-flex w-fit max-w-full items-center gap-1.5 truncate text-xs text-zinc-500 dark:text-zinc-400">
+              <KeyRound className="h-3.5 w-3.5 shrink-0" />
+              Exact x402 · {status?.capabilities?.facilitatorUrl || 'facilitator'}
             </span>
           </div>
           <div className="overflow-x-auto">

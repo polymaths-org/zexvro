@@ -12,6 +12,7 @@ import type {
   VerifiedPayment,
 } from './domain.js'
 import { JsonAuditLogger } from './audit.js'
+import { facilitatorSettleReadiness } from './facilitator.js'
 import { claimPaymentReplay } from './replay.js'
 import { MemoryRateLimitStore, MemoryReplayStore } from './stores.js'
 
@@ -81,15 +82,24 @@ export function createDepinApp(options: DepinAppOptions) {
   })
 
   app.get('/status', (_request, response) => {
+    const facilitator = facilitatorSettleReadiness(
+      config.facilitatorUrl,
+      environment,
+    )
     response.json({
       status: 'ok',
       service: 'depin',
       configSource,
       stateBackend,
+      multiInstanceSafe: stateBackend === 'file',
       capabilities: {
         scheme: 'exact',
         network: 'stellar:testnet',
         facilitatorUrl: config.facilitatorUrl,
+        facilitatorAuthConfigured: facilitator.authConfigured,
+        facilitatorOzChannels: facilitator.ozChannels,
+        settleAuthRequired: facilitator.settleAuthRequired,
+        settleReady: facilitator.settleReady,
         settlement: 'after_upstream_success',
         fees: 'sponsored',
         replayTtlMs: config.replayTtlMs,

@@ -655,7 +655,10 @@ const depinService = getOrCreateAppRunnerService({
   runtimeEnv: {
     NODE_ENV: 'production',
     PORT: '4102',
-    DEPIN_STATE_BACKEND: 'memory',
+    // Multi-instance-safe replay/rate-limit (ephemeral App Runner disk is per instance;
+    // still better than process memory when a single task restarts). Prefer redis later.
+    DEPIN_STATE_BACKEND: 'file',
+    DEPIN_STATE_PATH: '/tmp/depin-state.json',
   },
   runtimeSecrets: {
     DEPIN_CONFIG_JSON: depinSecretArn,

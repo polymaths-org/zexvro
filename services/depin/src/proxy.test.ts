@@ -190,11 +190,15 @@ describe('De-pin proxy', () => {
       service: 'depin',
       configSource: { type: 'file', detail: 'depin.config.json' },
       stateBackend: 'memory',
+      multiInstanceSafe: false,
       capabilities: {
         scheme: 'exact',
         network: 'stellar:testnet',
         settlement: 'after_upstream_success',
         fees: 'sponsored',
+        settleReady: true,
+        facilitatorAuthConfigured: false,
+        facilitatorOzChannels: false,
       },
       providers: [
         {

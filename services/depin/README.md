@@ -50,11 +50,11 @@ names (`upstreamSecretRef`); service owners do not bake secrets into the image.
 
 | `DEPIN_STATE_BACKEND` | Behavior |
 | --- | --- |
-| `memory` (default) | Single-process only |
-| `file` | Shared JSON file via `DEPIN_STATE_PATH` (default `.data/depin-state.json`) |
+| `memory` | Single-process only (not multi-instance safe) |
+| `file` | Shared JSON file via `DEPIN_STATE_PATH` (default `.data/depin-state.json`) — **prefer for multi-process / production** |
 | `redis` | Reserved; not implemented yet |
 
-Multi-instance hosts must not use `memory`.
+Root `.env.example` recommends `DEPIN_STATE_BACKEND=file`. Multi-instance hosts must not use `memory`. In `NODE_ENV=production` with memory, the gateway logs a warning unless `DEPIN_ALLOW_MEMORY_STATE=1`.
 
 V1 accepts concrete `GET` and `HEAD` routes only. Streaming, sessions, mutable POST compute, custom facilitators, physical-device adapters, and a provider marketplace remain outside this version.
 
@@ -66,29 +66,44 @@ npm run build
 DEPIN_CONFIG_PATH=depin.config.json npm start
 ```
 
-The gateway exposes `/health` for readiness and `/status` for the frontend setup screen. `/status` returns sanitized provider routes, prices, recipients, network, timeout policy, upstream origins, `configSource`, and `stateBackend`; it does not expose upstream secret values or secret reference names.
+The gateway exposes `/health` for readiness and `/status` for the frontend setup screen. `/status` returns sanitized provider routes, prices, recipients, network, timeout policy, upstream origins, `configSource`, `stateBackend`, `multiInstanceSafe`, and facilitator readiness (`settleReady`, `facilitatorAuthConfigured`, `facilitatorOzChannels`). It does not expose upstream secret values, secret reference names, or API keys.
 
-## Local testnet smoke test
+## Local smoke (unpaid)
 
-The machine-local `depin.config.json` is ignored by Git. With the gateway and
-its configured upstream running, an unpaid request should return HTTP `402`:
+```bash
+# From repo root (NFT API + De-pin + frontend)
+cp .env.example .env   # if needed
+cp services/depin/depin.config.example.json services/depin/depin.config.json
+# set recipient to your provider G-address in depin.config.json
+npm run dev:all
+
+# In another terminal
+npm --prefix services/depin run smoke
+# or: DEPIN_URL=http://127.0.0.1:4102 node services/depin/scripts/smoke.mjs
+```
+
+Manual unpaid probe:
 
 ```bash
 curl -i http://127.0.0.1:4102/v1/nft-health
 ```
 
-From the frontend dev server, the same gateway is available through `/api/depin` when Vite is running. The project De-pin screen uses `/api/depin/status` and an unpaid probe request to verify that the standard `PAYMENT-REQUIRED` challenge is returned.
+From the frontend, open **Resource Gateway → De-pin x402 Gateway** and use **Probe 402**. The screen shows settle readiness and multi-instance state.
 
-For a paid smoke test, fund the buyer identity with Stellar testnet USDC and
-run the bounded demo client. The command substitution keeps the secret out of
-the repository and shell history:
+## Paid settle smoke
+
+1. Prefer OpenZeppelin Channels facilitator URL in `depin.config.json` and set `OZ_API_KEY` in root `.env`.
+2. Fund the buyer identity with Stellar testnet USDC.
+3. Run the bounded demo client (keeps secrets out of history):
 
 ```bash
 STELLAR_PRIVATE_KEY="$(stellar keys secret zexvro-buyer)" \
 DEPIN_EXPECTED_RECIPIENT="$(stellar keys address zexvro-provider)" \
-npm run demo:client
+npm --prefix services/depin run demo:client
 ```
 
 The demo refuses a recipient mismatch or a payment above `10000` atomic USDC
 (`0.001 USDC`). Override `DEPIN_URL`, `DEPIN_EXPECTED_RECIPIENT`, or
 `DEPIN_MAX_PAYMENT_ATOMIC` only when deliberately testing another route.
+
+See also [`docs/depin_local_smoke.md`](../../docs/depin_local_smoke.md).

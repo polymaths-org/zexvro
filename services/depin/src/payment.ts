@@ -15,6 +15,7 @@ import type {
   ProviderConfig,
   VerifiedPayment,
 } from './domain.js'
+import { resolveFacilitatorApiKey } from './facilitator.js'
 
 export function buildX402Routes(providers: ProviderConfig[]): RoutesConfig {
   return Object.fromEntries(
@@ -49,10 +50,7 @@ export class X402PaymentProtocol implements PaymentProtocol {
     }
     // OZ Channels (recommended for Stellar x402) requires Bearer auth on testnet/mainnet.
     // Keep unauthenticated clients for public facilitators such as x402.org when no key is set.
-    const facilitatorApiKey =
-      process.env.OZ_API_KEY?.trim() ||
-      process.env.X402_FACILITATOR_API_KEY?.trim() ||
-      ''
+    const facilitatorApiKey = resolveFacilitatorApiKey()
     const facilitator = new HTTPFacilitatorClient({
       url: config.facilitatorUrl,
       ...(facilitatorApiKey === ''

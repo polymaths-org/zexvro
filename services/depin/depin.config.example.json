@@ -9,15 +9,14 @@
   },
   "providers": [
     {
-      "route": "/v1/weather",
+      "route": "/v1/nft-health",
       "method": "GET",
-      "upstreamUrl": "https://api.example.com/weather",
-      "description": "Current weather data",
+      "upstreamUrl": "http://127.0.0.1:4101/health",
+      "description": "ZEXVRO NFT API health (local smoke upstream)",
       "price": "$0.001",
       "recipient": "REPLACE_WITH_STELLAR_G_ADDRESS",
       "network": "stellar:testnet",
-      "timeoutMs": 5000,
-      "upstreamSecretRef": "WEATHER_API_TOKEN"
+      "timeoutMs": 5000
     }
   ]
 }
