@@ -251,6 +251,7 @@ describe('NFT API client', () => {
       collectionId: 'collection-id',
       preparedTransaction: 'prepared-sale',
       signedTransaction: 'signed-sale',
+      priceAtomic: '12500000',
       accessToken: 'token',
     });
     await submitPublicCheckoutIntent({

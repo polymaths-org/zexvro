@@ -1,0 +1,9 @@
+# Rust's output directory
+target
+
+# Local settings
+.soroban
+.stellar
+
+# Local ZK artifact backups (large zkey/wasm; keep on disk, not in git)
+backups/

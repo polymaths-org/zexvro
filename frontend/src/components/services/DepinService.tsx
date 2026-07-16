@@ -146,7 +146,7 @@ export default function DepinService() {
         <div className="flex items-center gap-2 bg-white px-3 py-2.5 text-xs dark:bg-[#050506]">
           <ReceiptText className={`h-4 w-4 ${status ? 'text-emerald-500' : 'text-zinc-400'}`} />
           <span className="text-zinc-500 dark:text-zinc-400">Scheme</span>
-          <span className="ml-auto font-medium text-zinc-800 dark:text-zinc-200">{status ? status.capabilities.scheme : 'Unknown'}</span>
+          <span className="ml-auto font-medium text-zinc-800 dark:text-zinc-200">{status?.capabilities?.scheme || 'Unknown'}</span>
         </div>
         <div className="flex items-center gap-2 bg-white px-3 py-2.5 text-xs dark:bg-[#050506]">
           <ShieldCheck className={`h-4 w-4 ${status ? 'text-emerald-500' : 'text-zinc-400'}`} />
@@ -189,7 +189,7 @@ export default function DepinService() {
             <div>
               <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Protected resources</h2>
               <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                {providers.length} configured route{providers.length === 1 ? '' : 's'} on {status?.capabilities.network}
+                {providers.length} configured route{providers.length === 1 ? '' : 's'} on {status?.capabilities?.network || 'stellar:testnet'}
               </p>
             </div>
             <span className="inline-flex w-fit items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">

@@ -36,11 +36,13 @@ export const errorHandler: ErrorRequestHandler = (error, _request, response, _ne
   }
 
   const message = error instanceof Error ? error.message : 'Unknown error'
+  console.error('[nft-api] internal_error', message, error)
   response.status(500).json({
     error: {
       code: 'internal_error',
       message: 'The NFT service could not complete the request',
-      details: process.env.NODE_ENV === 'production' ? undefined : message,
+      // Surface a short reason so the dashboard can show actionable text.
+      details: message.slice(0, 240),
     },
   })
 }
