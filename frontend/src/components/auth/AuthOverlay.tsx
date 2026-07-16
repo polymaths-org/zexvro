@@ -1,8 +1,6 @@
 import { AlertCircle, Check, ChevronRight, KeyRound, Lock, Mail, User } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import {
-  COGNITO_REGION,
-  COGNITO_USER_POOL_ID,
   confirmForgotPassword,
   confirmSignUp,
   forgotPassword,
@@ -154,11 +152,11 @@ export default function AuthOverlay({ onSuccess }: AuthOverlayProps) {
                 {isSignUp ? 'Create account' : isConfirm ? 'Confirm account' : isForgot ? 'Recover password' : isReset ? 'Set new password' : 'Sign in'}
               </h2>
               <p className="mt-1 text-sm text-zinc-500">
-                {isSignIn && 'Use your Cognito username and password.'}
-                {isSignUp && 'New users are created in your Cognito user pool.'}
+                {isSignIn && 'Sign in with your ZEXVRO account email or username.'}
+                {isSignUp && 'Create a workspace account to access services and projects.'}
                 {isConfirm && 'Enter the confirmation code sent to your email.'}
-                {isForgot && 'We will send a reset code through Cognito.'}
-                {isReset && 'Enter the reset code and your new password.'}
+                {isForgot && 'We will email a reset code to recover your password.'}
+                {isReset && 'Enter the reset code and choose a new password.'}
               </p>
             </div>
 
@@ -306,9 +304,9 @@ export default function AuthOverlay({ onSuccess }: AuthOverlayProps) {
               </div>
             </div>
 
-            <div className="mt-5 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-center text-[10px] font-mono text-zinc-500">
-              Region: {COGNITO_REGION} | Pool: {COGNITO_USER_POOL_ID.substring(0, 15)}...
-            </div>
+            <p className="mt-5 text-center text-[10px] text-zinc-600">
+              Secure workspace access · Stellar testnet ready
+            </p>
           </div>
         </main>
       </div>

@@ -158,7 +158,7 @@ function CreateProjectWizard({ onClose, onCreate, existingProjectNames }: {
   const [description, setDescription] = useState('');
   const [purpose, setPurpose] = useState('');
   const [network, setNetwork] = useState('Stellar Testnet');
-  const [enabledServices, setEnabledServices] = useState<string[]>([]);
+  const [enabledServices, setEnabledServices] = useState<string[]>(['srv-nft', 'srv-depin']);
 
   const steps = [
     { label: 'Basics', description: 'Name, purpose, and target network' },
@@ -276,7 +276,7 @@ function CreateProjectWizard({ onClose, onCreate, existingProjectNames }: {
                 { id: 'srv-trade', label: 'Agent-to-Agent Trade Pipeline', desc: 'Secure agent-to-agent negotiations and asset settlements.' },
                 { id: 'srv-agent-auth', label: 'Agent Authentication Service', desc: 'Verify human vs agent boundary with CAPTCHA-like controls.' },
                 { id: 'srv-nft', label: 'NFT Service', desc: 'Simple NFT deployment and drop management.' },
-                { id: 'srv-depin', label: 'De-pin Service', desc: 'Resource sharing and telemetry tracking (Pending scope).' },
+                { id: 'srv-depin', label: 'Access Shield (x402)', desc: 'Exact USDC-per-request gateway for protected HTTP routes.' },
               ].map(s => {
                 const isSelected = enabledServices.includes(s.id);
                 return (

@@ -57,12 +57,12 @@ If a detail is only a work update, keep it here.
 
 | Service | Owner | Current status | Edit rule |
 | --- | --- | --- | --- |
-| Zero-Knowledge Privacy Pool | Paris / `paris-29` | Planned | Ask or record coordination before changing core design |
+| Zero-Knowledge Privacy Pool (Zer0) | Paris / `paris-29` | **Complete (product UI)** — suite, privacy pool, stealth, settings client-facing | Ask before changing core proving/pool design; product UX marked complete 2026-07-17 |
 | Transformation Agent (Morph) | Paris / `paris-29` | **In Progress — CLI built** | Owned by Paris. CLI skeleton done. Next: wire LLM, add web panel. |
 | A-2-A Trade Pipeline | Rushi / `Wraient` | Planned | Ask or record coordination before changing protocol, wallet, or negotiation design |
 | Captcha-like Agent Authentication Service | Rushi / `Wraient` | Planned | Ask or record coordination before changing identity, SDK, classifier, or HDM design |
-| NFT Service | Nabil / `n4bi10p` | Authenticated API/frontend + inventory; S3 media + Dynamo repository code ready (file/local defaults) | Ask or record coordination before changing minting, metadata, checkout, or NFT model |
-| De-pin | Nabil / `n4bi10p` | Live Stellar testnet x402 payment verified | Follow the accepted exact per-request x402 scope |
+| NFT Service | Nabil / `n4bi10p` + Paris | **Complete (product UI)** — create cinema, studio dashboard, public checkout, SDK, docs | Ask before changing minting, metadata, checkout, or NFT model |
+| De-pin | Nabil / `n4bi10p` | **In progress** — CORS/status harden on branch; full Access Shield product testing **tomorrow** | Follow exact per-request x402 scope; redeploy App Runner before claiming live CORS |
 
 Shared areas that need extra care:
 
@@ -865,3 +865,13 @@ Use `None` for empty fields. Do not delete fields.
 - Follow-ups: Live paid settle with OZ key when available; provider onboarding UI; redis store when multi-region needed; coordinate Access Shield control-plane with Agent Auth (Rushi).
 - Blockers: None for unpaid path. Paid settle needs human OZ_API_KEY + funded buyer for full proof.
 - Verification: `npm --prefix services/depin test` (expect 38+); FE depin unit tests; smoke script against running gateway when available.
+
+## 2026-07-17 - Codex with Paris - NFT + Zer0 product complete; De-pin paused for tomorrow
+
+- Service or area: NFT Service, Zer0 UI, brand cinema, client settings, De-pin gateway harden (code-only).
+- Files changed (high level): NFT create cinema + success modal, CollectionStudio dashboard (ledger charts, delete, URLs), nftApi hosted default + get-by-id, brand/boot assets, Auth/Settings AWS scrub, Depin CORS + multiInstance honesty, `/docs` NFT section, `memory.md`/`context.md`.
+- Summary: Marked **NFT** and **Zer0** product surfaces complete for client use. NFT: mission-brief through Freighter, launch finale, success popup (dashboard/manage/delete), studio analytics, docs at `/docs`. Zer0: client settings without EC2/AWS region/Cognito debug UI. De-pin: CORS + expose x402 headers + FE base URL default; **full Depin product testing deferred to tomorrow** — do not merge this branch yet.
+- Decisions: Accepted - NFT/Zer0 = complete for product UI on this branch. Accepted - De-pin remains in progress (redeploy + paid settle smoke still open). Accepted - Push branch only; **no merge to main**.
+- Follow-ups (tomorrow): Depin service E2E (App Runner redeploy, CORS from Pages, OZ settle, probe 402 from dashboard). Optional: fuel/assemble videos if product wants multi-stage cinema again.
+- Blockers: None for NFT/Zer0. Depin live CORS depends on redeploy of hardened gateway image.
+- Verification: FE NFT unit suite green earlier; Depin gateway 40/40 + FE depin 5/5 earlier; typecheck green on studio/hooks fixes.

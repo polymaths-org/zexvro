@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   AlertCircle, BookOpen, Check, CheckCircle2, Copy, ExternalLink, Loader2,
-  Lock, Shield, X, Zap,
+  Lock, Shield, X,
 } from 'lucide-react';
 import {
   isPaymentInFlight,
@@ -326,7 +326,7 @@ export default function PaymentProcessingModal() {
               ) : session.shielded ? (
                 <Lock className="h-5 w-5" />
               ) : (
-                <Zap className="h-5 w-5" />
+                <img src="/brand/Logo.png" alt="" className="h-5 w-5 object-contain" draggable={false} />
               )}
             </div>
             <div className="min-w-0">

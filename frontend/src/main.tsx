@@ -4,9 +4,13 @@ import { RouterProvider } from '@tanstack/react-router';
 import { router } from './routes/router';
 import { prefetchZkArtifacts, syncNotesFromAws, syncSigningPreferenceFromStorage } from './api/privacyPool';
 import { startPaymentResumeWatcher } from './lib/paymentResume';
+import { ensureBrandAssetsCached } from './lib/brandAssets';
 import { reconcileStaleZer0State } from './stores/zer0';
 import PaymentSessionHost from './components/zer0/PaymentSessionHost';
 import './index.css';
+
+// Local brand loader + intro: Cache API + session object URLs (no CDN re-fetch)
+void ensureBrandAssetsCached();
 
 // Restore ZK notes + Freighter vs auto-sign preference; warm Groth16 artifacts
 syncSigningPreferenceFromStorage();

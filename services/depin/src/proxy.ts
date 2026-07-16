@@ -48,6 +48,34 @@ const passthroughResponseHeaders = [
   'last-modified',
 ] as const
 
+const EXPOSED_HEADERS = [
+  'PAYMENT-REQUIRED',
+  'PAYMENT-RESPONSE',
+  'X-Request-Id',
+  'Retry-After',
+].join(', ')
+
+const DEFAULT_CORS_ORIGINS = [
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'http://localhost:4173',
+  'http://127.0.0.1:4173',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'https://zexvrodashboard.xyz',
+  'https://www.zexvrodashboard.xyz',
+  'https://zexvro.pages.dev',
+]
+
+function parseCorsOrigins(environment: NodeJS.ProcessEnv): string[] {
+  const raw = environment.CORS_ALLOWED_ORIGINS || environment.DEPIN_CORS_ORIGINS
+  if (raw === undefined || raw.trim() === '') return DEFAULT_CORS_ORIGINS
+  return raw
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+}
+
 export function createDepinApp(options: DepinAppOptions) {
   const {
     config,
@@ -62,9 +90,36 @@ export function createDepinApp(options: DepinAppOptions) {
     now = Date.now,
   } = options
 
+  const allowedOrigins = parseCorsOrigins(environment)
+  // App Runner /tmp file store is per-instance — not shared across scale-out.
+  const multiInstanceSafe =
+    stateBackend === 'file' && environment.DEPIN_SHARED_STATE === '1'
+
   const app = express()
   app.disable('x-powered-by')
-  app.set('trust proxy', false)
+  // App Runner / proxies set X-Forwarded-For — needed for unpaid rate limits.
+  app.set('trust proxy', 1)
+
+  app.use((request, response, next) => {
+    const origin = request.header('Origin')
+    if (origin && allowedOrigins.includes(origin)) {
+      response.setHeader('Access-Control-Allow-Origin', origin)
+      response.setHeader('Vary', 'Origin')
+      response.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')
+      response.setHeader(
+        'Access-Control-Allow-Headers',
+        'Accept, Content-Type, PAYMENT-SIGNATURE, X-Request-Id',
+      )
+      response.setHeader('Access-Control-Expose-Headers', EXPOSED_HEADERS)
+      response.setHeader('Access-Control-Max-Age', '600')
+    }
+
+    if (request.method === 'OPTIONS') {
+      response.status(204).end()
+      return
+    }
+    next()
+  })
 
   app.use((request, response, next) => {
     const supplied = request.header('X-Request-Id')
@@ -91,7 +146,7 @@ export function createDepinApp(options: DepinAppOptions) {
       service: 'depin',
       configSource,
       stateBackend,
-      multiInstanceSafe: stateBackend === 'file',
+      multiInstanceSafe,
       capabilities: {
         scheme: 'exact',
         network: 'stellar:testnet',

@@ -26,6 +26,8 @@ import {
   X,
 } from 'lucide-react';
 import type { NftCollection } from '../../types';
+import NftLaunchCinema from '../../components/NftLaunchCinema';
+import SectionSkeleton from '../../components/ui/SectionSkeleton';
 import { loadCollections } from './collectionStore';
 import {
   archiveNftCollection,
@@ -127,6 +129,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
   const [actionError, setActionError] = useState('');
   const [actionMessage, setActionMessage] = useState('');
   const [busyCollectionId, setBusyCollectionId] = useState('');
+  const [launchOpen, setLaunchOpen] = useState(false);
   const [editingCollection, setEditingCollection] = useState<ApiNftCollection | null>(null);
   const [editDraft, setEditDraft] = useState({
     name: '',
@@ -214,6 +217,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
 
   const retryCollection = async (collection: ApiNftCollection) => {
     setBusyCollectionId(collection.id);
+    setLaunchOpen(true);
     setActionError('');
     setActionMessage('');
     try {
@@ -223,6 +227,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
     } catch (error) {
       setActionError(errorMessage(error));
     } finally {
+      setLaunchOpen(false);
       setBusyCollectionId('');
     }
   };
@@ -591,6 +596,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
+      <NftLaunchCinema open={launchOpen} stage="assemble" label="Redeploying collection…" />
       <header className="flex flex-col gap-4 border-b border-zinc-200 pb-5 dark:border-zinc-900 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <div className="mb-2 flex items-center gap-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">
@@ -686,8 +692,8 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
       )}
 
       {loading ? (
-        <section className="flex min-h-56 items-center justify-center border-y border-zinc-200 dark:border-zinc-900" aria-label="Loading collections">
-          <LoaderCircle className="h-5 w-5 animate-spin text-zinc-400" />
+        <section aria-label="Loading collections">
+          <SectionSkeleton rows={5} label="Loading collections" />
         </section>
       ) : !hasAnyCollections ? (
         <section className="border-y border-zinc-200 py-16 text-center dark:border-zinc-900 sm:py-24">

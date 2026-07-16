@@ -1,7 +1,15 @@
 import type { CollectionStatus } from '../../types';
 import { ensureValidAccessToken, isAccessTokenExpired } from '../../auth/cognito';
 
-const NFT_API_BASE = (import.meta.env.VITE_NFT_API_URL || '/api/nft').replace(/\/$/, '');
+const HOSTED_NFT_API = 'https://iyk6idmup6.us-east-1.awsapprunner.com';
+const configuredNftApi = (import.meta.env.VITE_NFT_API_URL || '').trim().replace(/\/$/, '');
+// Prefer explicit env; fall back to hosted App Runner so local/Pages never hit a dead proxy or SPA HTML 200.
+const NFT_API_BASE = configuredNftApi || HOSTED_NFT_API;
+
+/** Shared API origin for dashboard + SDK snippets. */
+export function getNftApiBaseUrl(): string {
+  return NFT_API_BASE;
+}
 
 export interface NftServiceHealth {
   status: 'ok';
@@ -161,19 +169,31 @@ export class NftApiError extends Error {
 
 async function readJson(response: Response): Promise<unknown> {
   const contentType = response.headers.get('content-type') || '';
-  if (!contentType.includes('application/json')) {
-    // Pages SPA fallback serves HTML for unknown paths — never treat as API JSON.
-    return undefined;
+  if (contentType.includes('application/json')) {
+    return response.json().catch(() => undefined);
   }
-  return response.json().catch(() => undefined);
+
+  // Some proxies omit content-type; try parse body when it looks like JSON.
+  const text = await response.text().catch(() => '');
+  const trimmed = text.trim();
+  if (!trimmed) return undefined;
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    try {
+      return JSON.parse(trimmed) as unknown;
+    } catch {
+      return undefined;
+    }
+  }
+  // HTML / SPA shell / plain text — never treat as API JSON.
+  return undefined;
 }
 
-function assertJsonPayload(payload: unknown, path: string): asserts payload is object {
+function assertJsonPayload(payload: unknown, path: string, status: number): asserts payload is object {
   if (payload === null || payload === undefined || typeof payload !== 'object') {
     throw new NftApiError(
-      502,
+      status >= 200 && status < 300 ? 502 : status,
       'invalid_nft_api_response',
-      `NFT API returned a non-JSON response for ${path}. Check VITE_NFT_API_URL points at the NFT service (not the static site).`,
+      `NFT API returned a non-JSON ${status} for ${path} (base ${NFT_API_BASE}). Set VITE_NFT_API_URL to the App Runner NFT API, not the static site.`,
     );
   }
 }
@@ -226,10 +246,14 @@ async function requestJson<T>(
 
   if (!response.ok) {
     const apiError = payload as ApiErrorPayload | undefined;
+    const detail =
+      typeof apiError?.error?.details === 'string'
+        ? ` — ${apiError.error.details}`
+        : '';
     throw new NftApiError(
       response.status,
       apiError?.error?.code || 'nft_api_error',
-      apiError?.error?.message || `NFT service request failed (${response.status})`,
+      (apiError?.error?.message || `NFT service request failed (${response.status})`) + detail,
       apiError?.error?.details,
     );
   }
@@ -241,7 +265,7 @@ async function requestJson<T>(
 
   // Never treat HTML/empty 200 as success — that previously returned undefined and
   // crashed callers with "can't access property X of undefined" (e.g. capabilities).
-  assertJsonPayload(payload, path);
+  assertJsonPayload(payload, path, response.status);
   return payload as T;
 }
 
@@ -309,6 +333,44 @@ export async function createNftCollection(
     );
   }
   return result.collection;
+}
+
+export async function getNftCollection(
+  collectionId: string,
+  accessToken: string,
+  signal?: AbortSignal,
+) {
+  const result = await requestJson<{ collection?: ApiNftCollection }>(
+    `/v1/collections/${encodeURIComponent(collectionId)}`,
+    { signal },
+    accessToken,
+  );
+  if (!result?.collection) {
+    throw new NftApiError(
+      502,
+      'invalid_nft_api_response',
+      'NFT collection response was empty. Sign in again and retry.',
+    );
+  }
+  return result.collection;
+}
+
+export async function getNftCollectionStatus(
+  collectionId: string,
+  accessToken: string,
+  signal?: AbortSignal,
+) {
+  return requestJson<{
+    id: string;
+    status: Exclude<CollectionStatus, 'draft'>;
+    contractId?: string;
+    deploymentTxHash?: string;
+    failureReason?: string;
+  }>(
+    `/v1/collections/${encodeURIComponent(collectionId)}/status`,
+    { signal },
+    accessToken,
+  );
 }
 
 export async function updateNftCollection(

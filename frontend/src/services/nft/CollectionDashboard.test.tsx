@@ -8,6 +8,7 @@ import { createCollection } from './collectionStore';
 const api = vi.hoisted(() => ({
   archiveNftCollection: vi.fn(),
   deleteNftCollection: vi.fn(),
+  getNftApiBaseUrl: vi.fn(() => 'https://iyk6idmup6.us-east-1.awsapprunner.com'),
   getNftServiceHealth: vi.fn(),
   listCollectionItems: vi.fn(),
   listNftCollections: vi.fn(),
@@ -221,7 +222,7 @@ describe('CollectionDashboard', () => {
 
     await user.click(await screen.findByTitle('Update primary sale'));
     expect(screen.getByRole('heading', { name: 'Primary sale configured' })).toBeInTheDocument();
-    expect(screen.getByText('1.25 USDC')).toBeInTheDocument();
+    expect(screen.getByText('1.25 XLM')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /update sale/i })).toBeInTheDocument();
   });
 

@@ -53,11 +53,13 @@ import DocsLibrary from '../components/docs/DocsLibrary';
 import PublicCollection from '../services/nft/PublicCollection';
 import EmbedCheckout from '../services/nft/EmbedCheckout';
 
+import BrandLoader from '../components/BrandLoader';
+
 const MarketingPage = React.lazy(() => import('../marketing/MarketingPage'));
 const WithdrawPage = React.lazy(() => import('../components/withdraw/WithdrawPage'));
 
 function AppFallback() {
-  return <div className="min-h-screen bg-[#050505] text-zinc-100" />;
+  return <BrandLoader fullscreen size="lg" />;
 }
 
 function MarketingRoute() {
@@ -175,11 +177,7 @@ function DashboardShortcutRedirect({ section }: { section: 'agent' | 'services' 
     navigate({ to: '/dashboard' });
   }, [navigate, section, workspaces]);
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-[#050505]">
-      <div className="h-8 w-8 border-2 border-zinc-300 dark:border-zinc-700 border-t-blue-500 rounded-full animate-spin" />
-    </div>
-  );
+  return <BrandLoader fullscreen size="md" label="Opening console…" />;
 }
 
 const rootRoute = createRootRoute({
@@ -581,11 +579,15 @@ function DashboardIndexRedirect() {
   }, [workspaceStore.workspaces.length]);
 
   return (
-    <div className="min-h-[60vh] flex items-center justify-center">
-      <div className="text-center space-y-3">
-        <div className="h-8 w-8 mx-auto border-2 border-zinc-300 dark:border-zinc-700 border-t-blue-500 rounded-full animate-spin" />
-        <p className="text-sm text-zinc-500">Loading workspace…</p>
+    <div className="mx-auto w-full max-w-3xl space-y-3 p-6" role="status" aria-label="Loading workspace">
+      <div className="h-5 w-40 rounded bg-zinc-200 dark:bg-zinc-900 animate-pulse" />
+      <div className="h-4 w-full max-w-md rounded bg-zinc-200 dark:bg-zinc-900 animate-pulse" />
+      <div className="mt-4 space-y-2">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="h-12 rounded-lg bg-zinc-100 dark:bg-zinc-900/80 animate-pulse" />
+        ))}
       </div>
+      <p className="pt-2 text-sm text-zinc-500">Loading workspace…</p>
     </div>
   );
 }

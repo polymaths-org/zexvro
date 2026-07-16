@@ -1,4 +1,5 @@
 import type { PaymentSessionPhase } from '../../stores/paymentSession';
+import BrandLoader from '../BrandLoader';
 
 const STAGES = [
   { id: 'wake', short: 'Prover', title: 'Prover' },
@@ -7,6 +8,15 @@ const STAGES = [
   { id: 'prove', short: 'Prove', title: 'Prove' },
   { id: 'withdraw', short: 'Withdraw', title: 'Withdraw' },
 ] as const;
+
+function StepSpinner({ className = '' }: { className?: string }) {
+  return (
+    <svg className={`animate-spin ${className}`} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" className="opacity-20" />
+      <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 /** Simple custom icons (no Lucide) */
 function IconCheck({ className = '' }: { className?: string }) {
@@ -41,11 +51,15 @@ function IconGhostAddr({ className = '' }: { className?: string }) {
   );
 }
 
-function IconBolt({ className = '' }: { className?: string }) {
+function IconBrandLogo({ className = '' }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path d="M13 2L5 13h6l-1 9 9-13h-6l0-7z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
-    </svg>
+    <img
+      src="/brand/Logo.png"
+      alt=""
+      aria-hidden
+      className={`object-contain ${className}`}
+      draggable={false}
+    />
   );
 }
 
@@ -55,21 +69,6 @@ function IconAlert({ className = '' }: { className?: string }) {
       <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" />
       <path d="M12 7v6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
       <circle cx="12" cy="16.5" r="1" fill="currentColor" />
-    </svg>
-  );
-}
-
-/** Standard circular loader */
-function StandardLoader({ className = '' }: { className?: string }) {
-  return (
-    <svg className={`animate-spin ${className}`} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" className="opacity-20" />
-      <path
-        d="M21 12a9 9 0 0 0-9-9"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-      />
     </svg>
   );
 }
@@ -118,7 +117,7 @@ export default function SettleCinema({
       ? IconCheck
       : shielded
         ? (stealth ? IconGhostAddr : IconLock)
-        : IconBolt;
+        : IconBrandLogo;
 
   const coreTone = error
     ? 'bg-red-500/10 text-red-600 dark:text-red-400 ring-red-500/20'
@@ -136,12 +135,9 @@ export default function SettleCinema({
     <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 px-3.5 py-4 dark:border-zinc-800 dark:bg-zinc-900/40">
       {/* Center status */}
       <div className="mb-4 flex flex-col items-center gap-3">
-        <div className={`relative flex h-14 w-14 items-center justify-center rounded-2xl ring-1 ${coreTone}`}>
+        <div className={`relative flex h-16 w-16 items-center justify-center rounded-2xl ring-1 ${coreTone}`}>
           {inFlight ? (
-            <>
-              <StandardLoader className="absolute h-14 w-14 text-zinc-400 dark:text-zinc-500" />
-              <CoreIcon className="relative h-5 w-5" />
-            </>
+            <BrandLoader bare size="lg" />
           ) : (
             <CoreIcon className="h-6 w-6" />
           )}
@@ -210,7 +206,7 @@ export default function SettleCinema({
                 {complete ? (
                   <IconCheck className="h-3 w-3" />
                 ) : active ? (
-                  <StandardLoader className="h-3.5 w-3.5" />
+                  <StepSpinner className="h-3.5 w-3.5" />
                 ) : (
                   i + 1
                 )}

@@ -14,10 +14,14 @@ vi.mock('../../services/depin/depinApi', () => api);
 const status = {
   status: 'ok',
   service: 'depin',
+  stateBackend: 'memory' as const,
+  multiInstanceSafe: false,
+  configSource: { type: 'file' as const, detail: 'depin.config.json' },
   capabilities: {
     scheme: 'exact',
     network: 'stellar:testnet',
     facilitatorUrl: 'https://x402.org/facilitator',
+    settleReady: true,
     settlement: 'after_upstream_success',
     fees: 'sponsored',
     replayTtlMs: 600000,
@@ -77,5 +81,22 @@ describe('DepinService', () => {
     expect(await screen.findByText('PAYMENT-REQUIRED')).toBeInTheDocument();
     expect(screen.getByText('0.001 USDC')).toBeInTheDocument();
     expect(api.probeDepinProvider).toHaveBeenCalledWith(status.providers[0]);
+  });
+
+  it('surfaces single-instance state and OZ settle warnings', async () => {
+    api.getDepinStatus.mockResolvedValue({
+      ...status,
+      multiInstanceSafe: false,
+      capabilities: {
+        ...status.capabilities,
+        settleReady: false,
+      },
+    });
+
+    render(<DepinService />);
+
+    expect(await screen.findByText(/Needs OZ key/i)).toBeInTheDocument();
+    expect(screen.getByText(/OZ_API_KEY/i)).toBeInTheDocument();
+    expect(screen.getByText(/single-instance/i)).toBeInTheDocument();
   });
 });

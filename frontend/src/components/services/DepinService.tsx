@@ -21,6 +21,7 @@ import {
   type DepinProvider,
   type DepinStatus,
 } from '../../services/depin/depinApi';
+import SectionSkeleton from '../ui/SectionSkeleton';
 
 function shortAddress(value: string) {
   return value.length > 18 ? `${value.slice(0, 9)}...${value.slice(-7)}` : value;
@@ -188,8 +189,10 @@ export default function DepinService() {
         <div className="flex items-start gap-2.5 border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950/40 dark:text-zinc-400" role="status">
           <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
-            Replay/rate-limit state is in-memory (single process). For multi-instance hosts set{' '}
-            <code className="text-xs">DEPIN_STATE_BACKEND=file</code>.
+            State backend is <code className="text-xs">{status.stateBackend || 'memory'}</code> (single-instance).
+            App Runner scale-out needs a shared store; for one instance use{' '}
+            <code className="text-xs">DEPIN_STATE_BACKEND=file</code>. Shared multi-ok requires{' '}
+            <code className="text-xs">DEPIN_SHARED_STATE=1</code> on a shared volume.
           </span>
         </div>
       )}
@@ -209,8 +212,8 @@ export default function DepinService() {
       )}
 
       {loading ? (
-        <section className="flex min-h-56 items-center justify-center border-y border-zinc-200 dark:border-zinc-900" aria-label="Loading De-pin gateway">
-          <LoaderCircle className="h-5 w-5 animate-spin text-zinc-400" />
+        <section aria-label="Loading De-pin gateway">
+          <SectionSkeleton rows={5} label="Loading De-pin gateway" />
         </section>
       ) : providers.length === 0 ? (
         <section className="border-y border-zinc-200 py-16 text-center dark:border-zinc-900 sm:py-24">
@@ -219,7 +222,9 @@ export default function DepinService() {
           </span>
           <h2 className="mt-5 text-lg font-semibold text-zinc-950 dark:text-white">No protected routes configured</h2>
           <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-zinc-500 dark:text-zinc-400">
-            Add a local gateway config before using this project screen.
+            {status?.configSource
+              ? `Gateway config source is ${status.configSource.type}:${status.configSource.detail}, but it defines zero providers. Update DEPIN_CONFIG_JSON / Secrets Manager or local depin.config.json and restart the gateway.`
+              : 'Configure providers via local depin.config.json, DEPIN_CONFIG_JSON, or the App Runner secret zexvro/depin/config-json, then refresh.'}
           </p>
         </section>
       ) : (

@@ -4,10 +4,10 @@ import {
   Boxes,
   CircleAlert,
   Image,
-  LoaderCircle,
   Plus,
   RefreshCw,
 } from 'lucide-react';
+import SectionSkeleton from '../../components/ui/SectionSkeleton';
 import {
   getNftServiceHealth,
   listNftCollections,
@@ -23,7 +23,10 @@ interface CollectionListProps {
 }
 
 function errorMessage(error: unknown) {
-  if (error instanceof Error && error.message) return error.message;
+  if (error instanceof Error && error.message) {
+    // Surface real API/auth failures; avoid bare "200" looking like success.
+    return error.message;
+  }
   return 'NFT API unavailable';
 }
 
@@ -118,9 +121,7 @@ export default function CollectionList({
       )}
 
       {loading ? (
-        <div className="flex min-h-48 items-center justify-center">
-          <LoaderCircle className="h-5 w-5 animate-spin text-zinc-400" />
-        </div>
+        <SectionSkeleton rows={4} label="Loading collections" />
       ) : collections.length === 0 ? (
         <section className="border-y border-zinc-200 py-16 text-center dark:border-zinc-900">
           <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg border border-zinc-200 text-brand-blue dark:border-zinc-800">

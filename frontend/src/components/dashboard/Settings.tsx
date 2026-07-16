@@ -206,37 +206,26 @@ export default function SettingsView({
             </div>
           </div>
 
-          {/* Environment Variables Pane */}
+          {/* Client-facing workspace / Web3 summary (no cloud infra IDs) */}
           <div className="p-5 rounded-lg border border-zinc-200 dark:border-[#27272A] bg-white dark:bg-[#0A0A0B] space-y-4">
-            <span className="text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wide block font-sans">Environment parameters</span>
-
-            <div className="p-3 border border-red-500/20 bg-red-500/5 rounded text-red-500 text-xs flex items-start gap-2.5 font-sans">
-              <ShieldAlert className="h-4.5 w-4.5 shrink-0 mt-0.5" />
-              <div>
-                <span className="font-semibold uppercase">Secret Exposure Warning</span>
-                <p className="text-xs mt-0.5 leading-relaxed text-zinc-500">
-                  Never commit Stellar secret seeds, API keys, wallet seeds, or real credentials. Use placeholders until a secrets manager is designed.
-                </p>
-              </div>
-            </div>
-
+            <span className="text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wide block font-sans">Workspace defaults</span>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+              What matters for your Web3 work: network, privacy mode, and agent chat provider. Cloud regions and auth pools are managed by ZEXVRO — not configured here.
+            </p>
             <div className="space-y-3 font-sans text-xs">
               {[
-                { name: 'STELLAR_NETWORK', value: 'testnet', type: 'Config' },
-                { name: 'PRIVACY_PROOF_MODE', value: 'draft', type: 'Config' },
-                { name: 'AWS_REGION', value: import.meta.env.VITE_AWS_REGION || 'us-east-1', type: 'Cloud Provision' },
-                { name: 'COGNITO_USER_POOL_ID', value: import.meta.env.VITE_COGNITO_USER_POOL_ID || 'us-east-1_vyONcitBD', type: 'Cloud Provision' },
-                { name: 'COGNITO_CLIENT_ID', value: import.meta.env.VITE_COGNITO_CLIENT_ID || '7qmkq33si9qk8pgo6ebi3qantm', type: 'Cloud Provision' },
-                { name: 'OPENCODE_PROVIDER', value: agentSettings.provider, type: 'Agent Chat' },
-                { name: 'OPENCODE_MODEL', value: agentSettings.model, type: 'Agent Chat' },
-                { name: 'OPENCODE_API_KEY', value: agentSettings.apiKey ? 'stored in AWS memory' : 'not stored', type: 'Secret Proxy' }
+                { name: 'Stellar network', value: 'Testnet', type: 'Chain' },
+                { name: 'Privacy proof mode', value: 'Draft / ZK pool', type: 'Zer0' },
+                { name: 'Agent provider', value: agentSettings.provider || '—', type: 'Agent' },
+                { name: 'Agent model', value: agentSettings.model || '—', type: 'Agent' },
+                { name: 'Agent API key', value: agentSettings.apiKey ? 'Saved for your account' : 'Not set', type: 'Agent' },
               ].map((env) => (
                 <div key={env.name} className="flex items-center justify-between p-2.5 rounded bg-zinc-50/50 dark:bg-zinc-900/30 border border-zinc-100 dark:border-zinc-800">
                   <div className="min-w-0">
                     <span className="font-semibold text-zinc-850 dark:text-zinc-200 block truncate">{env.name}</span>
-                    <span className="text-[10px] text-zinc-400">Class: {env.type}</span>
+                    <span className="text-[10px] text-zinc-400">{env.type}</span>
                   </div>
-                  <span className="text-zinc-500 text-[11px] font-mono bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded shrink-0">{env.value}</span>
+                  <span className="text-zinc-500 text-[11px] font-mono bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded shrink-0 max-w-[50%] truncate">{env.value}</span>
                 </div>
               ))}
             </div>
@@ -254,7 +243,7 @@ export default function SettingsView({
             </div>
 
             <p className="text-xs text-zinc-550 dark:text-zinc-400 font-sans leading-normal">
-              Provider defaults are pinned for the prototype. Saved provider settings are written through the AWS memory API for the signed-in user.
+              Morph / OpenCode settings for your account. Provider, model, and key stay private to your signed-in session.
             </p>
 
             <div className="space-y-4 font-sans text-xs">
@@ -304,14 +293,14 @@ export default function SettingsView({
                   className="w-full rounded border border-zinc-200 bg-zinc-55/30 px-3 py-2 text-xs text-zinc-850 dark:border-zinc-800 dark:bg-zinc-950/50 dark:text-zinc-200 focus:outline-none focus:border-brand-blue transition-colors font-mono disabled:opacity-50"
                 />
                 <p className="mt-1.5 text-[10px] leading-normal text-zinc-400">
-                  Save it to AWS memory for this signed-in user, or set OPENCODE_API_KEY in the dev server env.
+                  Saved to your account for Morph agent chat. Never share this key publicly.
                 </p>
               </div>
 
               {/* Base URL override */}
               <div>
                 <label className="text-[10px] font-bold text-zinc-400 dark:text-zinc-550 block mb-1.5 uppercase">
-                  API Endpoint Base URL (Optional)
+                  Model API base URL (optional)
                 </label>
                 <input
                   type="text"
@@ -350,7 +339,7 @@ export default function SettingsView({
                 )}
                 {saveStatus === 'error' && (
                   <span className="text-rose-500 font-semibold flex items-center gap-1">
-                    <ShieldAlert className="h-4 w-4" /> AWS save failed
+                    <ShieldAlert className="h-4 w-4" /> Save failed
                   </span>
                 )}
                 {saveStatus === 'dirty' && (

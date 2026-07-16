@@ -39,9 +39,11 @@ createDepinApp({
   replayStore: state.replayStore,
   rateLimitStore: state.rateLimitStore,
 }).listen(config.port, () => {
+  const multiInstanceSafe =
+    state.backend === 'file' && process.env.DEPIN_SHARED_STATE === '1'
   console.log(
     `De-pin gateway listening on http://localhost:${String(config.port)} ` +
       `configSource=${source.type}:${source.detail} stateBackend=${state.backend} ` +
-      `settleReady=${String(facilitator.settleReady)} multiInstanceSafe=${String(state.backend === 'file')}`,
+      `settleReady=${String(facilitator.settleReady)} multiInstanceSafe=${String(multiInstanceSafe)}`,
   )
 })

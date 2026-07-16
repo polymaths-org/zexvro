@@ -7,6 +7,7 @@ import {
   ShieldCheck,
   ShoppingCart,
 } from 'lucide-react';
+import BrandLoader from '../../components/BrandLoader';
 import {
   collectionLogo,
   createPublicCheckoutIntent,
@@ -169,8 +170,8 @@ export default function PublicCollection() {
 
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#050506] text-white">
-        <LoaderCircle className="h-6 w-6 animate-spin text-zinc-500" />
+      <main className="flex min-h-screen items-center justify-center bg-[#141416] text-white">
+        <BrandLoader size="lg" />
       </main>
     );
   }

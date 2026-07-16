@@ -6,6 +6,8 @@ import {
   type DepinProvider,
 } from './depinApi';
 
+const DEPIN_BASE = 'https://sr9k3xpmbj.us-east-1.awsapprunner.com';
+
 const provider: DepinProvider = {
   route: '/v1/nft-health',
   method: 'GET',
@@ -65,8 +67,8 @@ describe('De-pin API client', () => {
     expect(status.providers[0]?.route).toBe('/v1/nft-health');
     expect(status.capabilities.settleReady).toBe(true);
     expect(status.multiInstanceSafe).toBe(false);
-    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/depin/health', expect.any(Object));
-    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/depin/status', expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(1, `${DEPIN_BASE}/health`, expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, `${DEPIN_BASE}/status`, expect.any(Object));
   });
 
   it('probes a provider and decodes the standard x402 challenge header', async () => {

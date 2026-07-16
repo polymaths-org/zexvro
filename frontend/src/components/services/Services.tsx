@@ -11,14 +11,17 @@ import {
   Key,
   Layers,
   Lock,
+  Power,
+  PowerOff,
   Radio,
   ShieldCheck,
   Sparkles,
   X,
 } from 'lucide-react';
-import { Service } from '../../types';
+import { useNavigate, useParams, useRouterState } from '@tanstack/react-router';
 import { motion, AnimatePresence } from 'motion/react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import type { Service } from '../../types';
+import { useProjectStore } from '../../stores/project';
 
 interface ServicesProps {
   services: Service[];
@@ -32,6 +35,7 @@ const serviceBlueprints: Record<Service['category'], {
   inputs: string[];
   setup: string[];
   checklist: string[];
+  routeSegment?: string;
 }> = {
   privacy: {
     icon: Lock,
@@ -40,6 +44,7 @@ const serviceBlueprints: Record<Service['category'], {
     inputs: ['Transaction privacy requirements', 'Supported asset or contract type', 'Compliance review boundary', 'Stellar/Soroban integration target'],
     setup: ['Create proof-flow draft', 'Define public vs private fields', 'Prepare sandbox test vectors'],
     checklist: ['Threat model is documented', 'No live funds are connected', 'Reviewer approval is required before backend work'],
+    routeSegment: 'zer0',
   },
   transformation: {
     icon: Brain,
@@ -48,6 +53,7 @@ const serviceBlueprints: Record<Service['category'], {
     inputs: ['Git repository URL or uploaded source', 'Target Web3 architecture', 'Allowed files and forbidden files', 'Approval rules for agent actions'],
     setup: ['Run repository read-only scan', 'Generate migration map', 'Create approval cards for each action'],
     checklist: ['Repository permissions are explicit', 'Shared memory is current', 'Agent cannot execute without sign-off'],
+    routeSegment: 'transformation',
   },
   trade: {
     icon: Sparkles,
@@ -56,6 +62,7 @@ const serviceBlueprints: Record<Service['category'], {
     inputs: ['Agent identity format', 'Wallet policy', 'Negotiation rules', 'Settlement and dispute path'],
     setup: ['Define agent capability schema', 'Draft offer/request handshake', 'Set spending and approval limits'],
     checklist: ['Wallet permissions are capped', 'Human override is defined', 'Simulation mode exists before live trades'],
+    routeSegment: 'trade',
   },
   auth: {
     icon: Key,
@@ -64,6 +71,7 @@ const serviceBlueprints: Record<Service['category'], {
     inputs: ['SDK target platform', 'Signal collection rules', 'Human verification path', 'Data marketplace consent model'],
     setup: ['Design challenge flow', 'Map SDK/API responses', 'Create consent and policy screens'],
     checklist: ['Privacy policy is ready', 'False-positive handling exists', 'Marketplace data is opt-in only'],
+    routeSegment: 'agent-auth',
   },
   nft: {
     icon: Blocks,
@@ -72,14 +80,16 @@ const serviceBlueprints: Record<Service['category'], {
     inputs: ['Collection metadata', 'IPFS media package', 'Creator-controlled minting rules', 'USDC checkout configuration'],
     setup: ['Open collection workspace', 'Prepare contract deployment', 'Review metadata and royalty preference'],
     checklist: ['Metadata can be previewed', 'No deployment happens without approval', 'Creator owns final approval'],
+    routeSegment: 'nft',
   },
   depin: {
     icon: Radio,
-    state: 'Gateway scaffold ready',
-    purpose: 'Protect HTTP API and compute resources with exact per-request USDC payments using the Stellar x402 protocol.',
+    state: 'Access Shield MVP live',
+    purpose: 'Protect HTTP API and compute resources with exact per-request USDC payments using the Stellar x402 protocol (Access Shield enforcement plane).',
     inputs: ['Protected route and upstream URL', 'USDC price and recipient', 'Stellar network', 'Timeout and rate-limit policy'],
-    setup: ['Create provider configuration', 'Run testnet gateway', 'Verify payment and settlement flow'],
-    checklist: ['Uses standard x402 v2 headers', 'No user funds are held by ZEXVRO', 'Physical hardware adapters remain out of v1'],
+    setup: ['Configure providers (JSON / Secrets Manager)', 'Probe unpaid 402 from the dashboard', 'Enable OZ facilitator key for paid settle'],
+    checklist: ['Uses standard x402 v2 headers', 'Unpaid probes return PAYMENT-REQUIRED', 'Paid settle needs settleReady facilitator'],
+    routeSegment: 'depin',
   },
 };
 
@@ -91,28 +101,63 @@ function stateTone(status: Service['status']) {
 
 export default function Services({ services }: ServicesProps) {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const { workspaceId, projectId } = useParams({ strict: false });
+  const search = useRouterState({ select: (s) => s.location.search });
+  const projectStore = useProjectStore();
+  const currentProject = projectStore.projects.find((p) => p.id === projectId);
+  const enabledServices = currentProject?.enabledServices || [];
+
   const [selectedServiceId, setSelectedServiceId] = useState<string>(services[0]?.id || '');
   const [panelServiceId, setPanelServiceId] = useState<string | null>(null);
 
   const selectedService = useMemo(
     () => services.find((service) => service.id === selectedServiceId) || services[0],
-    [selectedServiceId, services]
+    [selectedServiceId, services],
   );
   const panelService = services.find((service) => service.id === panelServiceId);
 
   const selectedBlueprint = selectedService ? serviceBlueprints[selectedService.category] : null;
   const SelectedIcon = selectedBlueprint?.icon || Blocks;
+  const isSelectedEnabled = selectedService ? enabledServices.includes(selectedService.id) : false;
 
   useEffect(() => {
-    const category = searchParams.get('service');
-    const requestedService = services.find(service => service.category === category);
+    const params = new URLSearchParams(typeof search === 'string' ? search : '');
+    const category = params.get('service');
+    const requestedService = services.find((service) => service.category === category);
     if (requestedService) setSelectedServiceId(requestedService.id);
-  }, [searchParams, services]);
+  }, [search, services]);
+
+  const openService = (service: Service) => {
+    const blueprint = serviceBlueprints[service.category];
+    const segment = blueprint?.routeSegment;
+    if (workspaceId && projectId && segment) {
+      void navigate({
+        to: `/dashboard/w/$workspaceId/p/$projectId/${segment}`,
+        params: { workspaceId, projectId },
+      });
+      return;
+    }
+    setPanelServiceId(service.id);
+  };
+
+  const toggleService = (serviceId: string) => {
+    if (!currentProject) return;
+    const next = enabledServices.includes(serviceId)
+      ? enabledServices.filter((id) => id !== serviceId)
+      : [...enabledServices, serviceId];
+    projectStore.updateProject(currentProject.id, { enabledServices: next });
+  };
+
+  const primaryActionLabel = selectedService?.category === 'nft'
+    ? 'Open collections'
+    : selectedService?.category === 'depin'
+      ? 'Open gateway'
+      : selectedBlueprint?.routeSegment
+        ? 'Open service'
+        : 'Open setup';
 
   return (
     <div className="space-y-6">
-      {/* AI NOTE: Services screen is a setup/workflow surface. Keep it empty-state honest; do not add metrics, owners, balances, or live usage. */}
       <div className="flex flex-col gap-3 border-b border-zinc-200 pb-4 dark:border-zinc-900 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-zinc-950 dark:text-white sm:text-2xl">
@@ -120,13 +165,9 @@ export default function Services({ services }: ServicesProps) {
             Services
           </h1>
           <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-500 dark:text-zinc-400">
-            Configure MVP services with required inputs, approval rules, and setup drafts before a service is connected to this workspace.
+            Enable services for this project, then open NFT Collections, De-pin, or other scaffolds from the catalog.
           </p>
         </div>
-        <button className="inline-flex items-center justify-center gap-2 rounded-md border border-zinc-200 px-3 py-2 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900">
-          <ClipboardList className="h-4 w-4" />
-          Create setup draft
-        </button>
       </div>
 
       <section className="grid gap-5 xl:grid-cols-[260px_1fr]">
@@ -139,10 +180,12 @@ export default function Services({ services }: ServicesProps) {
               const blueprint = serviceBlueprints[service.category];
               const Icon = blueprint.icon;
               const isSelected = selectedServiceId === service.id;
+              const enabled = enabledServices.includes(service.id);
 
               return (
                 <button
                   key={service.id}
+                  type="button"
                   onClick={() => setSelectedServiceId(service.id)}
                   className={`group flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm transition ${
                     isSelected
@@ -152,6 +195,9 @@ export default function Services({ services }: ServicesProps) {
                 >
                   <Icon className={`h-4 w-4 shrink-0 ${isSelected ? 'text-brand-blue' : 'text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-300'}`} />
                   <span className="min-w-0 flex-1 truncate">{service.name}</span>
+                  {enabled ? (
+                    <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">On</span>
+                  ) : null}
                 </button>
               );
             })}
@@ -175,23 +221,43 @@ export default function Services({ services }: ServicesProps) {
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="text-lg font-semibold tracking-tight text-zinc-950 dark:text-white">{selectedService.name}</h2>
-                      <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${stateTone(selectedService.status)}`}>
-                        {selectedBlueprint.state}
+                      <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${stateTone(isSelectedEnabled ? 'active' : selectedService.status)}`}>
+                        {isSelectedEnabled ? 'Enabled on project' : selectedBlueprint.state}
                       </span>
                     </div>
                     <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600 dark:text-zinc-400">{selectedBlueprint.purpose}</p>
                   </div>
                 </div>
-                <button
-                  onClick={() => selectedService.category === 'nft'
-                    ? navigate('/services/nft')
-                    : setPanelServiceId(selectedService.id)}
-                  className="inline-flex items-center justify-center gap-2 rounded-md bg-zinc-950 px-3.5 py-2 text-xs font-medium text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
-                >
-                  {selectedService.category === 'nft' ? 'Open collections' : 'Open setup'}
-                  <ArrowRight className="h-4 w-4" />
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  {currentProject ? (
+                    <button
+                      type="button"
+                      onClick={() => toggleService(selectedService.id)}
+                      className={`inline-flex items-center justify-center gap-2 rounded-md border px-3.5 py-2 text-xs font-medium transition ${
+                        isSelectedEnabled
+                          ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/15 dark:text-emerald-300'
+                          : 'border-zinc-200 text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900'
+                      }`}
+                    >
+                      {isSelectedEnabled ? <PowerOff className="h-4 w-4" /> : <Power className="h-4 w-4" />}
+                      {isSelectedEnabled ? 'Disable on project' : 'Enable on project'}
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => openService(selectedService)}
+                    className="inline-flex items-center justify-center gap-2 rounded-md bg-zinc-950 px-3.5 py-2 text-xs font-medium text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
+                  >
+                    {primaryActionLabel}
+                    <ArrowRight className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
+              {!currentProject ? (
+                <p className="mt-3 text-xs text-amber-600 dark:text-amber-400">
+                  Open Services Manager from inside a project to enable services and jump to NFT / De-pin routes.
+                </p>
+              ) : null}
             </div>
 
             <div className="grid gap-0 lg:grid-cols-3">
@@ -219,6 +285,8 @@ export default function Services({ services }: ServicesProps) {
                   {selectedBlueprint.setup.map((item) => (
                     <button
                       key={item}
+                      type="button"
+                      onClick={() => openService(selectedService)}
                       className="group flex w-full items-center justify-between gap-3 rounded-md border border-zinc-200 p-3 text-left text-xs text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900"
                     >
                       <span>{item}</span>
@@ -284,6 +352,7 @@ export default function Services({ services }: ServicesProps) {
                   <h3 className="mt-1 text-lg font-semibold text-zinc-950 dark:text-white">{panelService.name}</h3>
                 </div>
                 <button
+                  type="button"
                   onClick={() => setPanelServiceId(null)}
                   className="rounded-md border border-zinc-200 p-2 text-zinc-500 transition hover:bg-zinc-50 hover:text-zinc-900 dark:border-zinc-800 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
                   title="Close setup panel"
@@ -314,12 +383,33 @@ export default function Services({ services }: ServicesProps) {
               </div>
 
               <div className="flex flex-col gap-2 border-t border-zinc-200 p-5 dark:border-zinc-800 sm:flex-row">
-                <button className="inline-flex flex-1 items-center justify-center gap-2 rounded-md bg-zinc-950 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200">
-                  <ClipboardList className="h-4 w-4" />
-                  Save draft
-                </button>
-                <button className="inline-flex flex-1 items-center justify-center gap-2 rounded-md border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900">
-                  Request approval
+                {currentProject ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      toggleService(panelService.id);
+                      setPanelServiceId(null);
+                    }}
+                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-md bg-zinc-950 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
+                  >
+                    <Power className="h-4 w-4" />
+                    {enabledServices.includes(panelService.id) ? 'Disable on project' : 'Enable on project'}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-md bg-zinc-950 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
+                  >
+                    <ClipboardList className="h-4 w-4" />
+                    Save draft
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setPanelServiceId(null)}
+                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-md border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                >
+                  Close
                 </button>
               </div>
             </motion.div>

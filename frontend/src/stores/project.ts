@@ -37,7 +37,7 @@ interface ProjectState {
     enabledServices?: string[];
   }) => Project;
 
-  updateProject: (id: string, updates: Partial<Pick<Project, 'name' | 'description' | 'purpose' | 'lifecycle' | 'framework' | 'branch' | 'network'>>) => void;
+  updateProject: (id: string, updates: Partial<Pick<Project, 'name' | 'description' | 'purpose' | 'lifecycle' | 'framework' | 'branch' | 'network' | 'enabledServices'>>) => void;
   archiveProject: (id: string) => void;
   deleteProject: (id: string) => void;
   selectProject: (id: string | null) => void;

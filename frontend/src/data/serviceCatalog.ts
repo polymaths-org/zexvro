@@ -53,12 +53,12 @@ export const serviceCatalog: Service[] = [
   },
   {
     id: 'srv-depin',
-    name: 'De-pin',
-    owner: 'Unassigned',
-    status: 'inactive',
-    description: 'Scope not defined yet. Do not implement until the service concept, target user, and boundaries are accepted.',
-    progress: 0,
-    lastActivity: 'Needs product scope',
+    name: 'Access Shield (De-pin x402)',
+    owner: 'Platform',
+    status: 'configuring',
+    description: 'Exact per-request Stellar testnet USDC enforcement for protected HTTP routes (x402 GET/HEAD). Unpaid probes return 402; paid settle uses the configured facilitator.',
+    progress: 70,
+    lastActivity: 'Gateway + dashboard probe live',
     category: 'depin',
   },
 ];

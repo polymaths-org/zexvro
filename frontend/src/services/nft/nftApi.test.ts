@@ -14,6 +14,8 @@ import {
   uploadNftMedia,
 } from './nftApi';
 
+const NFT_BASE = 'https://iyk6idmup6.us-east-1.awsapprunner.com';
+
 describe('NFT API client', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -39,7 +41,7 @@ describe('NFT API client', () => {
       service: 'nft-service',
       capabilities: { stellarConfigured: false, storageMode: 'local' },
     });
-    expect(fetchMock).toHaveBeenCalledWith('/api/nft/health', expect.objectContaining({
+    expect(fetchMock).toHaveBeenCalledWith(`${NFT_BASE}/health`, expect.objectContaining({
       headers: { Accept: 'application/json' },
     }));
   });
@@ -160,7 +162,7 @@ describe('NFT API client', () => {
 
     expect(fetchMock.mock.calls.every((call) => {
       const headers = call[1]?.headers as Record<string, string>;
-      return headers.Authorization === 'Bearer token' || call[0] === '/api/nft/health';
+      return headers.Authorization === 'Bearer token' || call[0] === `${NFT_BASE}/health`;
     })).toBe(true);
   });
 
@@ -211,10 +213,10 @@ describe('NFT API client', () => {
       idempotencyKey: 'public-buy-1',
     });
 
-    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/nft/v1/public/collections/collection-id', expect.objectContaining({
+    expect(fetchMock).toHaveBeenNthCalledWith(1, `${NFT_BASE}/v1/public/collections/collection-id`, expect.objectContaining({
       headers: { Accept: 'application/json' },
     }));
-    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/nft/v1/public/checkout/intents', expect.objectContaining({
+    expect(fetchMock).toHaveBeenNthCalledWith(2, `${NFT_BASE}/v1/public/checkout/intents`, expect.objectContaining({
       method: 'POST',
       headers: {
         Accept: 'application/json',
@@ -261,12 +263,12 @@ describe('NFT API client', () => {
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      '/api/nft/v1/collections/collection-id/sale-config/submit',
+      `${NFT_BASE}/v1/collections/collection-id/sale-config/submit`,
       expect.objectContaining({ method: 'POST' }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      '/api/nft/v1/public/checkout/intents/intent-1/submit',
+      `${NFT_BASE}/v1/public/checkout/intents/intent-1/submit`,
       expect.objectContaining({ method: 'POST' }),
     );
   });

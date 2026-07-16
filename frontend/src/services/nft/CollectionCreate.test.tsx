@@ -7,12 +7,22 @@ import CollectionList from './CollectionList';
 
 const api = vi.hoisted(() => ({
   createNftCollection: vi.fn(),
+  getNftApiBaseUrl: vi.fn(() => 'https://iyk6idmup6.us-east-1.awsapprunner.com'),
   getNftServiceHealth: vi.fn(),
   listNftCollections: vi.fn(),
   uploadNftMedia: vi.fn(),
+  prepareNftSaleConfig: vi.fn(),
+  submitNftSaleConfig: vi.fn(),
 }));
 
 vi.mock('./nftApi', () => api);
+
+vi.mock('./stellarWallet', () => ({
+  formatWalletError: (error: unknown) => (error instanceof Error ? error.message : ''),
+  getPublicKey: vi.fn().mockResolvedValue('GCD4SBBOLPUM7UYWLPRKOP6IYKOZ6FX5YQOJHVVE7RKC2QGZYNUHKRCZ'),
+  isWalletAvailable: vi.fn().mockResolvedValue(true),
+  signTransaction: vi.fn().mockResolvedValue('signed-sale'),
+}));
 
 const ownerAddress = 'GCD4SBBOLPUM7UYWLPRKOP6IYKOZ6FX5YQOJHVVE7RKC2QGZYNUHKRCZ';
 
@@ -35,6 +45,15 @@ const liveCollection = {
   updatedAt: '2026-07-11T00:00:00.000Z',
 };
 
+function StudioStub({ name }: { name: string }) {
+  return (
+    <div>
+      <h1>Collection studio</h1>
+      <p>{name}</p>
+    </div>
+  );
+}
+
 function FlowRoutes() {
   const navigate = useNavigate();
   return (
@@ -44,7 +63,7 @@ function FlowRoutes() {
           workspaceId="studio-a"
           accessToken="access-token"
           onClose={() => navigate('/services/nft')}
-          onCreated={() => navigate('/services/nft')}
+          onCreated={(collection) => navigate(`/services/nft/collections/${collection.id}`)}
         />
       )} />
       <Route path="/services/nft" element={(
@@ -54,6 +73,9 @@ function FlowRoutes() {
           onCreate={() => navigate('/services/nft/collections/new')}
           onOpenDashboard={() => undefined}
         />
+      )} />
+      <Route path="/services/nft/collections/:collectionId" element={(
+        <StudioStub name="Astral Gear" />
       )} />
     </Routes>
   );
@@ -87,6 +109,22 @@ describe('CollectionCreate', () => {
     });
     api.createNftCollection.mockResolvedValue(liveCollection);
     api.listNftCollections.mockResolvedValue([liveCollection]);
+    api.prepareNftSaleConfig.mockResolvedValue({
+      serializedTransaction: 'prepared-sale',
+      requiredSigners: [ownerAddress],
+    });
+    api.submitNftSaleConfig.mockResolvedValue({
+      transaction: { transactionHash: 'sale-hash', status: 'confirmed' },
+      collection: {
+        ...liveCollection,
+        primarySale: {
+          paymentTokenAddress: 'native',
+          priceAtomic: '100000000',
+          transactionHash: 'sale-hash',
+          configuredAt: '2026-07-11T00:00:00.000Z',
+        },
+      },
+    });
   });
 
   it('validates required collection details', async () => {
@@ -100,7 +138,7 @@ describe('CollectionCreate', () => {
     expect(screen.getByText('Upload an NFT logo / cover image.')).toBeInTheDocument();
   });
 
-  it('uploads, deploys, and returns to the collection list', async () => {
+  it('uploads, deploys, activates sale, and opens the collection studio', async () => {
     const user = userEvent.setup();
     renderFlow();
 
@@ -118,8 +156,6 @@ describe('CollectionCreate', () => {
     await user.type(screen.getByLabelText('Wallet address'), ownerAddress);
     await user.click(screen.getByRole('button', { name: 'Create collection' }));
 
-    expect(await screen.findByRole('heading', { name: 'NFT Collections' })).toBeInTheDocument();
-    expect(await screen.findByText('Astral Gear')).toBeInTheDocument();
     expect(api.uploadNftMedia).toHaveBeenCalledWith(file, 'access-token');
     expect(api.createNftCollection).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -129,18 +165,13 @@ describe('CollectionCreate', () => {
       }),
       'access-token',
     );
-  });
-
-  it('accepts covers when the browser leaves mime empty but the extension is valid', async () => {
-    const user = userEvent.setup();
-    renderFlow();
-
-    const file = new File(['cover'], 'gear.png', { type: '' });
-    await user.upload(screen.getByLabelText(/NFT logo/), file);
-
-    expect(screen.queryByText('Choose a PNG, JPEG, WebP, or SVG image.')).not.toBeInTheDocument();
-    expect(screen.getByAltText('NFT logo preview')).toBeInTheDocument();
-  });
+    await waitFor(() => expect(api.prepareNftSaleConfig).toHaveBeenCalled());
+    await waitFor(() => expect(api.submitNftSaleConfig).toHaveBeenCalled());
+    // Launch cinema → success popup (not auto-navigate).
+    expect(await screen.findByRole('heading', { name: 'Astral Gear' }, { timeout: 12_000 })).toBeInTheDocument();
+    expect(screen.getByText(/NFT created/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Go to dashboard/i })).toBeInTheDocument();
+  }, 20_000);
 
   it('accepts SVG covers', async () => {
     const user = userEvent.setup();

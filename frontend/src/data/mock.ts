@@ -61,12 +61,12 @@ export const mockServices: Service[] = [
   },
   {
     id: 'srv-depin',
-    name: 'De-pin',
-    owner: 'Unassigned',
+    name: 'Access Shield (De-pin x402)',
+    owner: 'Platform',
     status: 'configuring',
     description: 'Stellar x402 gateway for exact USDC payments that unlock HTTP API and compute resources for autonomous agents.',
-    progress: 15,
-    lastActivity: 'Local gateway scaffold verified',
+    progress: 70,
+    lastActivity: 'Gateway + dashboard probe live',
     category: 'depin'
   }
 ];

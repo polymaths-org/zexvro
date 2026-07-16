@@ -326,6 +326,58 @@ Content-Type: application/json
     ),
   },
   {
+    id: 'nft-service',
+    title: 'NFT Collections',
+    category: 'Services',
+    icon: Layers,
+    content: (
+      <div>
+        <P>
+          The NFT Service deploys creator-owned Soroban collection contracts on Stellar testnet.
+          Use it for game items, drops, and primary sales with a fixed XLM price.
+        </P>
+        <H3>What is a collection?</H3>
+        <P>
+          A collection is one Soroban NFT contract you own. It holds shared metadata (name, logo, description)
+          and can mint many token IDs under the same rules.
+        </P>
+        <H3>What is minting?</H3>
+        <P>
+          Minting creates a new token ID and assigns ownership on-chain. Creator mint (Mint tab) is free for the
+          collection owner wallet. Buyers can also mint via public checkout after primary sale is active.
+        </P>
+        <H3>What is primary sale?</H3>
+        <P>
+          Primary sale sets a fixed XLM price on the contract. When live, “Prepare purchase” on the public page
+          builds a buyer transaction that pays you and mints the next available token.
+        </P>
+        <H3>Public page vs dashboard</H3>
+        <P>
+          The public page is for buyers/players (no login). The collection dashboard is for you: pricing, minting,
+          ledger/analytics, SDK snippets, and archive/delete of the API record.
+        </P>
+        <H3>Integrate into a game</H3>
+        <P>
+          Use Integrate / SDK panel for popup checkout, branding API, and embed URLs. Pass <code>collectionId</code> from
+          your game and listen for postMessage success events after purchase.
+        </P>
+        <H3>Delete vs archive</H3>
+        <P>
+          Archive hides the collection from active lists but keeps data. Delete removes the ZEXVRO API record only —
+          live Stellar contracts cannot be erased from this UI. Prefer archive for live collections.
+        </P>
+        <H3>Ledger &amp; analytics</H3>
+        <P>
+          Ledger lists every recorded mint/purchase with token id, owner, and explorer link. Charts estimate volume and
+          revenue from primary-sale unit price × items.
+        </P>
+        <Callout type="tip">
+          Open a project → NFT Collections → create a collection → open its dashboard for Sale, Mint, Ledger, and Integrate.
+        </Callout>
+      </div>
+    ),
+  },
+  {
     id: 'changelog',
     title: 'Changelog',
     category: 'Updates',
