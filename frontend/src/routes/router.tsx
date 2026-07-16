@@ -613,6 +613,8 @@ const embedNftCheckoutRoute = createRoute({
   path: '/nft/embed/checkout',
   validateSearch: (search: Record<string, unknown>) => ({
     collectionId: typeof search.collectionId === 'string' ? search.collectionId : '',
+    // Game embeds (e.g. http://127.0.0.1:4173) pass their origin so success postMessage can return.
+    openerOrigin: typeof search.openerOrigin === 'string' ? search.openerOrigin : '',
   }),
   component: EmbedCheckout,
 });

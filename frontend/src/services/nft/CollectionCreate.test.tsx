@@ -131,6 +131,30 @@ describe('CollectionCreate', () => {
     );
   });
 
+  it('accepts covers when the browser leaves mime empty but the extension is valid', async () => {
+    const user = userEvent.setup();
+    renderFlow();
+
+    const file = new File(['cover'], 'gear.png', { type: '' });
+    await user.upload(screen.getByLabelText(/NFT logo/), file);
+
+    expect(screen.queryByText('Choose a PNG, JPEG, WebP, or SVG image.')).not.toBeInTheDocument();
+    expect(screen.getByAltText('NFT logo preview')).toBeInTheDocument();
+  });
+
+  it('accepts SVG covers', async () => {
+    const user = userEvent.setup();
+    renderFlow();
+
+    const file = new File(['<svg xmlns="http://www.w3.org/2000/svg"></svg>'], 'gear.svg', {
+      type: 'image/svg+xml',
+    });
+    await user.upload(screen.getByLabelText(/NFT logo/), file);
+
+    expect(screen.queryByText('Choose a PNG, JPEG, WebP, or SVG image.')).not.toBeInTheDocument();
+    expect(screen.getByAltText('NFT logo preview')).toBeInTheDocument();
+  });
+
   it('keeps the form recoverable when deployment fails', async () => {
     const user = userEvent.setup();
     api.createNftCollection.mockRejectedValue(new Error('Deployment unavailable'));

@@ -56,6 +56,29 @@ curl -s http://127.0.0.1:4101/health | jq .
 | 1 | Unpaid `curl -i http://127.0.0.1:4102/v1/nft-health` → **402** | |
 | 2 | For real settle: set `OZ_API_KEY` + OZ Channels facilitator URL | |
 
+## Game SDK harness (recommended)
+
+Small RPG shop under `test/nft-rpg-demo` (not a full Pokémon repo—easier to modify).
+
+```bash
+# terminal A: platform
+npm run dev
+
+# terminal B: game
+cd test/nft-rpg-demo && node scripts/serve.mjs
+# open http://127.0.0.1:4173
+```
+
+| # | Step | Pass? |
+|---|---|---|
+| 1 | Create collection + primary sale; paste UUID into `test/nft-rpg-demo/config.js` | |
+| 2 | Add `http://127.0.0.1:4173` to `CORS_ALLOWED_ORIGINS` if needed; restart API | |
+| 3 | Offline mode (`collectionId: ''`) unlocks work locally | |
+| 4 | Live **Buy with ZEXVRO** opens embed checkout + Freighter | |
+| 5 | Success unlocks gear (sword slash J, shield Space, boots, aura, crown) | |
+
+Details: `test/nft-rpg-demo/README.md`.
+
 ## Notes
 
 - Existing collections deployed with the **old** WASM hash still run old bytecode (no TTL bumps). **New** deploys after this checklist use the new hash.

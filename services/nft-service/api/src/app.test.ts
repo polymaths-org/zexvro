@@ -258,6 +258,33 @@ describe('NFT service API', () => {
       .expect(201)
     expect(uploaded.body.asset.uri).toBe('ipfs://bafy-cover.png')
 
+    const aliased = await request(app)
+      .post('/v1/media')
+      .attach('file', Buffer.from('image'), {
+        filename: 'cover.jpg',
+        contentType: 'image/jpg',
+      })
+      .expect(201)
+    expect(aliased.body.asset.mimeType).toBe('image/jpeg')
+
+    const generic = await request(app)
+      .post('/v1/media')
+      .attach('file', Buffer.from('image'), {
+        filename: 'cover.PNG',
+        contentType: 'application/octet-stream',
+      })
+      .expect(201)
+    expect(generic.body.asset.mimeType).toBe('image/png')
+
+    const svg = await request(app)
+      .post('/v1/media')
+      .attach('file', Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>'), {
+        filename: 'cover.svg',
+        contentType: 'image/svg+xml',
+      })
+      .expect(201)
+    expect(svg.body.asset.mimeType).toBe('image/svg+xml')
+
     pinning.failure = new ApiError(502, 'pinata_upload_failed', 'Pinata rejected upload')
     const failed = await request(app)
       .post('/v1/media')
@@ -270,9 +297,9 @@ describe('NFT service API', () => {
 
     await request(app)
       .post('/v1/media')
-      .attach('file', Buffer.from('text'), {
-        filename: 'cover.svg',
-        contentType: 'image/svg+xml',
+      .attach('file', Buffer.from('gif'), {
+        filename: 'cover.gif',
+        contentType: 'image/gif',
       })
       .expect(415)
   })

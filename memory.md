@@ -826,6 +826,16 @@ Use `None` for empty fields. Do not delete fields.
 - Blockers: None for docs.
 - Verification: Docs only (no test matrix required).
 
+## 2026-07-15 - Codex with Nabil - NFT RPG demo harness for SDK E2E
+
+- Service or area: NFT SDK integration test game.
+- Files changed: `test/nft-rpg-demo/**` (canvas RPG shop, 5 SVG assets, vendored checkout SDK, serve script, README); `docs/nft_local_test_checklist.md` game section.
+- Summary: Built a small self-contained web RPG under test/ instead of cloning a large Pokemon repo. Shop buys via openCheckout popup; ownership unlocks in-game stats/VFX. Offline demo mode without collectionId.
+- Decisions: Accepted - Tiny custom harness > huge third-party RPG for controllable E2E. Accepted - Demo maps purchase success to clicked SKU (collection is sequential mints, not on-chain SKUs).
+- Follow-ups: User creates live collection, pastes collectionId, Freighter buy smoke; optional commit of test/ harness.
+- Blockers: Needs human Cognito/Freighter for full live proof.
+- Verification: Static server serves index/game/sdk/assets HTTP 200; NFT API health when running.
+
 ## 2026-07-15 - Merge - Zer0 + NFT/De-pin into updates-routing-and-zer0
 
 - Service or area: Branch merge of `origin/main` (NFT/De-pin) into `updates-routing-and-zer0` (Zer0/routing).
@@ -835,3 +845,13 @@ Use `None` for empty fields. Do not delete fields.
 - Follow-ups: Deploy `zexvro-agent-backend` Lambda; merge PR #3.
 - Blockers: None.
 - Verification: Pending lint/build and Lambda deploy after conflict resolution.
+
+## 2026-07-16 - Codex with Nabil - Merge origin/main into feature/nft-service
+
+- Service or area: feature/nft-service merge of Paris main (Zer0 + NFT App Runner) + Nabil SVG media/RPG demo.
+- Files changed: conflict resolutions in `CollectionCreate.tsx`, `EmbedCheckout.tsx`, `memory.md`.
+- Summary: Kept main NFT create wizard (XLM price steps) with SVG/MIME-normalized cover upload; embed checkout uses openerOrigin when provided and `*` fallback; both memory entries retained.
+- Decisions: Accepted - Prefer main CollectionCreate flow; keep media.ts MIME normalization + SVG. Accepted - postMessage targetOrigin = openerOrigin or `*`.
+- Follow-ups: Push feature/nft-service; browser smoke RPG demo after pull.
+- Blockers: None.
+- Verification: Conflict markers cleared; commit merge.

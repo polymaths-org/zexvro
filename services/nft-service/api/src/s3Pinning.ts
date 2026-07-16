@@ -28,6 +28,7 @@ function extensionFor(mimeType: string, filename: string): string {
   if (mimeType === 'image/png') return '.png'
   if (mimeType === 'image/jpeg') return '.jpg'
   if (mimeType === 'image/webp') return '.webp'
+  if (mimeType === 'image/svg+xml') return '.svg'
   if (mimeType === 'image/gif') return '.gif'
   if (mimeType === 'application/json') return '.json'
   return ''
