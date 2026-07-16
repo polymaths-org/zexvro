@@ -607,3 +607,9 @@ Completed full live AWS + local API smoke after unit green. NFT API running on 4
 - Updated `context.md` De-pin + NFT sections; `planning.md` MVP table + Access Shield proposal; `pages.md` NFT SDK/embed routes
 - Tell Paris/Rushi: Access Shield economic gate = Nabil/De-pin; Agent Auth classification stays Rushi; no Morph touch
 - Still uncommitted code polish (SDK UI, skills, WASM hash) — user testing first
+
+## Handoff — NFT RPG SDK test harness
+- Path: `test/nft-rpg-demo` → `node scripts/serve.mjs` → http://127.0.0.1:4173
+- Set `config.js` collectionId after Studio create+sale
+- CORS: add :4173 to CORS_ALLOWED_ORIGINS if preflight fails
+- Offline unlocks work without chain; live uses openCheckout + Freighter

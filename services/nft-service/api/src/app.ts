@@ -6,6 +6,7 @@ import { z } from 'zod'
 import type { CheckoutIntentRecord, CollectionRecord } from './domain.js'
 import { ApiError, errorHandler } from './errors.js'
 import type { PublicAssetReader } from './localPinning.js'
+import { resolveNftImageMime } from './mediaTypes.js'
 import { NftService } from './service.js'
 
 const stellarAccount = z.string().refine(StrKey.isValidEd25519PublicKey, {
@@ -90,16 +91,19 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024, files: 1 },
   fileFilter: (_request, file, callback) => {
-    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.mimetype)) {
+    const mime = resolveNftImageMime(file.mimetype, file.originalname)
+    if (!mime) {
       callback(
         new ApiError(
           415,
           'unsupported_media_type',
-          'Only PNG, JPEG, and WebP images are accepted',
+          'Only PNG, JPEG, WebP, and SVG images are accepted',
         ),
       )
       return
     }
+    // Normalize aliases / empty browser types before service persistence.
+    file.mimetype = mime
     callback(null, true)
   },
 })

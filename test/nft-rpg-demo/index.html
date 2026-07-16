@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ZEXVRO NFT RPG Demo</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <strong>ZEXVRO · NFT RPG Demo</strong>
+        <span>Buy Oak Shield via openCheckout popup · unlock block stance (Space)</span>
+      </div>
+      <div class="badges">
+        <label class="mode-label">
+          Mode
+          <select id="checkout-mode" aria-label="Checkout mode">
+            <option value="popup">Popup (openCheckout)</option>
+            <option value="headless">Headless client</option>
+            <option value="offline">Offline demo</option>
+          </select>
+        </label>
+        <span id="badge-mode" class="badge">…</span>
+        <span id="badge-collection" class="badge">…</span>
+        <span id="badge-wallet" class="badge">…</span>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="stage-wrap">
+        <canvas id="game" width="640" height="448" aria-label="RPG map"></canvas>
+        <div class="hint">
+          Move: <strong>WASD / arrows</strong> · Slash: <strong>J</strong> (needs Iron Sword) ·
+          Block: <strong>Space</strong> (needs Oak Shield) · Boots speed / mana trail / crown unlock after ownership.
+          <div id="equip" style="margin-top: 6px; color: #e4e4e7"></div>
+        </div>
+      </section>
+
+      <aside class="sidebar">
+        <header>
+          <h1>Item shop</h1>
+          <p>
+            Live collection is wired in <code>config.js</code>.
+            <strong>Popup</strong> opens ZEXVRO Freighter checkout; success unlocks the gear.
+          </p>
+        </header>
+        <div id="collection-meta" class="collection-meta"></div>
+        <div class="config-box">
+          Oak Shield · collection <code>c080bf4d-…8e72</code> ·
+          <code>openCheckout</code> · App <code>http://localhost:3000</code> ·
+          Game <code>http://127.0.0.1:4173</code>
+        </div>
+        <div id="shop" class="shop"></div>
+        <div id="log" class="log" aria-live="polite"></div>
+      </aside>
+    </main>
+
+    <div id="headless-modal" class="modal" hidden>
+      <div class="modal-card">
+        <button type="button" id="headless-close" class="modal-close" aria-label="Close">×</button>
+        <div id="headless-body"></div>
+      </div>
+    </div>
+
+    <script type="module" src="./game.js"></script>
+  </body>
+</html>

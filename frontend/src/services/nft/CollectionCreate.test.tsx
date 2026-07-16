@@ -120,6 +120,40 @@ describe('CollectionCreate', () => {
     );
   });
 
+  it('accepts covers when the browser leaves mime empty but the extension is valid', async () => {
+    const user = userEvent.setup();
+    renderFlow();
+
+    await user.type(screen.getByLabelText('Name'), 'Astral Gear');
+    await user.type(screen.getByLabelText('Symbol'), 'gear');
+    await user.type(screen.getByLabelText(/^Description/), 'Equipment used throughout the Astral Gear game world.');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+    const file = new File(['cover'], 'gear.png', { type: '' });
+    await user.upload(screen.getByLabelText(/Choose collection cover/), file);
+
+    expect(screen.queryByText('Choose a PNG, JPEG, WebP, or SVG image.')).not.toBeInTheDocument();
+    expect(screen.getByText(/gear\.png/i)).toBeInTheDocument();
+  });
+
+  it('accepts SVG covers', async () => {
+    const user = userEvent.setup();
+    renderFlow();
+
+    await user.type(screen.getByLabelText('Name'), 'Astral Gear');
+    await user.type(screen.getByLabelText('Symbol'), 'gear');
+    await user.type(screen.getByLabelText(/^Description/), 'Equipment used throughout the Astral Gear game world.');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+    const file = new File(['<svg xmlns="http://www.w3.org/2000/svg"></svg>'], 'gear.svg', {
+      type: 'image/svg+xml',
+    });
+    await user.upload(screen.getByLabelText(/Choose collection cover/), file);
+
+    expect(screen.queryByText('Choose a PNG, JPEG, WebP, or SVG image.')).not.toBeInTheDocument();
+    expect(screen.getByText(/gear\.svg/i)).toBeInTheDocument();
+  });
+
   it('keeps the form recoverable when deployment fails', async () => {
     const user = userEvent.setup();
     api.createNftCollection.mockRejectedValue(new Error('Deployment unavailable'));
