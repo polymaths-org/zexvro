@@ -172,6 +172,60 @@ describe('De-pin proxy', () => {
     logger = new CapturingLogger()
   })
 
+  it('allows CORS preflight and exposes x402 headers for allowed origins', async () => {
+    const server = createDepinApp({
+      config,
+      protocol,
+      fetchImplementation: fetchMock,
+      logger,
+      environment: {
+        CORS_ALLOWED_ORIGINS: 'https://zexvro.pages.dev,https://*.zexvro.pages.dev',
+      },
+    })
+
+    const preflight = await request(server)
+      .options('/status')
+      .set('Origin', 'https://zexvro.pages.dev')
+      .set('Access-Control-Request-Method', 'GET')
+
+    expect(preflight.status).toBe(204)
+    expect(preflight.headers['access-control-allow-origin']).toBe('https://zexvro.pages.dev')
+    expect(preflight.headers['access-control-expose-headers']).toMatch(/PAYMENT-REQUIRED/)
+
+    const status = await request(server)
+      .get('/status')
+      .set('Origin', 'https://zexvro.pages.dev')
+
+    expect(status.status).toBe(200)
+    expect(status.headers['access-control-allow-origin']).toBe('https://zexvro.pages.dev')
+    expect(status.body.multiInstanceSafe).toBe(false)
+
+    const preview = await request(server)
+      .options('/status')
+      .set('Origin', 'https://main.zexvro.pages.dev')
+      .set('Access-Control-Request-Method', 'GET')
+
+    expect(preview.status).toBe(204)
+    expect(preview.headers['access-control-allow-origin']).toBe('https://main.zexvro.pages.dev')
+  })
+
+  it('only marks multiInstanceSafe when shared state is enabled', async () => {
+    const server = createDepinApp({
+      config,
+      protocol,
+      fetchImplementation: fetchMock,
+      logger,
+      stateBackend: 'file',
+      environment: {
+        DEPIN_SHARED_STATE: '1',
+      },
+    })
+
+    const status = await request(server).get('/status')
+    expect(status.body.multiInstanceSafe).toBe(true)
+    expect(status.body.stateBackend).toBe('file')
+  })
+
   function app(overrides: Partial<DepinConfig> = {}) {
     return createDepinApp({
       config: { ...config, ...overrides },
@@ -190,11 +244,15 @@ describe('De-pin proxy', () => {
       service: 'depin',
       configSource: { type: 'file', detail: 'depin.config.json' },
       stateBackend: 'memory',
+      multiInstanceSafe: false,
       capabilities: {
         scheme: 'exact',
         network: 'stellar:testnet',
         settlement: 'after_upstream_success',
         fees: 'sponsored',
+        settleReady: true,
+        facilitatorAuthConfigured: false,
+        facilitatorOzChannels: false,
       },
       providers: [
         {

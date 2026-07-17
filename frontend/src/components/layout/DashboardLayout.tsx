@@ -20,6 +20,7 @@ import {
 } from '../../auth/cognito';
 import { buildAgentChatPayload, loadAgentSettingsFromAWS } from '../../agent/settings';
 import CliActivation from '../auth/CliActivation';
+import PlatformBootup from '../PlatformBootup';
 import { initializeAWSSync, pullFromAWS } from '../../stores/awsSync';
 const IS_LOCAL_HOST = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 const API_BASE_URL = import.meta.env.VITE_API_URL ||
@@ -198,7 +199,7 @@ function CustomIcon({ name, className = '' }: { name: CustomIconName; className?
 
 function ScreenSkeleton() {
   return (
-    <div className="space-y-6" aria-label="Loading screen">
+    <div className="space-y-6" aria-label="Loading screen" role="status">
       <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-[#080809]">
         <div className="h-5 w-40 rounded bg-zinc-200 dark:bg-zinc-900 animate-pulse" />
         <div className="mt-4 h-8 w-full max-w-lg rounded bg-zinc-200 dark:bg-zinc-900 animate-pulse" />
@@ -210,6 +211,18 @@ function ScreenSkeleton() {
             <div className="h-4 w-24 rounded bg-zinc-200 dark:bg-zinc-900 animate-pulse" />
             <div className="mt-4 h-7 w-20 rounded bg-zinc-200 dark:bg-zinc-900 animate-pulse" />
             <div className="mt-3 h-3 w-32 rounded bg-zinc-200 dark:bg-zinc-900 animate-pulse" />
+          </div>
+        ))}
+      </div>
+      <div className="grid gap-5 lg:grid-cols-2">
+        {Array.from({ length: 2 }).map((_, index) => (
+          <div key={index} className="h-48 rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-[#0A0A0B]">
+            <div className="h-4 w-36 rounded bg-zinc-200 dark:bg-zinc-900 animate-pulse" />
+            <div className="mt-6 space-y-3">
+              <div className="h-10 rounded bg-zinc-200 dark:bg-zinc-900 animate-pulse" />
+              <div className="h-10 rounded bg-zinc-200 dark:bg-zinc-900 animate-pulse" />
+              <div className="h-10 rounded bg-zinc-200 dark:bg-zinc-900 animate-pulse" />
+            </div>
           </div>
         ))}
       </div>
@@ -341,76 +354,16 @@ export default function DashboardLayout() {
   const currentProject = projectStore.projects.find(p => p.id === projectId);
 
   const dynamicProjectCategories = React.useMemo(() => {
-    if (!currentProject) {
-      const fallbackDigitalAssetItems = isNftProjectRoute
-        ? [{ to: 'nft', label: 'NFT Collections', icon: 'nft' as const }]
-        : [];
-      const fallbackResourceGatewayItems = isDepinProjectRoute
-        ? [{ to: 'depin', label: 'De-pin x402 Gateway', icon: 'depin' as const }]
-        : [];
-
-      return [
-        {
-          id: 'project-core',
-          label: 'Project Core',
-          items: [
-            { to: 'overview', label: 'Overview', icon: 'overview' as const },
-            { to: 'executions', label: 'Executions & Runs', icon: 'deployments' as const },
-          ],
-        },
-        {
-          id: 'project-services',
-          label: 'Services',
-          items: [
-            { to: 'services', label: 'Services Manager', icon: 'services' as const },
-          ],
-        },
-        ...(fallbackDigitalAssetItems.length > 0
-          ? [{
-              id: 'project-digital-assets',
-              label: 'Digital Assets',
-              items: fallbackDigitalAssetItems,
-            }]
-          : []),
-        ...(fallbackResourceGatewayItems.length > 0
-          ? [{
-              id: 'project-resource-gateway',
-              label: 'Resource Gateway',
-              items: fallbackResourceGatewayItems,
-            }]
-          : []),
-        {
-          id: 'project-agentic',
-          label: 'Agentic Operation',
-          items: [
-            { to: 'agent', label: 'Morph Agent', icon: 'agent' as const },
-            { to: 'memory', label: 'Shared Memory', icon: 'memory' as const },
-          ],
-        },
-        {
-          id: 'project-security',
-          label: 'Security & Insights',
-          items: [
-            { to: 'security', label: 'Security', icon: 'security' as const },
-            { to: 'analytics', label: 'Analytics', icon: 'analytics' as const },
-          ],
-        },
-        {
-          id: 'project-admin',
-          label: 'Project Admin',
-          items: [
-            { to: 'members', label: 'Members', icon: 'team' as const },
-            { to: 'audit', label: 'Audit Log', icon: 'security' as const },
-            { to: 'settings', label: 'Settings', icon: 'settings' as const },
-          ],
-        },
-      ];
-    }
-
-    const enabled = currentProject.enabledServices || [];
+    const enabled = currentProject?.enabledServices || [];
     const serviceItems: Array<{ to: string; label: string; icon: CustomIconName }> = [];
-    const digitalAssetItems: Array<{ to: string; label: string; icon: CustomIconName }> = [];
-    const resourceGatewayItems: Array<{ to: string; label: string; icon: CustomIconName }> = [];
+    // Always expose primary surfaces on project routes so users can open them
+    // even when the project was created without selecting services.
+    const digitalAssetItems: Array<{ to: string; label: string; icon: CustomIconName }> = [
+      { to: 'nft', label: 'NFT Collections', icon: 'nft' as const },
+    ];
+    const resourceGatewayItems: Array<{ to: string; label: string; icon: CustomIconName }> = [
+      { to: 'depin', label: 'De-pin x402 Gateway', icon: 'depin' as const },
+    ];
     if (enabled.includes('srv-privacy')) {
       serviceItems.push({ to: 'zer0', label: 'Payroll', icon: 'privacy' as const });
     }
@@ -422,12 +375,6 @@ export default function DashboardLayout() {
     }
     if (enabled.includes('srv-agent-auth')) {
       serviceItems.push({ to: 'agent-auth', label: 'Agent Authentication', icon: 'auth' as const });
-    }
-    if (enabled.includes('srv-nft') || isNftProjectRoute) {
-      digitalAssetItems.push({ to: 'nft', label: 'NFT Collections', icon: 'nft' as const });
-    }
-    if (enabled.includes('srv-depin') || isDepinProjectRoute) {
-      resourceGatewayItems.push({ to: 'depin', label: 'De-pin x402 Gateway', icon: 'depin' as const });
     }
     serviceItems.push({ to: 'services', label: 'Services Manager', icon: 'services' as const });
 
@@ -445,20 +392,16 @@ export default function DashboardLayout() {
         label: 'Services',
         items: serviceItems,
       },
-      ...(digitalAssetItems.length > 0
-        ? [{
-            id: 'project-digital-assets',
-            label: 'Digital Assets',
-            items: digitalAssetItems,
-          }]
-        : []),
-      ...(resourceGatewayItems.length > 0
-        ? [{
-            id: 'project-resource-gateway',
-            label: 'Resource Gateway',
-            items: resourceGatewayItems,
-          }]
-        : []),
+      {
+        id: 'project-digital-assets',
+        label: 'Digital Assets',
+        items: digitalAssetItems,
+      },
+      {
+        id: 'project-resource-gateway',
+        label: 'Resource Gateway',
+        items: resourceGatewayItems,
+      },
       {
         id: 'project-agentic',
         label: 'Agentic Operation',
@@ -485,7 +428,7 @@ export default function DashboardLayout() {
         ],
       },
     ];
-  }, [currentProject, isDepinProjectRoute, isNftProjectRoute]);
+  }, [currentProject]);
 
   let activeSection = 'overview';
   if (isProjectRoute) {
@@ -496,7 +439,27 @@ export default function DashboardLayout() {
     activeSection = lastPart === workspaceId ? 'overview' : lastPart;
   }
 
-  const currentSectionLabel = activeSection.charAt(0).toUpperCase() + activeSection.slice(1).replace(/-/g, ' ');
+  const SECTION_LABELS: Record<string, string> = {
+    nft: 'NFT',
+    depin: 'De-pin',
+    zer0: 'Zer0',
+    'agent-auth': 'Agent Auth',
+    overview: 'Overview',
+    services: 'Services',
+    settings: 'Settings',
+    executions: 'Executions',
+    members: 'Members',
+    audit: 'Audit',
+    agent: 'Agent',
+    memory: 'Memory',
+    security: 'Security',
+    analytics: 'Analytics',
+    transformation: 'Transformation',
+    trade: 'Trade',
+  };
+  const currentSectionLabel =
+    SECTION_LABELS[activeSection]
+    || activeSection.charAt(0).toUpperCase() + activeSection.slice(1).replace(/-/g, ' ');
   const isSectionSelected = (target: string) => {
     if (target.includes('/')) {
       return currentPath.endsWith(`/${target}`);
@@ -756,6 +719,8 @@ export default function DashboardLayout() {
     <div className={`min-h-screen font-sans antialiased text-zinc-900 dark:text-zinc-100 bg-zinc-50 dark:bg-[#050505] transition-colors duration-200 ${
       density === 'compact' ? 'text-xs' : 'text-sm'
     }`}>
+      {/* One-time platform boot after login (localStorage). */}
+      <PlatformBootup active={Boolean(userSession)} />
       <div className="flex min-h-screen">
 
         {/* Desktop Sidebar */}

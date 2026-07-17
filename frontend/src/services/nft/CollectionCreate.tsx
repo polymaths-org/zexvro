@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, useCallback } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
@@ -28,6 +28,8 @@ import {
   type ApiNftCollection,
   type NftServiceHealth,
 } from './nftApi';
+import NftLaunchCinema from '../../components/NftLaunchCinema';
+import CollectionCreatedModal from './CollectionCreatedModal';
 import { formatWalletError, getPublicKey, isWalletAvailable, signTransaction } from './stellarWallet';
 
 interface CollectionCreateProps {
@@ -99,7 +101,11 @@ export default function CollectionCreate({
   const [errors, setErrors] = useState<FieldErrors>({});
   const [health, setHealth] = useState<NftServiceHealth | null>(null);
   const [submitError, setSubmitError] = useState('');
-  const [submitStatus, setSubmitStatus] = useState<'idle' | 'uploading' | 'deploying' | 'activating_sale'>('idle');
+  const [submitStatus, setSubmitStatus] = useState<
+    'idle' | 'uploading' | 'deploying' | 'activating_sale' | 'signing' | 'launch' | 'success'
+  >('idle');
+  const [pendingCreated, setPendingCreated] = useState<ApiNftCollection | null>(null);
+  const [saleWarning, setSaleWarning] = useState('');
   const [connectingWallet, setConnectingWallet] = useState(false);
   const skipHydrationSave = useRef(false);
 
@@ -262,6 +268,7 @@ export default function CollectionCreate({
         throw new Error('Media storage is not configured on the NFT service.');
       }
 
+      // Mission brief runs through upload + deploy (looks cool / loops).
       setSubmitStatus('uploading');
       const asset = await uploadNftMedia(coverFile, accessToken);
       setSubmitStatus('deploying');
@@ -279,7 +286,9 @@ export default function CollectionCreate({
       }, accessToken);
 
       // Activate primary sale so public checkout "Prepare purchase" is enabled immediately.
+      // Keep mission brief on screen while Freighter signs — launch plays only after everything succeeds.
       const priceAtomic = unitPriceToAtomicUsdc(draft.unitPriceXlm || '1');
+      let nextSaleWarning = '';
       if (created.status === 'live' && priceAtomic) {
         try {
           setSubmitStatus('activating_sale');
@@ -289,11 +298,10 @@ export default function CollectionCreate({
             priceAtomic,
             accessToken,
           });
-          // Some sponsor setups auto-submit set_sale_config during prepare.
           if (saleIntent.autoSubmitted?.transactionHash) {
-            // Persist via submit path is not needed; reload collection if API already marked sale.
-            // Fall through — dashboard/public will reflect primarySale after prepare's server mark.
+            // already on-chain
           } else if (saleIntent.requiredSigners?.length) {
+            setSubmitStatus('signing');
             const signedTransaction = await signTransaction(saleIntent.serializedTransaction);
             const saleResult = await submitNftSaleConfig({
               collectionId: created.id,
@@ -304,7 +312,7 @@ export default function CollectionCreate({
             });
             if (saleResult.collection) created = saleResult.collection;
           } else {
-            // No signers required and no autoSubmitted — still record via submit with sponsor-only envelope.
+            setSubmitStatus('signing');
             const saleResult = await submitNftSaleConfig({
               collectionId: created.id,
               preparedTransaction: saleIntent.serializedTransaction,
@@ -315,25 +323,117 @@ export default function CollectionCreate({
             if (saleResult.collection) created = saleResult.collection;
           }
         } catch (saleError) {
-          // Collection exists; sale can still be activated from the dashboard.
           console.warn('[nft/create] primary sale activation deferred', saleError);
+          nextSaleWarning = errorMessage(saleError)
+            || 'Primary sale was not activated. Open Sale in More options to finish.';
         }
       }
 
       clearCollectionDraft(workspaceId);
-      onCreated?.(created);
-      onClose();
+      if (nextSaleWarning && typeof window !== 'undefined') {
+        try {
+          sessionStorage.setItem(`zexvro.nft.saleWarning.${created.id}`, nextSaleWarning);
+        } catch {
+          // ignore
+        }
+      }
+      setSaleWarning(nextSaleWarning);
+      setPendingCreated(created);
+      // Everything done → NFT Launch finale, then success popup.
+      setSubmitStatus('launch');
     } catch (error) {
       setSubmitError(errorMessage(error));
-    } finally {
       setSubmitStatus('idle');
+      setPendingCreated(null);
     }
+  };
+
+  const showSuccess = useCallback(() => {
+    if (!pendingCreated) return;
+    setSubmitStatus('success');
+  }, [pendingCreated]);
+
+  // Safety: if launch video stalls / autoplay fails, still open success popup.
+  useEffect(() => {
+    if (submitStatus !== 'launch' || !pendingCreated) return;
+    const timer = window.setTimeout(() => showSuccess(), 8_000);
+    return () => window.clearTimeout(timer);
+  }, [pendingCreated, showSuccess, submitStatus]);
+
+  const goDashboard = () => {
+    const created = pendingCreated;
+    setPendingCreated(null);
+    setSubmitStatus('idle');
+    if (!created) {
+      onClose();
+      return;
+    }
+    if (onCreated) onCreated(created);
+    else onClose();
+  };
+
+  const closeToList = () => {
+    setPendingCreated(null);
+    setSubmitStatus('idle');
+    onClose();
+  };
+
+  const manageSection = (section: 'sale' | 'mint' | 'ledger' | 'integrate') => {
+    const created = pendingCreated;
+    if (!created) return;
+    try {
+      sessionStorage.setItem(`zexvro.nft.studioTab.${created.id}`, section);
+    } catch {
+      // ignore
+    }
+    goDashboard();
   };
 
   const price = (draft.unitPriceXlm || '0').trim() || '0';
 
+  // Mission brief through Freighter; NFT Launch only after work is done.
+  const cinemaStage = submitStatus === 'launch' ? 'launch' as const : 'brief' as const;
+
+  const launchOpen =
+    submitStatus === 'uploading'
+    || submitStatus === 'deploying'
+    || submitStatus === 'activating_sale'
+    || submitStatus === 'signing'
+    || submitStatus === 'launch';
+
+  const launchLabel =
+    submitStatus === 'launch'
+      ? 'NFT collection live'
+      : submitStatus === 'signing'
+        ? 'Approve in Freighter…'
+        : submitStatus === 'activating_sale'
+          ? 'Preparing primary sale…'
+          : submitStatus === 'deploying'
+            ? 'Deploying collection…'
+            : submitStatus === 'uploading'
+              ? 'Uploading media…'
+              : 'Preparing launch vehicle…';
+
   return (
     <div className="mx-auto max-w-3xl space-y-6">
+      <NftLaunchCinema
+        open={launchOpen}
+        stage={cinemaStage}
+        label={launchLabel}
+        onEnded={submitStatus === 'launch' ? showSuccess : undefined}
+      />
+      {submitStatus === 'success' && pendingCreated ? (
+        <CollectionCreatedModal
+          collection={pendingCreated}
+          accessToken={accessToken}
+          unitPriceXlm={draft.unitPriceXlm || price}
+          saleWarning={saleWarning}
+          onGoDashboard={goDashboard}
+          onClose={closeToList}
+          onManage={manageSection}
+          onDeleted={closeToList}
+        />
+      ) : null}
       <header className="border-b border-zinc-200 pb-5 dark:border-zinc-900">
         <button
           type="button"

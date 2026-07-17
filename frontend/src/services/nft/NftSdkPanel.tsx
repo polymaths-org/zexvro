@@ -10,6 +10,7 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
+import { getNftApiBaseUrl } from './nftApi';
 
 export type SdkSnippetTab = 'popup' | 'custom' | 'backend' | 'script';
 
@@ -27,10 +28,7 @@ function resolveAppOrigin() {
 }
 
 function resolveApiBase() {
-  if (typeof window === 'undefined') return 'https://api.zexvro.local/api/nft';
-  const configured = (import.meta.env.VITE_NFT_API_URL || '/api/nft').replace(/\/$/, '');
-  if (configured.startsWith('http://') || configured.startsWith('https://')) return configured;
-  return `${window.location.origin}${configured.startsWith('/') ? configured : `/${configured}`}`;
+  return getNftApiBaseUrl();
 }
 
 function buildSnippets(input: {

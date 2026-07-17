@@ -12,6 +12,7 @@ import type {
   VerifiedPayment,
 } from './domain.js'
 import { JsonAuditLogger } from './audit.js'
+import { facilitatorSettleReadiness } from './facilitator.js'
 import { claimPaymentReplay } from './replay.js'
 import { MemoryRateLimitStore, MemoryReplayStore } from './stores.js'
 import {
@@ -52,6 +53,69 @@ const passthroughResponseHeaders = [
   'last-modified',
 ] as const
 
+const EXPOSED_HEADERS = [
+  'PAYMENT-REQUIRED',
+  'PAYMENT-RESPONSE',
+  'X-Request-Id',
+  'Retry-After',
+].join(', ')
+
+const DEFAULT_CORS_ORIGINS = [
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'http://localhost:4173',
+  'http://127.0.0.1:4173',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'https://zexvrodashboard.xyz',
+  'https://www.zexvrodashboard.xyz',
+  'https://zexvro.pages.dev',
+  'https://main.zexvro.pages.dev',
+  // Cloudflare Pages preview / branch aliases (*.zexvro.pages.dev)
+  'https://*.zexvro.pages.dev',
+]
+
+function parseCorsOrigins(environment: NodeJS.ProcessEnv): string[] {
+  const raw = environment.CORS_ALLOWED_ORIGINS || environment.DEPIN_CORS_ORIGINS
+  if (raw === undefined || raw.trim() === '') return DEFAULT_CORS_ORIGINS
+  return raw
+    .split(',')
+    .map((value) => value.trim().replace(/\/$/, ''))
+    .filter(Boolean)
+}
+
+/** Exact match or single-label wildcard host (e.g. https://*.zexvro.pages.dev). */
+export function isCorsOriginAllowed(origin: string, allowedOrigins: string[]): boolean {
+  const normalized = origin.trim().replace(/\/$/, '')
+  if (!normalized) return false
+  if (allowedOrigins.includes(normalized)) return true
+
+  let parsed: URL
+  try {
+    parsed = new URL(normalized)
+  } catch {
+    return false
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false
+  if (parsed.username || parsed.password) return false
+
+  for (const entry of allowedOrigins) {
+    if (!entry.includes('*')) continue
+    try {
+      // Support https://*.example.com only (one subdomain label).
+      const wildcard = new URL(entry.replace('://*.', '://wildcard-marker.'))
+      if (wildcard.protocol !== parsed.protocol) continue
+      const suffix = wildcard.hostname.replace(/^wildcard-marker\./, '')
+      if (!suffix || !parsed.hostname.endsWith(`.${suffix}`)) continue
+      const sub = parsed.hostname.slice(0, -(suffix.length + 1))
+      if (sub.length > 0 && !sub.includes('.')) return true
+    } catch {
+      // ignore bad allowlist entries
+    }
+  }
+  return false
+}
+
 export function createDepinApp(options: DepinAppOptions) {
   const {
     config,
@@ -66,9 +130,36 @@ export function createDepinApp(options: DepinAppOptions) {
     now = Date.now,
   } = options
 
+  const allowedOrigins = parseCorsOrigins(environment)
+  // App Runner /tmp file store is per-instance — not shared across scale-out.
+  const multiInstanceSafe =
+    stateBackend === 'file' && environment.DEPIN_SHARED_STATE === '1'
+
   const app = express()
   app.disable('x-powered-by')
-  app.set('trust proxy', false)
+  // App Runner / proxies set X-Forwarded-For — needed for unpaid rate limits.
+  app.set('trust proxy', 1)
+
+  app.use((request, response, next) => {
+    const origin = request.header('Origin')
+    if (origin && isCorsOriginAllowed(origin, allowedOrigins)) {
+      response.setHeader('Access-Control-Allow-Origin', origin.trim().replace(/\/$/, ''))
+      response.setHeader('Vary', 'Origin')
+      response.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')
+      response.setHeader(
+        'Access-Control-Allow-Headers',
+        'Accept, Content-Type, PAYMENT-SIGNATURE, X-Request-Id',
+      )
+      response.setHeader('Access-Control-Expose-Headers', EXPOSED_HEADERS)
+      response.setHeader('Access-Control-Max-Age', '600')
+    }
+
+    if (request.method === 'OPTIONS') {
+      response.status(204).end()
+      return
+    }
+    next()
+  })
 
   app.use((request, response, next) => {
     const supplied = request.header('X-Request-Id')
@@ -86,15 +177,24 @@ export function createDepinApp(options: DepinAppOptions) {
   })
 
   app.get('/status', (_request, response) => {
+    const facilitator = facilitatorSettleReadiness(
+      config.facilitatorUrl,
+      environment,
+    )
     response.json({
       status: 'ok',
       service: 'depin',
       configSource,
       stateBackend,
+      multiInstanceSafe,
       capabilities: {
         scheme: 'exact',
         network: 'stellar:testnet',
         facilitatorUrl: config.facilitatorUrl,
+        facilitatorAuthConfigured: facilitator.authConfigured,
+        facilitatorOzChannels: facilitator.ozChannels,
+        settleAuthRequired: facilitator.settleAuthRequired,
+        settleReady: facilitator.settleReady,
         settlement: 'after_upstream_success',
         fees: 'sponsored',
         replayTtlMs: config.replayTtlMs,

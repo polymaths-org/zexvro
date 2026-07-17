@@ -7,6 +7,7 @@ import {
   ShieldCheck,
   ShoppingCart,
 } from 'lucide-react';
+import BrandLoader from '../../components/BrandLoader';
 import {
   collectionLogo,
   createPublicCheckoutIntent,
@@ -169,8 +170,8 @@ export default function PublicCollection() {
 
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#050506] text-white">
-        <LoaderCircle className="h-6 w-6 animate-spin text-zinc-500" />
+      <main className="flex min-h-screen items-center justify-center bg-[#141416] text-white">
+        <BrandLoader size="lg" />
       </main>
     );
   }
@@ -189,11 +190,11 @@ export default function PublicCollection() {
   return (
     <main className="min-h-dvh bg-[#050506] text-zinc-100">
       <div className="mx-auto max-w-lg px-5 py-8">
-        <header className="mb-6 flex items-center justify-start">
+        <header className="mb-6 flex w-full items-center justify-center">
           <img
             src="/brand/wordmark-transparent.png"
             alt="ZEXVRO"
-            className="h-7 w-auto max-w-[160px] object-contain opacity-90"
+            className="mx-auto h-7 w-auto max-w-[160px] object-contain object-center opacity-90"
             onError={(event) => {
               (event.currentTarget as HTMLImageElement).src = '/brand/typo-logo.png';
             }}

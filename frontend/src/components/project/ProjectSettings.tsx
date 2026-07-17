@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from '@tanstack/react-router';
 import { Save, ShieldAlert } from 'lucide-react';
 import { useProjectStore } from '../../stores/project';
+import { serviceCatalog } from '../../data/serviceCatalog';
 
 export default function ProjectSettings() {
   const { projectId, workspaceId } = useParams({ strict: false });
@@ -14,6 +15,7 @@ export default function ProjectSettings() {
   const [purpose, setPurpose] = useState(currentProject?.purpose || '');
   const [network, setNetwork] = useState(currentProject?.network || 'Stellar Testnet');
   const [lifecycle, setLifecycle] = useState(currentProject?.lifecycle || 'active');
+  const [enabledServices, setEnabledServices] = useState<string[]>(currentProject?.enabledServices || []);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
@@ -23,9 +25,18 @@ export default function ProjectSettings() {
     setPurpose(currentProject.purpose || '');
     setNetwork(currentProject.network || 'Stellar Testnet');
     setLifecycle(currentProject.lifecycle);
+    setEnabledServices(currentProject.enabledServices || []);
   }, [currentProject]);
 
   if (!currentProject) return null;
+
+  const toggleService = (serviceId: string) => {
+    setEnabledServices((prev) => (
+      prev.includes(serviceId)
+        ? prev.filter((id) => id !== serviceId)
+        : [...prev, serviceId]
+    ));
+  };
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,6 +46,7 @@ export default function ProjectSettings() {
       purpose,
       network,
       lifecycle,
+      enabledServices,
     });
     setSaved(true);
     window.setTimeout(() => setSaved(false), 1800);
@@ -115,6 +127,33 @@ export default function ProjectSettings() {
                 <option value="paused">Paused</option>
                 <option value="archived">Archived</option>
               </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-zinc-550 mb-2">Enabled services</label>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {serviceCatalog.map((service) => {
+                const on = enabledServices.includes(service.id);
+                return (
+                  <button
+                    key={service.id}
+                    type="button"
+                    onClick={() => toggleService(service.id)}
+                    className={`rounded-lg border px-3 py-2.5 text-left transition ${
+                      on
+                        ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200'
+                        : 'border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-400'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold">{service.name}</span>
+                      <span className="text-[10px] font-bold uppercase tracking-wide">{on ? 'On' : 'Off'}</span>
+                    </div>
+                    <p className="mt-1 text-[11px] leading-4 opacity-80">{service.description}</p>
+                  </button>
+                );
+              })}
             </div>
           </div>
 

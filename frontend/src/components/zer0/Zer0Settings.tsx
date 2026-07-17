@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import {
   Settings, Shield, Wallet, Eye, AlertTriangle, Save, RotateCcw, CheckCircle2,
-  Check, Loader2, X, Info, Server, Power, PowerOff, RefreshCw, Zap, Scale, Lock,
-  SlidersHorizontal, Rocket,
+  Check, Loader2, X, Info, RefreshCw, Zap, Scale, Lock,
+  SlidersHorizontal, Rocket, Server, Power, PowerOff,
 } from 'lucide-react';
 import { useZer0Store, privacyPresetValues } from '../../stores/zer0';
 import type { Zer0ProofSystem, Zer0Currency, Zer0PrivacyPreset } from '../../stores/types';
@@ -198,7 +198,6 @@ export default function Zer0Settings() {
     try {
       const st = await zkWorkerApi.start();
       setZkWorker(st);
-      // Poll a few times while EC2 boots
       for (let i = 0; i < 8; i++) {
         await new Promise(r => setTimeout(r, 4000));
         const next = await zkWorkerApi.status();
@@ -1082,7 +1081,7 @@ export default function Zer0Settings() {
                       ? 'Every fund / deposit / withdraw asks Freighter — best for debugging'
                       : isTreasuryKeyConfigured()
                         ? 'Treasury key signs in the background — no Freighter windows'
-                        : 'Auto-sign needs VITE_TREASURY_SECRET in .env (not configured)'}
+                         : 'Auto-sign is not configured for this workspace (ops treasury key missing)'}
                   </span>
                 </div>
                 <button
@@ -1119,7 +1118,6 @@ export default function Zer0Settings() {
               )}
             </div>
 
-            {/* RapidSNARK / EC2 prover power control */}
             <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 p-4 space-y-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -1297,7 +1295,7 @@ export default function Zer0Settings() {
               <Info className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
               <div className="text-[11px] text-zinc-600 dark:text-zinc-400 space-y-2">
                 <p><strong className="text-zinc-800 dark:text-zinc-200">What auditors see on explorers:</strong> pool deposits and withdrawals of fixed unit size ({denomXlm} XLM). They do not see a single “salary amount” linking company → employee.</p>
-                <p><strong className="text-zinc-800 dark:text-zinc-200">What finance keeps internally:</strong> full payment history, employee, amount, and tx hashes in ZEXVRO (AWS + your export).</p>
+                <p><strong className="text-zinc-800 dark:text-zinc-200">What finance keeps internally:</strong> full payment history, employee, amount, and tx hashes in ZEXVRO (workspace ledger + your export).</p>
                 <p><strong className="text-zinc-800 dark:text-zinc-200">View keys (coming):</strong> optional decrypt keys for auditors without making amounts public on-chain.</p>
               </div>
             </div>
