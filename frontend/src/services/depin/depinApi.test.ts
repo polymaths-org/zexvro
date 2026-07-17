@@ -6,6 +6,8 @@ import {
   type DepinProvider,
 } from './depinApi';
 
+const DEPIN_BASE = 'https://sr9k3xpmbj.us-east-1.awsapprunner.com';
+
 const provider: DepinProvider = {
   route: '/v1/nft-health',
   method: 'GET',
@@ -37,10 +39,16 @@ describe('De-pin API client', () => {
         JSON.stringify({
           status: 'ok',
           service: 'depin',
+          multiInstanceSafe: false,
+          stateBackend: 'memory',
           capabilities: {
             scheme: 'exact',
             network: 'stellar:testnet',
             facilitatorUrl: 'https://x402.org/facilitator',
+            facilitatorAuthConfigured: false,
+            facilitatorOzChannels: false,
+            settleAuthRequired: false,
+            settleReady: true,
             settlement: 'after_upstream_success',
             fees: 'sponsored',
             replayTtlMs: 600000,
@@ -57,8 +65,22 @@ describe('De-pin API client', () => {
 
     expect(health.service).toBe('depin');
     expect(status.providers[0]?.route).toBe('/v1/nft-health');
-    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/depin/health', expect.any(Object));
-    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/depin/status', expect.any(Object));
+    expect(status.capabilities.settleReady).toBe(true);
+    expect(status.multiInstanceSafe).toBe(false);
+    expect(fetchMock).toHaveBeenNthCalledWith(1, `${DEPIN_BASE}/health`, expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, `${DEPIN_BASE}/status`, expect.any(Object));
+  });
+
+  it('maps browser network failures to a depin_network_error', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockRejectedValue(new TypeError('NetworkError when attempting to fetch resource.'));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(getDepinHealth()).rejects.toMatchObject({
+      name: 'DepinApiError',
+      code: 'depin_network_error',
+      status: 0,
+    });
+    await expect(getDepinHealth()).rejects.toThrow(/Network error reaching De-pin/);
   });
 
   it('probes a provider and decodes the standard x402 challenge header', async () => {

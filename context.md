@@ -129,9 +129,10 @@ Ownership means:
 
 ## Service Map
 
-### 1. Zero-Knowledge Privacy Pool
+### 1. Zero-Knowledge Privacy Pool (Zer0)
 
-Owner: Paris / `paris-29`
+Owner: Paris / `paris-29`  
+Status: **Complete (product UI)** — 2026-07-17
 
 Problem:
 
@@ -143,18 +144,22 @@ MVP intent:
 - Use zero-knowledge techniques where they fit.
 - Make on-chain or Web3-backed activity acceptable for privacy-sensitive teams.
 
+Shipped product surface:
+
+- Zer0 multi-screen suite: dashboard, people, pay party, history, proofs, stealth, settings.
+- Client settings are Web3-facing (wallet, network, privacy, signing) — no AWS region/Cognito/EC2 controls in the UI.
+- Payment processing modal uses brand loader + settle cinema.
+
 Agent boundaries:
 
 - Do not choose a final proving system, circuit design, smart contract model, or privacy architecture without a recorded decision.
 - If researching implementation, record options and tradeoffs in `memory.md`.
 - Any Stellar-specific privacy approach must explain why Stellar is suitable for that part.
 
-Unknowns:
+Remaining (ops / protocol, not “incomplete product UI”):
 
-- Exact privacy model.
-- Compliance requirements.
-- Which data must be hidden versus verifiable.
-- Whether this is a protocol, API, dashboard feature, or all three.
+- Hosted prover capacity and treasury ops keys remain platform-managed.
+- Compliance view-keys and mainnet policy remain product follow-ups.
 
 ### 2. Transformation Agent — Morph
 
@@ -265,7 +270,8 @@ Unknowns:
 
 ### 5. NFT Service
 
-Owner: Nabil / `n4bi10p`
+Owner: Nabil / `n4bi10p` (API/chain) + Paris (dashboard/product UX)  
+Status: **Complete (product UI)** — 2026-07-17
 
 Problem:
 
@@ -277,6 +283,13 @@ MVP intent:
 - Provide simple NFT management.
 - Support checkout or purchase flows from the platform.
 - Hide wallet, metadata, and chain complexity behind clear UI and APIs.
+
+Shipped product surface:
+
+- Create wizard with mission-brief cinema through Freighter, NFT Launch finale, success modal (dashboard / manage / delete).
+- Collection studio: overview (graphs + full dashboard/public URLs), sale, mint, ledger analytics, integrate SDK, delete/archive.
+- Public collection + embed checkout; nftApi defaults to hosted App Runner when env empty.
+- Docs: `/docs` → Services → NFT Collections.
 
 Architecture decisions:
 
@@ -303,16 +316,17 @@ Agent boundaries:
 - Any metadata schema, royalty logic, minting permission, or storage provider must be documented before implementation.
 - Do not build multi-chain support in v1.
 
-Remaining integration work:
+Remaining integration work (ops, not product-UI incomplete):
 
-- Record managed end-to-end smoke (Cognito + Freighter mint/sale/buy, auto token IDs, SDK embed) in `memory.md`.
-- Hosted NFT API (ECS/Lambda) + least-privilege IAM remain ops.
+- Periodic Cognito + Freighter mint/sale/buy smoke still useful after deploys.
+- Least-privilege IAM / custom domain for hosted NFT API remain ops.
 - Partner game origins must be listed in `CORS_ALLOWED_ORIGINS`.
 - New collection deploys use WASM hash with instance TTL bumps; older collections keep prior WASM until redeployed.
 
 ### 6. De-pin (x402 Agentic Resource Gateway) + Access Shield direction
 
-Owner: Nabil / `n4bi10p`
+Owner: Nabil / `n4bi10p`  
+Status: **In progress** — product testing planned next (do not treat as complete)
 
 Problem (shipping MVP):
 
@@ -359,9 +373,11 @@ Agent boundaries:
 - Do not claim Access Shield is fully shipped; keep product expansion marked Proposed until accepted by the team.
 - Coordinate Agent Auth identity/challenge design with Rushi; do not fork a second classifier under De-pin.
 
-Remaining integration work:
+Remaining integration work (active — test tomorrow):
 
-- Use `DEPIN_STATE_BACKEND=file` (or future redis) for multi-instance hosts; do not run multiple processes on memory defaults.
+- Redeploy App Runner image with CORS + expose `PAYMENT-REQUIRED` (branch harden).
+- Dashboard probe 402 + settle readiness from Pages origin.
+- Use `DEPIN_STATE_BACKEND=file` (or future redis) for multi-instance hosts; multi-ok only with shared state flag.
 - Prefer managed config via `DEPIN_CONFIG_JSON` or `DEPIN_CONFIG_URL` in containers; local file remains the dev default.
 - Provider onboarding UI and richer ownership model remain product follow-ups.
 - Optional OZ Channels facilitator + `OZ_API_KEY` for production-like settle.

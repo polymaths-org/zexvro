@@ -606,7 +606,12 @@ const sponsorSecretArn = awsJson([
 const corsOrigins = [
   'http://127.0.0.1:3000',
   'http://localhost:3000',
+  'http://127.0.0.1:4173',
+  'http://localhost:4173',
+  'http://127.0.0.1:5173',
+  'http://localhost:5173',
   'https://zexvrodashboard.xyz',
+  'https://www.zexvrodashboard.xyz',
   'https://zexvro.pages.dev',
 ].join(',');
 
@@ -655,7 +660,12 @@ const depinService = getOrCreateAppRunnerService({
   runtimeEnv: {
     NODE_ENV: 'production',
     PORT: '4102',
-    DEPIN_STATE_BACKEND: 'memory',
+    // Multi-instance-safe replay/rate-limit (ephemeral App Runner disk is per instance;
+    // still better than process memory when a single task restarts). Prefer redis later.
+    DEPIN_STATE_BACKEND: 'file',
+    DEPIN_STATE_PATH: '/tmp/depin-state.json',
+    // Required for browser dashboard (Pages / local) → App Runner cross-origin fetches.
+    CORS_ALLOWED_ORIGINS: corsOrigins,
   },
   runtimeSecrets: {
     DEPIN_CONFIG_JSON: depinSecretArn,

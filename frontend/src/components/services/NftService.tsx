@@ -1,10 +1,11 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from '@tanstack/react-router';
-import { CircleAlert, LoaderCircle } from 'lucide-react';
+import { CircleAlert } from 'lucide-react';
 import {
   ensureValidAccessToken,
   readStoredSession,
 } from '../../auth/cognito';
+import SectionSkeleton from '../ui/SectionSkeleton';
 import CollectionCreate from '../../services/nft/CollectionCreate';
 import CollectionList from '../../services/nft/CollectionList';
 import CollectionStudio from '../../services/nft/CollectionStudio';
@@ -58,12 +59,7 @@ function NftAuthGate({ children }: { children: (accessToken: string) => ReactNod
   const { accessToken, authError, ready } = useNftAccessToken();
 
   if (!ready) {
-    return (
-      <div className="flex min-h-[40vh] items-center justify-center gap-2 text-sm text-zinc-500">
-        <LoaderCircle className="h-4 w-4 animate-spin" />
-        Checking session…
-      </div>
-    );
+    return <SectionSkeleton rows={3} label="Checking session" />;
   }
 
   if (!accessToken || authError) {

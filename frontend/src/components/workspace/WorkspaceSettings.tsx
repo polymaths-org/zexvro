@@ -12,7 +12,6 @@ export default function WorkspaceSettings() {
     name: '',
     plan: 'Team workspace',
     billingEmail: '',
-    region: 'us-east-1',
     defaultNetwork: 'Stellar Testnet',
     defaultBranch: 'main',
     requireInviteApproval: false,
@@ -27,7 +26,6 @@ export default function WorkspaceSettings() {
       name: workspace.name,
       plan: workspace.plan,
       billingEmail: workspace.settings?.billingEmail || '',
-      region: workspace.settings?.region || 'us-east-1',
       defaultNetwork: workspace.settings?.defaultNetwork || 'Stellar Testnet',
       defaultBranch: workspace.settings?.defaultBranch || 'main',
       requireInviteApproval: workspace.settings?.requireInviteApproval || false,
@@ -46,7 +44,8 @@ export default function WorkspaceSettings() {
       plan: form.plan,
       settings: {
         billingEmail: form.billingEmail,
-        region: form.region,
+        // Keep existing region if present (platform-managed); clients do not edit cloud regions.
+        region: workspace.settings?.region || 'us-east-1',
         defaultNetwork: form.defaultNetwork,
         defaultBranch: form.defaultBranch,
         requireInviteApproval: form.requireInviteApproval,
@@ -64,7 +63,7 @@ export default function WorkspaceSettings() {
       <div>
         <h1 className="text-lg font-semibold text-zinc-900 dark:text-white">Workspace Settings</h1>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          Workspace identity, defaults, access rules, and operational retention.
+          Workspace identity, chain defaults, access rules, and audit retention. Cloud infrastructure is managed by ZEXVRO.
         </p>
       </div>
 
@@ -87,21 +86,13 @@ export default function WorkspaceSettings() {
               <select value={form.preferredCurrency} onChange={event => setForm(current => ({ ...current, preferredCurrency: event.target.value }))} className="h-10 w-full rounded-lg border border-zinc-200 bg-white px-2.5 text-sm text-zinc-900 outline-none dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
                 <option value="USD">USD ($)</option>
                 <option value="EUR">EUR (€)</option>
+                <option value="XLM">XLM</option>
               </select>
             </Field>
-            <Field label="Service Runtime Region">
-              <select value={form.region} onChange={event => setForm(current => ({ ...current, region: event.target.value }))} className="h-10 w-full rounded-lg border border-zinc-200 bg-white px-2.5 text-sm text-zinc-900 outline-none dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
-                <option value="us-east-1">US East (N. Virginia)</option>
-                <option value="eu-central-1">EU Central (Frankfurt)</option>
-                <option value="ap-southeast-1">AP Southeast (Singapore)</option>
-              </select>
-            </Field>
-            <Field label="Default Network">
+            <Field label="Default chain network">
               <select value={form.defaultNetwork} onChange={event => setForm(current => ({ ...current, defaultNetwork: event.target.value }))} className="h-10 w-full rounded-lg border border-zinc-200 bg-white px-2.5 text-sm text-zinc-900 outline-none dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
                 <option>Stellar Testnet</option>
                 <option>Stellar Mainnet</option>
-                <option>Ethereum Sepolia</option>
-                <option>Ethereum Mainnet</option>
               </select>
             </Field>
             <Field label="Default Project Branch">

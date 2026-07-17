@@ -139,8 +139,24 @@ function stop(exitCode = 0) {
   }
 }
 
+const depinConfigPathResolved = (() => {
+  const configuredPath = baseEnv.DEPIN_CONFIG_PATH || 'depin.config.json';
+  return path.isAbsolute(configuredPath)
+    ? configuredPath
+    : path.join(depinDirectory, configuredPath);
+})();
+const depinConfigExists = existsSync(depinConfigPathResolved);
+// Start De-pin with plain `npm run dev` when a local config exists (same as frontend dev-stack).
+// Force on with --with-depin / npm run dev:all; force off is only via --only=frontend|nft.
+const shouldStartDepin =
+  only === 'depin' ||
+  (only === undefined && (withDepin || depinConfigExists));
+
 function shouldStart(target) {
-  if (only === undefined) return target === 'frontend' || target === 'nft' || (target === 'depin' && withDepin);
+  if (only === undefined) {
+    if (target === 'depin') return shouldStartDepin;
+    return target === 'frontend' || target === 'nft';
+  }
   return only === target;
 }
 
@@ -152,16 +168,16 @@ if (shouldStart('nft')) {
 }
 
 if (shouldStart('depin')) {
-  const configuredPath = baseEnv.DEPIN_CONFIG_PATH || 'depin.config.json';
-  const depinConfigPath = path.isAbsolute(configuredPath)
-    ? configuredPath
-    : path.join(depinDirectory, configuredPath);
-  if (!existsSync(depinConfigPath)) {
+  if (!depinConfigExists) {
     console.warn(
-      `[depin] config not found at ${depinConfigPath}. Copy services/depin/depin.config.example.json to depin.config.json first.`,
+      `[depin] config not found at ${depinConfigPathResolved}. Copy services/depin/depin.config.example.json to depin.config.json first.`,
     );
+  } else if (!withDepin && only === undefined) {
+    console.log(`[depin] auto-starting (config found at ${depinConfigPathResolved})`);
   }
-  start('depin', depinDirectory, ['run', 'dev'], { DEPIN_CONFIG_PATH: depinConfigPath });
+  start('depin', depinDirectory, ['run', 'dev'], {
+    DEPIN_CONFIG_PATH: depinConfigPathResolved,
+  });
 }
 
 if (shouldStart('frontend')) {
