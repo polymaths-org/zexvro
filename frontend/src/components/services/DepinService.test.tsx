@@ -7,6 +7,7 @@ const api = vi.hoisted(() => ({
   getDepinHealth: vi.fn(),
   getDepinStatus: vi.fn(),
   probeDepinProvider: vi.fn(),
+  getDepinApiBaseUrl: vi.fn(() => 'https://sr9k3xpmbj.us-east-1.awsapprunner.com'),
 }));
 
 vi.mock('../../services/depin/depinApi', () => api);
@@ -30,11 +31,11 @@ const status = {
   providers: [
     {
       route: '/v1/nft-health',
-      method: 'GET',
+      method: 'GET' as const,
       description: 'ZEXVRO NFT service health response',
       price: '$0.001',
       recipient: 'GCD4SBBOLPUM7UYWLPRKOP6IYKOZ6FX5YQOJHVVE7RKC2QGZYNUHKRCZ',
-      network: 'stellar:testnet',
+      network: 'stellar:testnet' as const,
       timeoutMs: 5000,
       upstreamOrigin: 'http://127.0.0.1:4101',
       upstreamSecretRequired: false,
@@ -63,24 +64,35 @@ describe('DepinService', () => {
     });
   });
 
-  it('renders configured x402 gateway providers', async () => {
+  it('renders gateway overview and how-it-works', async () => {
     render(<DepinService />);
 
     expect(await screen.findByRole('heading', { name: 'x402 Gateway' })).toBeInTheDocument();
-    expect(screen.getByText('GET /v1/nft-health')).toBeInTheDocument();
-    expect(screen.getByText('$0.001')).toBeInTheDocument();
-    expect(screen.getByText('stellar:testnet')).toBeInTheDocument();
+    expect(screen.getByText(/How Access Shield works/i)).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /Protect route/i }).length).toBeGreaterThan(0);
   });
 
-  it('shows the unpaid x402 probe result', async () => {
+  it('shows live routes and unpaid x402 probe result', async () => {
     const user = userEvent.setup();
     render(<DepinService />);
 
-    await user.click(await screen.findByRole('button', { name: /probe 402/i }));
+    await user.click(await screen.findByRole('button', { name: /^Routes/i }));
+    expect(await screen.findByText('GET /v1/nft-health')).toBeInTheDocument();
+    expect(screen.getByText('$0.001')).toBeInTheDocument();
 
+    await user.click(screen.getByRole('button', { name: /probe 402/i }));
     expect(await screen.findByText('PAYMENT-REQUIRED')).toBeInTheDocument();
     expect(screen.getByText('0.001 USDC')).toBeInTheDocument();
     expect(api.probeDepinProvider).toHaveBeenCalledWith(status.providers[0]);
+  });
+
+  it('opens protect route wizard from primary CTA', async () => {
+    const user = userEvent.setup();
+    render(<DepinService />);
+
+    await user.click(await screen.findByRole('button', { name: 'Open protect wizard' }));
+    expect(await screen.findByRole('heading', { name: 'Protect a route' })).toBeInTheDocument();
+    expect(screen.getByText(/Build a provider entry/i)).toBeInTheDocument();
   });
 
   it('surfaces single-instance state and OZ settle warnings', async () => {

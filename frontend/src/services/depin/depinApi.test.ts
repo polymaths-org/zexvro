@@ -71,6 +71,18 @@ describe('De-pin API client', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(2, `${DEPIN_BASE}/status`, expect.any(Object));
   });
 
+  it('maps browser network failures to a depin_network_error', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockRejectedValue(new TypeError('NetworkError when attempting to fetch resource.'));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(getDepinHealth()).rejects.toMatchObject({
+      name: 'DepinApiError',
+      code: 'depin_network_error',
+      status: 0,
+    });
+    await expect(getDepinHealth()).rejects.toThrow(/Network error reaching De-pin/);
+  });
+
   it('probes a provider and decodes the standard x402 challenge header', async () => {
     const paymentRequired = {
       x402Version: 2,

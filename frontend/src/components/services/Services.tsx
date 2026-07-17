@@ -84,11 +84,19 @@ const serviceBlueprints: Record<Service['category'], {
   },
   depin: {
     icon: Radio,
-    state: 'Access Shield MVP live',
-    purpose: 'Protect HTTP API and compute resources with exact per-request USDC payments using the Stellar x402 protocol (Access Shield enforcement plane).',
-    inputs: ['Protected route and upstream URL', 'USDC price and recipient', 'Stellar network', 'Timeout and rate-limit policy'],
-    setup: ['Configure providers (JSON / Secrets Manager)', 'Probe unpaid 402 from the dashboard', 'Enable OZ facilitator key for paid settle'],
-    checklist: ['Uses standard x402 v2 headers', 'Unpaid probes return PAYMENT-REQUIRED', 'Paid settle needs settleReady facilitator'],
+    state: 'Access Shield product UI live',
+    purpose: 'Protect HTTP APIs and agent tool-loops with exact per-request Stellar testnet USDC (x402). Unpaid → 402; paid → verify, upstream once, settle, release.',
+    inputs: ['Route + upstream URL', 'USDC price + G-address recipient', 'Facilitator URL', 'Timeout / unpaid rate-limit policy'],
+    setup: [
+      'Open gateway → Protect route wizard (build JSON)',
+      'Apply depin.config.json or Secrets Manager, restart',
+      'Routes → Probe 402, then Integrate for client snippets',
+    ],
+    checklist: [
+      'Overview explains flow; Docs cover Access Shield',
+      'Unpaid probes return PAYMENT-REQUIRED',
+      'Paid settle needs settleReady facilitator (OZ_API_KEY for Channels)',
+    ],
     routeSegment: 'depin',
   },
 };

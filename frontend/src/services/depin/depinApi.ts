@@ -112,14 +112,30 @@ async function readJson(response: Response): Promise<unknown> {
   return undefined;
 }
 
+function networkErrorMessage(path: string, error: unknown): string {
+  const msg = error instanceof Error ? error.message : String(error);
+  if (msg.includes('NetworkError') || msg.includes('Failed to fetch') || msg.includes('Network request failed')) {
+    return (
+      `Network error reaching De-pin (${DEPIN_API_BASE}${path}). ` +
+      'Gateway may be down, VITE_DEPIN_API_URL may be wrong, or App Runner CORS may need redeploy.'
+    );
+  }
+  return msg;
+}
+
 async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${DEPIN_API_BASE}${path}`, {
-    ...init,
-    headers: {
-      Accept: 'application/json',
-      ...(init.headers as Record<string, string> | undefined),
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${DEPIN_API_BASE}${path}`, {
+      ...init,
+      headers: {
+        Accept: 'application/json',
+        ...(init.headers as Record<string, string> | undefined),
+      },
+    });
+  } catch (error) {
+    throw new DepinApiError(0, 'depin_network_error', networkErrorMessage(path, error));
+  }
   const payload = await readJson(response);
 
   if (!response.ok) {
@@ -161,13 +177,18 @@ export function getDepinStatus(signal?: AbortSignal) {
 }
 
 export async function probeDepinProvider(provider: DepinProvider, signal?: AbortSignal) {
-  const response = await fetch(`${DEPIN_API_BASE}${provider.route}`, {
-    method: provider.method,
-    headers: {
-      Accept: 'application/json',
-    },
-    signal,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${DEPIN_API_BASE}${provider.route}`, {
+      method: provider.method,
+      headers: {
+        Accept: 'application/json',
+      },
+      signal,
+    });
+  } catch (error) {
+    throw new DepinApiError(0, 'depin_network_error', networkErrorMessage(provider.route, error));
+  }
   const paymentRequired = decodePaymentRequired(response.headers.get('PAYMENT-REQUIRED'));
 
   return {

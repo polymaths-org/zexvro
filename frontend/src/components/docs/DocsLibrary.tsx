@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   BookOpen, Terminal, Shield, Cpu, RefreshCw, Layers, ArrowLeft, Search,
-  ChevronRight, Users, Wallet, Code, Settings, FileText, Key, Copy, Check
+  ChevronRight, Users, Wallet, Code, Settings, FileText, Key, Copy, Check, RadioTower
 } from 'lucide-react';
 import { Link } from '@tanstack/react-router';
 import { copyText } from '../../lib/clipboard';
@@ -378,6 +378,128 @@ Content-Type: application/json
     ),
   },
   {
+    id: 'access-shield',
+    title: 'Access Shield (De-pin x402)',
+    category: 'Services',
+    icon: RadioTower,
+    content: (
+      <div>
+        <P>
+          Access Shield is ZEXVRO&apos;s economic edge for HTTP APIs and agent tool-loops.
+          The shipping enforcement plane is <strong>De-pin</strong>: an x402 reverse proxy that requires
+          exact Stellar testnet USDC per request before origin traffic is released.
+        </P>
+        <Callout type="info">
+          Status: gateway MVP is live (GET/HEAD, exact scheme, probe + paid settle path). Full multi-tenant
+          control-plane CRUD is not shipped — routes are configured at gateway boot via JSON.
+        </Callout>
+
+        <H3>What problem does it solve?</H3>
+        <P>
+          Free-tier farming, shared cookies, and unlimited agent loops abuse flat API keys and daily quotas.
+          Access Shield makes each call have a price so resale and spam become uneconomic, while legitimate
+          paid/agent access stays attributable via payment receipts.
+        </P>
+
+        <H3>What is a protected route?</H3>
+        <P>
+          A provider entry maps a gateway path (e.g. <code>GET /v1/weather</code>) to an upstream URL, a USD price,
+          and a Stellar <strong>G-address</strong> recipient. Unpaid clients never see the origin response.
+        </P>
+
+        <H3>Unpaid 402 vs paid settle</H3>
+        <P>
+          Without payment the gateway returns HTTP 402 and a base64 <code>PAYMENT-REQUIRED</code> header.
+          With a valid <code>PAYMENT-SIGNATURE</code>, the gateway verifies with a facilitator, claims a replay
+          fingerprint, calls upstream once, settles, then releases the body + <code>PAYMENT-RESPONSE</code>.
+          Failures withhold the resource (fail closed).
+        </P>
+        <CodeBlock lang="text" code={`Client → GET /v1/resource
+       ← 402 + PAYMENT-REQUIRED
+
+Client → GET /v1/resource + PAYMENT-SIGNATURE
+       → facilitator verify
+       → upstream (once, buffered)
+       → facilitator settle
+       ← 200 + body + PAYMENT-RESPONSE`} />
+
+        <H3>Dashboard: Protect, Probe, Integrate</H3>
+        <ul className="list-disc pl-5 text-xs text-zinc-600 dark:text-zinc-400 space-y-1 mb-4">
+          <li><strong>Overview</strong> — how Access Shield works + live readiness (Gateway / Scheme / Settle / State).</li>
+          <li><strong>Routes</strong> — live providers from <code>/status</code>; Probe 402 without spending USDC.</li>
+          <li><strong>Protect route</strong> — wizard builds provider JSON + full <code>depin.config.json</code> (copy/download). Apply offline and restart the gateway.</li>
+          <li><strong>Integrate</strong> — curl, paid demo client, config, and env snippets (same product pattern as NFT SDK).</li>
+        </ul>
+
+        <H3>Config sources (boot only)</H3>
+        <P>Priority: <code>DEPIN_CONFIG_JSON</code> → <code>DEPIN_CONFIG_URL</code> → <code>DEPIN_CONFIG_PATH</code> / local file.</P>
+        <CodeBlock lang="json" code={`{
+  "port": 4102,
+  "facilitatorUrl": "https://x402.org/facilitator",
+  "providers": [{
+    "route": "/v1/weather",
+    "method": "GET",
+    "upstreamUrl": "https://httpbin.org/get",
+    "description": "Sample paid probe",
+    "price": "$0.001",
+    "recipient": "G...PROVIDER_WITH_USDC_TRUSTLINE",
+    "network": "stellar:testnet",
+    "timeoutMs": 5000
+  }]
+}`} />
+
+        <H3>Facilitator &amp; OZ_API_KEY</H3>
+        <P>
+          Local unpaid probes can use the public x402 facilitator. Real Stellar settle often uses
+          OpenZeppelin Channels (<code>https://channels.openzeppelin.com/x402/testnet</code>) with process env
+          <code>OZ_API_KEY</code> (Bearer). That key authenticates the payment facilitator — it is not a model API key.
+        </P>
+        <Callout type="warning">
+          <code>payTo</code> / recipient must be a classic G-address with a USDC trustline. Never put the USDC SAC C-address in recipient.
+        </Callout>
+
+        <H3>State backend</H3>
+        <P>
+          Replay and unpaid rate-limit state: prefer <code>DEPIN_STATE_BACKEND=file</code> for production single-instance.
+          <code>memory</code> is not multi-instance safe. Shared multi-ok needs a shared volume + <code>DEPIN_SHARED_STATE=1</code>.
+        </P>
+
+        <H3>Local smoke</H3>
+        <CodeBlock lang="bash" code={`# Root
+cp services/depin/depin.config.example.json services/depin/depin.config.json
+# set recipient G-address
+npm run dev:all
+
+# Unpaid
+curl -i http://127.0.0.1:4102/v1/weather
+# or dashboard → Routes → Probe 402
+
+# Paid (buyer funded with testnet USDC + OZ key if Channels)
+STELLAR_PRIVATE_KEY="$(stellar keys secret zexvro-buyer)" \\
+DEPIN_EXPECTED_RECIPIENT="$(stellar keys address zexvro-provider)" \\
+npm --prefix services/depin run demo:client`} />
+
+        <H3>Hosted App Runner</H3>
+        <P>
+          Service URL is configured via <code>VITE_DEPIN_API_URL</code>. Config secret: <code>zexvro/depin/config-json</code>.
+          Browser dashboards need CORS allowlist (redeploy with <code>CORS_ALLOWED_ORIGINS</code>).
+        </P>
+
+        <H3>MVP limits (honest)</H3>
+        <ul className="list-disc pl-5 text-xs text-zinc-600 dark:text-zinc-400 space-y-1 mb-4">
+          <li>GET and HEAD only — no streaming, sessions, or mutable POST compute in v1</li>
+          <li>No live create/delete provider API — config at boot</li>
+          <li>Agent Auth classification and full rate-card policy are roadmap, not this gateway</li>
+        </ul>
+
+        <Callout type="tip">
+          Open a project → Resource Gateway → De-pin x402 Gateway → Overview for the flow, Protect route to build JSON,
+          Routes to Probe 402, Integrate for client snippets.
+        </Callout>
+      </div>
+    ),
+  },
+  {
     id: 'changelog',
     title: 'Changelog',
     category: 'Updates',
@@ -394,6 +516,12 @@ Content-Type: application/json
           <li>Comprehensive Settings with 5 configuration tabs</li>
           <li>Zustand persistence for all data (employees, payments, proofs, pool)</li>
           <li>API client layer with DynamoDB-ready endpoints</li>
+        </ul>
+        <H3>v2.1.0 — Access Shield product UI</H3>
+        <ul className="list-disc pl-5 text-xs text-zinc-600 dark:text-zinc-400 space-y-1 mb-4">
+          <li>De-pin dashboard: Overview, Routes, Protect route wizard, Integrate panel</li>
+          <li>Config builder export (copy/download depin.config.json) + deploy steps</li>
+          <li>Docs topic: Access Shield (De-pin x402)</li>
         </ul>
         <H3>v1.2.0 — Documentation Library</H3>
         <ul className="list-disc pl-5 text-xs text-zinc-600 dark:text-zinc-400 space-y-1 mb-4">

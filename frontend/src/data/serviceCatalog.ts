@@ -56,9 +56,9 @@ export const serviceCatalog: Service[] = [
     name: 'Access Shield (De-pin x402)',
     owner: 'Platform',
     status: 'configuring',
-    description: 'Exact per-request Stellar testnet USDC enforcement for protected HTTP routes (x402 GET/HEAD). Unpaid probes return 402; paid settle uses the configured facilitator.',
-    progress: 70,
-    lastActivity: 'Gateway + dashboard probe live',
+    description: 'Exact per-request Stellar testnet USDC for protected HTTP routes (x402 GET/HEAD). Dashboard: protect-route config builder, probe 402, integrate snippets, and docs.',
+    progress: 90,
+    lastActivity: 'Product UI: protect + integrate + docs',
     category: 'depin',
   },
 ];

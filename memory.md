@@ -875,3 +875,23 @@ Use `None` for empty fields. Do not delete fields.
 - Follow-ups (tomorrow): Depin service E2E (App Runner redeploy, CORS from Pages, OZ settle, probe 402 from dashboard). Optional: fuel/assemble videos if product wants multi-stage cinema again.
 - Blockers: None for NFT/Zer0. Depin live CORS depends on redeploy of hardened gateway image.
 - Verification: FE NFT unit suite green earlier; Depin gateway 40/40 + FE depin 5/5 earlier; typecheck green on studio/hooks fixes.
+
+## 2026-07-17 - Codex with Paris - De-pin App Runner CORS redeploy
+
+- Service or area: De-pin x402 gateway (Access Shield) on App Runner + FE client.
+- Files changed: `scripts/redeploy-depin-aws.mjs` (new), `scripts/deploy-nft-depin-aws.mjs` (CORS on depin service), `frontend/src/services/depin/depinApi.ts` (+test), `frontend/src/components/services/DepinService.tsx`, root + `frontend/.env` `VITE_DEPIN_API_URL` → hosted URL, `memory.md`.
+- Summary: Dashboard Unavailable/Unknown was browser NetworkError — live App Runner image lacked CORS (OPTIONS 404, no ACAO). Rebuilt image `depin-1784274236906` via CodeBuild ZIP source, updated `zexvro-depin` with `CORS_ALLOWED_ORIGINS` + file state. Verified OPTIONS/GET from localhost:3000 and pages.dev return 204/200 with ACAO. FE maps NetworkError to clearer message and shows API base.
+- Decisions: Accepted - Point local FE at hosted App Runner by default until local :4102 is intentionally used. Accepted - Deploy script now injects CORS for De-pin (was NFT-only).
+- Follow-ups: Hard refresh dashboard; Probe 402 on `/v1/weather`; paid settle still needs OZ_API_KEY + funded buyer; restore full dual-image CodeBuild source if next NFT+Depin joint deploy.
+- Blockers: None for unpaid readiness/probe.
+- Verification: Live OPTIONS 204 + ACAO; `/health` ok; `/status` scheme=exact state=file providers=1; FE depinApi tests 3/3.
+
+## 2026-07-17 - Codex with Paris - Access Shield full product UI
+
+- Service or area: De-pin / Access Shield frontend product surface (+ docs).
+- Files changed: `DepinService.tsx` (tabs Overview/Routes/Protect/Integrate), `depinConfig.ts` (+tests), `ProtectRouteWizard.tsx`, `DepinIntegratePanel.tsx`, `DocsLibrary.tsx` topic `access-shield`, catalog/Services copy, DepinService tests.
+- Summary: NFT-parity product UI without inventing a control-plane API. Protect wizard builds validated provider + full `depin.config.json` (copy/download + local/hosted apply steps). Integrate panel mirrors NFT SDK (probe/pay/config/env). Docs explain problem, 402 flow, config sources, OZ key, MVP limits.
+- Decisions: Accepted - Config-at-boot honesty (wizard does not claim live create). Accepted - Single project `/depin` screen with tabs instead of extra routes for now.
+- Follow-ups: Browser smoke protect → export → apply; optional deep-link `/docs?topic=access-shield`; paid settle still needs human OZ key.
+- Blockers: None for unpaid product UI.
+- Verification: `tsc --noEmit` clean; depin unit tests (re-run after selector fix).
