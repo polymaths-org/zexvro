@@ -179,7 +179,7 @@ describe('De-pin proxy', () => {
       fetchImplementation: fetchMock,
       logger,
       environment: {
-        CORS_ALLOWED_ORIGINS: 'https://zexvro.pages.dev',
+        CORS_ALLOWED_ORIGINS: 'https://zexvro.pages.dev,https://*.zexvro.pages.dev',
       },
     })
 
@@ -199,6 +199,14 @@ describe('De-pin proxy', () => {
     expect(status.status).toBe(200)
     expect(status.headers['access-control-allow-origin']).toBe('https://zexvro.pages.dev')
     expect(status.body.multiInstanceSafe).toBe(false)
+
+    const preview = await request(server)
+      .options('/status')
+      .set('Origin', 'https://main.zexvro.pages.dev')
+      .set('Access-Control-Request-Method', 'GET')
+
+    expect(preview.status).toBe(204)
+    expect(preview.headers['access-control-allow-origin']).toBe('https://main.zexvro.pages.dev')
   })
 
   it('only marks multiInstanceSafe when shared state is enabled', async () => {

@@ -613,6 +613,8 @@ const corsOrigins = [
   'https://zexvrodashboard.xyz',
   'https://www.zexvrodashboard.xyz',
   'https://zexvro.pages.dev',
+  'https://main.zexvro.pages.dev',
+  'https://*.zexvro.pages.dev',
 ].join(',');
 
 const baseNftEnv = {

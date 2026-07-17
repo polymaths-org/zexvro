@@ -65,6 +65,9 @@ const DEFAULT_CORS_ORIGINS = [
   'https://zexvrodashboard.xyz',
   'https://www.zexvrodashboard.xyz',
   'https://zexvro.pages.dev',
+  'https://main.zexvro.pages.dev',
+  // Cloudflare Pages preview / branch aliases (*.zexvro.pages.dev)
+  'https://*.zexvro.pages.dev',
 ]
 
 function parseCorsOrigins(environment: NodeJS.ProcessEnv): string[] {
@@ -72,8 +75,40 @@ function parseCorsOrigins(environment: NodeJS.ProcessEnv): string[] {
   if (raw === undefined || raw.trim() === '') return DEFAULT_CORS_ORIGINS
   return raw
     .split(',')
-    .map((value) => value.trim())
+    .map((value) => value.trim().replace(/\/$/, ''))
     .filter(Boolean)
+}
+
+/** Exact match or single-label wildcard host (e.g. https://*.zexvro.pages.dev). */
+export function isCorsOriginAllowed(origin: string, allowedOrigins: string[]): boolean {
+  const normalized = origin.trim().replace(/\/$/, '')
+  if (!normalized) return false
+  if (allowedOrigins.includes(normalized)) return true
+
+  let parsed: URL
+  try {
+    parsed = new URL(normalized)
+  } catch {
+    return false
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false
+  if (parsed.username || parsed.password) return false
+
+  for (const entry of allowedOrigins) {
+    if (!entry.includes('*')) continue
+    try {
+      // Support https://*.example.com only (one subdomain label).
+      const wildcard = new URL(entry.replace('://*.', '://wildcard-marker.'))
+      if (wildcard.protocol !== parsed.protocol) continue
+      const suffix = wildcard.hostname.replace(/^wildcard-marker\./, '')
+      if (!suffix || !parsed.hostname.endsWith(`.${suffix}`)) continue
+      const sub = parsed.hostname.slice(0, -(suffix.length + 1))
+      if (sub.length > 0 && !sub.includes('.')) return true
+    } catch {
+      // ignore bad allowlist entries
+    }
+  }
+  return false
 }
 
 export function createDepinApp(options: DepinAppOptions) {
@@ -102,8 +137,8 @@ export function createDepinApp(options: DepinAppOptions) {
 
   app.use((request, response, next) => {
     const origin = request.header('Origin')
-    if (origin && allowedOrigins.includes(origin)) {
-      response.setHeader('Access-Control-Allow-Origin', origin)
+    if (origin && isCorsOriginAllowed(origin, allowedOrigins)) {
+      response.setHeader('Access-Control-Allow-Origin', origin.trim().replace(/\/$/, ''))
       response.setHeader('Vary', 'Origin')
       response.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')
       response.setHeader(
