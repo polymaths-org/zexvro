@@ -41,7 +41,7 @@ export const mockServices: Service[] = [
   },
   {
     id: 'srv-agent-auth',
-    name: 'Captcha-like Agent Authentication Service',
+    name: 'ZEXVRO Gate (Agent Auth)',
     owner: 'Unassigned',
     status: 'configuring',
     description: 'Human vs agent access classification service with SDK/API direction. Privacy model and signals are not finalized.',

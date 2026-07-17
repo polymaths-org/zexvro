@@ -17,10 +17,24 @@
     "test:depin": "npm --prefix services/depin test",
     "build:frontend": "npm --prefix frontend run build",
     "build:nft": "npm --prefix services/nft-service/api run build",
-    "build:depin": "npm --prefix services/depin run build"
+    "build:depin": "npm --prefix services/depin run build",
+    "dev:agent-auth": "npm --prefix services/agent-auth run dev",
+    "lint:agent-auth": "npm --prefix services/agent-auth run lint",
+    "test:agent-auth": "npm --prefix services/agent-auth test",
+    "build:agent-auth": "npm --prefix services/agent-auth run build",
+    "agent-auth:smoke": "node scripts/agent-auth-smoke.mjs",
+    "dev:stack-gate": "node scripts/dev.mjs --with-depin --with-agent-auth",
+    "gate:deploy-plan": "node scripts/deploy-agent-auth-aws.mjs --plan",
+    "gate:dynamo-smoke": "node scripts/gate-dynamo-smoke.mjs",
+    "gate:deploy": "node scripts/deploy-agent-auth-codebuild.mjs",
+    "dev:gate": "node scripts/dev.mjs --only=agent-auth",
+    "test:gate": "npm run test:agent-auth",
+    "gate:smoke": "node scripts/agent-auth-smoke.mjs",
+    "gate:protect-demo": "node scripts/gate-local-protect-demo.mjs",
+    "dev:frontend-gate": "node scripts/dev.mjs --only=frontend --with-agent-auth",
+    "dev:stack-gate-lite": "node scripts/dev.mjs --with-depin --with-agent-auth --no-nft"
   },
   "engines": {
     "node": ">=22"
   }
 }
-

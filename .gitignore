@@ -10,3 +10,11 @@ playwright-report/
 .env*
 !.env.example
 
+services/agent-auth/captcha-assets
+
+# Kaggle credentials (never commit)
+kaggle.json
+.kaggle/
+
+# Playwright CLI local snapshots
+.playwright-cli/

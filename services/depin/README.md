@@ -92,3 +92,37 @@ npm run demo:client
 The demo refuses a recipient mismatch or a payment above `10000` atomic USDC
 (`0.001 USDC`). Override `DEPIN_URL`, `DEPIN_EXPECTED_RECIPIENT`, or
 `DEPIN_MAX_PAYMENT_ATOMIC` only when deliberately testing another route.
+
+
+## Optional: ZEXVRO Gate capability (Access Shield plane 1)
+
+De-pin does **not** classify humans/agents. When configured, it verifies a Gate capability token before payment, and can bind the x402 **payer** to `allowed_payer_pks`.
+
+```json
+{
+  "capabilityGate": {
+    "gateApiBase": "http://127.0.0.1:4103",
+    "siteSecret": "sk_test_demo_secret_do_not_use_prod",
+    "defaultMinClass": "agent",
+    "bindPayer": true
+  },
+  "providers": [
+    {
+      "route": "/v1/weather",
+      "method": "GET",
+      "requireCapability": true,
+      "capabilityAction": "depin.weather.get",
+      "capabilityMinClass": "agent",
+      "bindCapabilityPayer": true,
+      "upstreamUrl": "https://api.example.com/weather",
+      "description": "Weather behind Gate + pay",
+      "price": "$0.001",
+      "recipient": "G...",
+      "network": "stellar:testnet",
+      "timeoutMs": 5000
+    }
+  ]
+}
+```
+
+Client headers: `X-Zexvro-Capability`, optional `X-Zexvro-Pop`, then `PAYMENT-SIGNATURE` as usual.

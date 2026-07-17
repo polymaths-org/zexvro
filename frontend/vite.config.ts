@@ -201,6 +201,11 @@ export default defineConfig(({ mode }) => {
           changeOrigin: false,
           rewrite: (requestPath) => requestPath.replace(/^\/api\/depin/, ''),
         },
+        '/api/agent-auth': {
+          target: env.AGENT_AUTH_API_PROXY_TARGET || 'http://127.0.0.1:4103',
+          changeOrigin: false,
+          rewrite: (requestPath) => requestPath.replace(/^\/api\/agent-auth/, ''),
+        },
       },
     },
   };

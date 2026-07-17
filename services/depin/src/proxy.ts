@@ -14,6 +14,11 @@ import type {
 import { JsonAuditLogger } from './audit.js'
 import { claimPaymentReplay } from './replay.js'
 import { MemoryRateLimitStore, MemoryReplayStore } from './stores.js'
+import {
+  assertPayerAllowed,
+  extractPayerFromPaymentPayload,
+  verifyCapabilityWithGate,
+} from './capabilityGate.js'
 
 class UpstreamError extends Error {
   constructor(
@@ -94,6 +99,13 @@ export function createDepinApp(options: DepinAppOptions) {
         fees: 'sponsored',
         replayTtlMs: config.replayTtlMs,
         unpaidRateLimit: config.unpaidRateLimit,
+        capabilityGate: config.capabilityGate
+          ? {
+              enabled: true,
+              gateApiBase: config.capabilityGate.gateApiBase,
+              bindPayer: config.capabilityGate.bindPayer === true,
+            }
+          : { enabled: false },
       },
       providers: config.providers.map(provider => {
         const upstream = new URL(provider.upstreamUrl)
@@ -107,6 +119,10 @@ export function createDepinApp(options: DepinAppOptions) {
           timeoutMs: provider.timeoutMs,
           upstreamOrigin: upstream.origin,
           upstreamSecretRequired: provider.upstreamSecretRef !== undefined,
+          requireCapability: provider.requireCapability === true,
+          capabilityAction: provider.capabilityAction,
+          capabilityMinClass: provider.capabilityMinClass,
+          bindCapabilityPayer: provider.bindCapabilityPayer,
         }
       }),
     })
@@ -116,6 +132,59 @@ export function createDepinApp(options: DepinAppOptions) {
     const handler = async (request: Request, response: Response): Promise<void> => {
       const requestId = String(response.locals.requestId)
       const startedAt = now()
+
+      // Optional Access Shield plane 1: Gate capability (no classifier inside De-pin)
+      let capabilityClaims:
+        | {
+            class: string
+            stellar_pk?: string
+            pay_mode?: string
+            allowed_payer_pks?: string[]
+          }
+        | undefined
+      if (provider.requireCapability && config.capabilityGate) {
+        const gateConfig = {
+          gateApiBase: config.capabilityGate.gateApiBase,
+          siteSecret: config.capabilityGate.siteSecret,
+          minClass:
+            provider.capabilityMinClass ??
+            config.capabilityGate.defaultMinClass ??
+            ('either' as const),
+          required: true as const,
+          ...(provider.capabilityAction
+            ? { action: provider.capabilityAction }
+            : {}),
+        }
+        const gateResult = await verifyCapabilityWithGate(
+          request,
+          gateConfig,
+          fetchImplementation,
+        )
+        if (!gateResult.ok) {
+          response.status(gateResult.status)
+          response.setHeader('content-type', 'application/problem+json')
+          response.json(gateResult.problem)
+          logger.info({
+            event: 'capability_rejected',
+            requestId,
+            route: provider.route,
+            method: provider.method,
+            status: gateResult.status,
+          })
+          return
+        }
+        capabilityClaims = { class: gateResult.class }
+        if (gateResult.stellar_pk !== undefined) {
+          capabilityClaims.stellar_pk = gateResult.stellar_pk
+        }
+        if (gateResult.pay_mode !== undefined) {
+          capabilityClaims.pay_mode = gateResult.pay_mode
+        }
+        if (gateResult.allowed_payer_pks !== undefined) {
+          capabilityClaims.allowed_payer_pks = gateResult.allowed_payer_pks
+        }
+      }
+
       const paymentSignature = request.header('PAYMENT-SIGNATURE')
 
       if (paymentSignature === undefined) {
@@ -197,6 +266,38 @@ export function createDepinApp(options: DepinAppOptions) {
           status: decision.response.status,
         })
         return
+      }
+
+      // Bind payment payer to Gate capability when configured
+      if (
+        capabilityClaims &&
+        (provider.bindCapabilityPayer === true ||
+          (provider.bindCapabilityPayer !== false &&
+            config.capabilityGate?.bindPayer === true))
+      ) {
+        const payer = extractPayerFromPaymentPayload(decision.payment.paymentPayload)
+        const bind = assertPayerAllowed(capabilityClaims, payer)
+        if (!bind.ok) {
+          await safeCancel(protocol, decision.payment, {
+            reason: 'handler_failed',
+            responseStatus: 403,
+          })
+          response.status(403).json({
+            error: {
+              code: bind.code,
+              message: bind.detail,
+            },
+          })
+          logger.info({
+            event: 'capability_payer_mismatch',
+            requestId,
+            route: provider.route,
+            method: provider.method,
+            status: 403,
+            reason: bind.code,
+          })
+          return
+        }
       }
 
       if (

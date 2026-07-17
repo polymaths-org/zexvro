@@ -225,43 +225,48 @@ Unknowns:
 - Settlement mechanism.
 - Dispute or cancellation flow.
 
-### 4. Captcha-Like Agent Authentication Service
+### 4. Captcha-Like Agent Authentication Service (ZEXVRO Gate)
 
-Owner: Rushi / `Wraient`
+Owner: Rushi / `Wraient`  
+Product name: **ZEXVRO Gate** (code: `services/agent-auth`, SDK `@zexvro/gate`)
 
 Problem:
 
-- Platforms need to distinguish humans from agents and control how each can access product flows.
+- Platforms need dual-channel access control: humans and agents prove themselves differently, without default-denying agents or letting one class solve for the other.
 
 MVP intent:
 
-- Build an auth service that classifies humans and agents.
-- Provide SDK/API access for external platforms.
-- Use Web3 and Stellar technology where useful.
-- Support high-accuracy labeling of internet users as human or agent.
+- Dual-channel capability issuer (`human` / `agent`) with per-action policy (`human_only` | `agent_only` | `either`).
+- SDK so developers protect **any action** (browser + agent + Express middleware + remote verify).
+- Class integrity: ceremony success sets class; humans cannot mint agent tokens and vice versa.
+- Optional Stellar: agent principal + De-pin **payer** allowlist — **not** proof of humanness.
+- Honest security: no perfect detection; no image CAPTCHA farms; soft human is not a farm-stopper alone.
 
-Related concept: HDM, Human Data Marketplace.
-
-HDM intent:
-
-- A verified human can choose to sell data to AI training companies.
-- AI companies get human-origin data instead of AI-content-polluted data.
-- Users can earn from their data.
+Related concept: HDM, Human Data Marketplace — **Deferred** (not MVP Gate).
 
 Agent boundaries:
 
-- Do not claim perfect detection.
-- Do not store biometric, behavioral, or personal data without a privacy model.
-- Do not design HDM data sale flows without consent, auditability, and deletion requirements.
-- Any classification model must describe input signals, confidence score, appeal flow, and false-positive handling.
+- Do not claim perfect detection or CAPTCHA replacement that stops farms.
+- Do not store biometric/behavioral data without a privacy model.
+- Do not design HDM data sale flows without consent, auditability, and deletion.
+- Coordinate with Nabil: De-pin verifies Gate remotely; does **not** reimplement a classifier.
 
-Unknowns:
+**Accepted** decisions (see `docs/agent_auth_PLAN_FINAL.md`, `docs/adr-002-gate-protocol-v0.2.md`):
 
-- Classification signals.
-- Web3 identity method.
-- Stellar role.
-- SDK shape.
-- Data marketplace consent and payment model.
+- Classification signals: ceremony success + honest `ceremony_strength` (not ML confidence).
+- Human prod soft: `session_pop` (Ed25519); hard: WebAuthn; soft_confirm **dev-only**.
+- Agent: registered Ed25519 + challenge sign + PoP (`GATE_REQUIRE_POP` default true); `clientPublicKey` must equal `agentPublicKey`.
+- Header: `X-Zexvro-Capability`; PoP: `X-Zexvro-Pop` / body `pop`.
+- Stellar role: principal + De-pin payer bind (`pay_mode`, `allowed_payer_pks`); not humanness.
+- SDK: `@zexvro/gate` + `/browser` + `/middleware`; `gateFetch` for agents.
+- Human maxReuse default 1; request-bound Pop via origin `expectedHtm/Htu/bodyHash`.
+- HDM / data marketplace: deferred.
+
+Remaining:
+
+- Public App Runner Gate URL (CodeBuild quota / Docker).
+- npm publish of `@zexvro/gate`; richer dashboard CRUD.
+- Optional SEP-10; human presentation Pop as default product path when marketing anti-relay.
 
 ### 5. NFT Service
 

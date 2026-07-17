@@ -7,6 +7,7 @@ const rootDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)),
 const frontendDirectory = path.join(rootDirectory, 'frontend');
 const nftApiDirectory = path.join(rootDirectory, 'services/nft-service/api');
 const depinDirectory = path.join(rootDirectory, 'services/depin');
+const agentAuthDirectory = path.join(rootDirectory, 'services/agent-auth');
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const defaultWasmHash = 'df42dfceaf2036be527561f313392cee4b756d34745d7cc5f7a1c96936543710';
 
@@ -14,8 +15,10 @@ const args = new Set(process.argv.slice(2));
 const onlyArg = [...args].find((arg) => arg.startsWith('--only='));
 const only = onlyArg?.slice('--only='.length);
 const withDepin = args.has('--with-depin') || only === 'depin';
+const withAgentAuth = args.has('--with-agent-auth') || only === 'agent-auth';
+const withNft = !(args.has('--no-nft') || args.has('--skip-nft'));
 
-if (only !== undefined && !['frontend', 'nft', 'depin'].includes(only)) {
+if (only !== undefined && !['frontend', 'nft', 'depin', 'agent-auth'].includes(only)) {
   console.error(`Unsupported --only target: ${only}`);
   process.exit(1);
 }
@@ -58,6 +61,8 @@ function withDefaults(env) {
   next.NFT_API_PROXY_TARGET ||= 'http://127.0.0.1:4101';
   next.VITE_DEPIN_API_URL ||= '/api/depin';
   next.DEPIN_API_PROXY_TARGET ||= 'http://127.0.0.1:4102';
+  next.VITE_AGENT_AUTH_API_URL ||= '/api/agent-auth';
+  next.AGENT_AUTH_API_PROXY_TARGET ||= 'http://127.0.0.1:4103';
   next.PORT ||= '4101';
   next.NFT_STORAGE_MODE ||= 'local';
   next.NFT_PUBLIC_BASE_URL ||= 'http://127.0.0.1:4101';
@@ -140,7 +145,20 @@ function stop(exitCode = 0) {
 }
 
 function shouldStart(target) {
-  if (only === undefined) return target === 'frontend' || target === 'nft' || (target === 'depin' && withDepin);
+  if (only === undefined) {
+    if (target === 'frontend') return true;
+    if (target === 'nft') return withNft;
+    if (target === 'depin') return withDepin;
+    if (target === 'agent-auth') return withAgentAuth;
+    return false;
+  }
+  // Allow composing --only=frontend with --with-agent-auth / --with-depin
+  if (only === 'frontend') {
+    if (target === 'frontend') return true;
+    if (target === 'agent-auth') return withAgentAuth;
+    if (target === 'depin') return withDepin;
+    return false;
+  }
   return only === target;
 }
 
@@ -164,6 +182,13 @@ if (shouldStart('depin')) {
   start('depin', depinDirectory, ['run', 'dev'], { DEPIN_CONFIG_PATH: depinConfigPath });
 }
 
+if (shouldStart('agent-auth')) {
+  start('agent-auth', agentAuthDirectory, ['run', 'dev'], {
+    AGENT_AUTH_PORT: '4103',
+  });
+}
+
+
 if (shouldStart('frontend')) {
   start('frontend', frontendDirectory, ['run', 'dev']);
 }
@@ -176,6 +201,7 @@ if (children.length === 0) {
 const labels = [];
 if (shouldStart('nft')) labels.push('NFT API :' + (baseEnv.PORT || '4101'));
 if (shouldStart('depin')) labels.push('De-pin :4102');
+if (shouldStart('agent-auth')) labels.push('Gate/Agent-Auth :4103');
 if (shouldStart('frontend')) labels.push('Frontend :3000');
 console.log(`[zexvro] root env loaded from ${existsSync(path.join(rootDirectory, '.env')) ? '.env' : '.env.example defaults + process env'}`);
 console.log(`[zexvro] starting ${labels.join(', ')}`);

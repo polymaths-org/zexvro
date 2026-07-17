@@ -17,6 +17,11 @@ export interface ProviderConfig {
   network: 'stellar:testnet'
   timeoutMs: number
   upstreamSecretRef?: string | undefined
+  /** Optional ZEXVRO Gate capability requirement (Access Shield composition). */
+  requireCapability?: boolean | undefined
+  capabilityAction?: string | undefined
+  capabilityMinClass?: 'human' | 'agent' | 'either' | undefined
+  bindCapabilityPayer?: boolean | undefined
 }
 
 export interface DepinConfig {
@@ -29,6 +34,13 @@ export interface DepinConfig {
     windowMs: number
   }
   providers: ProviderConfig[]
+  /** Global Gate settings; per-provider requireCapability enables checks. */
+  capabilityGate?: {
+    gateApiBase: string
+    siteSecret: string
+    defaultMinClass?: 'human' | 'agent' | 'either' | undefined
+    bindPayer?: boolean | undefined
+  } | undefined
 }
 
 export interface VerifiedPayment {
