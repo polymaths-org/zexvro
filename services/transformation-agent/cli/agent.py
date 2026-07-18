@@ -100,7 +100,12 @@ class Agent:
         import json
 
         api_url = os.environ.get("OPENCODE_API_URL", "https://opencode.ai/zen/v1/chat/completions")
-        api_key = os.environ.get("OPENCODE_API_KEY", "REDACTED_OPENCODE_API_KEY")
+        api_key = (os.environ.get("OPENCODE_API_KEY") or "").strip()
+        if not api_key:
+            return (
+                "[dim](AI offline — set OPENCODE_API_KEY in the environment)[/dim]\n\n"
+                "I can still help with local tools. Type `tools` or describe a task."
+            )
         provider = os.environ.get("OPENCODE_PROVIDER", "opencode zen")
         model = os.environ.get("OPENCODE_MODEL", "big-pickle")
 

@@ -271,7 +271,12 @@ def lambda_handler(event, context):
         import urllib.error
         
         api_url = "https://opencode.ai/zen/v1/chat/completions"
-        api_key = "REDACTED_OPENCODE_API_KEY"
+        api_key = (os.environ.get("OPENCODE_API_KEY") or "").strip()
+        if not api_key:
+            return respond(503, {
+                "error": "configuration_error",
+                "error_description": "OPENCODE_API_KEY is not configured on the Lambda",
+            })
         
         messages = body.get("messages", [])
         model = body.get("model", "big-pickle")

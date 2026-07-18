@@ -5,8 +5,31 @@ test-results/
 playwright-report/
 .DS_Store
 *.log
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
 
 # Local machine secrets/config. Keep `.env.example` committed as the template.
 .env*
 !.env.example
+
+# Local runtime / agent data (may contain chat history or secrets)
+.data/
+*.db
+*.sqlite
+*.sqlite3
+services/transformation-agent/data/morph_memory.db
+services/depin/depin.config.json
+
+# Packaging dumps / accidental archives (never commit secrets inside zips)
+*.zip
+!packages/**/*.zip
+
+# Large local circuit artifacts (use backups/zk-proofs-LATEST when needed)
+zer0-pool/circuit/build/
+zer0-pool/circuit/circomlib/
+zer0-pool/circuit/*.ptau
+zer0-pool/target/
 

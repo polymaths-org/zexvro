@@ -562,10 +562,11 @@ You can simply import this test account into your Freighter wallet:
 
 1. Open Freighter, click the **Settings Gear ⚙️** at the bottom right.
 2. Go to **Manage Wallets** -> **Import a Wallet** -> **Import with Secret Key**.
-3. Paste the secret key for the `zexvro-buyer` account:
-   ```text
-   REDACTED_STELLAR_BUYER_SECRET
+3. Import the local `zexvro-buyer` secret from your machine only (never commit it):
+   ```bash
+   stellar keys secret zexvro-buyer
    ```
+   Paste that value into Freighter → **Import with Secret Key**.
 4. Name it something like "Testnet Buyer" and click **Import**.
 
 Now you can switch to this account in Freighter and it will instantly work for testing the checkout flow on your local site!

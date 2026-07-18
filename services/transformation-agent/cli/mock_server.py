@@ -1,5 +1,6 @@
 import http.server
 import json
+import os
 import urllib.parse
 import uuid
 import sys
@@ -312,7 +313,15 @@ class MockServerHandler(http.server.BaseHTTPRequestHandler):
             try:
                 data = json.loads(post_data.decode("utf-8"))
                 api_url = "https://opencode.ai/zen/v1/chat/completions"
-                api_key = "REDACTED_OPENCODE_API_KEY"
+                api_key = (os.environ.get("OPENCODE_API_KEY") or "").strip()
+                if not api_key:
+                    self.send_response(503)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        "error": "OPENCODE_API_KEY is not configured on the mock server",
+                    }).encode("utf-8"))
+                    return
                 
                 payload = {
                     "model": data.get("model", "big-pickle"),
