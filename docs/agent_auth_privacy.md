@@ -1,6 +1,6 @@
 # ZEXVRO Gate — Signals & Privacy (MVP)
 
-**Status:** Proposed companion to `docs/agent_auth_implementation_plan.md`  
+**Status:** Proposed companion to Gate privacy posture (see ADRs + developer guide).  
 **Owner:** Rushi / `Wraient`
 
 ## Purpose of processing
@@ -40,4 +40,4 @@ Confidence scores are **not** perfect detection. Policy + channel binding + econ
 ## Related
 
 - `context.md` Agent Auth boundaries
-- `docs/agent_auth_implementation_plan.md`
+- `docs/agent_auth_DEVELOPER_GUIDE.md`

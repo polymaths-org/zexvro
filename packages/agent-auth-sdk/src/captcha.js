@@ -1,3 +1,4 @@
+export const CAPABILITY_HEADER = 'x-zexvro-capability'
 /**
  * @zexvro/gate captcha — premium modal UX
  * Soft gate → hero challenges · attempts chip · a11y · co-brand · fluid motion
@@ -32,7 +33,6 @@ const HERO_TYPES = [
   'count_objects',
   'photo_rotate',
     'majority_select',
-  'sequence',
   'text_distorted',
   'rotate',
 ]
@@ -979,36 +979,36 @@ function renderChallenge(bodyEl, actionsEl, toolsEl, statusEl, ctx, root, hooks)
   bodyEl.style.flexDirection = 'column'
   bodyEl.style.minHeight = '0'
 
-  // Compact top row: optional reference thumb + prompt
+  // Prompt + large reference example (readable subject, not a 44px pin)
   const top = document.createElement('div')
   top.style.cssText =
-    'display:flex;align-items:center;gap:10px;margin:0 0 8px;flex:0 0 auto;min-height:0'
+    'display:flex;flex-direction:column;gap:8px;margin:0 0 8px;flex:0 0 auto;min-height:0'
+
+  const prompt = document.createElement('div')
+  prompt.style.cssText =
+    'font-size:13px;font-weight:600;color:#fafafa;line-height:1.35'
+  prompt.textContent = captcha.prompt
+  top.appendChild(prompt)
 
   if (ui.referenceAssetPath) {
+    const refRow = document.createElement('div')
+    refRow.style.cssText =
+      'display:flex;align-items:center;gap:10px;padding:8px;border-radius:10px;border:1px solid #27272a;background:#0c0c0e'
     const refImg = document.createElement('img')
     refImg.src = assetUrl(ui.referenceAssetPath)
     refImg.alt = `Example of ${ui.referenceLabel || 'target'}`
     refImg.title = `Example: ${ui.referenceLabel || 'target'}`
     refImg.style.cssText =
-      'width:44px;height:44px;object-fit:contain;object-position:center;border-radius:8px;border:1px solid #3f3f46;flex:0 0 auto;background:#0a0a0b;box-shadow:0 0 0 1px rgba(255,255,255,.04)'
-    top.appendChild(refImg)
+      'width:96px;height:72px;object-fit:contain;object-position:center;border-radius:8px;border:1px solid #3f3f46;flex:0 0 auto;background:#09090b'
+    const refMeta = document.createElement('div')
+    refMeta.style.cssText = 'min-width:0;flex:1'
+    refMeta.innerHTML =
+      '<div style="font-size:10px;font-weight:700;color:#71717a;letter-spacing:.06em;text-transform:uppercase;margin-bottom:4px">Match this example</div>' +
+      '<div style="font-size:12px;color:#a1a1aa;line-height:1.35">Look for the same kind of object in the grid below</div>'
+    refRow.appendChild(refImg)
+    refRow.appendChild(refMeta)
+    top.appendChild(refRow)
   }
-
-  const promptCol = document.createElement('div')
-  promptCol.style.cssText = 'min-width:0;flex:1'
-  if (ui.referenceAssetPath) {
-    const hint = document.createElement('div')
-    hint.style.cssText =
-      'font-size:10px;font-weight:600;color:#71717a;letter-spacing:.04em;text-transform:uppercase;margin-bottom:2px'
-    hint.textContent = 'Match this example'
-    promptCol.appendChild(hint)
-  }
-  const prompt = document.createElement('div')
-  prompt.style.cssText =
-    'font-size:13px;font-weight:600;color:#fafafa;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden'
-  prompt.textContent = captcha.prompt
-  promptCol.appendChild(prompt)
-  top.appendChild(promptCol)
   bodyEl.appendChild(top)
 
   const area = document.createElement('div')
@@ -1020,8 +1020,7 @@ function renderChallenge(bodyEl, actionsEl, toolsEl, statusEl, ctx, root, hooks)
   const gridTypes = new Set([
     'image_select',
     'image_grid',
-    'sequence',
-    'odd_one_out',
+      'odd_one_out',
     'pair_match',
     'majority_select',
       ])
@@ -1033,7 +1032,7 @@ function renderChallenge(bodyEl, actionsEl, toolsEl, statusEl, ctx, root, hooks)
     const grid = document.createElement('div')
     const cols = Number(ui.columns || (type === 'binary_pick' ? 2 : 3))
     let rows = Number(ui.rows || (tiles.length <= 6 ? 2 : 3))
-    if (type === 'sequence' && tiles.length <= 4) {
+    if (false) {
       rows = 2
     }
     if (type === 'binary_pick') {
@@ -1041,7 +1040,7 @@ function renderChallenge(bodyEl, actionsEl, toolsEl, statusEl, ctx, root, hooks)
     }
     grid.style.cssText = [
       'display:grid',
-      `grid-template-columns:repeat(${type === 'sequence' && tiles.length <= 4 ? 2 : cols},minmax(0,1fr))`,
+      `grid-template-columns:repeat(${false ? 2 : cols},minmax(0,1fr))`,
       `grid-template-rows:repeat(${rows},minmax(0,1fr))`,
       'gap:6px',
       'flex:1 1 auto',
@@ -1089,7 +1088,7 @@ function renderChallenge(bodyEl, actionsEl, toolsEl, statusEl, ctx, root, hooks)
         if (!cell.dataset.on) cell.style.borderColor = '#3f3f46'
       }
       cell.onclick = () => {
-        if (type === 'sequence') {
+        if (false) { // sequence removed
           if (!order.includes(t.id)) {
             order.push(t.id)
             cell.dataset.on = '1'
@@ -1140,7 +1139,7 @@ function renderChallenge(bodyEl, actionsEl, toolsEl, statusEl, ctx, root, hooks)
     let verifyBtn
     const updateVerify = () => {
       let ok = selected.size > 0
-      if (type === 'sequence') ok = order.length > 0
+      /* sequence removed */
       if (type === 'odd_one_out' || type === 'binary_pick') ok = selected.size === 1
       if (type === 'pair_match') ok = selected.size === 2
       if (verifyBtn) {
@@ -1151,7 +1150,7 @@ function renderChallenge(bodyEl, actionsEl, toolsEl, statusEl, ctx, root, hooks)
     verifyBtn = btnPrimary(
       'Verify',
       () => {
-        if (type === 'sequence') return hooks.onSubmit([...order])
+        /* sequence removed */
         if (type === 'odd_one_out' || type === 'binary_pick') return hooks.onSubmit([...selected][0])
         return hooks.onSubmit([...selected])
       },
@@ -1291,8 +1290,7 @@ function renderChallenge(bodyEl, actionsEl, toolsEl, statusEl, ctx, root, hooks)
     let delta = 0
     const initial = Number(ui.initialDegrees || 0)
     const apply = () => {
-      if (type === 'photo_rotate') img.style.transform = `rotate(${initial + delta}deg)`
-      else img.style.transform = `rotate(${delta}deg)`
+      img.style.transform = `rotate(${delta}deg)`
     }
     apply()
     box.appendChild(img)
@@ -1356,6 +1354,7 @@ export async function protectPage(opts) {
 }
 
 export default {
+  CAPABILITY_HEADER,
   protectWithCaptcha,
   mountCaptchaWidget,
   mountCaptchaModal,

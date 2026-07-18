@@ -20,6 +20,7 @@ import {
 } from './captcha/service.js'
 import { CAPTCHA_TYPES } from './captcha/types.js'
 import { CAPTCHA_DEMO_HTML } from './captcha/demoPage.js'
+import { MERCHANT_DEMO_HTML } from './captcha/merchantDemoPage.js'
 import { CURATE_HTML } from './captcha/curatePage.js'
 import {
   CURATE_LABELS,
@@ -33,8 +34,9 @@ import {
   type CurateLabel,
 } from './captcha/curate.js'
 import { createReadStream, existsSync, readFileSync } from 'node:fs'
-import { extname, join } from 'node:path'
+import { dirname, extname, join } from 'node:path'
 import { invalidatePhotoBankCache, photoBankStats } from './captcha/assets.js'
+import { fileURLToPath } from 'node:url'
 
 export function createGateApp(config: GateConfig, repo: GateRepository) {
   const app = express()
@@ -620,6 +622,117 @@ export function createGateApp(config: GateConfig, repo: GateRepository) {
     res.setHeader('content-type', 'text/html; charset=utf-8')
     res.send(CAPTCHA_DEMO_HTML)
   })
+
+
+  // --- Sample merchant site: dual-channel (human captcha vs agent crypto) ---
+  app.get('/demo/site', (_req, res) => {
+    res.setHeader('content-type', 'text/html; charset=utf-8')
+    res.setHeader('cache-control', 'no-store')
+    res.send(MERCHANT_DEMO_HTML)
+  })
+
+  app.get('/demo/site/sdk/captcha.js', (_req, res) => {
+    // Serve monorepo SDK captcha module for the static demo page (local only)
+    const candidates = [
+      join(process.cwd(), '../../packages/agent-auth-sdk/src/captcha.js'),
+      join(process.cwd(), '../packages/agent-auth-sdk/src/captcha.js'),
+      join(process.cwd(), 'packages/agent-auth-sdk/src/captcha.js'),
+      join(dirname(fileURLToPath(import.meta.url)), '../../../../packages/agent-auth-sdk/src/captcha.js'),
+    ]
+    const path = candidates.find((p) => existsSync(p))
+    if (!path) {
+      res.status(404).type('text/plain').send('captcha sdk not found')
+      return
+    }
+    res.setHeader('content-type', 'text/javascript; charset=utf-8')
+    res.setHeader('cache-control', 'no-store')
+    res.send(readFileSync(path, 'utf8'))
+  })
+
+  app.get('/demo/site/api/public', (_req, res) => {
+    res.json({ ok: true, open: true, message: 'No Gate required' })
+  })
+
+  app.post('/demo/site/api/checkout', async (req, res) => {
+    // Merchant edge: require human capability (as if developer wired Gate on checkout)
+    const capability =
+      (typeof req.header(CAPABILITY_HEADER) === 'string' && req.header(CAPABILITY_HEADER)) ||
+      (typeof req.header('x-zexvro-capability') === 'string' && req.header('x-zexvro-capability')) ||
+      ''
+    const site = await repo.getSiteByKey('zk_test_demo_public')
+    const secret = site?.secretPlainDevOnly
+    if (!secret) {
+      res.status(500).json(problem(500, 'demo_misconfigured', 'Demo site secret unavailable'))
+      return
+    }
+    const result = await verifyCapability(config, repo, {
+      capability: String(capability),
+      action: 'checkout.submit',
+      minClass: 'human',
+      siteSecret: secret,
+      expectedOrigin: req.header('origin') || undefined,
+    })
+    if (!result.ok) {
+      res.status(result.status).json(result.problem)
+      return
+    }
+    res.json({
+      ok: true,
+      channel: 'human',
+      class: result.ok ? result.claims.class : undefined,
+      orderId: randomId('ord'),
+      message: 'Checkout accepted for human principal',
+    })
+  })
+
+  app.get('/demo/site/api/search', async (req, res) => {
+    // Merchant edge: agent path — capability + request-bound PoP
+    const capability =
+      (typeof req.header(CAPABILITY_HEADER) === 'string' && req.header(CAPABILITY_HEADER)) ||
+      (typeof req.header('x-zexvro-capability') === 'string' && req.header('x-zexvro-capability')) ||
+      ''
+    const popRaw = req.header('x-zexvro-pop') || ''
+    let pop: unknown
+    if (popRaw) {
+      try {
+        pop = JSON.parse(popRaw)
+      } catch {
+        pop = popRaw
+      }
+    }
+    const site = await repo.getSiteByKey('zk_test_demo_public')
+    const secret = site?.secretPlainDevOnly
+    if (!secret) {
+      res.status(500).json(problem(500, 'demo_misconfigured', 'Demo site secret unavailable'))
+      return
+    }
+    const htu = `${req.protocol}://${req.get('host')}${req.originalUrl.split('?')[0]}`
+    // Prefer absolute URL agent used; accept configured issuer host variants via expectedHtu from agent
+    const result = await verifyCapability(config, repo, {
+      capability: String(capability),
+      action: 'search.query',
+      minClass: 'agent',
+      siteSecret: secret,
+      pop: pop as never,
+      expectedHtm: 'GET',
+      expectedHtu: req.header('x-zexvro-expected-htu') || htu,
+    })
+    if (!result.ok) {
+      res.status(result.status).json(result.problem)
+      return
+    }
+    res.json({
+      ok: true,
+      channel: 'agent',
+      class: result.ok ? result.claims.class : undefined,
+      results: [
+        { id: 'sku_1', title: 'Nebula Widget', score: 0.98 },
+        { id: 'sku_2', title: 'Orbit Cable', score: 0.91 },
+      ],
+      message: 'Search allowed for registered agent with PoP',
+    })
+  })
+
 
 
   /** Human captcha feedback (broken image / wrong challenge / accessibility). No auth required for siteKey demos. */

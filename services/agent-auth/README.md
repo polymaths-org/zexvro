@@ -21,6 +21,8 @@ npm run test:agent-auth
 
 Full local guide: [`docs/agent_auth_quickstart.md`](../../docs/agent_auth_quickstart.md)
 
+**Show someone the product:** [`docs/agent_auth_local_demo.md`](../../docs/agent_auth_local_demo.md) · `npm run gate:demo`
+
 ## Core ideas
 
 - **Human** and **agent** channels are separate ceremonies.

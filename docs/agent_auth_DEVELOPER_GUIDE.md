@@ -110,10 +110,8 @@ npm run gate:deploy-plan
 
 ## Full docs
 
-- Plan: `docs/agent_auth_PLAN_FINAL.md`
 - Protocol: `docs/adr-002-gate-protocol-v0.2.md`
 - Ops: `docs/agent_auth_production_ops.md`
-- UI: `docs/agent_auth_ui_spec.md`
 - De-pin bind: `docs/agent_auth_depin_bind.md`
 
 
@@ -148,3 +146,27 @@ npm run dev:stack-gate     # frontend + depin + Gate
 
 Local guide: `docs/agent_auth_quickstart.md`.  
 **No AWS deploy** until you approve after local testing.
+
+## Embed captcha on a third-party page
+
+```js
+import { protectWithCaptcha, CAPABILITY_HEADER } from "../../packages/agent-auth-sdk/src/captcha.js"
+
+const { capability } = await protectWithCaptcha({
+  siteKey: "zk_test_demo_public",
+  apiBase: "http://localhost:4103",
+  action: "checkout.submit",
+  origin: location.origin,
+})
+
+await fetch("/api/checkout", {
+  method: "POST",
+  headers: { "content-type": "application/json", [CAPABILITY_HEADER]: capability },
+  body: JSON.stringify({ ok: true }),
+})
+```
+
+Origin verifies with `gateMiddleware` (`minClass: "human"`). Agents use `GateAgent` + `gateFetch` (never captcha).
+
+Full walkthrough: [`agent_auth_local_demo.md`](./agent_auth_local_demo.md).
+

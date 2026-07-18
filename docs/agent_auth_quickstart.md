@@ -1,5 +1,7 @@
 # ZEXVRO Gate — Local Quickstart
 
+**Demo for another person (human + agent):** [`docs/agent_auth_local_demo.md`](./agent_auth_local_demo.md) · `npm run gate:demo`
+
 Dual-channel **human / agent** capability gate. Not a puzzle CAPTCHA.  
 **Local only** — no AWS required. Do not deploy until you finish testing.
 
@@ -177,7 +179,7 @@ npm run test:agent-auth
 npm run test:depin
 ```
 
-More detail: `docs/agent_auth_DEVELOPER_GUIDE.md`, `docs/agent_auth_PLAN_FINAL.md`, `docs/adr-002-gate-protocol-v0.2.md`.
+More detail: `docs/agent_auth_DEVELOPER_GUIDE.md`, `docs/agent_auth_local_demo.md`, `docs/adr-002-gate-protocol-v0.2.md`.
 
 **Deploy:** not part of local completion. Wait until you explicitly approve AWS deploy.
 
@@ -194,4 +196,4 @@ Agents do not use captcha; use Ed25519 + PoP.
 
 ## Agent path local test
 
-See [agent_auth_local_agent_test.md](./agent_auth_local_agent_test.md).
+See [agent_auth_local_demo.md](./agent_auth_local_demo.md) and `npm run gate:agent-site-demo`.

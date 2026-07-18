@@ -314,10 +314,11 @@ export function svgSliderTrack(targetOffset: number): { track: string; piece: st
   // SECURITY: never paint the secret target position. UI shows a plain track;
   // the client moves a piece and submits offset; server checks against secret.
   void targetOffset
-  const decoys = [40, 90, 140, 180]
+  // Fixed decoy ticks — not secret targets (do not encode secret offset).
+  const decoys = [28, 96, 164, 220]
     .map(
       (x) =>
-        `<rect x="${12 + x}" y="20" width="6" height="20" rx="2" fill="#1e293b" opacity="0.5"/>`,
+        `<rect x="${x}" y="20" width="6" height="20" rx="2" fill="#1e293b" opacity="0.5"/>`,
     )
     .join('')
   const track = `<?xml version="1.0" encoding="UTF-8"?>

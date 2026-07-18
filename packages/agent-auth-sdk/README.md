@@ -1,5 +1,7 @@
 # @zexvro/gate
 
+Local dual-channel demo: [`docs/agent_auth_local_demo.md`](../../docs/agent_auth_local_demo.md) · `npm run gate:demo`
+
 Developer SDK for **ZEXVRO Gate** — dual-channel human/agent capability tokens.
 
 Agents are first-class. Humans and agents use **different ceremonies**. Class is set only by which channel succeeds (no human→agent mint).
@@ -119,7 +121,7 @@ app.post(
 - `X-Zexvro-Capability` — capability JWT  
 - `X-Zexvro-Pop` — proof-of-possession (agent; optional human session)
 
-See `docs/adr-002-gate-protocol-v0.2.md` and `docs/agent_auth_PLAN_FINAL.md`.
+See `docs/adr-002-gate-protocol-v0.2.md` and `docs/agent_auth_local_demo.md`.
 
 ## Human captcha (self-hosted multi-type)
 

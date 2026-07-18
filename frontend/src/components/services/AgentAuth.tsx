@@ -12,7 +12,7 @@ import {
 import { KeyRound, ShieldCheck, Bot, UserRound, ScrollText, Copy } from 'lucide-react'
 import GateProtect from '../gate/GateProtect'
 
-type TabId = 'overview' | 'keys' | 'policies' | 'agents' | 'events'
+type TabId = 'overview' | 'captcha' | 'keys' | 'policies' | 'agents' | 'events'
 
 type PolicyMode = 'human_only' | 'agent_only' | 'either' | 'dual_path'
 
@@ -34,6 +34,30 @@ const DEFAULT_POLICIES: Array<{ action: string; mode: PolicyMode; note: string }
   { action: 'index.bulk', mode: 'agent_only', note: 'Machine pipelines only' },
   { action: 'trade.execute', mode: 'dual_path', note: 'Different scopes/TTL per class' },
 ]
+
+function buildCaptchaSnippet(siteKey: string, apiBase: string) {
+  return `import { protectWithCaptcha, CAPABILITY_HEADER } from '@zexvro/gate/captcha'
+
+const { capability } = await protectWithCaptcha({
+  apiBase: '${apiBase}',
+  siteKey: '${siteKey}',
+  action: 'checkout.submit',
+  origin: location.origin,
+  mode: 'modal',
+})
+
+await fetch('/api/checkout', {
+  method: 'POST',
+  headers: {
+    'content-type': 'application/json',
+    [CAPABILITY_HEADER]: capability,
+  },
+  body: JSON.stringify({ /* payload */ }),
+})
+
+// Server: gateMiddleware({ apiBase, siteSecret, action, minClass: 'human' })
+`
+}
 
 const SNIPPET = `import { BrowserGate, CAPABILITY_HEADER } from '@zexvro/gate/browser'
 
@@ -84,6 +108,7 @@ export default function AgentAuth() {
     },
   ])
   const [copied, setCopied] = useState(false)
+  const [captchaCopied, setCaptchaCopied] = useState(false)
   const [gateStatus, setGateStatus] = useState<GateStatus | null>(null)
   const [gateError, setGateError] = useState<string | null>(null)
   const [demoKeys, setDemoKeys] = useState<DemoKeys | null>(null)
@@ -197,6 +222,7 @@ export default function AgentAuth() {
     () =>
       [
         { id: 'overview' as const, label: 'Overview', icon: ShieldCheck },
+        { id: 'captcha' as const, label: 'Captcha', icon: UserRound },
         { id: 'keys' as const, label: 'Keys', icon: KeyRound },
         { id: 'policies' as const, label: 'Policies', icon: ScrollText },
         { id: 'agents' as const, label: 'Agents', icon: Bot },
@@ -227,7 +253,7 @@ export default function AgentAuth() {
           </div>
           <p className="mt-1 max-w-2xl text-sm text-zinc-500 dark:text-zinc-400">
             Dual-channel access gate for humans and agents. Issue short-lived capabilities, enforce
-            per-action policy, and keep channels non-transferable. Not a puzzle CAPTCHA.
+            per-action policy. Humans use captcha; agents use keys. Captcha is friction, not farm-proof.
           </p>
         </div>
         <button
@@ -302,9 +328,31 @@ export default function AgentAuth() {
               {gateStatus.securityProfile.popEnforcedOnVerify ? ' · PoP on' : ' · PoP off'}
             </div>
           )}
+          {gateError && (
+            <div className="md:col-span-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm text-amber-900 dark:text-amber-100">
+              <div className="font-semibold">Gate API is not running</div>
+              <p className="mt-1 text-xs opacity-90">
+                Frontend alone is not enough. Captcha and keys need the Gate service on port 4103.
+              </p>
+              <pre className="mt-3 overflow-x-auto rounded-lg bg-zinc-950 p-3 text-[11px] text-zinc-100">{`npm run dev:frontend-gate
+# starts frontend :3000 + Gate :4103
+
+# or full stack:
+npm run dev:stack-gate-lite`}</pre>
+              <p className="mt-2 text-[11px] opacity-80">
+                Demo captcha (API):{' '}
+                <a className="underline" href="http://localhost:4103/demo/captcha" target="_blank" rel="noreferrer">
+                  http://localhost:4103/demo/captcha
+                </a>
+              </p>
+            </div>
+          )}
           <div className="md:col-span-3">
             <GateProtect
               action="checkout.submit"
+              mode="captcha"
+              siteKey={demoKeys?.siteKey || DEMO_SITE_KEY}
+              apiBase={gateApiBase()}
               onReady={(r) => {
                 console.info('[gate] capability', r.class, r.securityNote)
               }}
@@ -318,6 +366,115 @@ export default function AgentAuth() {
               <li>Server verifies <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-900">X-Zexvro-Capability</code> bound to action + class.</li>
               <li>Optional: compose with De-pin so paid routes also check Stellar payer allowlists.</li>
             </ol>
+          </div>
+        </div>
+      )}
+
+      
+      {tab === 'captcha' && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="space-y-4">
+            <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-[#080809]">
+              <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Human captcha setup</h2>
+              <p className="mt-1 text-xs text-zinc-500">
+                Self-hosted multi-type captcha for humans. Agents use keys + PoP and never see this UI.
+                Not farm-proof; casual-bot friction only.
+              </p>
+              <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm text-zinc-600 dark:text-zinc-400">
+                <li>
+                  Run Gate + dashboard:{' '}
+                  <code className="rounded bg-zinc-100 px-1 text-[11px] dark:bg-zinc-900">npm run dev:frontend-gate</code>
+                </li>
+                <li>Copy site key into the browser app; keep secret on the server only.</li>
+                <li>
+                  Wrap any button with <code className="text-[11px]">protectWithCaptcha</code>.
+                </li>
+                <li>
+                  Verify with <code className="text-[11px]">minClass: &apos;human&apos;</code> on your API.
+                </li>
+              </ol>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <a
+                  href="http://localhost:4103/demo/captcha"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center rounded-lg bg-zinc-900 px-3 py-2 text-xs font-semibold text-white dark:bg-white dark:text-zinc-900"
+                >
+                  Open live captcha demo
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setTab('overview')}
+                  className="inline-flex items-center rounded-lg border border-zinc-200 px-3 py-2 text-xs font-semibold text-zinc-700 dark:border-zinc-700 dark:text-zinc-200"
+                >
+                  Try protect widget
+                </button>
+              </div>
+            </div>
+            <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-[#080809]">
+              <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Your keys (local)</h3>
+              <div className="mt-3 space-y-2 text-xs">
+                <div>
+                  <div className="text-[11px] uppercase text-zinc-450">siteKey</div>
+                  <code className="mt-1 block break-all rounded-lg bg-zinc-50 px-3 py-2 font-mono dark:bg-zinc-900">
+                    {demoKeys?.siteKey || DEMO_SITE_KEY}
+                  </code>
+                </div>
+                <div>
+                  <div className="text-[11px] uppercase text-zinc-450">apiBase (Vite proxy)</div>
+                  <code className="mt-1 block break-all rounded-lg bg-zinc-50 px-3 py-2 font-mono dark:bg-zinc-900">
+                    {gateApiBase()}
+                  </code>
+                </div>
+                <div>
+                  <div className="text-[11px] uppercase text-zinc-450">Allowed origins</div>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {(demoKeys?.allowedOrigins || ['http://localhost:3000', 'http://localhost:5173']).map((o) => (
+                      <span
+                        key={o}
+                        className="rounded-full bg-zinc-100 px-2 py-0.5 font-mono text-[10px] text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                      >
+                        {o}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              {gateError && (
+                <p className="mt-3 text-xs text-amber-600 dark:text-amber-400">
+                  Gate offline — start with <code className="text-[10px]">npm run dev:frontend-gate</code>
+                </p>
+              )}
+            </div>
+          </div>
+          <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-[#080809]">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Embed snippet</h2>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(
+                      buildCaptchaSnippet(demoKeys?.siteKey || DEMO_SITE_KEY, gateApiBase()),
+                    )
+                    setCaptchaCopied(true)
+                    window.setTimeout(() => setCaptchaCopied(false), 1500)
+                  } catch {
+                    setCaptchaCopied(false)
+                  }
+                }}
+                className="inline-flex items-center gap-1 rounded-md bg-zinc-900 px-2 py-1 text-[11px] font-semibold text-white dark:bg-white dark:text-zinc-900"
+              >
+                <Copy className="h-3 w-3" />
+                {captchaCopied ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+            <pre className="mt-3 max-h-[420px] overflow-auto rounded-lg bg-zinc-950 p-3 text-[11px] leading-relaxed text-zinc-100">
+              {buildCaptchaSnippet(demoKeys?.siteKey || DEMO_SITE_KEY, gateApiBase())}
+            </pre>
+            <p className="mt-3 text-[11px] text-zinc-500">
+              Monorepo package: <code className="text-[10px]">packages/agent-auth-sdk/src/captcha.js</code>
+            </p>
           </div>
         </div>
       )}

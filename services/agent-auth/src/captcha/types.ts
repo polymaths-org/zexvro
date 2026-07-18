@@ -6,7 +6,6 @@ export const CAPTCHA_TYPES = [
   'text_distorted',
   'rotate',
   'slider_align',
-  'sequence',
   'odd_one_out',
   'pair_match',
   'label_pick',
@@ -25,14 +24,13 @@ export type CaptchaSecret =
   | { type: 'image_select'; correctTileIds: string[] }
   | { type: 'image_grid'; correctTileIds: string[] }
   | { type: 'text_distorted'; text: string }
-  | { type: 'rotate'; targetDegrees: number; tolerance: number }
+  | { type: 'rotate'; targetDegrees: number; tolerance: number; initialDegrees: number }
   | { type: 'slider_align'; targetOffset: number; tolerance: number }
-  | { type: 'sequence'; order: string[] }
   | { type: 'odd_one_out'; correctTileId: string }
   | { type: 'pair_match'; pairs: Record<string, string> }
   | { type: 'label_pick'; correctLabel: string }
   | { type: 'count_objects'; count: number }
-  | { type: 'photo_rotate'; targetDegrees: number; tolerance: number }
+  | { type: 'photo_rotate'; targetDegrees: number; tolerance: number; initialDegrees: number }
   | { type: 'binary_pick'; correctTileId: string }
   | { type: 'majority_select'; correctTileIds: string[] }
 

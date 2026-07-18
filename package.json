@@ -32,7 +32,10 @@
     "gate:smoke": "node scripts/agent-auth-smoke.mjs",
     "gate:protect-demo": "node scripts/gate-local-protect-demo.mjs",
     "dev:frontend-gate": "node scripts/dev.mjs --only=frontend --with-agent-auth",
-    "dev:stack-gate-lite": "node scripts/dev.mjs --with-depin --with-agent-auth --no-nft"
+    "dev:stack-gate-lite": "node scripts/dev.mjs --with-depin --with-agent-auth --no-nft",
+    "gate:captcha-llm-demo": "node scripts/captcha-llm-browser-demo.mjs",
+    "gate:agent-site-demo": "node scripts/gate-agent-site-demo.mjs",
+    "gate:demo": "node scripts/gate-local-demo.mjs"
   },
   "engines": {
     "node": ">=22"

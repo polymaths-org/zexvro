@@ -38,7 +38,6 @@ export const CLIENT_FORCEABLE_TYPES: CaptchaType[] = [
   'label_pick',
   'count_objects',
   'majority_select',
-  'sequence',
   'photo_rotate',
 ]
 
@@ -55,7 +54,6 @@ export const HERO_CAPTCHA_TYPES: CaptchaType[] = [
   'count_objects',
   'photo_rotate',
   'majority_select',
-  'sequence',
   'text_distorted',
   'rotate',
   'slider_align',
@@ -73,8 +71,7 @@ function pickType(allowed?: CaptchaType[]): CaptchaType {
       'count_objects', 'count_objects',
       'photo_rotate',
       'majority_select', 'majority_select',
-      'sequence',
-      'text_distorted',
+          'text_distorted',
       'rotate',
       // slider kept rare — no longer free-solvable via SVG
       'slider_align',
@@ -213,7 +210,7 @@ function buildRotate(): Omit<
   const assetId = 'main'
   return {
     type: 'rotate',
-    secret: { type: 'rotate', targetDegrees: 0, tolerance: 20 },
+    secret: { type: 'rotate', targetDegrees: 0, tolerance: 20, initialDegrees: initial },
     public: {
       captchaId: '',
       type: 'rotate',
@@ -221,7 +218,7 @@ function buildRotate(): Omit<
       expiresIn: CAPTCHA_TTL_MS / 1000,
       ui: {
         assetPath: assetId,
-        initialDegrees: initial,
+        // SECURITY: do not expose initialDegrees (free-solve). Asset is pre-rotated server-side.
         step: 15,
         input: 'degrees',
       },
@@ -261,42 +258,6 @@ function buildSlider(): Omit<
       track: { contentType: 'image/svg+xml', body: track, encoding: 'utf8' },
       piece: { contentType: 'image/svg+xml', body: piece, encoding: 'utf8' },
     },
-  }
-}
-
-function buildSequence(): Omit<
-  CaptchaState,
-  'captchaId' | 'status' | 'attempts' | 'maxAttempts' | 'expiresAt'
-> {
-  const labels = pickLabels(4)
-  const tiles = labels.map((label) => ({ id: newAssetId('s'), label }))
-  const order = tiles.map((t) => t.id)
-  const display = [...tiles]
-  for (let i = display.length - 1; i > 0; i--) {
-    const j = randomInt(i + 1)
-    ;[display[i], display[j]] = [display[j]!, display[i]!]
-  }
-  const usedPaths = new Set<string>()
-  const assets: CaptchaState['assets'] = {}
-  for (const tile of tiles) {
-    const img = imageForLabel(tile.label, 0, usedPaths)
-    assets[tile.id] = { contentType: img.contentType, body: img.body, encoding: img.encoding }
-  }
-  // Order references as a strip (images only) — never put class names in the prompt.
-  return {
-    type: 'sequence',
-    secret: { type: 'sequence', order },
-    public: {
-      captchaId: '',
-      type: 'sequence',
-      prompt: 'Click the large tiles in the same order as the small strip (left → right)',
-      expiresIn: CAPTCHA_TTL_MS / 1000,
-      ui: {
-        tiles: display.map((t) => ({ id: t.id, assetPath: t.id })),
-        input: 'sequence',
-      },
-    },
-    assets,
   }
 }
 
@@ -510,9 +471,18 @@ function buildPhotoRotate(): Omit<
   const label = randomLabel()
   const initial = [45, 90, 135, 180, 225, 270, 315][randomInt(7)]!
   const photo = imageForLabel(label)
+  // Bake secret initial rotation into the served asset so public ui cannot leak it.
+  const dataUri = `data:${photo.contentType};base64,${photo.body}`
+  const wrapped = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="240" height="240" viewBox="0 0 240 240">
+  <rect width="240" height="240" rx="16" fill="#0a0a0b"/>
+  <g transform="rotate(${initial} 120 120)">
+    <image xlink:href="${dataUri}" href="${dataUri}" x="20" y="20" width="200" height="200" preserveAspectRatio="xMidYMid meet"/>
+  </g>
+</svg>`
   return {
     type: 'photo_rotate',
-    secret: { type: 'photo_rotate', targetDegrees: 0, tolerance: 22 },
+    secret: { type: 'photo_rotate', targetDegrees: 0, tolerance: 22, initialDegrees: initial },
     public: {
       captchaId: '',
       type: 'photo_rotate',
@@ -520,21 +490,16 @@ function buildPhotoRotate(): Omit<
       expiresIn: CAPTCHA_TTL_MS / 1000,
       ui: {
         assetPath: 'main',
-        initialDegrees: initial,
         step: 15,
         input: 'degrees',
-        // subject class name omitted (label leak)
       },
     },
     assets: {
-      main: { contentType: photo.contentType, body: photo.body, encoding: photo.encoding },
+      main: { contentType: 'image/svg+xml', body: wrapped, encoding: 'utf8' },
     },
   }
 }
 
-/**
- * Two photos side by side — pick the one matching the reference class.
- */
 function buildBinaryPick(): Omit<
   CaptchaState,
   'captchaId' | 'status' | 'attempts' | 'maxAttempts' | 'expiresAt'
@@ -677,9 +642,6 @@ export function issueCaptcha(opts?: {
         break
       case 'slider_align':
         partial = buildSlider()
-        break
-      case 'sequence':
-        partial = buildSequence()
         break
       case 'odd_one_out':
         partial = buildOddOneOut()
@@ -871,13 +833,11 @@ export function verifyCaptchaAnswer(
         typeof value === 'number'
           ? value
           : Number((value as { degrees?: number })?.degrees ?? NaN)
-      const initial = Number(state.public.ui.initialDegrees ?? 0)
-      // SECURITY: only relative delta from the issued initial. Ignore client displayDegrees
-      // (was a free-solve: submit {displayDegrees:0}).
       if (!Number.isFinite(degrees)) {
         correct = false
         break
       }
+      const initial = Number((state.secret as { initialDegrees?: number }).initialDegrees ?? 0)
       const displayAbs = (((initial + degrees) % 360) + 360) % 360
       correct = circularDistance(displayAbs, state.secret.targetDegrees) <= state.secret.tolerance
       break
@@ -888,19 +848,6 @@ export function verifyCaptchaAnswer(
           ? value
           : Number((value as { offset?: number })?.offset ?? NaN)
       correct = Math.abs(offset - state.secret.targetOffset) <= state.secret.tolerance
-      break
-    }
-    case 'sequence': {
-      const order = Array.isArray(value)
-        ? value.map(String)
-        : typeof value === 'object' &&
-            value &&
-            Array.isArray((value as { order?: unknown }).order)
-          ? (value as { order: unknown[] }).order.map(String)
-          : []
-      const expected = (state.secret as { type: 'sequence'; order: string[] }).order
-      correct =
-        order.length === expected.length && order.every((id, i) => id === expected[i])
       break
     }
     case 'odd_one_out': {
@@ -950,12 +897,11 @@ export function verifyCaptchaAnswer(
         typeof value === 'number'
           ? value
           : Number((value as { degrees?: number })?.degrees ?? NaN)
-      const initial = Number(state.public.ui.initialDegrees ?? 0)
       if (!Number.isFinite(degrees)) {
         correct = false
         break
       }
-      // Only relative user delta; server derives absolute orientation.
+      const initial = Number((state.secret as { initialDegrees?: number }).initialDegrees ?? 0)
       const displayAbs = (((initial + degrees) % 360) + 360) % 360
       correct = circularDistance(displayAbs, state.secret.targetDegrees) <= state.secret.tolerance
       break

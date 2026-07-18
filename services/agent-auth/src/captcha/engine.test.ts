@@ -3,7 +3,7 @@ import { issueCaptcha, verifyCaptchaAnswer, CAPTCHA_TYPES } from './engine.js'
 
 describe('captcha engine', () => {
   it('exports all captcha types', () => {
-    expect(CAPTCHA_TYPES).toHaveLength(13)
+    expect(CAPTCHA_TYPES).toHaveLength(12)
   })
 
   it('issues each type without leaking secret fields in public payload', () => {
@@ -115,7 +115,9 @@ describe('captcha engine', () => {
   it('photo_rotate accepts upright within tolerance', () => {
     const state = issueCaptcha({ preferredType: 'photo_rotate' })
     if (state.type !== 'photo_rotate') return
-    const initial = Number(state.public.ui.initialDegrees ?? 0)
+    const initial = Number((state.secret as { initialDegrees: number }).initialDegrees ?? 0)
+    // public ui must not leak initialDegrees
+    expect(state.public.ui.initialDegrees).toBeUndefined()
     const degrees = (360 - (initial % 360)) % 360
     expect(verifyCaptchaAnswer(state, { value: { degrees } }).ok).toBe(true)
   })
@@ -136,15 +138,22 @@ describe('captcha engine', () => {
     expect(verifyCaptchaAnswer(state, { value: correct }).ok).toBe(true)
   })
 
-  it('rotate rejects client displayDegrees free-solve', () => {
+  it('rotate rejects free-solves without secret initial', () => {
     const state = issueCaptcha({ preferredType: 'rotate' })
     if (state.type !== 'rotate') return
-    const initial = Number(state.public.ui.initialDegrees ?? 0)
-    if (initial === 0) return
-    // Old attack: claim upright absolutely without rotating
+    expect(state.public.ui.initialDegrees).toBeUndefined()
+    const initial = Number((state.secret as { initialDegrees: number }).initialDegrees ?? 0)
+    // Old attacks
     expect(verifyCaptchaAnswer(state, { value: { displayDegrees: 0 } }).ok).toBe(false)
-    expect(verifyCaptchaAnswer(state, { value: 0 }).ok).toBe(false)
-    // Legitimate: relative delta that undoes initial
+    // degrees=0 is only correct if already upright (initial 0) — rare
+    if (initial !== 0) {
+      expect(verifyCaptchaAnswer(state, { value: 0 }).ok).toBe(false)
+    }
+    // Public formula without secret must not work: attacker sees no initialDegrees
+    const fake = (360 - Number(state.public.ui.initialDegrees || 0)) % 360
+    if (initial !== 0) {
+      // fake using 0 public initial is degrees=0 already checked
+    }
     const degrees = (360 - (initial % 360)) % 360
     expect(verifyCaptchaAnswer(state, { value: { degrees } }).ok).toBe(true)
   })
@@ -172,7 +181,9 @@ describe('captcha engine', () => {
     const state = issueCaptcha({ preferredType: 'slider_align' })
     const target = (state.secret as { targetOffset: number }).targetOffset
     const track = state.assets.track?.body || ''
+    // Must not paint secret slot at 12+target (old free-solve)
     expect(track).not.toContain(`x="${12 + target}"`)
+    expect(track).not.toMatch(/stroke-dasharray/)
   })
 
   it('image_select public prompt does not leak class name', () => {

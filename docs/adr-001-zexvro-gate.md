@@ -37,6 +37,6 @@ Build a **dual-channel capability gate**:
 
 ## References
 
-- `docs/agent_auth_implementation_plan.md`
+- `docs/agent_auth_local_demo.md`
 - `docs/access_shield.md`
 - `context.md` § Agent Authentication

@@ -180,6 +180,8 @@ export default defineConfig(({ mode }) => {
         '@stellar/stellar-base',
         'stellar-sdk',
         '@creit.tech/stellar-wallets-kit',
+        'react-is',
+        'recharts',
       ],
     },
     resolve: {

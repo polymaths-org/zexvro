@@ -43,7 +43,7 @@
 - Payment upgrades principal class
 - Classifier inside `services/depin`
 
-See `docs/agent_auth_implementation_plan.md` § Stellar.
+See `docs/agent_auth_DEVELOPER_GUIDE.md` and ADRs for Stellar payer claims.
 
 
 ## Implementation status (2026-07-17)

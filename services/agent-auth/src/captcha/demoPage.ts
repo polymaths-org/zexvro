@@ -372,41 +372,38 @@ export const CAPTCHA_DEMO_HTML = `<!doctype html>
 
       const ui = cap.ui || {};
       const top = document.createElement('div');
-      top.style.cssText = 'display:flex;align-items:center;gap:10px;margin:0 0 8px;flex:0 0 auto';
-      if (ui.referenceAssetPath) {
-        const refImg = document.createElement('img');
-        refImg.src = assetUrl(challengeId, ui.referenceAssetPath);
-        refImg.alt = 'Example';
-        refImg.style.cssText = 'width:44px;height:44px;object-fit:contain;object-position:center;border-radius:8px;border:1px solid #3f3f46;flex:0 0 auto;background:#0a0a0b';
-        top.appendChild(refImg);
-      }
-      const promptCol = document.createElement('div');
-      promptCol.style.cssText = 'min-width:0;flex:1';
-      if (ui.referenceAssetPath) {
-        const hint = document.createElement('div');
-        hint.style.cssText = 'font-size:10px;font-weight:600;color:#71717a;letter-spacing:.04em;text-transform:uppercase;margin-bottom:2px';
-        hint.textContent = 'Match this example';
-        promptCol.appendChild(hint);
-      }
+      top.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin:0 0 8px;flex:0 0 auto';
       const prompt = document.createElement('div');
       prompt.className = 'zg-prompt';
       prompt.textContent = cap.prompt;
-      promptCol.appendChild(prompt);
-      top.appendChild(promptCol);
+      top.appendChild(prompt);
+      if (ui.referenceAssetPath) {
+        const refRow = document.createElement('div');
+        refRow.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px;border-radius:10px;border:1px solid #27272a;background:#0c0c0e';
+        const refImg = document.createElement('img');
+        refImg.src = assetUrl(challengeId, ui.referenceAssetPath);
+        refImg.alt = 'Example';
+        refImg.style.cssText = 'width:96px;height:72px;object-fit:contain;object-position:center;border-radius:8px;border:1px solid #3f3f46;flex:0 0 auto;background:#09090b';
+        const refMeta = document.createElement('div');
+        refMeta.innerHTML = '<div style="font-size:10px;font-weight:700;color:#71717a;letter-spacing:.06em;text-transform:uppercase;margin-bottom:4px">Match this example</div><div style="font-size:12px;color:#a1a1aa;line-height:1.35">Look for the same kind of object in the grid below</div>';
+        refRow.appendChild(refImg);
+        refRow.appendChild(refMeta);
+        top.appendChild(refRow);
+      }
       zgBody.appendChild(top);
 
       const stage = document.createElement('div');
       stage.className = 'zg-stage';
       zgBody.appendChild(stage);
 
-      const gridTypes = new Set(['image_select','image_grid','sequence','odd_one_out','pair_match','majority_select','binary_pick']);
+      const gridTypes = new Set(['image_select','image_grid','odd_one_out','pair_match','majority_select','binary_pick']);
       if (gridTypes.has(cap.type)) {
         const tiles = (ui.tiles || []).slice(0, 9);
         const selected = new Set();
         const order = [];
         const grid = document.createElement('div');
         grid.className = 'tile-grid';
-        if (cap.type === 'sequence' && tiles.length <= 4) {
+        if (false && tiles.length <= 4) {
           grid.classList.add('cols-2');
           grid.style.gridTemplateColumns = 'repeat(2,minmax(0,1fr))';
           grid.style.gridTemplateRows = 'repeat(2,minmax(0,1fr))';
@@ -422,7 +419,7 @@ export const CAPTCHA_DEMO_HTML = `<!doctype html>
         let verify;
         const update = () => {
           let ok = selected.size > 0;
-          if (cap.type === 'sequence') ok = order.length > 0;
+          if (cap.type === 'image_select') ok = order.length > 0;
           if (cap.type === 'binary_pick' || cap.type === 'odd_one_out') ok = selected.size === 1;
           if (cap.type === 'pair_match') ok = selected.size === 2;
           if (verify) verify.disabled = !ok;
@@ -435,11 +432,11 @@ export const CAPTCHA_DEMO_HTML = `<!doctype html>
           img.src = assetUrl(challengeId, t.assetPath);
           img.alt = '';
           el.appendChild(img);
-          if (cap.type === 'sequence') {
+          if (cap.type === 'image_select') {
             // numbered badges applied on click
           }
           el.onclick = () => {
-            if (cap.type === 'sequence') {
+            if (cap.type === 'image_select') {
               if (!order.includes(t.id)) {
                 order.push(t.id);
                 el.classList.add('selected');
@@ -470,8 +467,11 @@ export const CAPTCHA_DEMO_HTML = `<!doctype html>
         verify.className = 'zg-btn';
         verify.textContent = 'Verify';
         verify.disabled = true;
-        verify.onclick = () => submitAnswer(challengeId, cap.captchaId,
-          cap.type === 'sequence' ? order : (cap.type === 'binary_pick' || cap.type === 'odd_one_out') ? [...selected][0] : [...selected]);
+        verify.onclick = () => submitAnswer(
+          challengeId,
+          cap.captchaId,
+          (cap.type === 'binary_pick' || cap.type === 'odd_one_out') ? [...selected][0] : [...selected],
+        );
         zgActions.appendChild(verify);
       } else if (cap.type === 'label_pick') {
         // Fixed compact hero + 2x2 choices always visible (never clip under footer)
@@ -558,8 +558,7 @@ export const CAPTCHA_DEMO_HTML = `<!doctype html>
         const apply = () => {
           // photo_rotate: image is already rotated by server initialDegrees in asset for SVG rotate;
           // for photo we apply initial+delta; for SVG rotate asset already has initial baked, apply delta only.
-          if (cap.type === 'photo_rotate') img.style.transform = 'rotate(' + (initial + delta) + 'deg)';
-          else img.style.transform = 'rotate(' + delta + 'deg)';
+          img.style.transform = 'rotate(' + delta + 'deg)';
         };
         apply();
         box.appendChild(img);

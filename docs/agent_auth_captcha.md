@@ -19,7 +19,7 @@ Agents **never** use this path. Agents use registered Ed25519 + challenge sign +
 - Engine loads `verified/manifest.json` exclusively (no unverified live label dirs).
 - Image challenges never fall back to SVG tiles; shortfall falls back to `text_distorted`.
 
-## Types (13)
+## Types (12)
 
 | Type | Interaction | Notes |
 | --- | --- | --- |
@@ -28,7 +28,6 @@ Agents **never** use this path. Agents use registered Ed25519 + challenge sign +
 | text_distorted | type warped characters | SVG glyph, typo-tolerant |
 | rotate | rotate SVG upright | lenient tolerance |
 | slider_align | align piece to slot | SVG track |
-| sequence | click photos in named order | verified photos |
 | odd_one_out | pick the tile that does not belong | 3×3 verified |
 | pair_match | select two matching squares | verified |
 | label_pick | one photo → pick class from 4 labels | verified |
@@ -92,3 +91,49 @@ Hardened against trivial script bypasses:
 Still not claimed: farm-proof, CV-proof, equivalent to WebAuthn, request-bound Pop.
 
 Agents never use captcha (Ed25519 + PoP only).
+
+
+## LLM browser demo (product QA — not Gate agent channel)
+
+Shows a **website bot** (Playwright + optional vision LLM) opening `/demo/captcha`.
+This is **not** the ZEXVRO Gate agent path (Ed25519 + PoP). Do not confuse the two in marketing.
+
+```bash
+export CODEXIN_API_BASE=https://api.codexin.lol/v1
+export CODEXIN_API_KEY=...   # never commit
+export CODEXIN_MODEL=grok-4.5
+npm run dev:agent-auth   # terminal 1
+npm run gate:captcha-llm-demo
+```
+
+Artifacts: `/tmp/zexvro-captcha-llm-demo/` (screenshot + plan + analysis + report).
+
+
+**Naming:** “agent demo” / “agent channel” = registered keys + PoP only. `gate:captcha-llm-demo` is human-channel bot QA, never an agent demo.
+
+## Dual-channel merchant demo (what “agent” means)
+
+Sample developer website protected by Gate:
+
+- UI: `http://localhost:4103/demo/site`
+- Human checkout: captcha / human ceremony (`checkout.submit`, human_only)
+- Agent search: registered key + PoP (`search.query`) — **no captcha UI**
+
+Autonomous agent (Node):
+
+```bash
+npm run dev:agent-auth
+npm run gate:agent-site-demo
+```
+
+This proves the product path for agents: crypto channel through a Gate-protected website, not browser captcha solving.
+
+## Local demo
+
+- Human playground: `http://localhost:4103/demo/captcha`
+- Merchant site (human checkout + agent search): `http://localhost:4103/demo/site`
+- Walkthrough: [`agent_auth_local_demo.md`](./agent_auth_local_demo.md)
+- Checklist: `npm run gate:demo`
+- Autonomous agent: `npm run gate:agent-site-demo`
+- Optional vision-LLM human-channel QA (env keys only): `npm run gate:captcha-llm-demo`
+
