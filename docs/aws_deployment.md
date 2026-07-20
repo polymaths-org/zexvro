@@ -49,7 +49,7 @@ Make sure your DynamoDB table is configured as follows to support both device co
    - Add/Verify these variables:
      - `DYNAMODB_TABLE` = `ZexvroDeviceCodes`
      - `USER_CODE_GSI` = `user_code-index`
-     - `FRONTEND_URL` = `https://zexvrodashboard.xyz` (your production React app domain)
+      - `FRONTEND_URL` = `https://console.zexvro.in` (your production React app domain)
 
 ---
 

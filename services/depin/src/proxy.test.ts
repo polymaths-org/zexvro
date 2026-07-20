@@ -179,25 +179,25 @@ describe('De-pin proxy', () => {
       fetchImplementation: fetchMock,
       logger,
       environment: {
-        CORS_ALLOWED_ORIGINS: 'https://zexvro.pages.dev,https://*.zexvro.pages.dev',
+        CORS_ALLOWED_ORIGINS: 'https://console.zexvro.in,https://*.zexvro.pages.dev',
       },
     })
 
     const preflight = await request(server)
       .options('/status')
-      .set('Origin', 'https://zexvro.pages.dev')
+      .set('Origin', 'https://console.zexvro.in')
       .set('Access-Control-Request-Method', 'GET')
 
     expect(preflight.status).toBe(204)
-    expect(preflight.headers['access-control-allow-origin']).toBe('https://zexvro.pages.dev')
+    expect(preflight.headers['access-control-allow-origin']).toBe('https://console.zexvro.in')
     expect(preflight.headers['access-control-expose-headers']).toMatch(/PAYMENT-REQUIRED/)
 
     const status = await request(server)
       .get('/status')
-      .set('Origin', 'https://zexvro.pages.dev')
+      .set('Origin', 'https://console.zexvro.in')
 
     expect(status.status).toBe(200)
-    expect(status.headers['access-control-allow-origin']).toBe('https://zexvro.pages.dev')
+    expect(status.headers['access-control-allow-origin']).toBe('https://console.zexvro.in')
     expect(status.body.multiInstanceSafe).toBe(false)
 
     const preview = await request(server)

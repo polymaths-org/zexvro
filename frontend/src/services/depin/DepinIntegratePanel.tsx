@@ -126,7 +126,7 @@ function buildSnippets(input: {
     'OZ_API_KEY=oz_...   # from channels.openzeppelin.com/testnet/gen',
     'DEPIN_STATE_BACKEND=file',
     'DEPIN_STATE_PATH=.data/depin-state.json',
-    'CORS_ALLOWED_ORIGINS=http://localhost:3000,https://zexvro.pages.dev',
+    'CORS_ALLOWED_ORIGINS=http://localhost:3000,https://console.zexvro.in',
   ].join('\n');
 
   return { probe, pay, config, env, apiBase };

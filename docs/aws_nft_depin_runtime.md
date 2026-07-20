@@ -40,7 +40,7 @@ See [aws_nft_production.md](./aws_nft_production.md):
 - `NFT_REPOSITORY=dynamo`
 - `NFT_REQUIRE_SPONSOR=1`
 - `STELLAR_SPONSOR_SECRET` from Secrets Manager
-- CORS includes localhost + `zexvrodashboard.xyz` + `zexvro.pages.dev`
+- CORS includes localhost + `console.zexvro.in` + legacy pages.dev / dashboard domains
 
 ### De-pin runtime env highlights
 - `DEPIN_CONFIG_JSON` from Secrets Manager

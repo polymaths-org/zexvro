@@ -558,7 +558,7 @@ def find_by_sort_key(table, sort_key_name, sort_key_value):
 
 
 def send_invite_email(recipient_email, workspace_name, inviter_name, role):
-    frontend_url = os.environ.get("FRONTEND_URL", "https://zexvro.pages.dev")
+    frontend_url = os.environ.get("FRONTEND_URL", "https://console.zexvro.in")
     source_email = os.environ.get("INVITE_SOURCE_EMAIL", "noreply@zexvro.dev")
     safe_workspace = workspace_name or "a ZEXVRO workspace"
     safe_inviter = inviter_name or "A teammate"
@@ -670,7 +670,7 @@ def lambda_handler(event, context):
             }
         )
 
-        frontend_url = os.environ.get("FRONTEND_URL", "https://zexvro.pages.dev")
+        frontend_url = os.environ.get("FRONTEND_URL", "https://console.zexvro.in")
 
         return respond(
             200,
