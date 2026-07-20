@@ -19,6 +19,8 @@ PROJECTS_TABLE_NAME = os.environ.get("PROJECTS_TABLE", "zexvro-projects")
 EMPLOYEES_TABLE_NAME = os.environ.get("EMPLOYEES_TABLE", "zexvro-employees")
 PAYROLL_TABLE_NAME = os.environ.get("PAYROLL_TABLE", "zexvro-payroll-runs")
 PAYROLL_TAXONOMY_TABLE_NAME = os.environ.get("PAYROLL_TAXONOMY_TABLE", "zexvro-payroll-taxonomy")
+WAITLIST_TABLE_NAME = os.environ.get("WAITLIST_TABLE", "zexvro-waitlist")
+WAITLIST_ADMIN_SECRET = (os.environ.get("WAITLIST_ADMIN_SECRET") or "").strip()
 
 devices_table = dynamodb.Table(DEVICES_TABLE_NAME)
 memory_table = dynamodb.Table(MEMORY_TABLE_NAME)
@@ -27,6 +29,9 @@ projects_table = dynamodb.Table(PROJECTS_TABLE_NAME)
 employees_table = dynamodb.Table(EMPLOYEES_TABLE_NAME)
 payroll_runs_table = dynamodb.Table(PAYROLL_TABLE_NAME)
 payroll_taxonomy_table = dynamodb.Table(PAYROLL_TAXONOMY_TABLE_NAME)
+waitlist_table = dynamodb.Table(WAITLIST_TABLE_NAME)
+
+EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 ses = boto3.client("ses", region_name=os.environ.get("AWS_REGION", "us-east-1"))
 ec2 = boto3.client("ec2", region_name=os.environ.get("AWS_REGION", "us-east-1"))
 
@@ -618,7 +623,7 @@ def respond(status_code, body):
         "headers": {
             "Content-Type": "application/json",
             "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "Content-Type,Authorization",
+            "Access-Control-Allow-Headers": "Content-Type,Authorization,x-waitlist-secret,X-Waitlist-Secret",
             "Access-Control-Allow-Methods": "POST,GET,PUT,DELETE,OPTIONS",
         },
         "body": json.dumps(body, default=json_default),
@@ -1583,6 +1588,85 @@ def lambda_handler(event, context):
             return respond(200, {"status": "success", "messageId": send_res.get("MessageId")})
         except Exception as exc:
             return respond(502, {"error": "email_send_failed", "error_description": str(exc)})
+
+    # Route: POST /api/waitlist (public join)
+    elif path == "/api/waitlist" and http_method == "POST":
+        raw_email = (body.get("email") or "").strip().lower()
+        if not raw_email or not EMAIL_RE.match(raw_email):
+            return respond(400, {"error": "invalid_email", "error_description": "A valid email is required"})
+
+        source = (body.get("source") or "landing").strip()[:64] or "landing"
+        now = int(time.time())
+        try:
+            existing = waitlist_table.get_item(Key={"email": raw_email}).get("Item")
+            if existing:
+                return respond(200, {"status": "already_joined", "email": raw_email})
+
+            waitlist_table.put_item(
+                Item={
+                    "email": raw_email,
+                    "created_at": now,
+                    "source": source,
+                    "user_agent": (headers.get("user-agent") or headers.get("User-Agent") or "")[:256],
+                },
+                ConditionExpression="attribute_not_exists(email)",
+            )
+            return respond(201, {"status": "joined", "email": raw_email})
+        except Exception as exc:
+            err_name = type(exc).__name__
+            if "ConditionalCheckFailed" in err_name or "ConditionalCheckFailed" in str(exc):
+                return respond(200, {"status": "already_joined", "email": raw_email})
+            return respond(500, {"error": "waitlist_write_failed", "error_description": str(exc)})
+
+    # Route: GET /api/waitlist (admin list — secret header or query)
+    elif path == "/api/waitlist" and http_method == "GET":
+        query = get_query_params(event)
+        provided = (
+            headers.get("x-waitlist-secret")
+            or headers.get("X-Waitlist-Secret")
+            or query.get("secret")
+            or query.get("")
+            or ""
+        ).strip()
+        # Also accept bare ?<secret> style (first query key is the secret)
+        if not provided and query:
+            first_key = next(iter(query.keys()), "")
+            if first_key and not query.get(first_key):
+                provided = first_key
+            elif first_key and first_key not in ("secret", "key", "limit"):
+                provided = first_key
+
+        if not WAITLIST_ADMIN_SECRET or provided != WAITLIST_ADMIN_SECRET:
+            return respond(401, {"error": "unauthorized", "error_description": "Invalid waitlist secret"})
+
+        try:
+            items = []
+            scan_kwargs = {}
+            while True:
+                res = waitlist_table.scan(**scan_kwargs)
+                items.extend(res.get("Items") or [])
+                last = res.get("LastEvaluatedKey")
+                if not last:
+                    break
+                scan_kwargs["ExclusiveStartKey"] = last
+
+            items.sort(key=lambda row: int(row.get("created_at") or 0), reverse=True)
+            return respond(
+                200,
+                {
+                    "count": len(items),
+                    "entries": [
+                        {
+                            "email": row.get("email"),
+                            "created_at": int(row.get("created_at") or 0),
+                            "source": row.get("source") or "landing",
+                        }
+                        for row in items
+                    ],
+                },
+            )
+        except Exception as exc:
+            return respond(500, {"error": "waitlist_read_failed", "error_description": str(exc)})
 
     # ─── ZK prover worker (EC2 on-demand / fixed URL) ───
     # GET /api/zk-worker/status

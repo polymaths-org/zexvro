@@ -895,3 +895,12 @@ Use `None` for empty fields. Do not delete fields.
 - Follow-ups: Browser smoke protect → export → apply; optional deep-link `/docs?topic=access-shield`; paid settle still needs human OZ key.
 - Blockers: None for unpaid product UI.
 - Verification: `tsc --noEmit` clean; depin unit tests (re-run after selector fix).
+
+## 2026-07-17 - Codex with Paris - Push main + Cloudflare Pages deploy
+
+- Service or area: git release + Cloudflare Pages `zexvro`.
+- Summary: Committed Access Shield UI + CORS redeploy tooling on `feature/depin-access-shield` (`623963c`), merged to `main` (`0be5016`), pushed origin. Built FE with hosted NFT/Depin API URLs and deployed Pages project `zexvro` → `https://79952fa4.zexvro.pages.dev` (alias `https://main.zexvro.pages.dev` / production `https://zexvro.pages.dev`).
+- Decisions: Accepted - Exclude marketing binaries / morph db / circuit artifacts from commit. Accepted - Production build uses App Runner NFT+Depin bases (not `/api/*` proxy).
+- Follow-ups: Hard-refresh production dashboard; confirm custom domain if not auto-promoting; paid settle still needs OZ key.
+- Blockers: None for unpaid path.
+- Verification: git push main ok; wrangler pages deploy success.

@@ -4,6 +4,7 @@ import {
   confirmForgotPassword,
   confirmSignUp,
   forgotPassword,
+  formatAuthError,
   persistSession,
   signInUser,
   signUpUser,
@@ -51,13 +52,29 @@ export default function AuthOverlay({ onSuccess }: AuthOverlayProps) {
     setMessage('');
     setIsLoading(true);
 
+    const action = isSignIn
+      ? 'signin'
+      : isSignUp
+        ? 'signup'
+        : isConfirm
+          ? 'confirm'
+          : isForgot
+            ? 'forgot'
+            : isReset
+              ? 'reset'
+              : 'general';
+
     try {
       const cleanUsername = username.trim();
       const cleanEmail = email.trim();
-      if (!cleanUsername) throw new Error('Username is required.');
+      if (!cleanUsername) throw new Error('Enter a username.');
+      if (cleanUsername.length < 3) throw new Error('Username must be at least 3 characters.');
+      if (!/^[A-Za-z0-9_.=@+-]+$/.test(cleanUsername)) {
+        throw new Error('Username can only use letters, numbers, and . _ - + @ =');
+      }
 
       if (isSignIn) {
-        if (!password) throw new Error('Password is required.');
+        if (!password) throw new Error('Enter your password.');
         const session = await signInUser(cleanUsername, password);
         persistSession(session);
         onSuccess(session);
@@ -65,23 +82,30 @@ export default function AuthOverlay({ onSuccess }: AuthOverlayProps) {
       }
 
       if (isSignUp) {
-        if (!cleanEmail) throw new Error('Email is required.');
+        if (!cleanEmail) throw new Error('Enter your email.');
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+          throw new Error('Enter a valid email address.');
+        }
+        if (!password) throw new Error('Choose a password.');
         if (password.length < 8) throw new Error('Password must be at least 8 characters.');
+        if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
+          throw new Error('Password needs letters and numbers.');
+        }
         const result = await signUpUser(cleanUsername, cleanEmail, password);
         if (result.UserConfirmed) {
           setMessage('Account created. You can sign in now.');
           setMode('signin');
         } else {
-          setMessage('Confirmation code sent. Check your email.');
+          setMessage('We sent a code to your email. Enter it below to finish signup.');
           setMode('confirm');
         }
         return;
       }
 
       if (isConfirm) {
-        if (!code.trim()) throw new Error('Confirmation code is required.');
+        if (!code.trim()) throw new Error('Enter the code from your email.');
         await confirmSignUp(cleanUsername, code.trim());
-        setMessage('Account confirmed. You can sign in now.');
+        setMessage('Email confirmed. You can sign in now.');
         setMode('signin');
         setCode('');
         return;
@@ -89,14 +113,18 @@ export default function AuthOverlay({ onSuccess }: AuthOverlayProps) {
 
       if (isForgot) {
         await forgotPassword(cleanUsername);
-        setMessage('Password reset code sent. Check your email.');
+        setMessage('If that account exists, we emailed a reset code.');
         setMode('reset');
         return;
       }
 
       if (isReset) {
-        if (!code.trim()) throw new Error('Reset code is required.');
+        if (!code.trim()) throw new Error('Enter the reset code from your email.');
+        if (!password) throw new Error('Choose a new password.');
         if (password.length < 8) throw new Error('New password must be at least 8 characters.');
+        if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
+          throw new Error('Password needs letters and numbers.');
+        }
         await confirmForgotPassword(cleanUsername, code.trim(), password);
         setMessage('Password updated. You can sign in now.');
         setMode('signin');
@@ -104,7 +132,7 @@ export default function AuthOverlay({ onSuccess }: AuthOverlayProps) {
         setPassword('');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Authentication failed.');
+      setError(formatAuthError(err, action));
     } finally {
       setIsLoading(false);
     }
