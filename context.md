@@ -8,15 +8,16 @@ Use this file to understand what ZEXVRO is, what the MVP contains, who owns each
 
 Every agent must start here:
 
-1. Read `README.md` for the public project summary.
-2. Read this file for product context and service boundaries.
-3. Read `memory.md` for current work state, handoffs, blockers, and decisions.
-4. Read `design.md` before changing UI, theme, typography, layout, charts, motion, or brand usage.
-5. Run `git status --short` before editing.
-6. Identify the service or shared area being touched.
-7. Make the smallest useful change.
-8. Update `memory.md` with what changed and what remains.
-9. Commit code and memory updates together.
+1. Read `AGENTS.md` for boot rules, remaining work owners, and do-nots.
+2. Read `README.md` for the public project summary.
+3. Read this file for product context, **Active Ticket Assignments**, and **Remaining Work**.
+4. Read `memory.md` for current work state, handoffs, blockers, and decisions (latest first).
+5. Read `design.md` before changing UI, theme, typography, layout, charts, motion, or brand usage.
+6. Run `git status --short` before editing.
+7. Identify assignee scope + service/area being touched; do not take another owner’s tickets.
+8. Make the smallest useful change.
+9. Update `memory.md` with what changed and what remains.
+10. Commit code and memory updates together when asked.
 
 ## Platform Identity
 
@@ -127,6 +128,86 @@ Ownership means:
 - Shared contracts must be documented in `memory.md`.
 - Cross-service changes require a memory entry explaining impact and follow-ups.
 
+## Active Ticket Assignments (2026-07-21)
+
+Agents must pull this section on startup and only build work owned by the assignee for the current session (unless the human expands scope).
+
+| Assignee | Owns / build |
+| --- | --- |
+| **Morph** (Morph track) | Morph CLI + agentic system, CI/CD, Web2→Web3 transformation demo, Morph site / product surface work |
+| **Nabil** / `n4bi10p` | RBAC system, Zexvro credits, team management, workspace management, related platform UI |
+| **Paris** / `paris-29` | Remove unwanted / dummy UI, landing page demos update, landing demo icons, other cleanup polish |
+
+Do not steal another assignee’s ticket. Cross-cutting shell changes need a `memory.md` entry and coordination.
+
+## Remaining Work (not 100% — agents: pick from your assignee list)
+
+Status labels: incomplete / partial. Prefer finishing owned items over new features.
+
+### Zexvro (platform)
+
+| # | Task | Primary owner |
+| --- | --- | --- |
+| 1 | RBAC system | Nabil |
+| 2 | Team → email display | Nabil |
+| 3 | Team invite fix | Nabil |
+| 4 | Need help → docs | Paris (UI) / shared docs |
+| 5 | Change mainnet ↔ testnet | Platform / service owners |
+| 6 | Credit system (Zexvro credits) | Nabil |
+
+### Overview (workspace / project shell)
+
+| # | Task | Primary owner |
+| --- | --- | --- |
+| 1 | Home page main metrics | Paris (UI) / shared |
+| 2 | Zer0 name without duplicated sidebar | Paris |
+| 3 | Payroll → Finance (rename / IA) | Paris |
+| 4 | Morph agent | Morph track |
+| 5 | Analytics | Shared / Morph track if agent metrics |
+| 6 | CI/CD | Morph track |
+| 7 | Project Settings | Paris (UI) / Nabil (workspace auth) |
+| 8 | Curated options (admin-only needed options) | Nabil (RBAC) + Paris (UI) |
+
+### Projects (project dashboard cleanup)
+
+| # | Task | Primary owner |
+| --- | --- | --- |
+| 1 | Remove execution | Paris |
+| 2 | Remove unwired dummy stuff | Paris |
+| 3 | Working audit logs | Nabil (workspace) + wiring |
+| 4 | Remove most shit from service manager | Paris |
+| 5 | Morph working | Morph track |
+| 6 | Shared memory updating actually | Morph track |
+| 7 | Project settings revamp (Discord settings) | Paris |
+
+### Build priorities by assignee
+
+**Morph track — build next**
+
+1. Morph CLI + agentic system (wire agent loop, LLM, audit trail).
+2. CI/CD for Morph / transformation flows.
+3. Web2 → Web3 transformation demo.
+4. Morph site / in-app Morph surface work.
+5. Shared memory that actually persists/updates across web + CLI.
+6. Make Morph “working” end-to-end in the project dashboard.
+
+**Nabil — build next**
+
+1. RBAC system (roles, permissions, admin-curated options).
+2. Credit system (Zexvro credits balance, consume, display).
+3. Team management (invite fix, email display, membership).
+4. Workspace management + related UI.
+5. Audit logs that work (workspace-level ledger).
+6. Project settings where auth/workspace policy applies.
+
+**Paris — build next**
+
+1. Remove unwanted UI (executions, unwired dummy, service manager bloat).
+2. Landing: update demos + demo icons.
+3. Shell polish: Zer0 sidebar duplication, Payroll → Finance, home metrics, need-help → docs.
+4. Project settings revamp (including Discord settings) where pure UI.
+5. Misc cleanup not owned by Morph/Nabil.
+
 ## Service Map
 
 ### 1. Zero-Knowledge Privacy Pool (Zer0)
@@ -163,9 +244,9 @@ Remaining (ops / protocol, not “incomplete product UI”):
 
 ### 2. Transformation Agent — Morph
 
-Owner: Paris / `paris-29`
+Owner: Morph track (platform ticket); historical service owner Paris / `paris-29`
 Product name: **Morph**
-Status: CLI fully implemented & packaged
+Status: CLI implemented & packaged; agentic wiring, CI/CD, demo, shared-memory sync, and dashboard Morph still remaining (see Active Ticket Assignments)
 
 Problem:
 
@@ -388,16 +469,17 @@ Remaining integration work (active — test tomorrow):
 
 These are not primary MVP services yet, but they will likely become shared modules.
 
-| Area | Current status | Agent rule |
-| --- | --- | --- |
-| Auth | Cognito frontend flow exists; shared architecture is not finalized | Preserve the current flow and document cross-service changes |
-| Accounts/workspaces | Browser-local prototype | Keep future multi-user and server authorization needs in mind |
-| Billing | Service-specific prototypes | Keep NFT checkout and De-pin payments inside their documented trust boundaries |
-| Deployment | Not designed | Prefer service-driven needs over generic deploy features |
-| Database | Not designed | Choose storage after data models are clearer |
-| Connectors | Not designed | Add only when a service needs one |
-| Security | Required but not designed | Never commit secrets; document trust boundaries |
-| Agent memory | Important but not designed | Separate user memory, project memory, task memory, logs, and secrets |
+| Area | Current status | Owner (active tickets) | Agent rule |
+| --- | --- | --- | --- |
+| Auth / RBAC | Cognito flow exists; full RBAC incomplete | Nabil | Preserve Cognito; do not invent parallel auth |
+| Accounts / workspaces / team | Browser-local prototype; invite + email display incomplete | Nabil | Multi-user + server auth needs in mind |
+| Credits / billing (platform) | Zexvro credits incomplete | Nabil | Keep NFT checkout + De-pin payments in service trust boundaries |
+| Deployment / CI/CD | Not finished | Morph track | Prefer service-driven CI over generic hosting |
+| Database | Not designed | — | Choose storage after data models are clearer |
+| Connectors | Not designed | — | Add only when a service needs one |
+| Security | Required but not designed | Shared | Never commit secrets; document trust boundaries |
+| Agent / shared memory | Partial; must actually update | Morph track | Separate user, project, task memory, logs, secrets |
+| Dashboard UI cleanup / landing | Partial; remove dummy + update demos | Paris | Follow `design.md`; remove unwired UI first |
 
 ## Product Design Rules
 

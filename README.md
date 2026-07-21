@@ -37,7 +37,8 @@ The product direction is simple: Vercel/Cloudflare-level clarity, Web3-native ra
 
 This repository currently holds the project foundation:
 
-- `context.md` - product, team, stack, and setup context.
+- `AGENTS.md` - agent boot checklist, remaining work, ticket owners.
+- `context.md` - product, team, stack, setup, and active remaining work.
 - `memory.md` - shared working memory for developers and agents.
 - `design.md` - visual system, themes, typography, and UI rules.
 - `frontend/` - Vite + React frontend workspace.

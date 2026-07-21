@@ -8,14 +8,15 @@ Use it to record what changed, why it changed, what decisions were made, what is
 
 Before any coding or documentation task, every agent must:
 
-1. Read `README.md`.
-2. Read `context.md`.
-3. Read this file from top to bottom.
-4. Run `git status --short`.
-5. Identify the service or shared area being touched.
-6. Check the latest memory entries for ownership, blockers, and decisions.
-7. Make scoped changes only.
-8. Add a memory entry before committing.
+1. Read `AGENTS.md` (assignees + remaining work pointer).
+2. Read `README.md`.
+3. Read `context.md` — **Active Ticket Assignments** and **Remaining Work**.
+4. Read this file (latest entries first, then scan for blockers).
+5. Run `git status --short`.
+6. Identify assignee scope + service/area being touched.
+7. Check the latest memory entries for ownership, blockers, and decisions.
+8. Make scoped changes only; do not steal another assignee’s ticket.
+9. Add a memory entry after meaningful work / before committing.
 
 ## Purpose Of This File
 
@@ -58,7 +59,7 @@ If a detail is only a work update, keep it here.
 | Service | Owner | Current status | Edit rule |
 | --- | --- | --- | --- |
 | Zero-Knowledge Privacy Pool (Zer0) | Paris / `paris-29` | **Complete (product UI)** — suite, privacy pool, stealth, settings client-facing | Ask before changing core proving/pool design; product UX marked complete 2026-07-17 |
-| Transformation Agent (Morph) | Paris / `paris-29` | **In Progress — CLI built** | Owned by Paris. CLI skeleton done. Next: wire LLM, add web panel. |
+| Transformation Agent (Morph) | Morph track (was Paris / `paris-29`) | **In Progress — CLI built; agentic + demo + CI/CD remaining** | Morph assignee builds CLI/agent/CI/demo/surface. Shared memory must actually update. |
 | A-2-A Trade Pipeline | Rushi / `Wraient` | Planned | Ask or record coordination before changing protocol, wallet, or negotiation design |
 | Captcha-like Agent Authentication Service | Rushi / `Wraient` | Planned | Ask or record coordination before changing identity, SDK, classifier, or HDM design |
 | NFT Service | Nabil / `n4bi10p` + Paris | **Complete (product UI)** — create cinema, studio dashboard, public checkout, SDK, docs | Ask before changing minting, metadata, checkout, or NFT model |
@@ -904,3 +905,16 @@ Use `None` for empty fields. Do not delete fields.
 - Follow-ups: Hard-refresh production dashboard; confirm custom domain if not auto-promoting; paid settle still needs OZ key.
 - Blockers: None for unpaid path.
 - Verification: git push main ok; wrangler pages deploy success.
+
+## 2026-07-21 - Codex with Paris - Remaining work + ticket assignments for agents
+
+- Service or area: shared agent config (`context.md`, `memory.md`, `AGENTS.md`).
+- Files changed: `context.md` (Active Ticket Assignments + Remaining Work + platform owners), `memory.md` (this entry), `AGENTS.md` (boot checklist + remaining work pointer).
+- Summary: Locked remaining incomplete work and who builds what so Morph / Nabil / Paris agents pull the same source of truth on startup.
+- Decisions: Accepted - Assignees: **Morph track** = Morph CLI/agentic + CI/CD + web2→web3 demo + Morph surface + shared memory; **Nabil** = RBAC, credits, team/workspace mgmt + related UI + audit logs; **Paris** = remove unwanted/dummy UI, landing demos+icons, shell polish (Zer0 sidebar, Payroll→Finance, need-help→docs, project settings UI). Accepted - Agents must not steal another assignee’s ticket without coordination + memory entry.
+- Remaining Zexvro: RBAC, team email display, team invite fix, need-help→docs, mainnet↔testnet toggle, Zexvro credits.
+- Remaining Overview: home metrics, Zer0 no duplicate sidebar, Payroll→Finance, Morph agent, Analytics, CI/CD, Project Settings, curated admin options.
+- Remaining Projects: remove execution, remove unwired dummy, working audit logs, gut service manager, Morph working, shared memory actually updates, project settings revamp (Discord).
+- Follow-ups: Each agent starts from `AGENTS.md` → `context.md` Active Ticket Assignments → own build list; update this file when a ticket finishes.
+- Blockers: None for assignment clarity.
+- Verification: Sections present in `context.md`; `AGENTS.md` points agents at remaining work.
