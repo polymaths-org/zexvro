@@ -1,7 +1,9 @@
 import express from 'express'
+import type { NextFunction, Request, Response } from 'express'
 import { z } from 'zod'
 import type { GateConfig } from './domain.js'
 import { CAPABILITY_HEADER } from './domain.js'
+import { isCorsOriginAllowed } from './config.js'
 import { completeChallenge, issueChallenge, problem, resolveSiteByKey } from './challenges.js'
 import { randomId } from './crypto.js'
 import type { GateRepository } from './repository.js'
@@ -41,6 +43,27 @@ import { fileURLToPath } from 'node:url'
 export function createGateApp(config: GateConfig, repo: GateRepository) {
   const app = express()
   app.disable('x-powered-by')
+
+  // CORS for third-party browser embeds (reflect allowlisted Origin only).
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const origin = req.header('origin')
+    if (origin && isCorsOriginAllowed(origin, config.corsOrigins)) {
+      res.setHeader('Access-Control-Allow-Origin', origin)
+      res.setHeader('Vary', 'Origin')
+      res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+      res.setHeader(
+        'Access-Control-Allow-Headers',
+        'Content-Type, Authorization, X-Zexvro-Capability, X-Zexvro-Pop, X-Zexvro-Site-Key, X-Zexvro-Action, X-Zexvro-Expected-Htu',
+      )
+      res.setHeader('Access-Control-Max-Age', '86400')
+    }
+    if (req.method === 'OPTIONS') {
+      res.status(204).end()
+      return
+    }
+    next()
+  })
+
   app.use(express.json({ limit: '64kb' }))
 
   const adminAuth = createAdminAuthMiddleware({
@@ -55,7 +78,13 @@ export function createGateApp(config: GateConfig, repo: GateRepository) {
   }
 
   app.get('/health', (_req, res) => {
-    res.json({ status: 'ok', service: 'agent-auth', product: 'zexvro-gate' })
+    res.json({
+      status: 'ok',
+      service: 'agent-auth',
+      product: 'zexvro-gate',
+      issuer: config.issuer,
+      basePath: config.basePath || '/',
+    })
   })
 
   app.get('/status', async (_req, res) => {

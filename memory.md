@@ -937,3 +937,14 @@ Use `None` for empty fields. Do not delete fields.
 - Follow-ups: Host Gate API, CORS, multi-tenant site keys, then console Pages deploy with `VITE_AGENT_AUTH_API_URL`.
 - Blockers: None for merge/test; production third-party captcha not ready until host + keys + CORS.
 - Verification: resolve conflicts; strip prod demos; `npm run test:agent-auth`.
+
+## 2026-07-22 - Grok with Rushi - Gate hosted (ECS Fargate + ALB)
+
+- Service or area: ZEXVRO Gate production host (`services/agent-auth`).
+- Summary: Built Gate image via CodeBuild → ECR. App Runner blocked (account max 2 services). Deployed ECS Fargate + ALB instead. Health green. Public path planned as https://api.zexvro.in/gate. Demo routes off in production. Signing secret rotated. No demo site seeded.
+- Live ALB: `zexvro-gate-alb-672701025.us-east-1.elb.amazonaws.com` (`/health`, `/gate/health` healthy).
+- DNS pending user: Cloudflare CNAME `api` → ALB; www→apex redirect (see `docs/gate_cloudflare_dns.md`).
+- Decisions: Accepted - No demo tenant in prod. Accepted - ECS Fargate due to App Runner limit. Accepted - User-editable allowed origins remains product todo.
+- Follow-ups: Cloudflare DNS + SSL; multi-tenant create-site API; optional HTTPS listener on ALB if not using CF proxy; photo bank optional.
+- Blockers: User must paste Cloudflare DNS for `api` and `www`.
+- Verification: target healthy; curl ALB `/health` + `/gate/health` ok.

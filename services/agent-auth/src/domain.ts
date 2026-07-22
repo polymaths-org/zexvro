@@ -200,6 +200,13 @@ export interface GateConfig {
   adminRequireAuth: boolean
   cognitoUserPoolId?: string
   cognitoClientId?: string
+  /**
+   * Public URL path prefix (no trailing slash), e.g. `/gate` for https://api.zexvro.in/gate.
+   * Empty string = mount at root (local default).
+   */
+  basePath: string
+  /** Browser origins allowed for CORS (comma-configured). Does not replace site.allowedOrigins. */
+  corsOrigins: string[]
 }
 
 export const CAPABILITY_HEADER = 'x-zexvro-capability'

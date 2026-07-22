@@ -32,8 +32,23 @@ const serviceName = 'zexvro-agent-auth'
 const tableName = process.env.GATE_DYNAMO_TABLE || 'zexvro-agent-auth'
 const secretName = process.env.GATE_SIGNING_SECRET_NAME || 'zexvro/agent-auth/issuer-signing'
 const instanceRole = `arn:aws:iam::${account}:role/zexvro-gate-apprunner-instance`
-const ecrAccessRole = `arn:aws:iam::${account}:role/zexvro-gate-apprunner-ecr-access`
+const ecrAccessRole =
+  process.env.GATE_ECR_ACCESS_ROLE_ARN ||
+  `arn:aws:iam::${account}:role/zexvro-gate-apprunner-ecr-access`
 const codebuildRole = `arn:aws:iam::${account}:role/zexvro-codebuild-ecr`
+const publicIssuer = process.env.AGENT_AUTH_ISSUER || 'https://api.zexvro.in/gate'
+const corsOrigins =
+  process.env.GATE_CORS_ORIGINS ||
+  [
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'https://console.zexvro.in',
+    'https://zexvro.pages.dev',
+    'https://main.zexvro.pages.dev',
+    'https://*.zexvro.pages.dev',
+    'https://zexvro.in',
+    'https://www.zexvro.in',
+  ].join(',')
 
 function run(cmd, args, opts = {}) {
   console.log(`$ ${cmd} ${args.join(' ')}`)
@@ -59,9 +74,10 @@ function awsJson(args) {
   return out ? JSON.parse(out) : null
 }
 
-async function tarGzipDir(srcDir, outFile) {
-  // Use system tar for reliability
-  execSync(`tar -czf ${JSON.stringify(outFile)} -C ${JSON.stringify(srcDir)} .`, {
+async function zipDir(srcDir, outFile) {
+  // CodeBuild S3 source expects a ZIP with buildspec.yml at archive root (not tar.gz).
+  rmSync(outFile, { force: true })
+  execSync(`cd ${JSON.stringify(srcDir)} && zip -qr ${JSON.stringify(outFile)} .`, {
     stdio: 'inherit',
   })
 }
@@ -131,9 +147,9 @@ artifacts:
 `,
 )
 
-const sourceKey = `builds/agent-auth-${tag}.tar.gz`
-const tarball = path.join(workDir, 'source.tar.gz')
-await tarGzipDir(stageDir, tarball)
+const sourceKey = `builds/agent-auth-${tag}.zip`
+const tarball = path.join(workDir, 'source.zip')
+await zipDir(stageDir, tarball)
 
 // ensure bucket
 try {
@@ -250,110 +266,85 @@ console.log(`[ecr] image ready ${imageId}`)
 const secretArn = ensureSecretArn()
 console.log(`[secret] ${secretArn}`)
 
-// Create or update App Runner
-const envVars = [
-  { Name: 'NODE_ENV', Value: 'production' },
-  { Name: 'AGENT_AUTH_PORT', Value: '4103' },
-  { Name: 'GATE_REQUIRE_POP', Value: 'true' },
-  { Name: 'GATE_STATE_BACKEND', Value: 'dynamo' },
-  { Name: 'GATE_DYNAMO_TABLE', Value: tableName },
-  { Name: 'GATE_ADMIN_REQUIRE_AUTH', Value: 'true' },
-  { Name: 'COGNITO_USER_POOL_ID', Value: process.env.COGNITO_USER_POOL_ID || 'us-east-1_vyONcitBD' },
-  { Name: 'COGNITO_CLIENT_ID', Value: process.env.COGNITO_CLIENT_ID || '7qmkq33si9qk8pgo6ebi3qantm' },
-  { Name: 'AWS_REGION', Value: region },
-]
+// Create or update App Runner — issuer is the public Cloudflare URL, not App Runner hostname.
+const runtimeEnv = {
+  NODE_ENV: 'production',
+  AGENT_AUTH_PORT: '4103',
+  AGENT_AUTH_ISSUER: publicIssuer,
+  GATE_BASE_PATH: '/gate',
+  GATE_REQUIRE_POP: 'true',
+  GATE_STATE_BACKEND: 'dynamo',
+  GATE_DYNAMO_TABLE: tableName,
+  GATE_ALLOW_DEV_HUMAN: 'false',
+  GATE_ALLOW_DEV_HMAC: 'false',
+  GATE_ADMIN_REQUIRE_AUTH: 'true',
+  GATE_CORS_ORIGINS: corsOrigins,
+  AWS_REGION: region,
+}
 
-const imageConfig = {
-  ImageIdentifier: imageId,
-  ImageRepositoryType: 'ECR',
-  ImageConfiguration: {
-    Port: '4103',
-    RuntimeEnvironmentVariables: Object.fromEntries(envVars.map((e) => [e.Name, e.Value])),
-    RuntimeEnvironmentSecrets: {
-      AGENT_AUTH_SIGNING_SECRET: secretArn,
+const sourceConfiguration = {
+  AuthenticationConfiguration: { AccessRoleArn: ecrAccessRole },
+  AutoDeploymentsEnabled: false,
+  ImageRepository: {
+    ImageIdentifier: imageId,
+    ImageRepositoryType: 'ECR',
+    ImageConfiguration: {
+      Port: '4103',
+      RuntimeEnvironmentVariables: runtimeEnv,
+      RuntimeEnvironmentSecrets: {
+        AGENT_AUTH_SIGNING_SECRET: secretArn,
+      },
     },
   },
 }
 
+const instanceConfiguration = {
+  Cpu: '256',
+  Memory: '512',
+  InstanceRoleArn: instanceRole,
+}
+
+const healthCheckConfiguration = {
+  Protocol: 'HTTP',
+  Path: '/health',
+  Interval: 10,
+  Timeout: 5,
+  HealthyThreshold: 1,
+  UnhealthyThreshold: 5,
+}
+
 let serviceArn
 let serviceUrl
-try {
-  const listed = awsJson(['apprunner', 'list-services'])
-  const existing = (listed.ServiceSummaryList || []).find((s) => s.ServiceName === serviceName)
-  if (existing) {
-    serviceArn = existing.ServiceArn
-    const updated = awsJson([
-      'apprunner',
-      'update-service',
-      '--service-arn',
-      serviceArn,
-      '--source-configuration',
-      JSON.stringify({
-        AuthenticationConfiguration: { AccessRoleArn: ecrAccessRole },
-        AutoDeploymentsEnabled: false,
-        ImageRepository: {
-          ImageIdentifier: imageId,
-          ImageRepositoryType: 'ECR',
-          ImageConfiguration: {
-            Port: '4103',
-            RuntimeEnvironmentVariables: Object.fromEntries(
-              envVars.map((e) => [e.Name, e.Value]),
-            ),
-            RuntimeEnvironmentSecrets: {
-              AGENT_AUTH_SIGNING_SECRET: secretArn,
-            },
-          },
-        },
-      }),
-      '--instance-configuration',
-      JSON.stringify({
-        Cpu: '256',
-        Memory: '512',
-        InstanceRoleArn: instanceRole,
-      }),
-    ])
-    serviceUrl = updated.Service.ServiceUrl
-    console.log(`[apprunner] updated ${serviceName}`)
-  } else {
-    throw new Error('not found')
-  }
-} catch {
+const listed = awsJson(['apprunner', 'list-services'])
+const existing = (listed.ServiceSummaryList || []).find((s) => s.ServiceName === serviceName)
+if (existing) {
+  serviceArn = existing.ServiceArn
+  const updated = awsJson([
+    'apprunner',
+    'update-service',
+    '--service-arn',
+    serviceArn,
+    '--source-configuration',
+    JSON.stringify(sourceConfiguration),
+    '--instance-configuration',
+    JSON.stringify(instanceConfiguration),
+    '--health-check-configuration',
+    JSON.stringify(healthCheckConfiguration),
+  ])
+  serviceUrl = updated.Service.ServiceUrl
+  console.log(`[apprunner] updated ${serviceName}`)
+} else {
   const created = awsJson([
     'apprunner',
     'create-service',
     '--service-name',
     serviceName,
     '--source-configuration',
-    JSON.stringify({
-      AuthenticationConfiguration: { AccessRoleArn: ecrAccessRole },
-      AutoDeploymentsEnabled: false,
-      ImageRepository: {
-        ImageIdentifier: imageId,
-        ImageRepositoryType: 'ECR',
-        ImageConfiguration: {
-          Port: '4103',
-          RuntimeEnvironmentVariables: Object.fromEntries(envVars.map((e) => [e.Name, e.Value])),
-          RuntimeEnvironmentSecrets: {
-            AGENT_AUTH_SIGNING_SECRET: secretArn,
-          },
-        },
-      },
-    }),
+    JSON.stringify(sourceConfiguration),
     '--instance-configuration',
-    JSON.stringify({
-      Cpu: '256',
-      Memory: '512',
-      InstanceRoleArn: instanceRole,
-    }),
+    JSON.stringify(instanceConfiguration),
     '--health-check-configuration',
-    JSON.stringify({
-      Protocol: 'HTTP',
-      Path: '/health',
-      Interval: 10,
-      Timeout: 5,
-      HealthyThreshold: 1,
-      UnhealthyThreshold: 5,
-    }),
+    JSON.stringify(healthCheckConfiguration),
   ])
   serviceArn = created.Service.ServiceArn
   serviceUrl = created.Service.ServiceUrl
@@ -373,37 +364,6 @@ for (let i = 0; i < 60; i += 1) {
   spawnSync('sleep', ['15'])
 }
 
-// Set issuer to public URL
-if (serviceUrl) {
-  const issuer = `https://${serviceUrl}`
-  awsJson([
-    'apprunner',
-    'update-service',
-    '--service-arn',
-    serviceArn,
-    '--source-configuration',
-    JSON.stringify({
-      AuthenticationConfiguration: { AccessRoleArn: ecrAccessRole },
-      AutoDeploymentsEnabled: false,
-      ImageRepository: {
-        ImageIdentifier: imageId,
-        ImageRepositoryType: 'ECR',
-        ImageConfiguration: {
-          Port: '4103',
-          RuntimeEnvironmentVariables: {
-            ...Object.fromEntries(envVars.map((e) => [e.Name, e.Value])),
-            AGENT_AUTH_ISSUER: issuer,
-          },
-          RuntimeEnvironmentSecrets: {
-            AGENT_AUTH_SIGNING_SECRET: secretArn,
-          },
-        },
-      },
-    }),
-  ])
-  console.log(`[apprunner] set AGENT_AUTH_ISSUER=${issuer}`)
-}
-
 console.log(
   JSON.stringify(
     {
@@ -411,6 +371,9 @@ console.log(
       serviceArn,
       serviceUrl: serviceUrl ? `https://${serviceUrl}` : null,
       health: serviceUrl ? `https://${serviceUrl}/health` : null,
+      gateHealth: serviceUrl ? `https://${serviceUrl}/gate/health` : null,
+      publicIssuer,
+      dns: 'CNAME api → ServiceUrl host (see docs/gate_cloudflare_dns.md)',
     },
     null,
     2,

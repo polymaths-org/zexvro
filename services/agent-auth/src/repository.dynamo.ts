@@ -43,16 +43,26 @@ export class DynamoRepository implements GateRepository {
   }
 
   async ensureDemoTenant() {
-    // Seed demo into cache for local DX even on dynamo backend (jti still dynamo).
+    // Local DX only — never call this under NODE_ENV=production.
+    if (process.env.NODE_ENV === 'production') return null
     if (this.cache.sites.size === 0) {
       return seedDemoTenant(this.cache)
     }
     return null
   }
 
+  /**
+   * Warm site cache. Production: empty is fine until sites are provisioned.
+   * Non-prod: may seed demo tenant into memory + optionally persist (legacy).
+   * Never writes demo secrets when NODE_ENV=production.
+   */
   async bootstrapFromCacheSeed() {
+    if (process.env.NODE_ENV === 'production') {
+      // Production: do not seed or persist demo tenants.
+      return
+    }
     await this.ensureDemoTenant()
-    // Persist demo site keys so multi-instance share site metadata if desired
+    // Dev only: persist demo site keys so multi-instance share site metadata if desired
     for (const site of this.cache.sites.values()) {
       await this.doc.send(
         new PutCommand({
@@ -181,11 +191,12 @@ export class DynamoRepository implements GateRepository {
       const secret = await this.getSiteSecret(site.siteId)
       if (secret && secretsEqual(secret, siteSecret)) return site
     }
-    // ensure demo cache
-    await this.ensureDemoTenant()
-    for (const site of this.cache.sites.values()) {
-      const secret = this.cache.secretsBySiteId.get(site.siteId)
-      if (secret && secretsEqual(secret, siteSecret)) return site
+    if (process.env.NODE_ENV !== 'production') {
+      await this.ensureDemoTenant()
+      for (const site of this.cache.sites.values()) {
+        const secret = this.cache.secretsBySiteId.get(site.siteId)
+        if (secret && secretsEqual(secret, siteSecret)) return site
+      }
     }
     return undefined
   }
