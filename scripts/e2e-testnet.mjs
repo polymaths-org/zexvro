@@ -7,12 +7,30 @@
  *   node scripts/e2e-testnet.mjs
  *   npm run e2e:testnet
  *
- * Optional secrets (deeper checks):
- *   GATE_ADMIN_API_KEY     — Gate admin sites + agent register
- *   NFT_SMOKE_ACCESS_TOKEN — authenticated NFT routes
- *   DEPIN_URL              — override De-pin base
+ * What this suite DOES cover (live deploy / Stellar testnet, not unit mocks):
+ *   - Console + landing HTTP + Gate wired in console bundle
+ *   - Platform API reachable (auth wall)
+ *   - Gate: health/status/SDK, admin sites, create site, human challenge+captcha
+ *     issue, origin block, full agent register→sign→complete→PoP verify
+ *   - NFT: health + capabilities (must be stellar:testnet)
+ *   - NFT auth: Cognito login / list collections
+ *   - NFT chain (with Cognito + @stellar/stellar-sdk): media upload, create
+ *     collection (on-chain deploy), mint token, configure primary sale
+ *   - De-pin: health/status + unpaid 402
+ *   - De-pin paid settle (with DEPIN_BUYER_SECRET): real testnet USDC payment
+ *
+ * Still out of scope here:
+ *   - Freighter browser UI / public buyer checkout in a real wallet extension
+ *   - Zer0 ZK prove/withdraw (prover EC2 often stopped)
+ *
+ * Secrets (GitHub Actions — never commit):
+ *   GATE_ADMIN_API_KEY
+ *   COGNITO_SMOKE_USERNAME + COGNITO_SMOKE_PASSWORD  (preferred) or NFT_SMOKE_ACCESS_TOKEN
+ *   DEPIN_BUYER_SECRET / NFT_SPONSOR_SECRET (Stellar secret seed for paid settle; optional for mint)
+ *   COGNITO_USER_POOL_ID / COGNITO_CLIENT_ID / COGNITO_REGION (defaults to prod pool)
  *
  * Exit 0 only if all required checks pass (after retries).
+ * Writes GITHUB_STEP_SUMMARY with every check when present.
  */
 import {
   generateKeyPairSync,
@@ -47,6 +65,20 @@ const cfg = {
   ).replace(/\/$/, ''),
   gateAdminKey: env('GATE_ADMIN_API_KEY'),
   nftToken: env('NFT_SMOKE_ACCESS_TOKEN', env('COGNITO_ACCESS_TOKEN')),
+  cognitoUser: env('COGNITO_SMOKE_USERNAME'),
+  cognitoPass: env('COGNITO_SMOKE_PASSWORD'),
+  cognitoPool: env('COGNITO_USER_POOL_ID', 'us-east-1_vyONcitBD'),
+  cognitoClient: env('COGNITO_CLIENT_ID', '7qmkq33si9qk8pgo6ebi3qantm'),
+  cognitoRegion: env('COGNITO_REGION', env('AWS_REGION', 'us-east-1')),
+  nftWorkspaceId: env('NFT_SMOKE_WORKSPACE_ID', 'smoke-workspace'),
+  stellarSecret: env('DEPIN_BUYER_SECRET', env('NFT_SPONSOR_SECRET', env('STELLAR_PRIVATE_KEY'))),
+  stellarNetworkPassphrase: env(
+    'STELLAR_NETWORK_PASSPHRASE',
+    'Test SDF Network ; September 2015',
+  ),
+  stellarRpcUrl: env('STELLAR_RPC_URL', 'https://soroban-testnet.stellar.org'),
+  enableChainSmoke: env('E2E_CHAIN_SMOKE', '1') !== '0',
+  enablePaidDepin: env('E2E_PAID_DEPIN', '1') !== '0',
   retries: Number(process.env.E2E_RETRIES || 8),
   retryMs: Number(process.env.E2E_RETRY_MS || 8000),
   stableHits: Number(process.env.E2E_STABLE_HITS || 2),
@@ -55,25 +87,75 @@ const cfg = {
 const results = []
 let failed = 0
 
+/** Values that must never appear in Actions logs (exact string match + patterns). */
+const secretValues = new Set(
+  [
+    cfg.gateAdminKey,
+    cfg.nftToken,
+    cfg.cognitoPass,
+    cfg.cognitoUser,
+    cfg.stellarSecret,
+    process.env.GATE_ADMIN_API_KEY,
+    process.env.NFT_SMOKE_ACCESS_TOKEN,
+    process.env.COGNITO_SMOKE_PASSWORD,
+    process.env.COGNITO_SMOKE_USERNAME,
+    process.env.DEPIN_BUYER_SECRET,
+    process.env.NFT_SPONSOR_SECRET,
+    process.env.STELLAR_PRIVATE_KEY,
+    process.env.COGNITO_ACCESS_TOKEN,
+  ].filter((v) => typeof v === 'string' && v.length > 0),
+)
+
+/** Register with GitHub Actions log masking (exact match only). */
+function maskSecret(value) {
+  if (!value || typeof value !== 'string') return
+  secretValues.add(value)
+  if (process.env.GITHUB_ACTIONS === 'true') {
+    // Actions masks exact matches of this string in subsequent log lines
+    console.log(`::add-mask::${value}`)
+  }
+}
+
+// Mask secrets known at boot (before any other logging)
+for (const v of [...secretValues]) maskSecret(v)
+
+function redact(input) {
+  let s = typeof input === 'string' ? input : String(input ?? '')
+  for (const secret of secretValues) {
+    if (secret && secret.length >= 4 && s.includes(secret)) {
+      s = s.split(secret).join('***')
+    }
+  }
+  // Stellar secret seeds (S…) and JWTs — belt and suspenders if they slip into error text
+  s = s.replace(/\bS[A-Za-z0-9]{50,}\b/g, 'S***')
+  s = s.replace(/\beyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g, 'eyJ***')
+  s = s.replace(/\bBearer\s+[A-Za-z0-9._~+/=-]{12,}/gi, 'Bearer ***')
+  s = s.replace(/("?(?:password|secret|privateKey|accessToken|idToken|refreshToken|apiKey|siteSecret)"?\s*[:=]\s*)(["']?)[^,"'\s}]+\2/gi, '$1$2***$2')
+  return s
+}
+
 function log(level, msg) {
   const ts = new Date().toISOString().slice(11, 19)
-  console.log(`[${ts}] ${level} ${msg}`)
+  console.log(`[${ts}] ${level} ${redact(msg)}`)
 }
 
 function pass(name, detail = '') {
-  results.push({ name, ok: true, detail })
-  log('OK  ', `${name}${detail ? ` — ${detail}` : ''}`)
+  const safe = redact(detail)
+  results.push({ name, ok: true, detail: safe })
+  log('OK  ', `${name}${safe ? ` — ${safe}` : ''}`)
 }
 
 function fail(name, detail = '') {
   failed += 1
-  results.push({ name, ok: false, detail })
-  log('FAIL', `${name}${detail ? ` — ${detail}` : ''}`)
+  const safe = redact(detail)
+  results.push({ name, ok: false, detail: safe })
+  log('FAIL', `${name}${safe ? ` — ${safe}` : ''}`)
 }
 
 function skip(name, detail = '') {
-  results.push({ name, ok: true, skipped: true, detail })
-  log('SKIP', `${name}${detail ? ` — ${detail}` : ''}`)
+  const safe = redact(detail)
+  results.push({ name, ok: true, skipped: true, detail: safe })
+  log('SKIP', `${name}${safe ? ` — ${safe}` : ''}`)
 }
 
 async function sleep(ms) {
@@ -240,7 +322,10 @@ async function runGateDeep() {
     siteKey = created.siteKey
     secretKey = created.secretKey
     siteId = created.siteId
-    pass('gate.admin.createSite', siteKey.slice(0, 20) + '…')
+    // Dynamic site credentials must not appear in Actions logs
+    maskSecret(siteKey)
+    maskSecret(secretKey)
+    pass('gate.admin.createSite', 'site created')
   } catch (e) {
     fail('gate.admin.createSite', e instanceof Error ? e.message : String(e))
     return
@@ -372,7 +457,83 @@ async function runGateDeep() {
   }
 }
 
+// ─── Cognito (for NFT auth) ──────────────────────────────────────
+
+async function fetchCognitoAccessToken() {
+  if (cfg.nftToken) return cfg.nftToken
+  if (!cfg.cognitoUser || !cfg.cognitoPass) return ''
+
+  const url = `https://cognito-idp.${cfg.cognitoRegion}.amazonaws.com/`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/x-amz-json-1.1',
+      'x-amz-target': 'AWSCognitoIdentityProviderService.InitiateAuth',
+    },
+    body: JSON.stringify({
+      AuthFlow: 'USER_PASSWORD_AUTH',
+      ClientId: cfg.cognitoClient,
+      AuthParameters: {
+        USERNAME: cfg.cognitoUser,
+        PASSWORD: cfg.cognitoPass,
+      },
+    }),
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    const msg = body?.message || body?.__type || `HTTP ${res.status}`
+    throw new Error(`Cognito login failed: ${msg}`)
+  }
+  const token = body?.AuthenticationResult?.AccessToken
+  if (!token) throw new Error('Cognito login returned no AccessToken')
+  maskSecret(token)
+  const idToken = body?.AuthenticationResult?.IdToken
+  const refresh = body?.AuthenticationResult?.RefreshToken
+  if (idToken) maskSecret(idToken)
+  if (refresh) maskSecret(refresh)
+  return token
+}
+
 // ─── NFT ─────────────────────────────────────────────────────────
+
+async function loadStellar() {
+  try {
+    const sdk = await import('@stellar/stellar-sdk')
+    const contract = await import('@stellar/stellar-sdk/contract')
+    return {
+      Keypair: sdk.Keypair,
+      AssembledTransaction: contract.AssembledTransaction,
+      basicNodeSigner: contract.basicNodeSigner,
+    }
+  } catch {
+    return null
+  }
+}
+
+async function signAssembledJson(stellar, secretKeypair, contractId, serializedTransaction) {
+  const parsed = JSON.parse(serializedTransaction)
+  const method = parsed.method || 'mint'
+  const tx = stellar.AssembledTransaction.fromJSON(
+    {
+      contractId,
+      networkPassphrase: cfg.stellarNetworkPassphrase,
+      rpcUrl: cfg.stellarRpcUrl,
+      method,
+      parseResultXdr: () => undefined,
+    },
+    {
+      tx: parsed.tx,
+      simulationResult: parsed.simulationResult,
+      simulationTransactionData: parsed.simulationTransactionData,
+    },
+  )
+  const nodeSigner = stellar.basicNodeSigner(secretKeypair, cfg.stellarNetworkPassphrase)
+  await tx.signAuthEntries({
+    address: secretKeypair.publicKey(),
+    signAuthEntry: nodeSigner.signAuthEntry,
+  })
+  return tx.toJSON()
+}
 
 async function runNft() {
   await checkHttpOk('nft.health', `${cfg.nftUrl}/health`, {
@@ -396,30 +557,268 @@ async function runNft() {
     fail('nft.capabilities', e instanceof Error ? e.message : String(e))
   }
 
-  if (!cfg.nftToken) {
-    skip('nft.authenticated', 'NFT_SMOKE_ACCESS_TOKEN not set')
+  let token = ''
+  try {
+    token = await fetchCognitoAccessToken()
+    if (token && (cfg.cognitoUser || cfg.nftToken)) {
+      pass(
+        'nft.cognito_token',
+        cfg.nftToken ? 'using NFT_SMOKE_ACCESS_TOKEN' : 'logged in via COGNITO_SMOKE_*',
+      )
+    }
+  } catch (e) {
+    fail('nft.cognito_token', e instanceof Error ? e.message : String(e))
+    return
+  }
+
+  if (!token) {
+    skip(
+      'nft.authenticated',
+      'set NFT_SMOKE_ACCESS_TOKEN or COGNITO_SMOKE_USERNAME+COGNITO_SMOKE_PASSWORD',
+    )
+    skip('nft.media', 'auth required')
+    skip('nft.create_collection', 'auth required')
+    skip('nft.mint', 'auth required')
+    skip('nft.sale_config', 'auth required')
     return
   }
 
   try {
-    const { status, body } = await fetchOnce(`${cfg.nftUrl}/v1/collections`, {
+    const ws = encodeURIComponent(cfg.nftWorkspaceId)
+    const { status, body } = await fetchOnce(`${cfg.nftUrl}/v1/collections?workspaceId=${ws}`, {
       headers: {
-        authorization: `Bearer ${cfg.nftToken}`,
+        authorization: `Bearer ${token}`,
         accept: 'application/json',
       },
     })
-    // 200 list or 400 missing workspace still proves auth middleware
-    if (status === 200 || status === 400 || status === 401 || status === 403) {
-      if (status === 401 || status === 403) {
-        fail('nft.authenticated', `token rejected HTTP ${status}`)
-      } else {
-        pass('nft.authenticated', `HTTP ${status}`)
-      }
+    if (status === 401 || status === 403) {
+      fail('nft.authenticated', `token rejected HTTP ${status}`)
+      return
+    } else if (status === 200) {
+      const count = Array.isArray(body?.collections) ? body.collections.length : 0
+      pass('nft.authenticated', `list collections HTTP 200 count=${count}`)
+    } else if (status === 400) {
+      pass('nft.authenticated', `auth accepted HTTP 400 (workspace)`)
     } else {
       fail('nft.authenticated', `HTTP ${status} ${JSON.stringify(body).slice(0, 120)}`)
+      return
     }
   } catch (e) {
     fail('nft.authenticated', e instanceof Error ? e.message : String(e))
+    return
+  }
+
+  if (!cfg.enableChainSmoke) {
+    skip('nft.media', 'E2E_CHAIN_SMOKE=0')
+    skip('nft.create_collection', 'E2E_CHAIN_SMOKE=0')
+    skip('nft.mint', 'E2E_CHAIN_SMOKE=0')
+    skip('nft.sale_config', 'E2E_CHAIN_SMOKE=0')
+    return
+  }
+
+  const stellar = await loadStellar()
+  if (!stellar) {
+    skip('nft.media', 'install @stellar/stellar-sdk for chain smoke')
+    skip('nft.create_collection', 'install @stellar/stellar-sdk for chain smoke')
+    skip('nft.mint', 'install @stellar/stellar-sdk for chain smoke')
+    skip('nft.sale_config', 'install @stellar/stellar-sdk for chain smoke')
+    return
+  }
+
+  // Ephemeral owner so mint requires non-invoker auth (sponsor-as-operator returns 422)
+  const owner = stellar.Keypair.random()
+  try {
+    const fb = await fetch(
+      `https://friendbot.stellar.org?addr=${encodeURIComponent(owner.publicKey())}`,
+    )
+    if (!fb.ok) throw new Error(`friendbot HTTP ${fb.status}`)
+    pass('nft.friendbot_owner', owner.publicKey().slice(0, 8) + '…')
+  } catch (e) {
+    fail('nft.friendbot_owner', e instanceof Error ? e.message : String(e))
+    return
+  }
+
+  let coverUri = ''
+  try {
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      'base64',
+    )
+    const form = new FormData()
+    form.set('file', new Blob([png], { type: 'image/png' }), 'e2e-smoke.png')
+    const res = await fetch(`${cfg.nftUrl}/v1/media`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}` },
+      body: form,
+    })
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok || !body?.asset?.uri) {
+      fail('nft.media', `HTTP ${res.status} ${JSON.stringify(body).slice(0, 160)}`)
+      return
+    }
+    coverUri = body.asset.uri
+    pass('nft.media', coverUri.slice(0, 64) + (coverUri.length > 64 ? '…' : ''))
+  } catch (e) {
+    fail('nft.media', e instanceof Error ? e.message : String(e))
+    return
+  }
+
+  let collection
+  try {
+    const res = await fetch(`${cfg.nftUrl}/v1/collections`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        workspaceId: cfg.nftWorkspaceId,
+        name: `E2E Smoke ${Date.now().toString().slice(-6)}`,
+        symbol: 'E2ESM',
+        description: 'Automated e2e testnet collection — create + mint + sale smoke',
+        ownerAddress: owner.publicKey(),
+        royaltyRecipient: owner.publicKey(),
+        royaltyBps: 250,
+        coverImageUri: coverUri,
+      }),
+    })
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok || !body?.collection?.id) {
+      fail('nft.create_collection', `HTTP ${res.status} ${JSON.stringify(body).slice(0, 200)}`)
+      return
+    }
+    collection = body.collection
+    if (collection.status !== 'live') {
+      fail(
+        'nft.create_collection',
+        `status=${collection.status} reason=${collection.failureReason || '?'}`,
+      )
+      return
+    }
+    pass(
+      'nft.create_collection',
+      `live contract=${String(collection.contractId).slice(0, 12)}… tx=${String(collection.deploymentTxHash || '').slice(0, 12)}…`,
+    )
+  } catch (e) {
+    fail('nft.create_collection', e instanceof Error ? e.message : String(e))
+    return
+  }
+
+  try {
+    const intentRes = await fetch(`${cfg.nftUrl}/v1/collections/${collection.id}/mints/intent`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        operatorAddress: owner.publicKey(),
+        recipientAddress: owner.publicKey(),
+      }),
+    })
+    const intentBody = await intentRes.json().catch(() => ({}))
+    if (!intentRes.ok || !intentBody?.intent?.serializedTransaction) {
+      fail('nft.mint', `intent HTTP ${intentRes.status} ${JSON.stringify(intentBody).slice(0, 200)}`)
+      return
+    }
+    const prepared = intentBody.intent.serializedTransaction
+    const signed = await signAssembledJson(
+      stellar,
+      owner,
+      collection.contractId,
+      prepared,
+    )
+    const submitRes = await fetch(`${cfg.nftUrl}/v1/collections/${collection.id}/mints/submit`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        preparedTransaction: prepared,
+        signedTransaction: signed,
+        tokenId: intentBody.intent.tokenId,
+        ownerAddress: owner.publicKey(),
+      }),
+    })
+    const submitBody = await submitRes.json().catch(() => ({}))
+    if (!submitRes.ok || submitBody?.transaction?.status !== 'confirmed') {
+      fail('nft.mint', `submit HTTP ${submitRes.status} ${JSON.stringify(submitBody).slice(0, 220)}`)
+      return
+    }
+    pass(
+      'nft.mint',
+      `tokenId=${intentBody.intent.tokenId} tx=${String(submitBody.transaction.transactionHash).slice(0, 16)}…`,
+    )
+  } catch (e) {
+    fail('nft.mint', e instanceof Error ? e.message : String(e))
+    return
+  }
+
+  try {
+    const saleRes = await fetch(
+      `${cfg.nftUrl}/v1/collections/${collection.id}/sale-config/intent`,
+      {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          ownerAddress: owner.publicKey(),
+          priceAtomic: '1000000',
+        }),
+      },
+    )
+    const saleBody = await saleRes.json().catch(() => ({}))
+    if (!saleRes.ok || !saleBody?.intent) {
+      fail('nft.sale_config', `intent HTTP ${saleRes.status} ${JSON.stringify(saleBody).slice(0, 200)}`)
+      return
+    }
+    if (saleBody.intent.autoSubmitted?.transactionHash) {
+      pass(
+        'nft.sale_config',
+        `autoSubmitted tx=${String(saleBody.intent.autoSubmitted.transactionHash).slice(0, 16)}…`,
+      )
+      return
+    }
+    const prepared = saleBody.intent.serializedTransaction
+    if (!prepared) {
+      fail('nft.sale_config', 'no serializedTransaction and no autoSubmitted')
+      return
+    }
+    const signed = await signAssembledJson(
+      stellar,
+      owner,
+      collection.contractId,
+      prepared,
+    )
+    const sub = await fetch(
+      `${cfg.nftUrl}/v1/collections/${collection.id}/sale-config/submit`,
+      {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          preparedTransaction: prepared,
+          signedTransaction: signed,
+          priceAtomic: '1000000',
+        }),
+      },
+    )
+    const subBody = await sub.json().catch(() => ({}))
+    if (!sub.ok || subBody?.transaction?.status !== 'confirmed') {
+      fail('nft.sale_config', `submit HTTP ${sub.status} ${JSON.stringify(subBody).slice(0, 220)}`)
+      return
+    }
+    pass(
+      'nft.sale_config',
+      `confirmed tx=${String(subBody.transaction.transactionHash).slice(0, 16)}… price=1000000`,
+    )
+  } catch (e) {
+    fail('nft.sale_config', e instanceof Error ? e.message : String(e))
   }
 }
 
@@ -430,6 +829,8 @@ async function runDepin() {
     jsonPred: (b) => b?.status === 'ok' || b?.service === 'depin',
   })
 
+  let probePath = process.env.DEPIN_PROBE_PATH || ''
+  let expectedRecipient = ''
   try {
     const { status, body } = await fetchOnce(`${cfg.depinUrl}/status`)
     if (status !== 200) throw new Error(`status HTTP ${status}`)
@@ -437,37 +838,110 @@ async function runDepin() {
     const settleReady = body?.capabilities?.settleReady
     pass(
       'depin.status',
-      `providers=${Array.isArray(providers) ? providers.length : '?'} settleReady=${String(settleReady)}`,
+      `providers=${Array.isArray(providers) ? providers.length : '?'} settleReady=${String(settleReady)} network=${body?.capabilities?.network || '?'}`,
     )
 
-    // Unpaid probe: pick first path-like provider
-    let probePath = process.env.DEPIN_PROBE_PATH || ''
     if (!probePath && Array.isArray(providers) && providers[0]) {
       const p = providers[0]
       probePath = p.path || p.route || p.prefix || ''
+      expectedRecipient = p.recipient || p.payTo || ''
     }
-    if (!probePath) {
-      // common demo path
-      probePath = '/v1/weather'
-    }
+    if (!probePath) probePath = '/v1/weather'
     if (!probePath.startsWith('/')) probePath = `/${probePath}`
 
     const probe = await fetchOnce(`${cfg.depinUrl}${probePath}`, {
       headers: { accept: 'application/json' },
     })
-    // Expect 402 Payment Required for protected route, or 404 if route missing
     if (probe.status === 402) {
       pass('depin.unpaid_402', probePath)
     } else if (probe.status === 404) {
       skip('depin.unpaid_402', `${probePath} not found (configure DEPIN_PROBE_PATH)`)
     } else if (probe.status === 200) {
-      // open route
       pass('depin.probe_open', `${probePath} HTTP 200 (no payment required)`)
     } else {
       fail('depin.unpaid_402', `${probePath} HTTP ${probe.status}`)
     }
   } catch (e) {
     fail('depin.status', e instanceof Error ? e.message : String(e))
+    return
+  }
+
+  if (!cfg.enablePaidDepin) {
+    skip('depin.paid_settle', 'E2E_PAID_DEPIN=0')
+    return
+  }
+  if (!cfg.stellarSecret) {
+    skip(
+      'depin.paid_settle',
+      'set DEPIN_BUYER_SECRET or NFT_SPONSOR_SECRET (Stellar secret for testnet USDC buyer)',
+    )
+    return
+  }
+
+  try {
+    // Prefer official demo client path via dynamic imports from services/depin when available.
+    // Fallback: shell out is avoided; reimplement minimal paid flow with @x402/* if present.
+    let ran = false
+    try {
+      const { spawnSync } = await import('node:child_process')
+      const { fileURLToPath } = await import('node:url')
+      const { dirname, join } = await import('node:path')
+      const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+      const demo = join(root, 'services/depin/src/demoClient.ts')
+      const env = {
+        ...process.env,
+        STELLAR_PRIVATE_KEY: cfg.stellarSecret,
+        DEPIN_URL: `${cfg.depinUrl}${probePath}`,
+        DEPIN_EXPECTED_RECIPIENT: expectedRecipient || process.env.DEPIN_EXPECTED_RECIPIENT || '',
+        DEPIN_MAX_PAYMENT_ATOMIC: process.env.DEPIN_MAX_PAYMENT_ATOMIC || '10000',
+        // Quiet demo client — never echo keys, full settlement JSON, or upstream body in CI
+        DEPIN_DEMO_QUIET: '1',
+      }
+      if (!env.DEPIN_EXPECTED_RECIPIENT) {
+        // re-fetch status for recipient
+        const st = await fetchOnce(`${cfg.depinUrl}/status`)
+        env.DEPIN_EXPECTED_RECIPIENT =
+          st.body?.providers?.[0]?.recipient || st.body?.providers?.[0]?.payTo || ''
+      }
+      if (!env.DEPIN_EXPECTED_RECIPIENT) {
+        throw new Error('no DEPIN_EXPECTED_RECIPIENT from status')
+      }
+      const r = spawnSync(
+        'npx',
+        ['--yes', 'tsx', demo],
+        {
+          env,
+          encoding: 'utf8',
+          timeout: 120_000,
+          cwd: join(root, 'services/depin'),
+          // Do not inherit process stdio — capture only so we control what hits Actions logs
+        },
+      )
+      const out = `${r.stdout || ''}\n${r.stderr || ''}`.trim()
+      // Never log full child output (may contain addresses / payloads). Parse success only.
+      if (r.status === 0 && /Access granted/i.test(out)) {
+        const txMatch = out.match(/"transaction"\s*:\s*"([a-f0-9]{8,})"/i)
+        const txHint = txMatch ? `${txMatch[1].slice(0, 12)}…` : 'ok'
+        pass('depin.paid_settle', `paid ${probePath} settle=${txHint}`)
+        ran = true
+      } else {
+        // Redacted short reason only — no full stdout dump
+        const reason = /buyer needs at least/i.test(out)
+          ? 'buyer needs testnet USDC'
+          : /trustline/i.test(out)
+            ? 'recipient trustline missing'
+            : /Expected HTTP 402/i.test(out)
+              ? 'expected 402 challenge missing'
+              : `demoClient exit ${r.status ?? 'n/a'}`
+        throw new Error(reason)
+      }
+    } catch (inner) {
+      if (!ran) {
+        fail('depin.paid_settle', inner instanceof Error ? inner.message : String(inner))
+      }
+    }
+  } catch (e) {
+    fail('depin.paid_settle', e instanceof Error ? e.message : String(e))
   }
 }
 
@@ -523,8 +997,11 @@ console.log(`gate     ${cfg.gateUrl}`)
 console.log(`nft      ${cfg.nftUrl}`)
 console.log(`depin    ${cfg.depinUrl}`)
 console.log(`platform ${cfg.platformUrl}`)
+// Presence only — never print secret values or usernames
 console.log(`adminKey ${cfg.gateAdminKey ? 'set' : 'missing'}`)
-console.log(`nftToken ${cfg.nftToken ? 'set' : 'missing'}`)
+console.log(`nftAuth  ${cfg.nftToken || cfg.cognitoUser ? 'set' : 'missing'}`)
+console.log(`stellar  ${cfg.stellarSecret ? 'set' : 'missing'}`)
+console.log(`chain    ${cfg.enableChainSmoke ? 'on' : 'off'}  paidDepin ${cfg.enablePaidDepin ? 'on' : 'off'}`)
 console.log('')
 
 const t0 = Date.now()
@@ -541,6 +1018,39 @@ console.log('──────────────────────�
 const okCount = results.filter((r) => r.ok && !r.skipped).length
 const skipCount = results.filter((r) => r.skipped).length
 console.log(`done in ${(ms / 1000).toFixed(1)}s · pass=${okCount} fail=${failed} skip=${skipCount}`)
+
+console.log('')
+console.log('Checks:')
+for (const r of results) {
+  const mark = !r.ok ? 'FAIL' : r.skipped ? 'SKIP' : 'PASS'
+  console.log(`  ${mark.padEnd(4)} ${r.name}${r.detail ? ` — ${r.detail}` : ''}`)
+}
+
+// GitHub Actions step summary: list every check
+if (process.env.GITHUB_STEP_SUMMARY) {
+  const { appendFileSync } = await import('node:fs')
+  const lines = [
+    '## E2E testnet / prod readiness',
+    '',
+    `**Result:** pass=${okCount} · fail=${failed} · skip=${skipCount} · ${(ms / 1000).toFixed(1)}s`,
+    '',
+    '| Status | Check | Detail |',
+    '| --- | --- | --- |',
+  ]
+  for (const r of results) {
+    const mark = !r.ok ? 'FAIL' : r.skipped ? 'SKIP' : 'PASS'
+    const detail = String(r.detail || '').replace(/\|/g, '\\|').replace(/\n/g, ' ')
+    lines.push(`| ${mark} | \`${r.name}\` | ${detail} |`)
+  }
+  lines.push('')
+  lines.push('### Coverage')
+  lines.push('- Frontends, platform auth wall, Gate deep (admin/human/agent)')
+  lines.push('- NFT testnet: auth, media, on-chain create, mint, sale config')
+  lines.push('- De-pin: unpaid 402 + optional paid testnet USDC settle')
+  lines.push('- Not covered: Freighter UI, Zer0 ZK prove/withdraw')
+  lines.push('')
+  appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\n') + '\n')
+}
 
 if (failed > 0) {
   console.log('\nFailed checks:')

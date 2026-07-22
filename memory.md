@@ -1,5 +1,21 @@
 # ZEXVRO Shared Memory
 
+## 2026-07-22 - Merge Gate captcha into main path
+
+- Service or area: Gate / agent-auth + Agent Auth UI
+- Summary: Merged `origin/main` into `merge/gate-captcha` (kept main e2e suite files). Fixed agent-auth lint (unused pretty/fake/textCloseEnough). Tests: agent-auth 63/63, depin 44/44. Landing onto main next.
+- Blockers: none for merge after frontend tsc check.
+
+## 2026-07-22 - E2E testnet: on-chain NFT + paid De-pin + full check summary
+
+- Service or area: CI e2e-testnet suite
+- Files changed: `scripts/e2e-testnet.mjs`, `.github/workflows/e2e-testnet.yml`
+- Summary: Extended manual E2E to exercise real Stellar **testnet** paths: NFT media upload, collection deploy, mint, sale-config; De-pin unpaid 402 + paid USDC settle via demo client. Summary now lists every check (console + GITHUB_STEP_SUMMARY table). Secrets wired: GATE_ADMIN_API_KEY, COGNITO_SMOKE_*, NFT_SPONSOR_SECRET, DEPIN_BUYER_SECRET. Fixed De-pin live config recipient to sponsor G-address (had no USDC trustline on old root recipient).
+- Local verification: `pass=26 fail=0 skip=0` (~54s) including `nft.mint` and `depin.paid_settle`.
+- Still out of scope: Freighter UI, Zer0 ZK prove/withdraw.
+- Follow-ups: optional GHA run after push; keep smoke Cognito user `e2e-smoke`.
+
+
 This file is the chronological operating memory for ZEXVRO developers and coding agents.
 
 Use it to record what changed, why it changed, what decisions were made, what is blocked, and what another agent needs to know before continuing. Keep it precise. Do not paste long logs, unrelated brainstorms, or raw context dumps.

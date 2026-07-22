@@ -150,7 +150,6 @@ function buildImageSelectLike(
     }
   }
 
-  const pretty = target.replaceAll('_', ' ')
   // Do not put class name in prompt — reference image only (reduces CV shortcut + label leak)
   const prompt = 'Select all squares that match the example'
   return {
@@ -436,7 +435,6 @@ function buildCountObjects(): Omit<
     assets[tile.id] = { contentType: img.contentType, body: img.body, encoding: img.encoding }
   }
 
-  const pretty = target.replaceAll('_', ' ')
   return {
     type: 'count_objects',
     secret: { type: 'count_objects', count: correctCount },
@@ -519,7 +517,6 @@ function buildBinaryPick(): Omit<
   const reference = imageForLabel(target, 0, usedPaths)
   const left = imageForLabel(leftLabel, 0, usedPaths)
   const right = imageForLabel(rightLabel, 0, usedPaths)
-  const pretty = target.replaceAll('_', ' ')
 
   return {
     type: 'binary_pick',
@@ -719,39 +716,6 @@ function imageSelectCloseEnough(selected: string[], correct: string[]): boolean 
   // Security-hardened: exact set match only (no half-correct / extra-tile free passes).
   // Human wiggle remains via MAX_ATTEMPTS, not fuzzy tile sets.
   return arraysEqualSet(selected, correct)
-}
-
-/** Text: allow one wrong character (Levenshtein ≤ 1) after normalize. */
-function textCloseEnough(a: string, b: string): boolean {
-  if (a === b) return true
-  if (Math.abs(a.length - b.length) > 1) return false
-  // classic edit distance ≤ 1
-  const m = a.length
-  const n = b.length
-  if (m === 0) return n <= 1
-  if (n === 0) return m <= 1
-  // ensure a is longer or equal
-  if (m < n) return textCloseEnough(b, a)
-  let i = 0
-  let j = 0
-  let edits = 0
-  while (i < m && j < n) {
-    if (a[i] === b[j]) {
-      i++
-      j++
-      continue
-    }
-    edits++
-    if (edits > 1) return false
-    if (m === n) {
-      i++
-      j++ // substitute
-    } else {
-      i++ // delete from a
-    }
-  }
-  edits += m - i + (n - j)
-  return edits <= 1
 }
 
 function circularDistance(a: number, b: number): number {

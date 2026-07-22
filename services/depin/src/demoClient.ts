@@ -77,9 +77,16 @@ async function main() {
     }
   }
 
-  console.log(
-    `Authorizing ${requirement.amount} atomic USDC from ${signer.address} to ${requirement.payTo}`,
-  )
+  const quiet =
+    process.env.DEPIN_DEMO_QUIET === '1' ||
+    process.env.DEPIN_DEMO_QUIET === 'true' ||
+    process.env.E2E_QUIET === '1'
+
+  if (!quiet) {
+    console.log(
+      `Authorizing ${requirement.amount} atomic USDC from ${signer.address} to ${requirement.payTo}`,
+    )
+  }
   const response = await fetch(target, {
     headers: httpClient.encodePaymentSignatureHeader(paymentPayload),
   })
@@ -89,13 +96,24 @@ async function main() {
     : undefined
 
   if (!response.ok) {
-    throw new Error(
-      `Paid request failed with HTTP ${String(response.status)}: ${body}`,
-    )
+    // Avoid dumping upstream/payment bodies that may include auth material
+    throw new Error(`Paid request failed with HTTP ${String(response.status)}`)
   }
 
-  console.log(`Access granted: HTTP ${String(response.status)} ${body}`)
-  console.log(`Settlement: ${JSON.stringify(settlement)}`)
+  if (quiet) {
+    const tx =
+      settlement && typeof settlement === 'object' && 'transaction' in settlement
+        ? String((settlement as { transaction?: string }).transaction ?? '').slice(0, 16)
+        : ''
+    console.log(
+      `Access granted: HTTP ${String(response.status)}${tx ? ` transaction=${tx}…` : ''}`,
+    )
+    // Minimal machine-readable line for e2e parser (no payer / full payload)
+    if (tx) console.log(`Settlement: {"success":true,"transaction":"${tx}"}`)
+  } else {
+    console.log(`Access granted: HTTP ${String(response.status)} ${body}`)
+    console.log(`Settlement: ${JSON.stringify(settlement)}`)
+  }
 }
 
 main().catch((error: unknown) => {

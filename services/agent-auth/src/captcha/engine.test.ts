@@ -150,11 +150,8 @@ describe('captcha engine', () => {
     if (initial !== 0) {
       expect(verifyCaptchaAnswer(state, { value: 0 }).ok).toBe(false)
     }
-    // Public formula without secret must not work: attacker sees no initialDegrees
-    const fake = (360 - Number(state.public.ui.initialDegrees || 0)) % 360
-    if (initial !== 0) {
-      // fake using 0 public initial is degrees=0 already checked
-    }
+    // Public UI must not expose initialDegrees for attackers to invert without the secret
+    expect(state.public.ui.initialDegrees).toBeUndefined()
     const degrees = (360 - (initial % 360)) % 360
     expect(verifyCaptchaAnswer(state, { value: { degrees } }).ok).toBe(true)
   })
