@@ -7,10 +7,25 @@
  *   node scripts/e2e-testnet.mjs
  *   npm run e2e:testnet
  *
- * Optional secrets (deeper checks):
- *   GATE_ADMIN_API_KEY     — Gate admin sites + agent register
- *   NFT_SMOKE_ACCESS_TOKEN — authenticated NFT routes
- *   DEPIN_URL              — override De-pin base
+ * What this suite DOES cover (live deploy, not unit mocks):
+ *   - Console + landing HTTP + Gate wired in console bundle
+ *   - Platform API reachable (auth wall)
+ *   - Gate: health/status/SDK, admin sites, create site, human challenge+captcha
+ *     issue, origin block, full agent register→sign→complete→PoP verify
+ *   - NFT: health + capabilities (testnet, stellar, s3)
+ *   - De-pin: health/status + unpaid 402 on a protected route
+ *
+ * What it does NOT do by default (needs extra secrets / wallets):
+ *   - NFT mint/sale on-chain, media upload, Freighter UI
+ *   - De-pin paid settle (real USDC spend)
+ *   - Zer0 ZK prove/withdraw
+ *
+ * Optional secrets (deeper checks — set as GitHub Actions secrets, never commit):
+ *   GATE_ADMIN_API_KEY       — Gate admin sites + agent register (required for Gate deep)
+ *   NFT_SMOKE_ACCESS_TOKEN   — Cognito access token (short-lived) for NFT list
+ *   COGNITO_SMOKE_USERNAME   — preferred: script logs in and fetches a fresh access token
+ *   COGNITO_SMOKE_PASSWORD
+ *   COGNITO_USER_POOL_ID / COGNITO_CLIENT_ID / COGNITO_REGION (defaults to prod pool)
  *
  * Exit 0 only if all required checks pass (after retries).
  */
@@ -47,6 +62,12 @@ const cfg = {
   ).replace(/\/$/, ''),
   gateAdminKey: env('GATE_ADMIN_API_KEY'),
   nftToken: env('NFT_SMOKE_ACCESS_TOKEN', env('COGNITO_ACCESS_TOKEN')),
+  cognitoUser: env('COGNITO_SMOKE_USERNAME'),
+  cognitoPass: env('COGNITO_SMOKE_PASSWORD'),
+  cognitoPool: env('COGNITO_USER_POOL_ID', 'us-east-1_vyONcitBD'),
+  cognitoClient: env('COGNITO_CLIENT_ID', '7qmkq33si9qk8pgo6ebi3qantm'),
+  cognitoRegion: env('COGNITO_REGION', env('AWS_REGION', 'us-east-1')),
+  nftWorkspaceId: env('NFT_SMOKE_WORKSPACE_ID', 'smoke-workspace'),
   retries: Number(process.env.E2E_RETRIES || 8),
   retryMs: Number(process.env.E2E_RETRY_MS || 8000),
   stableHits: Number(process.env.E2E_STABLE_HITS || 2),
@@ -372,6 +393,38 @@ async function runGateDeep() {
   }
 }
 
+// ─── Cognito (for NFT auth) ──────────────────────────────────────
+
+async function fetchCognitoAccessToken() {
+  if (cfg.nftToken) return cfg.nftToken
+  if (!cfg.cognitoUser || !cfg.cognitoPass) return ''
+
+  const url = `https://cognito-idp.${cfg.cognitoRegion}.amazonaws.com/`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/x-amz-json-1.1',
+      'x-amz-target': 'AWSCognitoIdentityProviderService.InitiateAuth',
+    },
+    body: JSON.stringify({
+      AuthFlow: 'USER_PASSWORD_AUTH',
+      ClientId: cfg.cognitoClient,
+      AuthParameters: {
+        USERNAME: cfg.cognitoUser,
+        PASSWORD: cfg.cognitoPass,
+      },
+    }),
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    const msg = body?.message || body?.__type || `HTTP ${res.status}`
+    throw new Error(`Cognito login failed: ${msg}`)
+  }
+  const token = body?.AuthenticationResult?.AccessToken
+  if (!token) throw new Error('Cognito login returned no AccessToken')
+  return token
+}
+
 // ─── NFT ─────────────────────────────────────────────────────────
 
 async function runNft() {
@@ -396,25 +449,44 @@ async function runNft() {
     fail('nft.capabilities', e instanceof Error ? e.message : String(e))
   }
 
-  if (!cfg.nftToken) {
-    skip('nft.authenticated', 'NFT_SMOKE_ACCESS_TOKEN not set')
+  let token = ''
+  try {
+    token = await fetchCognitoAccessToken()
+    if (token && (cfg.cognitoUser || cfg.nftToken)) {
+      pass(
+        'nft.cognito_token',
+        cfg.nftToken ? 'using NFT_SMOKE_ACCESS_TOKEN' : 'logged in via COGNITO_SMOKE_*',
+      )
+    }
+  } catch (e) {
+    fail('nft.cognito_token', e instanceof Error ? e.message : String(e))
+    return
+  }
+
+  if (!token) {
+    skip(
+      'nft.authenticated',
+      'set NFT_SMOKE_ACCESS_TOKEN or COGNITO_SMOKE_USERNAME+COGNITO_SMOKE_PASSWORD',
+    )
     return
   }
 
   try {
-    const { status, body } = await fetchOnce(`${cfg.nftUrl}/v1/collections`, {
+    const ws = encodeURIComponent(cfg.nftWorkspaceId)
+    const { status, body } = await fetchOnce(`${cfg.nftUrl}/v1/collections?workspaceId=${ws}`, {
       headers: {
-        authorization: `Bearer ${cfg.nftToken}`,
+        authorization: `Bearer ${token}`,
         accept: 'application/json',
       },
     })
-    // 200 list or 400 missing workspace still proves auth middleware
-    if (status === 200 || status === 400 || status === 401 || status === 403) {
-      if (status === 401 || status === 403) {
-        fail('nft.authenticated', `token rejected HTTP ${status}`)
-      } else {
-        pass('nft.authenticated', `HTTP ${status}`)
-      }
+    if (status === 401 || status === 403) {
+      fail('nft.authenticated', `token rejected HTTP ${status}`)
+    } else if (status === 200) {
+      const count = Array.isArray(body?.collections) ? body.collections.length : 0
+      pass('nft.authenticated', `list collections HTTP 200 count=${count}`)
+    } else if (status === 400) {
+      // Auth accepted; workspace validation failed — still proves JWT middleware
+      pass('nft.authenticated', `auth accepted HTTP 400 (workspace)`)
     } else {
       fail('nft.authenticated', `HTTP ${status} ${JSON.stringify(body).slice(0, 120)}`)
     }
