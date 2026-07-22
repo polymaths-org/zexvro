@@ -33,12 +33,12 @@ export const serviceCatalog: Service[] = [
   },
   {
     id: 'srv-agent-auth',
-    name: 'Captcha-like Agent Authentication Service',
-    owner: 'Unassigned',
+    name: 'ZEXVRO Gate (Agent Auth)',
+    owner: 'Rushi / Wraient',
     status: 'configuring',
-    description: 'Human vs agent access classification service with SDK/API direction. Privacy model and signals are not finalized.',
-    progress: 25,
-    lastActivity: 'Cognito sign-in/signup/reset UI connected',
+    description: 'Dual-channel human/agent capability gate with policy modes, SDK (@zexvro/gate), and anti-relay challenges. Not a puzzle CAPTCHA.',
+    progress: 45,
+    lastActivity: 'Phase 1 API scaffold + implementation plan',
     category: 'auth',
   },
   {

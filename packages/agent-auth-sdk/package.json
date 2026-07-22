@@ -1,0 +1,16 @@
+{
+  "name": "@zexvro/gate",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./middleware": "./src/middleware.js",
+    "./browser": "./src/browser.js",
+    "./captcha": "./src/captcha.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

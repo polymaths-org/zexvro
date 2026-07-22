@@ -52,6 +52,10 @@ const providerSchema = z.object({
     .string()
     .regex(/^[A-Z][A-Z0-9_]{1,127}$/)
     .optional(),
+  requireCapability: z.boolean().optional(),
+  capabilityAction: z.string().min(1).max(128).optional(),
+  capabilityMinClass: z.enum(['human', 'agent', 'either']).optional(),
+  bindCapabilityPayer: z.boolean().optional(),
 })
 
 const configSchema = z
@@ -67,6 +71,14 @@ const configSchema = z
       })
       .default({ maxRequests: 30, windowMs: 60_000 }),
     providers: z.array(providerSchema).min(1),
+    capabilityGate: z
+      .object({
+        gateApiBase: z.string().url(),
+        siteSecret: z.string().min(8),
+        defaultMinClass: z.enum(['human', 'agent', 'either']).optional(),
+        bindPayer: z.boolean().optional(),
+      })
+      .optional(),
   })
   .superRefine((config, context) => {
     const keys = new Set<string>()

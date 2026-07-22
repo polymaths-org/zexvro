@@ -173,7 +173,7 @@ Details: `services/depin/README.md`, `context.md` § De-pin.
 
 1. Accept Access Shield naming and big-tech anti-abuse pitch as product direction?
 2. Priority of POST/stream metering vs deepening GET/HEAD exact for data APIs first?
-3. How Agent Auth capability tokens bind to De-pin payment identity?
+3. How Agent Auth capability tokens bind to De-pin payment identity? → **Proposed answer:** capability claims `stellar_pk` + `allowed_payer_pks` + `pay_mode`; edge checks x402 **payer** ∈ allowlist (not `payTo`). See `docs/agent_auth_depin_bind.md` and Gate ADRs for Stellar payer claims.
 4. Fiat on-ramp story for enterprises that will not hold USDC operationally?
 
 Until accepted, keep claims in docs marked **Proposed** and do not market “Access Shield GA.”

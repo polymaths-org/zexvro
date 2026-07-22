@@ -61,7 +61,7 @@ If a detail is only a work update, keep it here.
 | Zero-Knowledge Privacy Pool (Zer0) | Paris / `paris-29` | **Complete (product UI)** — suite, privacy pool, stealth, settings client-facing | Ask before changing core proving/pool design; product UX marked complete 2026-07-17 |
 | Transformation Agent (Morph) | Morph track (was Paris / `paris-29`) | **In Progress — CLI built; agentic + demo + CI/CD remaining** | Morph assignee builds CLI/agent/CI/demo/surface. Shared memory must actually update. |
 | A-2-A Trade Pipeline | Rushi / `Wraient` | Planned | Ask or record coordination before changing protocol, wallet, or negotiation design |
-| Captcha-like Agent Authentication Service | Rushi / `Wraient` | Planned | Ask or record coordination before changing identity, SDK, classifier, or HDM design |
+| ZEXVRO Gate (Agent Auth + Captcha) | Rushi / `Wraient` | **Local-ready on `gate-captcha-local`** — dual-channel human captcha + agent Ed25519/PoP; AWS deploy blocked until owner approves | Coordinate before changing Gate protocol, captcha engine, or class integrity |
 | NFT Service | Nabil / `n4bi10p` + Paris | **Complete (product UI)** — create cinema, studio dashboard, public checkout, SDK, docs | Ask before changing minting, metadata, checkout, or NFT model |
 | De-pin | Nabil / `n4bi10p` | **In progress** — CORS/status harden on branch; full Access Shield product testing **tomorrow** | Follow exact per-request x402 scope; redeploy App Runner before claiming live CORS |
 
@@ -906,6 +906,15 @@ Use `None` for empty fields. Do not delete fields.
 - Blockers: None for unpaid path.
 - Verification: git push main ok; wrangler pages deploy success.
 
+## 2026-07-18 - Codex with Rushi - Gate local demo surface (minimal)
+
+- Service or area: ZEXVRO Gate (`services/agent-auth`, `@zexvro/gate`, frontend Gate UI).
+- Files: Gate service + SDK on `gate-captcha-local`; local demo routes were for dev only.
+- Summary: Dual-channel Gate (human multi-type captcha + agent Ed25519/PoP) implemented locally on :4103. Photo bank gitignored.
+- Decisions: Humans use captcha; agents never use captcha. Curate/demo routes are local-only, not production product.
+- Follow-ups: Merge product core to main; strip demos from prod; host Gate before third-party embed.
+- Verification: local smoke + unit tests on branch.
+
 ## 2026-07-21 - Codex with Paris - Remaining work + ticket assignments for agents
 
 - Service or area: shared agent config (`context.md`, `memory.md`, `AGENTS.md`).
@@ -918,3 +927,13 @@ Use `None` for empty fields. Do not delete fields.
 - Follow-ups: Each agent starts from `AGENTS.md` → `context.md` Active Ticket Assignments → own build list; update this file when a ticket finishes.
 - Blockers: None for assignment clarity.
 - Verification: Sections present in `context.md`; `AGENTS.md` points agents at remaining work.
+
+## 2026-07-22 - Grok with Rushi - Merge Gate captcha into main path
+
+- Service or area: ZEXVRO Gate merge (`merge/gate-captcha` from `gate-captcha-local` onto `main` @ `8bfa47c`).
+- Summary: Merged dual-channel Gate (human captcha + agent crypto) service, SDK, frontend wiring, tests. Demo/curate HTTP routes gated off in production (`NODE_ENV=production`). De-pin optional capabilityGate kept (off unless configured). Captcha photo bank remains gitignored.
+- Decisions: Accepted - No demo product surface on production. Accepted - Cloudflare Pages deploy is separate; do not ship console until Gate API URL + graceful UI handled. Accepted - De-pin Gate bind stays opt-in via env.
+- Pre-merge tip preserved: `gate-captcha-local` @ `e6047d6`; main pre-merge `8bfa47c`.
+- Follow-ups: Host Gate API, CORS, multi-tenant site keys, then console Pages deploy with `VITE_AGENT_AUTH_API_URL`.
+- Blockers: None for merge/test; production third-party captcha not ready until host + keys + CORS.
+- Verification: resolve conflicts; strip prod demos; `npm run test:agent-auth`.

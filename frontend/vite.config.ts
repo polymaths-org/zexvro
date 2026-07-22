@@ -180,6 +180,8 @@ export default defineConfig(({ mode }) => {
         '@stellar/stellar-base',
         'stellar-sdk',
         '@creit.tech/stellar-wallets-kit',
+        'react-is',
+        'recharts',
       ],
     },
     resolve: {
@@ -200,6 +202,11 @@ export default defineConfig(({ mode }) => {
           target: env.DEPIN_API_PROXY_TARGET || 'http://127.0.0.1:4102',
           changeOrigin: false,
           rewrite: (requestPath) => requestPath.replace(/^\/api\/depin/, ''),
+        },
+        '/api/agent-auth': {
+          target: env.AGENT_AUTH_API_PROXY_TARGET || 'http://127.0.0.1:4103',
+          changeOrigin: false,
+          rewrite: (requestPath) => requestPath.replace(/^\/api\/agent-auth/, ''),
         },
       },
     },

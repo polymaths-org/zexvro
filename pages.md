@@ -78,7 +78,7 @@ This file is for the next model and team members. It explains which pages work, 
 | --- | --- | --- | --- | --- | --- |
 | Morph Transformation | `/transformation` | Partial | UI/service component and agent backend | 55% | Needs real repository scan execution wiring. |
 | A-2-A Trade Pipeline | `/trade` | UI partial | Frontend component | 35% | Needs protocol, wallet policy, and settlement API. |
-| Agent Auth Service | `/agent-auth` | UI partial | Frontend component | 35% | Needs classifier API, SDK credentials, and telemetry. |
+| Agent Auth Service (ZEXVRO Gate) | `/agent-auth` | Plan + Phase 1 API scaffold | `services/agent-auth`, `docs/agent_auth_implementation_plan.md` | 45% | Dual-channel capability API scaffolded; WebAuthn, Dynamo, dashboard live wire remaining. |
 | NFT Studio | `/nft` (project scope under `/dashboard/w/.../p/.../nft`) | Working partial | Cognito NFT API (`services/nft-service`), Soroban collection contract, local JSON or Dynamo records, local/S3/Pinata media | 88% | Create/deploy/sale/mint/public buy/inventory/archive; **auto token IDs**; **Integrate SDK** copy panel; embed checkout at `/nft/embed/checkout`. Live production needs hosted API + Freighter E2E recorded. |
 | Public NFT collection | `/nft/collections/$collectionId` | Working partial | Public NFT API | 85% | Buyer prepare/sign/submit; no manual token ID. |
 | NFT embed checkout | `/nft/embed/checkout` | Working partial | Public NFT API + Freighter | 75% | Game popup surface; partner origins need `CORS_ALLOWED_ORIGINS`. |

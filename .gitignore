@@ -33,3 +33,12 @@ zer0-pool/circuit/circomlib/
 zer0-pool/circuit/*.ptau
 zer0-pool/target/
 
+# Gate captcha photo bank (local/S3 only — never commit blobs)
+services/agent-auth/captcha-assets
+
+# Kaggle credentials (never commit)
+kaggle.json
+.kaggle/
+
+# Playwright CLI local snapshots
+.playwright-cli/
