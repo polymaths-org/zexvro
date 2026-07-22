@@ -1,5 +1,11 @@
 # ZEXVRO Shared Memory
 
+## 2026-07-22 - Gate captcha landed on main + verified
+
+- Branch: `main` @ `9b8d6cc` (fast-forward from merge/gate-captcha after main merge-in + lint fix)
+- Summary: `services/agent-auth` + customer Agent Auth UI now on main. E2E kept from main. Console Pages redeployed (bundle index-B3tXwWD6.js with Protect your website / Get started). Live Gate already healthy. Automated: agent-auth 63, depin 44, vite build, local+GHA e2e 26/26.
+- Manual remaining: full human captcha *solve* UX, stranger-site embed click-through, Freighter NFT checkout UI, Zer0 prove.
+
 ## 2026-07-22 - Merge Gate captcha into main path
 
 - Service or area: Gate / agent-auth + Agent Auth UI
