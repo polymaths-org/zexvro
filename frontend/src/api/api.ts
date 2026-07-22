@@ -3,12 +3,27 @@
  *
  * Centralized HTTP client for AWS Lambda backend.
  * Stellar transaction building, signing (Freighter), and submission via Horizon.
+ *
+ * Mail never uses localhost:8080 — see services/mail/mailApi.ts (server → Brevo).
  */
 
-const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+import {
+  acceptInviteByToken,
+  getInviteByToken,
+  listLocalWorkspaceMembers,
+  listMySharedWorkspaces,
+  mailApiBase,
+  platformApiBase,
+  sendWorkspaceInviteEmail,
+  type SendWorkspaceInviteInput,
+  type SendWorkspaceInviteResult,
+} from '../services/mail/mailApi';
 
-export const API_BASE = import.meta.env.VITE_API_URL ||
-  (IS_LOCAL ? 'http://localhost:8080' : 'https://qkuostruh3.execute-api.us-east-1.amazonaws.com');
+/** Platform API — hosted Gateway by default (no localhost:8080). */
+export const API_BASE = platformApiBase();
+
+/** Mail send base — local Vite /api or hosted Lambda (both → Brevo). */
+export const INVITE_API_BASE = mailApiBase();
 
 function getAuthHeaders(): Record<string, string> {
   const session = localStorage.getItem('zexvro_user_session');
@@ -56,6 +71,7 @@ export const api = {
 
 export const workspaceApi = {
   list: () => api.get<{ workspaces: any[] }>('/api/workspaces'),
+  get: (id: string) => api.get<{ workspace: any }>(`/api/workspaces/${encodeURIComponent(id)}`),
   create: (data: any) => api.post<any>('/api/workspaces', data),
   update: (id: string, data: any) => api.put<any>(`/api/workspaces/${id}`, data),
   delete: (id: string) => api.delete<any>(`/api/workspaces/${id}`),
@@ -96,8 +112,59 @@ export const memoryApi = {
 };
 
 export const inviteApi = {
-  send: (data: { email: string; workspaceId: string; workspaceName: string; inviterName: string; role: string }) =>
-    api.post<any>('/api/invite/send', data),
+  /** @deprecated use create — always routes to server → Brevo */
+  send: (data: {
+    email: string;
+    workspaceId: string;
+    workspaceName: string;
+    inviterName: string;
+    role: string;
+    token?: string;
+    inviteId?: string;
+    expiresAt?: number;
+  }) =>
+    sendWorkspaceInviteEmail({
+      email: data.email,
+      workspaceId: data.workspaceId,
+      workspaceName: data.workspaceName,
+      inviterName: data.inviterName,
+      role: data.role,
+      token: data.token || `legacy_${Date.now().toString(36)}`,
+      inviteId: data.inviteId || `inv_legacy_${Date.now().toString(36)}`,
+      expiresAt: data.expiresAt || Date.now() + 7 * 24 * 60 * 60 * 1000,
+    }),
+
+  /** Create / send invite mail (Vite middleware or Lambda → api.brevo.com). */
+  create: (data: SendWorkspaceInviteInput): Promise<SendWorkspaceInviteResult> =>
+    sendWorkspaceInviteEmail(data),
+
+  revoke: (data: { workspaceId: string; inviteId: string; token?: string }) =>
+    fetch(`${mailApiBase()}/api/invite/revoke`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify(data),
+    }).then(async (r) => {
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error_description || j.error || 'Revoke failed');
+      return j as { status: string };
+    }),
+
+  /** Lookup invite — always mail API base (Vite store / Lambda), never localhost:8080. */
+  getByToken: (token: string) => getInviteByToken(token),
+
+  accept: (data: {
+    token: string;
+    principalId?: string;
+    email?: string;
+    username?: string;
+    name?: string;
+  }) => acceptInviteByToken(data),
+
+  /** Local membership index + optional Lambda-shared list helper. */
+  listShared: (email?: string) => listMySharedWorkspaces(email),
+
+  /** Accepted members for a workspace (local Vite store — owner roster sync). */
+  listLocalMembers: (workspaceId: string) => listLocalWorkspaceMembers(workspaceId),
 };
 
 export const proofApi = {

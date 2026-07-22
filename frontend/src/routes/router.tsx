@@ -36,6 +36,7 @@ import ProjectAudit from '../components/project/ProjectAudit';
 import ProjectSettings from '../components/project/ProjectSettings';
 
 import WorkspaceTeam from '../components/workspace/WorkspaceTeam';
+import AcceptInvite from '../components/workspace/AcceptInvite';
 import WorkspaceSecurity from '../components/workspace/WorkspaceSecurity';
 import WorkspaceAnalytics from '../components/workspace/WorkspaceAnalytics';
 import WorkspaceSettings from '../components/workspace/WorkspaceSettings';
@@ -206,6 +207,13 @@ const withdrawRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/withdraw',
   component: WithdrawRoute,
+});
+
+/** IAM invite accept — auth required to bind role, page itself is outside dashboard shell */
+const acceptInviteRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/invite/accept',
+  component: AcceptInvite,
 });
 
 const agentShortcutRoute = createRoute({
@@ -624,6 +632,7 @@ const embedNftCheckoutRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   indexRoute,
   withdrawRoute,
+  acceptInviteRoute,
   agentShortcutRoute,
   servicesShortcutRoute,
   misspelledServicesShortcutRoute,

@@ -2,11 +2,15 @@ import { useEffect, useState } from 'react';
 import { useParams } from '@tanstack/react-router';
 import { Save, Building2, CreditCard, Shield, GitBranch, Globe2 } from 'lucide-react';
 import { useWorkspaceStore } from '../../stores/workspace';
+import { useWorkspaceRbac } from '../../rbac/useWorkspaceRbac';
+import RequirePermission, { AccessDenied } from '../../rbac/RequirePermission';
 
 export default function WorkspaceSettings() {
   const { workspaceId } = useParams({ strict: false });
   const workspace = useWorkspaceStore(s => s.workspaces.find(item => item.id === workspaceId));
   const updateWorkspace = useWorkspaceStore(s => s.updateWorkspace);
+  const { can, role } = useWorkspaceRbac(workspaceId);
+  const canWrite = can('workspace.settings.write');
   const [saved, setSaved] = useState(false);
   const [form, setForm] = useState({
     name: '',
@@ -39,6 +43,7 @@ export default function WorkspaceSettings() {
 
   const handleSave = (event: React.FormEvent) => {
     event.preventDefault();
+    if (!canWrite) return;
     updateWorkspace(workspace.id, {
       name: form.name,
       plan: form.plan,
@@ -59,15 +64,22 @@ export default function WorkspaceSettings() {
   };
 
   return (
+    <RequirePermission
+      permission="workspace.settings.read"
+      workspaceId={workspaceId}
+      fallback={<AccessDenied title="Settings access required" />}
+    >
     <div className="space-y-6">
       <div>
         <h1 className="text-lg font-semibold text-zinc-900 dark:text-white">Workspace Settings</h1>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          Workspace identity, chain defaults, access rules, and audit retention. Cloud infrastructure is managed by ZEXVRO.
+          Workspace identity, chain defaults, access rules, and audit retention.
+          {role ? ` Your role: ${role}.` : ''}
+          {!canWrite ? ' Read-only for your role.' : ''}
         </p>
       </div>
 
-      <form onSubmit={handleSave} className="space-y-6">
+      <form onSubmit={handleSave} className="space-y-6" aria-disabled={!canWrite}>
         <div className="grid gap-6 xl:grid-cols-2">
           <Section title="Workspace" icon={<Building2 className="h-4 w-4" />}>
             <Field label="Workspace Name">
@@ -117,12 +129,15 @@ export default function WorkspaceSettings() {
 
         <div className="flex items-center justify-end gap-3">
           {saved && <span className="text-xs font-medium text-green-600 dark:text-green-400">Settings saved</span>}
-          <button type="submit" className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 px-4 py-2 text-xs font-medium text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200">
-            <Save className="h-4 w-4" /> Save Workspace Settings
-          </button>
+          {canWrite && (
+            <button type="submit" className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 px-4 py-2 text-xs font-medium text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200">
+              <Save className="h-4 w-4" /> Save Workspace Settings
+            </button>
+          )}
         </div>
       </form>
     </div>
+    </RequirePermission>
   );
 }
 

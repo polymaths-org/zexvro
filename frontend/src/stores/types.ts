@@ -1,12 +1,64 @@
 export type WorkspaceRole = 'Owner' | 'Admin' | 'Developer' | 'Finance' | 'Viewer' | 'Agent';
 
+/** Principal kinds for workspace access (user or service account). */
+export type PrincipalType = 'user' | 'serviceAccount';
+
+export type MemberBindingStatus =
+  | 'active'
+  | 'invited'
+  | 'inactive'
+  | 'pending'
+  | 'accepted'
+  | 'expired'
+  | 'revoked';
+
+/**
+ * Role binding on a workspace.
+ * One principal → one primary workspace role in v1.
+ */
 export interface WorkspaceMember {
   id: string;
   email: string;
   name: string;
   role: WorkspaceRole;
-  status: 'active' | 'invited' | 'inactive' | 'pending' | 'accepted' | 'expired' | 'revoked';
+  status: MemberBindingStatus;
   joinedAt: number;
+  /** user | serviceAccount — Agent maps to serviceAccount */
+  principalType?: PrincipalType;
+  /** Cognito username / subject once accepted */
+  principalId?: string;
+  /** When the role binding was last changed */
+  roleBoundAt?: number;
+  /** Who last set the role (email or username) */
+  roleBoundBy?: string;
+  /** Invite id that created this pending binding */
+  inviteId?: string;
+}
+
+export type InviteStatus = 'pending' | 'accepted' | 'expired' | 'revoked';
+
+/**
+ * Pending workspace invitation — tokenized accept link.
+ * Stored on workspace until accepted or revoked; not a full member until accept.
+ */
+export interface TeamInvite {
+  id: string;
+  workspaceId: string;
+  workspaceName?: string;
+  email: string;
+  role: WorkspaceRole;
+  status: InviteStatus;
+  createdAt: number;
+  expiresAt: number;
+  invitedBy: string;
+  invitedByEmail?: string;
+  /** Opaque accept token (sent in email link; never log full token in UI after create). */
+  token: string;
+  acceptedAt?: number;
+  acceptedBy?: string;
+  revokedAt?: number;
+  principalType?: PrincipalType;
+  note?: string;
 }
 
 export interface Workspace {
@@ -17,6 +69,8 @@ export interface Workspace {
   ownerId: string;
   createdAt: number;
   members: WorkspaceMember[];
+  /** Pending / historical invitations (IAM invite queue) */
+  invitations?: TeamInvite[];
   settings?: {
     billingEmail?: string;
     region?: string;
@@ -96,16 +150,6 @@ export interface Deployment {
   author: string;
   createdAt: number;
   duration: number | null;
-}
-
-export interface TeamInvite {
-  id: string;
-  workspaceId: string;
-  email: string;
-  role: WorkspaceRole;
-  status: 'pending' | 'accepted' | 'expired' | 'revoked';
-  createdAt: number;
-  invitedBy: string;
 }
 
 /* ─── Zer0 Privacy & Payroll Types ─── */

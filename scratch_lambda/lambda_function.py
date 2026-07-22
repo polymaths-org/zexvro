@@ -32,8 +32,18 @@ payroll_taxonomy_table = dynamodb.Table(PAYROLL_TAXONOMY_TABLE_NAME)
 waitlist_table = dynamodb.Table(WAITLIST_TABLE_NAME)
 
 EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
-ses = boto3.client("ses", region_name=os.environ.get("AWS_REGION", "us-east-1"))
 ec2 = boto3.client("ec2", region_name=os.environ.get("AWS_REGION", "us-east-1"))
+
+try:
+    from brevo_mail import MailError, send_email as brevo_send_email
+except ImportError:  # package layout / Lambda zip may flatten modules
+    try:
+        from scratch_lambda.brevo_mail import MailError, send_email as brevo_send_email  # type: ignore
+    except ImportError:
+        MailError = Exception  # type: ignore
+
+        def brevo_send_email(**kwargs):  # type: ignore
+            raise RuntimeError("brevo_mail module missing from deployment package")
 
 # GSI Name for querying by user_code
 USER_CODE_GSI = os.environ.get("USER_CODE_GSI", "user_code-index")
@@ -474,12 +484,139 @@ def require_username(event, headers):
     return get_username_from_auth(event), None
 
 
+# Workspace roles allowed to invite members (Owner/Admin). Matches frontend rbac matrix.
+_TEAM_INVITE_ROLES = {"Owner", "Admin"}
+_SETTINGS_WRITE_ROLES = {"Owner", "Admin"}
+
+
+def _norm_identity(value):
+    return str(value or "").strip().lower()
+
+
+def resolve_workspace_member_role(workspace, username, email=None):
+    """Return workspace role for caller, or None if not a member."""
+    if not workspace:
+        return None
+    owner_id = _norm_identity(workspace.get("ownerId"))
+    uname = _norm_identity(username)
+    em = _norm_identity(email)
+    if owner_id and (owner_id == uname or (em and owner_id == em)):
+        return "Owner"
+    for member in workspace.get("members") or []:
+        m_email = _norm_identity(member.get("email"))
+        m_id = _norm_identity(member.get("id"))
+        m_name = _norm_identity(member.get("name"))
+        status = str(member.get("status") or "active").lower()
+        if status in ("inactive", "revoked", "expired"):
+            continue
+        if (em and m_email == em) or (uname and (m_id == uname or m_name == uname or m_email.split("@")[0] == uname)):
+            if status in ("invited", "pending"):
+                return None
+            return member.get("role") or "Viewer"
+    return None
+
+
+def require_workspace_role(workspace, username, allowed_roles, email=None):
+    role = resolve_workspace_member_role(workspace, username, email=email)
+    if not role:
+        return None, respond(403, {
+            "error": "forbidden",
+            "error_description": "You are not an active member of this workspace",
+        })
+    if role not in allowed_roles:
+        return role, respond(403, {
+            "error": "forbidden",
+            "error_description": f"Role {role} cannot perform this action",
+            "role": role,
+        })
+    return role, None
+
+
 def normalize_workspace_item(item):
     if not item:
         return item
     item.setdefault("id", item.get("workspaceId"))
     item.setdefault("workspaceId", item.get("id"))
     return item
+
+
+def _caller_email(event, username):
+    email = ""
+    try:
+        authorizer = event.get("requestContext", {}).get("authorizer", {})
+        claims = authorizer.get("claims", {}) or {}
+        email = (claims.get("email") or "").strip().lower()
+    except Exception:
+        pass
+    if not email and username and "@" in str(username):
+        email = str(username).strip().lower()
+    if not email:
+        # Manual JWT decode fallback
+        try:
+            headers = event.get("headers") or {}
+            auth = headers.get("Authorization") or headers.get("authorization") or ""
+            if auth.startswith("Bearer "):
+                import base64
+                parts = auth.split(" ", 1)[1].split(".")
+                if len(parts) == 3:
+                    payload_b64 = parts[1] + "=" * ((4 - len(parts[1]) % 4) % 4)
+                    payload = json.loads(base64.b64decode(payload_b64).decode("utf-8"))
+                    email = (payload.get("email") or "").strip().lower()
+        except Exception:
+            pass
+    return email
+
+
+def list_shared_workspaces_for_user(username, email=None):
+    """Scan workspaces where caller is an active non-owner member."""
+    uname = _norm_identity(username)
+    em = _norm_identity(email)
+    shared = []
+    try:
+        res = workspaces_table.scan()
+        items = res.get("Items", [])
+        while res.get("LastEvaluatedKey"):
+            res = workspaces_table.scan(ExclusiveStartKey=res["LastEvaluatedKey"])
+            items.extend(res.get("Items", []))
+        for item in items:
+            owner = _norm_identity(item.get("ownerId"))
+            if owner and (owner == uname or (em and owner == em)):
+                continue
+            role = resolve_workspace_member_role(item, username, email=email)
+            if role:
+                shared.append(normalize_workspace_item(item))
+    except Exception as exc:
+        print(f"[list_shared_workspaces] scan failed: {exc}")
+    return shared
+
+
+def find_workspace_by_id(workspace_id):
+    """Locate a workspace row by workspaceId (any owner)."""
+    if not workspace_id:
+        return None
+    try:
+        found = find_by_sort_key(workspaces_table, "workspaceId", workspace_id)
+        if found:
+            return found
+        found = find_by_sort_key(workspaces_table, "id", workspace_id)
+        return found
+    except Exception:
+        return None
+
+
+def require_workspace_access(workspace_id, username, email=None):
+    """Owner or active member may access workspace resources (projects, etc.)."""
+    workspace = find_workspace_by_id(workspace_id)
+    if not workspace:
+        # Allow project list if workspace row missing but projects exist (legacy data)
+        return None, None
+    role = resolve_workspace_member_role(workspace, username, email=email)
+    if not role:
+        return None, respond(403, {
+            "error": "forbidden",
+            "error_description": "You are not a member of this workspace",
+        })
+    return workspace, None
 
 
 def normalize_project_item(item):
@@ -557,27 +694,68 @@ def find_by_sort_key(table, sort_key_name, sort_key_value):
     return items[0] if items else None
 
 
-def send_invite_email(recipient_email, workspace_name, inviter_name, role):
-    frontend_url = os.environ.get("FRONTEND_URL", "https://console.zexvro.in")
-    source_email = os.environ.get("INVITE_SOURCE_EMAIL", "noreply@zexvro.dev")
-    safe_workspace = workspace_name or "a ZEXVRO workspace"
-    safe_inviter = inviter_name or "A teammate"
-    safe_role = role or "Developer"
-    html_body = f"""
-    <div style="font-family:Inter,Arial,sans-serif;line-height:1.5;color:#18181b">
-      <h2 style="margin:0 0 12px">You have been invited to {safe_workspace} on ZEXVRO</h2>
-      <p>{safe_inviter} invited you to join as <strong>{safe_role}</strong>.</p>
-      <p><a href="{frontend_url}/dashboard" style="display:inline-block;background:#09090b;color:#fff;padding:10px 14px;border-radius:6px;text-decoration:none">Open ZEXVRO</a></p>
-    </div>
-    """
-    return ses.send_email(
-        Source=source_email,
-        Destination={"ToAddresses": [recipient_email]},
-        Message={
-            "Subject": {"Data": f"You have been invited to {safe_workspace} on ZEXVRO"},
-            "Body": {"Html": {"Data": html_body}},
-        },
+def send_invite_email(recipient_email, workspace_name, inviter_name, role, token=None, expires_at=None):
+    """Send branded workspace invite via Brevo."""
+    frontend_url = os.environ.get("FRONTEND_URL", "https://console.zexvro.in").rstrip("/")
+    accept_path = f"/invite/accept?token={token}" if token else "/dashboard"
+    accept_url = f"{frontend_url}{accept_path}"
+    expires_label = _format_invite_expiry(expires_at) if expires_at else ""
+
+    try:
+        from email_templates import render_workspace_invite
+    except ImportError:
+        try:
+            from scratch_lambda.email_templates import render_workspace_invite  # type: ignore
+        except ImportError:
+            render_workspace_invite = None
+
+    if render_workspace_invite:
+        subject, html_body, text_body = render_workspace_invite(
+            recipient_email=recipient_email,
+            workspace_name=workspace_name or "a ZEXVRO workspace",
+            inviter_name=inviter_name or "A teammate",
+            role=role or "Developer",
+            accept_url=accept_url,
+            expires_label=expires_label,
+        )
+    else:
+        safe_workspace = workspace_name or "a ZEXVRO workspace"
+        safe_role = role or "Developer"
+        subject = f"ZEXVRO · Join {safe_workspace} as {safe_role}"
+        html_body = f"<p>Accept: <a href=\"{accept_url}\">{accept_url}</a></p>"
+        text_body = f"Accept: {accept_url}"
+
+    result = brevo_send_email(
+        to=recipient_email,
+        subject=subject,
+        html=html_body,
+        text=text_body,
+        tags=["zexvro-invite", "workspace-iam"],
     )
+    return {"MessageId": result.get("messageId"), **result}
+
+
+def _format_invite_expiry(expires_at):
+    try:
+        ms = int(expires_at)
+        return time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(ms / 1000.0))
+    except Exception:
+        return str(expires_at)
+
+
+def find_workspace_invite(token):
+    """Scan workspaces for an invitation with the given accept token."""
+    if not token:
+        return None, None
+    try:
+        res = workspaces_table.scan()
+        for item in res.get("Items", []):
+            for invite in item.get("invitations") or []:
+                if invite.get("token") == token:
+                    return item, invite
+    except Exception:
+        return None, None
+    return None, None
 
 
 def get_username_from_auth(event):
@@ -833,11 +1011,30 @@ def lambda_handler(event, context):
         if auth_error:
             return auth_error
 
+        caller_email = _caller_email(event, username)
         res = workspaces_table.query(
             KeyConditionExpression=Key("ownerId").eq(username)
         )
-        workspaces = [normalize_workspace_item(item) for item in res.get("Items", [])]
-        return respond(200, {"workspaces": workspaces})
+        owned = [normalize_workspace_item(item) for item in res.get("Items", [])]
+        # Also query by email if Cognito username != ownerId used at create time
+        if caller_email and caller_email != _norm_identity(username):
+            try:
+                res_email = workspaces_table.query(
+                    KeyConditionExpression=Key("ownerId").eq(caller_email)
+                )
+                for item in res_email.get("Items", []):
+                    wid = item.get("workspaceId") or item.get("id")
+                    if not any((w.get("workspaceId") or w.get("id")) == wid for w in owned):
+                        owned.append(normalize_workspace_item(item))
+            except Exception:
+                pass
+        shared = list_shared_workspaces_for_user(username, email=caller_email)
+        by_id = {}
+        for w in owned + shared:
+            wid = w.get("workspaceId") or w.get("id")
+            if wid:
+                by_id[wid] = w
+        return respond(200, {"workspaces": list(by_id.values())})
 
     elif path == "/api/workspaces" and http_method == "POST":
         username, auth_error = require_username(event, headers)
@@ -845,6 +1042,22 @@ def lambda_handler(event, context):
             return auth_error
 
         now = int(time.time() * 1000)
+        name = (body.get("name") or "Untitled Workspace").strip()
+        # Dedupe: if owner already has a workspace with the same name, return it
+        try:
+            existing_res = workspaces_table.query(
+                KeyConditionExpression=Key("ownerId").eq(username)
+            )
+            for existing in existing_res.get("Items", []):
+                if str(existing.get("name") or "").strip().lower() == name.lower():
+                    return respond(200, {
+                        "status": "success",
+                        "workspace": normalize_workspace_item(existing),
+                        "deduped": True,
+                    })
+        except Exception as exc:
+            print(f"[create workspace] dedupe query failed: {exc}")
+
         workspace_id = body.get("workspaceId") or body.get("id") or create_id("ws")
         members = body.get("members") or [{
             "id": username,
@@ -859,7 +1072,7 @@ def lambda_handler(event, context):
             "ownerId": username,
             "workspaceId": workspace_id,
             "id": workspace_id,
-            "name": body.get("name", "Untitled Workspace"),
+            "name": name,
             "slug": body.get("slug", workspace_id),
             "plan": body.get("plan", "Team workspace"),
             "createdAt": body.get("createdAt", now),
@@ -884,12 +1097,28 @@ def lambda_handler(event, context):
         if not workspace:
             return respond(404, {"error": "not_found", "error_description": "Workspace not found"})
 
+        _, role_err = require_workspace_role(workspace, username, _TEAM_INVITE_ROLES)
+        if role_err:
+            return role_err
+
+        invited_role = body.get("role", "Developer")
+        if invited_role not in ("Admin", "Developer", "Finance", "Viewer", "Agent"):
+            return respond(400, {
+                "error": "invalid_request",
+                "error_description": "Invalid invite role",
+            })
+        if invited_role == "Owner":
+            return respond(400, {
+                "error": "invalid_request",
+                "error_description": "Cannot invite as Owner",
+            })
+
         now = int(time.time() * 1000)
         member = {
             "id": body.get("id") or create_id("member"),
             "email": body.get("email", ""),
             "name": body.get("name") or body.get("email", ""),
-            "role": body.get("role", "Developer"),
+            "role": invited_role,
             "status": body.get("status", "invited"),
             "joinedAt": body.get("joinedAt", now),
         }
@@ -904,6 +1133,35 @@ def lambda_handler(event, context):
         )
         return respond(200, {"status": "success", "member": member, "workspace": normalize_workspace_item(updated)})
 
+    # Route: GET /api/workspaces/{id} — full workspace for members (roster sync)
+    elif (
+        path.startswith("/api/workspaces/")
+        and http_method == "GET"
+        and path.count("/") == 3
+        and not path.endswith("/invite")
+    ):
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        workspace_id = path.strip("/").split("/")[-1]
+        caller_email = _caller_email(event, username)
+        workspace, access_err = require_workspace_access(workspace_id, username, email=caller_email)
+        if access_err and workspace is not None:
+            return access_err
+        if not workspace:
+            # Soft fallback: scan by id even if access helper returned None
+            workspace = find_workspace_by_id(workspace_id)
+        if not workspace:
+            return respond(404, {"error": "not_found", "error_description": "Workspace not found"})
+        # If found, ensure caller is owner or member
+        role = resolve_workspace_member_role(workspace, username, email=caller_email)
+        if not role:
+            return respond(403, {
+                "error": "forbidden",
+                "error_description": "You are not a member of this workspace",
+            })
+        return respond(200, {"workspace": normalize_workspace_item(workspace)})
+
     # Route: PUT/DELETE /api/workspaces/{id}
     elif path.startswith("/api/workspaces/") and http_method == "PUT":
         username, auth_error = require_username(event, headers)
@@ -912,14 +1170,20 @@ def lambda_handler(event, context):
 
         workspace_id = path.split("/")[-1]
         res = workspaces_table.get_item(Key={"ownerId": username, "workspaceId": workspace_id})
-        if not res.get("Item"):
+        workspace = res.get("Item")
+        if not workspace:
             return respond(404, {"error": "not_found", "error_description": "Workspace not found"})
 
+        _, role_err = require_workspace_role(workspace, username, _SETTINGS_WRITE_ROLES)
+        if role_err:
+            return role_err
+
+        # Allow Owner/Admin to update members + invitations (IAM invite flow).
         updated = update_item(
             workspaces_table,
             {"ownerId": username, "workspaceId": workspace_id},
             {**body, "updatedAt": int(time.time() * 1000)},
-            {"ownerId", "workspaceId", "id", "createdAt", "members"},
+            {"ownerId", "workspaceId", "id", "createdAt"},
         )
         return respond(200, {"status": "success", "workspace": normalize_workspace_item(updated)})
 
@@ -943,10 +1207,15 @@ def lambda_handler(event, context):
         if not workspace_id:
             return respond(400, {"error": "invalid_request", "error_description": "workspaceId is required"})
 
+        # Auth only for list — invitees may not be written to Dynamo members yet (local accept).
+        # Membership is enforced on write below.
         res = projects_table.query(
             KeyConditionExpression=Key("workspaceId").eq(workspace_id)
         )
         projects = [normalize_project_item(item) for item in res.get("Items", [])]
+        # Ensure workspaceId is set for FE filtering
+        for p in projects:
+            p.setdefault("workspaceId", workspace_id)
         return respond(200, {"projects": projects})
 
     elif path == "/api/projects" and http_method == "POST":
@@ -957,6 +1226,12 @@ def lambda_handler(event, context):
         workspace_id = body.get("workspaceId")
         if not workspace_id:
             return respond(400, {"error": "invalid_request", "error_description": "workspaceId is required"})
+
+        caller_email = _caller_email(event, username)
+        workspace_row, access_err = require_workspace_access(workspace_id, username, email=caller_email)
+        # Soft: if workspace row missing, allow create (legacy); if found without role, forbid
+        if workspace_row is not None and access_err:
+            return access_err
 
         now = int(time.time() * 1000)
         project_id = body.get("projectId") or body.get("id") or create_id("proj")
@@ -1568,26 +1843,190 @@ def lambda_handler(event, context):
 
         return respond(200, {"status": "success"})
 
-    # Route: POST /api/invite/send
+    # Route: POST /api/invite/send — IAM-style tokenized invite email
     elif path == "/api/invite/send" and http_method == "POST":
         username, auth_error = require_username(event, headers)
         if auth_error:
             return auth_error
 
-        recipient_email = body.get("email")
-        if not recipient_email:
-            return respond(400, {"error": "invalid_request", "error_description": "email is required"})
+        recipient_email = (body.get("email") or "").strip().lower()
+        if not recipient_email or not EMAIL_RE.match(recipient_email):
+            return respond(400, {"error": "invalid_request", "error_description": "valid email is required"})
+
+        token = body.get("token")
+        role = body.get("role") or "Developer"
+        workspace_name = body.get("workspaceName")
+        frontend_url = os.environ.get("FRONTEND_URL", "https://console.zexvro.in").rstrip("/")
+        accept_url = f"{frontend_url}/invite/accept?token={token}" if token else f"{frontend_url}/dashboard"
 
         try:
             send_res = send_invite_email(
                 recipient_email,
-                body.get("workspaceName"),
+                workspace_name,
                 body.get("inviterName") or username,
-                body.get("role"),
+                role,
+                token=token,
+                expires_at=body.get("expiresAt"),
             )
-            return respond(200, {"status": "success", "messageId": send_res.get("MessageId")})
+            return respond(200, {
+                "status": "success",
+                "messageId": send_res.get("MessageId"),
+                "acceptUrl": accept_url,
+            })
         except Exception as exc:
             return respond(502, {"error": "email_send_failed", "error_description": str(exc)})
+
+    # Route: GET /api/invite/{token} — preview invite (auth optional for UX)
+    elif path.startswith("/api/invite/") and http_method == "GET" and path.count("/") == 3:
+        token = path.strip("/").split("/")[-1]
+        workspace, invite = find_workspace_invite(token)
+        if not invite:
+            return respond(404, {"error": "not_found", "error_description": "Invitation not found"})
+        status = invite.get("status", "pending")
+        expires_at = int(invite.get("expiresAt") or 0)
+        if status == "pending" and expires_at and expires_at < int(time.time() * 1000):
+            status = "expired"
+        return respond(200, {
+            "invite": {
+                "id": invite.get("id"),
+                "workspaceId": invite.get("workspaceId") or workspace.get("workspaceId") or workspace.get("id"),
+                "workspaceName": invite.get("workspaceName") or workspace.get("name"),
+                "email": invite.get("email"),
+                "role": invite.get("role"),
+                "status": status,
+                "expiresAt": expires_at,
+                "invitedBy": invite.get("invitedBy") or invite.get("invitedByEmail") or "",
+            }
+        })
+
+    # Route: POST /api/invite/accept — bind principal to workspace role
+    elif path == "/api/invite/accept" and http_method == "POST":
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+
+        token = (body.get("token") or "").strip()
+        if not token:
+            return respond(400, {"error": "invalid_request", "error_description": "token is required"})
+
+        workspace, invite = find_workspace_invite(token)
+        if not invite or not workspace:
+            return respond(404, {"error": "not_found", "error_description": "Invitation not found"})
+
+        status = invite.get("status", "pending")
+        expires_at = int(invite.get("expiresAt") or 0)
+        now_ms = int(time.time() * 1000)
+        if status == "revoked":
+            return respond(410, {"error": "revoked", "error_description": "Invitation was revoked"})
+        if expires_at and expires_at < now_ms and status != "accepted":
+            return respond(410, {"error": "expired", "error_description": "Invitation has expired"})
+
+        invite_email = (invite.get("email") or "").strip().lower()
+        caller_email = _caller_email(event, username)
+
+        if invite_email and caller_email and invite_email != caller_email:
+            return respond(403, {
+                "error": "principal_mismatch",
+                "error_description": f"Sign in as {invite_email} to accept this invitation",
+            })
+
+        role = invite.get("role") or "Viewer"
+        owner_id = workspace.get("ownerId")
+        workspace_id = workspace.get("workspaceId") or workspace.get("id")
+        workspace_name = invite.get("workspaceName") or workspace.get("name") or "Workspace"
+        members = list(workspace.get("members") or [])
+        members = [
+            m for m in members
+            if (m.get("email") or "").strip().lower() != invite_email
+            and m.get("inviteId") != invite.get("id")
+        ]
+        members.append({
+            "id": username,
+            "email": invite_email or caller_email,
+            "name": (invite_email or caller_email or username).split("@")[0],
+            "role": role,
+            "status": "active",
+            "joinedAt": now_ms,
+            "principalType": "serviceAccount" if role == "Agent" else "user",
+            "principalId": username,
+            "roleBoundAt": now_ms,
+            "roleBoundBy": invite.get("invitedByEmail") or invite.get("invitedBy"),
+            "inviteId": invite.get("id"),
+        })
+
+        invitations = []
+        for inv in workspace.get("invitations") or []:
+            if inv.get("id") == invite.get("id") or inv.get("token") == token:
+                invitations.append({
+                    **inv,
+                    "status": "accepted",
+                    "acceptedAt": now_ms,
+                    "acceptedBy": username,
+                })
+            else:
+                invitations.append(inv)
+
+        updated = update_item(
+            workspaces_table,
+            {"ownerId": owner_id, "workspaceId": workspace_id},
+            {"members": members, "invitations": invitations, "updatedAt": now_ms},
+            {"ownerId", "workspaceId", "id"},
+        )
+        return respond(200, {
+            "status": "success",
+            "workspaceId": workspace_id,
+            "workspaceName": workspace_name,
+            "role": role,
+            "email": invite_email or caller_email,
+            "alreadyAccepted": status == "accepted",
+            "invite": {
+                "id": invite.get("id"),
+                "workspaceId": workspace_id,
+                "workspaceName": workspace_name,
+                "email": invite_email,
+                "role": role,
+                "status": "accepted",
+                "expiresAt": expires_at,
+                "invitedBy": invite.get("invitedBy") or invite.get("invitedByEmail") or "",
+            },
+            "workspace": normalize_workspace_item(updated),
+        })
+
+    # Route: POST /api/invite/revoke
+    elif path == "/api/invite/revoke" and http_method == "POST":
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        workspace_id = body.get("workspaceId")
+        invite_id = body.get("inviteId")
+        if not workspace_id or not invite_id:
+            return respond(400, {"error": "invalid_request", "error_description": "workspaceId and inviteId required"})
+        res = workspaces_table.get_item(Key={"ownerId": username, "workspaceId": workspace_id})
+        workspace = res.get("Item")
+        if not workspace:
+            # try scan by workspace id for non-owner admins later; owner-only for v1
+            return respond(404, {"error": "not_found", "error_description": "Workspace not found"})
+        _, role_err = require_workspace_role(workspace, username, _TEAM_INVITE_ROLES)
+        if role_err:
+            return role_err
+        now_ms = int(time.time() * 1000)
+        invitations = []
+        for inv in workspace.get("invitations") or []:
+            if inv.get("id") == invite_id:
+                invitations.append({**inv, "status": "revoked", "revokedAt": now_ms})
+            else:
+                invitations.append(inv)
+        members = [
+            m for m in (workspace.get("members") or [])
+            if not (m.get("inviteId") == invite_id and m.get("status") in ("invited", "pending"))
+        ]
+        updated = update_item(
+            workspaces_table,
+            {"ownerId": username, "workspaceId": workspace_id},
+            {"invitations": invitations, "members": members, "updatedAt": now_ms},
+            {"ownerId", "workspaceId", "id"},
+        )
+        return respond(200, {"status": "success", "workspace": normalize_workspace_item(updated)})
 
     # Route: POST /api/waitlist (public join)
     elif path == "/api/waitlist" and http_method == "POST":
