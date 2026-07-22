@@ -5,13 +5,15 @@
 #
 # Repo secrets (Settings → Secrets → Actions) — never commit values:
 #   GATE_ADMIN_API_KEY         required for full Gate admin/agent path
-#   NFT_SMOKE_ACCESS_TOKEN     optional short-lived Cognito access token
 #   COGNITO_SMOKE_USERNAME     preferred for NFT (script fetches a fresh token)
 #   COGNITO_SMOKE_PASSWORD
+#   NFT_SMOKE_ACCESS_TOKEN     optional short-lived Cognito access token
+#   DEPIN_BUYER_SECRET         Stellar secret (testnet USDC buyer) for paid settle
+#   NFT_SPONSOR_SECRET         same seed acceptable; used as DEPIN_BUYER fallback
 #
 # Optional variables:
 #   GATE_URL, NFT_URL, DEPIN_URL, CONSOLE_URL, LAND_URL, PLATFORM_API_URL
-#   NFT_SMOKE_WORKSPACE_ID
+#   NFT_SMOKE_WORKSPACE_ID, E2E_CHAIN_SMOKE, E2E_PAID_DEPIN
 name: E2E testnet / prod readiness
 
 on:
@@ -25,12 +27,22 @@ on:
         options:
           - prod
           - custom
+      chain_smoke:
+        description: 'On-chain NFT create/mint/sale (testnet)'
+        required: false
+        default: true
+        type: boolean
+      paid_depin:
+        description: 'Paid De-pin settle (testnet USDC)'
+        required: false
+        default: true
+        type: boolean
 
 jobs:
   e2e:
     name: Full readiness suite
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
 
     steps:
       - name: Checkout
@@ -41,9 +53,16 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Install Stellar SDK (NFT chain smoke)
+        if: ${{ inputs.chain_smoke }}
+        run: npm install @stellar/stellar-sdk@16.0.1 --no-save
+
+      - name: Install De-pin deps (paid settle demo client)
+        if: ${{ inputs.paid_depin }}
+        run: npm --prefix services/depin ci --ignore-scripts
+
       - name: Run e2e-testnet suite
         env:
-          # Defaults live in scripts/e2e-testnet.mjs; override via repo Variables if needed.
           CONSOLE_URL: ${{ vars.CONSOLE_URL }}
           LAND_URL: ${{ vars.LAND_URL }}
           GATE_URL: ${{ vars.GATE_URL }}
@@ -58,15 +77,12 @@ jobs:
           COGNITO_USER_POOL_ID: ${{ vars.COGNITO_USER_POOL_ID }}
           COGNITO_CLIENT_ID: ${{ vars.COGNITO_CLIENT_ID }}
           NFT_SMOKE_WORKSPACE_ID: ${{ vars.NFT_SMOKE_WORKSPACE_ID }}
+          DEPIN_BUYER_SECRET: ${{ secrets.DEPIN_BUYER_SECRET }}
+          NFT_SPONSOR_SECRET: ${{ secrets.NFT_SPONSOR_SECRET }}
+          E2E_CHAIN_SMOKE: ${{ inputs.chain_smoke && '1' || '0' }}
+          E2E_PAID_DEPIN: ${{ inputs.paid_depin && '1' || '0' }}
           E2E_RETRIES: '8'
           E2E_RETRY_MS: '8000'
           E2E_STABLE_HITS: '2'
+          E2E_TIMEOUT_MS: '60000'
         run: node scripts/e2e-testnet.mjs
-
-      - name: Summary
-        if: always()
-        run: |
-          echo "## E2E target: \`${{ inputs.target }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "Ran \`scripts/e2e-testnet.mjs\` against live endpoints." >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Secrets used: GATE_ADMIN_API_KEY, optional NFT/Cognito smoke credentials." >> "$GITHUB_STEP_SUMMARY"
