@@ -5,10 +5,11 @@ import type { GateConfig } from './domain.js'
 import { CAPABILITY_HEADER } from './domain.js'
 import { isCorsOriginAllowed } from './config.js'
 import { completeChallenge, issueChallenge, problem, resolveSiteByKey } from './challenges.js'
-import { randomId } from './crypto.js'
+import { hashSecret, randomId } from './crypto.js'
 import type { GateRepository } from './repository.js'
 import { verifyCapability } from './verify.js'
 import { createAdminAuthMiddleware } from './adminAuth.js'
+import { createSite, generateSiteSecret, normalizeOrigins } from './sites.js'
 import {
   buildRegistrationOptions,
   issueWebAuthnAuthOptionsForChallenge,
@@ -44,18 +45,29 @@ export function createGateApp(config: GateConfig, repo: GateRepository) {
   const app = express()
   app.disable('x-powered-by')
 
-  // CORS for third-party browser embeds (reflect allowlisted Origin only).
-  app.use((req: Request, res: Response, next: NextFunction) => {
+  // CORS for third-party browser embeds: static env list + registered site origins.
+  app.use(async (req: Request, res: Response, next: NextFunction) => {
     const origin = req.header('origin')
-    if (origin && isCorsOriginAllowed(origin, config.corsOrigins)) {
-      res.setHeader('Access-Control-Allow-Origin', origin)
-      res.setHeader('Vary', 'Origin')
-      res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
-      res.setHeader(
-        'Access-Control-Allow-Headers',
-        'Content-Type, Authorization, X-Zexvro-Capability, X-Zexvro-Pop, X-Zexvro-Site-Key, X-Zexvro-Action, X-Zexvro-Expected-Htu',
-      )
-      res.setHeader('Access-Control-Max-Age', '86400')
+    if (origin) {
+      let allowed = isCorsOriginAllowed(origin, config.corsOrigins)
+      if (!allowed) {
+        try {
+          const dynamic = await repo.listAllowedOrigins()
+          allowed = isCorsOriginAllowed(origin, dynamic)
+        } catch {
+          /* ignore */
+        }
+      }
+      if (allowed) {
+        res.setHeader('Access-Control-Allow-Origin', origin)
+        res.setHeader('Vary', 'Origin')
+        res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,OPTIONS')
+        res.setHeader(
+          'Access-Control-Allow-Headers',
+          'Content-Type, Authorization, X-Zexvro-Capability, X-Zexvro-Pop, X-Zexvro-Site-Key, X-Zexvro-Action, X-Zexvro-Expected-Htu, X-Gate-Admin-Key',
+        )
+        res.setHeader('Access-Control-Max-Age', '86400')
+      }
     }
     if (req.method === 'OPTIONS') {
       res.status(204).end()
@@ -70,6 +82,7 @@ export function createGateApp(config: GateConfig, repo: GateRepository) {
     requireAuth: config.adminRequireAuth,
     userPoolId: config.cognitoUserPoolId,
     clientId: config.cognitoClientId,
+    adminApiKey: config.adminApiKey,
   })
 
   // Local/dev only: seed demo tenant. Never auto-seed test secrets in production.
@@ -344,6 +357,153 @@ export function createGateApp(config: GateConfig, repo: GateRepository) {
         createdAt: a.createdAt,
       })),
     })
+  })
+
+  // --- Multi-tenant sites (stranger integration) ---
+  app.get('/v1/admin/sites', adminAuth, async (_req, res) => {
+    const sites = await repo.listSites()
+    res.json({
+      sites: sites.map((s) => ({
+        siteId: s.siteId,
+        projectId: s.projectId,
+        siteKey: s.siteKey,
+        name: s.name,
+        allowedOrigins: s.allowedOrigins,
+        createdAt: s.createdAt,
+      })),
+    })
+  })
+
+  app.post('/v1/admin/sites', adminAuth, async (req, res) => {
+    const body = z
+      .object({
+        name: z.string().min(2).max(120),
+        allowedOrigins: z.array(z.string()).min(1).max(50),
+        projectId: z.string().min(2).max(80).optional(),
+      })
+      .safeParse(req.body)
+    if (!body.success) {
+      res.status(400).json(problem(400, 'invalid_body', body.error.message))
+      return
+    }
+    try {
+      const created = await createSite(repo, body.data)
+      res.status(201).json({
+        siteId: created.site.siteId,
+        projectId: created.site.projectId,
+        siteKey: created.site.siteKey,
+        secretKey: created.secretKey,
+        name: created.site.name,
+        allowedOrigins: created.site.allowedOrigins,
+        createdAt: created.site.createdAt,
+        note: 'Store secretKey now — it is not shown again. Use siteKey in browsers; secretKey only on your server for /v1/verify.',
+        apiBase: config.issuer,
+      })
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'create_failed'
+      if (msg === 'allowedOrigins_required' || msg === 'name_required') {
+        res.status(400).json(problem(400, msg, msg))
+        return
+      }
+      res.status(500).json(problem(500, 'create_failed', msg))
+    }
+  })
+
+  app.get('/v1/admin/sites/:siteId', adminAuth, async (req, res) => {
+    const siteId = String(req.params.siteId)
+    const site = await repo.getSiteById(siteId)
+    if (!site) {
+      res.status(404).json(problem(404, 'site_not_found', 'Site not found'))
+      return
+    }
+    res.json({
+      siteId: site.siteId,
+      projectId: site.projectId,
+      siteKey: site.siteKey,
+      name: site.name,
+      allowedOrigins: site.allowedOrigins,
+      createdAt: site.createdAt,
+    })
+  })
+
+  app.patch('/v1/admin/sites/:siteId', adminAuth, async (req, res) => {
+    const siteId = String(req.params.siteId)
+    const site = await repo.getSiteById(siteId)
+    if (!site) {
+      res.status(404).json(problem(404, 'site_not_found', 'Site not found'))
+      return
+    }
+    const body = z
+      .object({
+        name: z.string().min(2).max(120).optional(),
+        allowedOrigins: z.array(z.string()).min(1).max(50).optional(),
+      })
+      .safeParse(req.body)
+    if (!body.success) {
+      res.status(400).json(problem(400, 'invalid_body', body.error.message))
+      return
+    }
+    if (body.data.name) site.name = body.data.name.trim()
+    if (body.data.allowedOrigins) {
+      const origins = normalizeOrigins(body.data.allowedOrigins)
+      if (origins.length === 0) {
+        res
+          .status(400)
+          .json(problem(400, 'allowedOrigins_required', 'At least one valid origin required'))
+        return
+      }
+      site.allowedOrigins = origins
+    }
+    await repo.updateSite(site)
+    res.json({
+      siteId: site.siteId,
+      siteKey: site.siteKey,
+      name: site.name,
+      allowedOrigins: site.allowedOrigins,
+      createdAt: site.createdAt,
+    })
+  })
+
+  app.post('/v1/admin/sites/:siteId/rotate-secret', adminAuth, async (req, res) => {
+    const siteId = String(req.params.siteId)
+    const site = await repo.getSiteById(siteId)
+    if (!site) {
+      res.status(404).json(problem(404, 'site_not_found', 'Site not found'))
+      return
+    }
+    const secretKey = generateSiteSecret()
+    site.secretHash = hashSecret(secretKey)
+    await repo.rotateSiteSecret(site.siteId, secretKey)
+    await repo.updateSite(site)
+    res.json({
+      siteId: site.siteId,
+      siteKey: site.siteKey,
+      secretKey,
+      note: 'Previous secret is invalid. Store the new secretKey now.',
+    })
+  })
+
+  /** Public captcha browser SDK (CDN-style for stranger sites). */
+  app.get('/v1/sdk/captcha.js', (_req, res) => {
+    const candidates = [
+      join(process.cwd(), 'static/sdk/captcha.js'),
+      join(process.cwd(), 'public/sdk/captcha.js'),
+      join(process.cwd(), '../../packages/agent-auth-sdk/src/captcha.js'),
+      join(process.cwd(), '../packages/agent-auth-sdk/src/captcha.js'),
+      join(
+        dirname(fileURLToPath(import.meta.url)),
+        '../../../../packages/agent-auth-sdk/src/captcha.js',
+      ),
+    ]
+    const path = candidates.find((p) => existsSync(p))
+    if (!path) {
+      res.status(404).type('text/plain').send('captcha sdk not packaged')
+      return
+    }
+    res.setHeader('content-type', 'text/javascript; charset=utf-8')
+    res.setHeader('cache-control', 'public, max-age=300')
+    res.setHeader('access-control-allow-origin', '*')
+    res.send(readFileSync(path, 'utf8'))
   })
 
 

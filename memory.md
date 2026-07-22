@@ -948,3 +948,13 @@ Use `None` for empty fields. Do not delete fields.
 - Follow-ups: Cloudflare DNS + SSL; multi-tenant create-site API; optional HTTPS listener on ALB if not using CF proxy; photo bank optional.
 - Blockers: User must paste Cloudflare DNS for `api` and `www`.
 - Verification: target healthy; curl ALB `/health` + `/gate/health` ok.
+
+## 2026-07-22 - Grok with Rushi - Gate stranger integration complete
+
+- Service or area: ZEXVRO Gate multi-tenant + public API.
+- Summary: Sites admin API (create/list/patch origins/rotate secret), dynamic CORS from site origins, public captcha SDK at `/v1/sdk/captcha.js`, Cognito or GATE_ADMIN_API_KEY admin auth, dashboard Sites/Integrate UI. ECS task def rev 3 deployed. Live: https://api.zexvro.in/gate.
+- Smoke: create site 201; human challenge + captcha issue; evil origin 403; SDK 200.
+- Sites: Console Site `zk_live_NAVlEwYMKhVQlVvjQUReyccQ`; Partner Shop `zk_live_NF9Dten6VKu4YrKqCMp1mNcY` (secrets not stored in memory).
+- Docs: `docs/gate_integrator.md`.
+- Follow-ups: Deploy console Pages with `VITE_AGENT_AUTH_API_URL=https://api.zexvro.in/gate`; optional purge CF cache; photo bank for image captchas.
+- Verification: unit tests 63/63; live health + admin sites + challenge.

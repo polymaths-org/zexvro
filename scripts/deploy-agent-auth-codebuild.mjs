@@ -116,9 +116,13 @@ function copyService(src, dest) {
     'tsconfig.json',
     'tsconfig.build.json',
     'src',
+    'static',
   ]) {
     const from = path.join(src, name)
-    if (!existsSync(from)) throw new Error(`Missing ${from}`)
+    if (!existsSync(from)) {
+      if (name === 'static') continue
+      throw new Error(`Missing ${from}`)
+    }
     cpSync(from, path.join(dest, name), { recursive: true })
   }
 }

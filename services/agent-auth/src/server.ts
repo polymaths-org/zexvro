@@ -27,7 +27,10 @@ if (repo.kind === 'dynamo') {
   }
   try {
     await dynamo.bootstrapFromCacheSeed()
-    console.log(`Dynamo backend ready table=${config.dynamoTable}`)
+    const sites = await dynamo.listSites()
+    console.log(
+      `Dynamo backend ready table=${config.dynamoTable} sites=${String(sites.length)}`,
+    )
   } catch (err) {
     console.warn(
       'Dynamo bootstrap failed (empty table is OK until sites are provisioned):',
@@ -37,6 +40,7 @@ if (repo.kind === 'dynamo') {
 } else if (!config.isProd) {
   await repo.ensureDemoTenant()
 }
+
 
 const gate = createGateApp(config, repo)
 const root = express()

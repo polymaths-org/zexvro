@@ -20,7 +20,29 @@ In Cloudflare → **zexvro.in** → **DNS** → **Add record**:
 | --- | --- | --- | --- | --- |
 | **CNAME** | `api` | `zexvro-gate-alb-672701025.us-east-1.elb.amazonaws.com` | **Proxied** (orange) **or** DNS only | Auto |
 
-**Recommended:** **Proxied** (orange) so Cloudflare terminates HTTPS for `api.zexvro.in` and forwards to the ALB on HTTP. ALB currently listens on **port 80 only**.
+**Recommended:** **Proxied** (orange).
+
+### SSL / 521 fix (required for HTTPS)
+
+Cloudflare zone SSL mode is almost certainly **Full**. With orange proxy, CF connects to the **origin on HTTPS :443**.  
+Our ALB only had **HTTP :80** → Cloudflare returns **521** (or 502).  
+`http://api.zexvro.in/gate/health` works; `https://` fails until one of these:
+
+**Option A — ACM + HTTPS on ALB (preferred)**
+
+1. Add DNS validation CNAME (DNS only / grey cloud is fine):
+
+| Type | Name | Target |
+| --- | --- | --- |
+| CNAME | `_0626c28ed2b67b1f925689722a300545.api` | `_71e2f3f753fe32e730fc6b9868e8c14f.jkddzztszm.acm-validations.aws.` |
+
+2. After cert is ISSUED, we attach ALB HTTPS:443 listener (cert ARN  
+   `arn:aws:acm:us-east-1:290294660486:certificate/0cb98f0c-9bcf-44ee-a176-6f713b293f9e`).
+
+**Option B — quick (zone-wide):** SSL/TLS → Overview → **Flexible**  
+(browser HTTPS → CF → origin HTTP). Works with port 80 only; slightly weaker origin hop.
+
+**Option C — scoped Flexible:** Rules → Configuration Rules → hostname `api.zexvro.in` → SSL **Flexible**.
 
 **Checks (before Cloudflare DNS):**
 
@@ -29,7 +51,7 @@ curl -sS http://zexvro-gate-alb-672701025.us-east-1.elb.amazonaws.com/health
 curl -sS http://zexvro-gate-alb-672701025.us-east-1.elb.amazonaws.com/gate/health
 ```
 
-**Checks (after Cloudflare DNS + proxy):**
+**Checks (after Cloudflare DNS + SSL fix):**
 
 ```bash
 curl -sS https://api.zexvro.in/gate/health
@@ -37,41 +59,31 @@ curl -sS https://api.zexvro.in/gate/status
 ```
 
 Expected JSON includes `"status":"ok"` and `"product":"zexvro-gate"` (or service `agent-auth`).
+
 ---
 
 ## 2) `www.zexvro.in` → `https://zexvro.in` (redirect)
 
-Landing already lives on Pages project **`land`** at apex **`zexvro.in`**.  
-`www` needs a record + a redirect rule.
+Landing is Pages project **`land`** at apex **`zexvro.in`**.  
+A plain DNS CNAME for `www` alone causes **522** until `www` is a **Pages custom domain**.
 
-### A. DNS record for www
+### A. Add custom domain on Pages (required)
 
-| Type | Name | Target | Proxy status |
-| --- | --- | --- | --- |
-| **CNAME** | `www` | `zexvro.in` | **Proxied** (orange cloud) |
+1. Cloudflare → **Workers & Pages** → project **`land`**
+2. **Custom domains** → **Set up a custom domain**
+3. Enter **`www.zexvro.in`** and finish (CF will manage DNS)
 
-(If Cloudflare rejects CNAME to apex, use: CNAME `www` → `land-1sa.pages.dev` Proxied.)
+### B. Redirect Rule (after www is on Pages)
 
-### B. Redirect Rule (preferred)
-
-Cloudflare → **Rules** → **Redirect Rules** → **Create rule**:
+Cloudflare → **Rules** → **Redirect Rules**:
 
 | Field | Value |
 | --- | --- |
 | Rule name | `www to apex` |
 | If | Hostname equals `www.zexvro.in` |
-| Then | Dynamic redirect |
-| Expression | `concat("https://zexvro.in", http.request.uri.path)` |
+| Then | Dynamic: `concat("https://zexvro.in", http.request.uri.path)` |
 | Status | **301** |
 | Preserve query string | **On** |
-
-Or static: URL `https://zexvro.in` with status 301 (path may be dropped — prefer dynamic).
-
-### C. Alternative: Bulk Redirect
-
-Source: `https://www.zexvro.in/*`  
-Target: `https://zexvro.in/$1`  
-Status: 301  
 
 ---
 

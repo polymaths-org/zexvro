@@ -25,9 +25,17 @@ export interface JtiRecord {
 export interface GateRepository {
   kind: 'memory' | 'dynamo'
   ensureDemoTenant(): Promise<{ siteKey: string; secretKey: string; siteId: string } | null>
+  /** Load durable sites into cache (Dynamo scan). No-op for memory. */
+  hydrateSites?(): Promise<void>
   getSiteByKey(siteKey: string): Promise<SiteRecord | undefined>
+  getSiteById(siteId: string): Promise<SiteRecord | undefined>
   getSiteSecret(siteId: string): Promise<string | undefined>
   findSiteBySecret(siteSecret: string): Promise<SiteRecord | undefined>
+  listSites(): Promise<SiteRecord[]>
+  createSite(site: SiteRecord, secretKey: string): Promise<void>
+  updateSite(site: SiteRecord): Promise<void>
+  rotateSiteSecret(siteId: string, secretKey: string): Promise<void>
+  listAllowedOrigins(): Promise<string[]>
   getPolicy(siteId: string, action: string): Promise<ActionPolicy | undefined>
   putAgent(agent: AgentRecord): Promise<void>
   getAgentByPublicKey(siteId: string, publicKey: string): Promise<AgentRecord | undefined>
@@ -77,6 +85,10 @@ export class MemoryRepository implements GateRepository {
     return this.stores.sites.get(siteId)
   }
 
+  async getSiteById(siteId: string) {
+    return this.stores.sites.get(siteId)
+  }
+
   async getSiteSecret(siteId: string) {
     return this.stores.secretsBySiteId.get(siteId)
   }
@@ -87,6 +99,37 @@ export class MemoryRepository implements GateRepository {
       if (secret === siteSecret) return site
     }
     return undefined
+  }
+
+  async listSites() {
+    return [...this.stores.sites.values()]
+  }
+
+  async createSite(site: SiteRecord, secretKey: string) {
+    this.stores.sites.set(site.siteId, site)
+    this.stores.siteKeyIndex.set(site.siteKey, site.siteId)
+    this.stores.secretsBySiteId.set(site.siteId, secretKey)
+  }
+
+  async updateSite(site: SiteRecord) {
+    this.stores.sites.set(site.siteId, site)
+    this.stores.siteKeyIndex.set(site.siteKey, site.siteId)
+  }
+
+  async rotateSiteSecret(siteId: string, secretKey: string) {
+    if (!this.stores.sites.has(siteId)) throw new Error('site_not_found')
+    this.stores.secretsBySiteId.set(siteId, secretKey)
+    const site = this.stores.sites.get(siteId)!
+    site.secretHash = ''
+    this.stores.sites.set(siteId, site)
+  }
+
+  async listAllowedOrigins() {
+    const set = new Set<string>()
+    for (const site of this.stores.sites.values()) {
+      for (const o of site.allowedOrigins) set.add(o)
+    }
+    return [...set]
   }
 
   async getPolicy(siteId: string, action: string) {

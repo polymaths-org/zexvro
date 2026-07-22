@@ -200,6 +200,8 @@ export interface GateConfig {
   adminRequireAuth: boolean
   cognitoUserPoolId?: string
   cognitoClientId?: string
+  /** Optional admin API key (X-Gate-Admin-Key or Bearer) for bootstrap / automation. */
+  adminApiKey?: string
   /**
    * Public URL path prefix (no trailing slash), e.g. `/gate` for https://api.zexvro.in/gate.
    * Empty string = mount at root (local default).

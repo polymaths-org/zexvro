@@ -769,6 +769,52 @@ describe('ZEXVRO Gate self-hosted captcha', () => {
     expect((await request(app).get('/v1/admin/demo-keys')).status).toBe(404)
   })
 
+  it('admin can create site, update origins, and human captcha path works', async () => {
+    const { app } = await setup()
+    const created = await request(app)
+      .post('/v1/admin/sites')
+      .send({
+        name: 'Partner Shop',
+        allowedOrigins: ['https://shop.example.com'],
+      })
+    expect(created.status).toBe(201)
+    expect(created.body.siteKey).toMatch(/^zk_live_/)
+    expect(created.body.secretKey).toMatch(/^sk_live_/)
+    expect(created.body.allowedOrigins).toEqual(['https://shop.example.com'])
+
+    const listed = await request(app).get('/v1/admin/sites')
+    expect(listed.status).toBe(200)
+    expect(listed.body.sites.some((s: { siteId: string }) => s.siteId === created.body.siteId)).toBe(
+      true,
+    )
+
+    const patched = await request(app)
+      .patch(`/v1/admin/sites/${created.body.siteId}`)
+      .send({
+        allowedOrigins: ['https://shop.example.com', 'https://www.shop.example.com'],
+      })
+    expect(patched.status).toBe(200)
+    expect(patched.body.allowedOrigins).toHaveLength(2)
+
+    const ch = await request(app).post('/v1/challenges').send({
+      siteKey: created.body.siteKey,
+      action: 'checkout.submit',
+      channel: 'human',
+      clientPublicKey: 'ck_partner_test_key',
+      origin: 'https://shop.example.com',
+    })
+    expect(ch.status).toBe(201)
+
+    const badOrigin = await request(app).post('/v1/challenges').send({
+      siteKey: created.body.siteKey,
+      action: 'checkout.submit',
+      channel: 'human',
+      clientPublicKey: 'ck_partner_test_key2',
+      origin: 'https://evil.example',
+    })
+    expect(badOrigin.status).toBe(403)
+  })
+
   it('accepts captcha report feedback', async () => {
     const { app } = await setup()
     const { siteKey } = await demoKeys(app)

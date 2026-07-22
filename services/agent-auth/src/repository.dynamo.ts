@@ -6,6 +6,7 @@ import {
   GetCommand,
   PutCommand,
   QueryCommand,
+  ScanCommand,
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb'
 import type {
@@ -51,6 +52,142 @@ export class DynamoRepository implements GateRepository {
     return null
   }
 
+  /** Load all SITE META rows into memory cache (for list + CORS). */
+  async hydrateSites() {
+    let startKey: Record<string, unknown> | undefined
+    do {
+      const res = await this.doc.send(
+        new ScanCommand({
+          TableName: this.table,
+          FilterExpression: 'entity = :e AND sk = :sk',
+          ExpressionAttributeValues: { ':e': 'site', ':sk': 'META' },
+          ExclusiveStartKey: startKey,
+        }),
+      )
+      for (const item of res.Items ?? []) {
+        const site = this.itemToSite(item)
+        if (!site) continue
+        this.cache.sites.set(site.siteId, site)
+        this.cache.siteKeyIndex.set(site.siteKey, site.siteId)
+      }
+      startKey = res.LastEvaluatedKey as Record<string, unknown> | undefined
+    } while (startKey)
+  }
+
+  private itemToSite(item: Record<string, unknown>): SiteRecord | undefined {
+    if (!item.siteId || !item.siteKey) return undefined
+    return {
+      siteId: String(item.siteId),
+      projectId: String(item.projectId ?? 'proj_default'),
+      siteKey: String(item.siteKey),
+      secretHash: String(item.secretHash ?? ''),
+      secretPlainDevOnly: item.secretPlainDevOnly ? String(item.secretPlainDevOnly) : undefined,
+      allowedOrigins: Array.isArray(item.allowedOrigins)
+        ? (item.allowedOrigins as string[])
+        : [],
+      name: String(item.name ?? ''),
+      createdAt: String(item.createdAt ?? ''),
+    }
+  }
+
+  private async persistSiteMeta(site: SiteRecord) {
+    await this.doc.send(
+      new PutCommand({
+        TableName: this.table,
+        Item: {
+          pk: `SITE#${site.siteId}`,
+          sk: 'META',
+          entity: 'site',
+          siteId: site.siteId,
+          projectId: site.projectId,
+          siteKey: site.siteKey,
+          secretHash: site.secretHash,
+          allowedOrigins: site.allowedOrigins,
+          name: site.name,
+          createdAt: site.createdAt,
+        },
+      }),
+    )
+    await this.doc.send(
+      new PutCommand({
+        TableName: this.table,
+        Item: {
+          pk: `SITEKEY#${site.siteKey}`,
+          sk: `SITE#${site.siteId}`,
+          entity: 'sitekey',
+          siteKey: site.siteKey,
+          siteId: site.siteId,
+        },
+      }),
+    )
+  }
+
+  private async persistSiteSecret(siteId: string, secret: string) {
+    await this.doc.send(
+      new PutCommand({
+        TableName: this.table,
+        Item: {
+          pk: `SITE#${siteId}`,
+          sk: 'SECRET',
+          entity: 'secret',
+          siteId,
+          secret,
+        },
+      }),
+    )
+    this.cache.secretsBySiteId.set(siteId, secret)
+  }
+
+  async getSiteById(siteId: string) {
+    const cached = this.cache.sites.get(siteId)
+    if (cached) return cached
+    const res = await this.doc.send(
+      new GetCommand({
+        TableName: this.table,
+        Key: { pk: `SITE#${siteId}`, sk: 'META' },
+      }),
+    )
+    const site = res.Item ? this.itemToSite(res.Item) : undefined
+    if (site) {
+      this.cache.sites.set(site.siteId, site)
+      this.cache.siteKeyIndex.set(site.siteKey, site.siteId)
+    }
+    return site
+  }
+
+  async listSites() {
+    if (this.cache.sites.size === 0) await this.hydrateSites()
+    return [...this.cache.sites.values()]
+  }
+
+  async createSite(site: SiteRecord, secretKey: string) {
+    await this.persistSiteMeta(site)
+    await this.persistSiteSecret(site.siteId, secretKey)
+    this.cache.sites.set(site.siteId, site)
+    this.cache.siteKeyIndex.set(site.siteKey, site.siteId)
+  }
+
+  async updateSite(site: SiteRecord) {
+    await this.persistSiteMeta(site)
+    this.cache.sites.set(site.siteId, site)
+    this.cache.siteKeyIndex.set(site.siteKey, site.siteId)
+  }
+
+  async rotateSiteSecret(siteId: string, secretKey: string) {
+    const site = await this.getSiteById(siteId)
+    if (!site) throw new Error('site_not_found')
+    await this.persistSiteSecret(siteId, secretKey)
+  }
+
+  async listAllowedOrigins() {
+    const sites = await this.listSites()
+    const set = new Set<string>()
+    for (const site of sites) {
+      for (const o of site.allowedOrigins) set.add(o)
+    }
+    return [...set]
+  }
+
   /**
    * Warm site cache. Production: empty is fine until sites are provisioned.
    * Non-prod: may seed demo tenant into memory + optionally persist (legacy).
@@ -58,7 +195,8 @@ export class DynamoRepository implements GateRepository {
    */
   async bootstrapFromCacheSeed() {
     if (process.env.NODE_ENV === 'production') {
-      // Production: do not seed or persist demo tenants.
+      // Production: load existing sites only (no demo seed).
+      await this.hydrateSites()
       return
     }
     await this.ensureDemoTenant()

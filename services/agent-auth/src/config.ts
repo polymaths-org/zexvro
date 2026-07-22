@@ -44,6 +44,8 @@ const envSchema = z.object({
   GATE_BASE_PATH: z.string().optional(),
   /** Comma-separated browser origins for CORS */
   GATE_CORS_ORIGINS: z.string().optional(),
+  /** Bootstrap / automation admin key (optional alongside Cognito) */
+  GATE_ADMIN_API_KEY: z.string().optional(),
   COGNITO_USER_POOL_ID: z.string().optional(),
   COGNITO_CLIENT_ID: z.string().optional(),
   NODE_ENV: z.string().optional(),
@@ -96,6 +98,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): GateConfig {
     })(),
     cognitoUserPoolId: parsed.COGNITO_USER_POOL_ID,
     cognitoClientId: parsed.COGNITO_CLIENT_ID,
+    adminApiKey: parsed.GATE_ADMIN_API_KEY,
     basePath: normalizeBasePath(parsed.GATE_BASE_PATH, issuer),
     corsOrigins: parseCorsOrigins(parsed.GATE_CORS_ORIGINS),
   }
