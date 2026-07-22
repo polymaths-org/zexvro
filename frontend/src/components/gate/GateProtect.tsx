@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { Loader2, ShieldCheck, AlertCircle } from 'lucide-react'
+import { Loader2, ShieldCheck, AlertCircle, CheckCircle2 } from 'lucide-react'
 
 type GatePhase = 'idle' | 'checking' | 'challenge' | 'ready' | 'error'
 
@@ -30,8 +30,7 @@ function resolveApiBase(apiBase: string) {
 }
 
 /**
- * Gate protect control. Captcha mode uses the public SDK from the Gate host
- * (`/v1/sdk/captcha.js`) so production builds do not need monorepo package paths.
+ * Customer-facing “try verification” control. Uses the public Gate captcha SDK.
  */
 export default function GateProtect({
   action,
@@ -39,7 +38,7 @@ export default function GateProtect({
   apiBase = '/api/agent-auth',
   mode = 'captcha',
   onReady,
-  label = 'Continue securely',
+  label = 'Run verification',
 }: Props) {
   const [phase, setPhase] = useState<GatePhase>('idle')
   const [error, setError] = useState<string | null>(null)
@@ -51,7 +50,7 @@ export default function GateProtect({
     const base = resolveApiBase(apiBase)
     if (!siteKey) {
       setPhase('error')
-      setError('Create a site and select it first')
+      setError('Create a website first, then try again.')
       return
     }
     try {
@@ -102,7 +101,6 @@ export default function GateProtect({
         protectResult = {
           capability: completed.capability || completed.token,
           class: completed.class || 'human',
-          securityNote: 'soft_confirm is dev-only',
         }
       }
       setResult(protectResult)
@@ -110,34 +108,49 @@ export default function GateProtect({
       onReady?.(protectResult)
     } catch (err: unknown) {
       setPhase('error')
-      setError(err instanceof Error ? err.message : 'Gate protect failed')
+      const msg = err instanceof Error ? err.message : 'Verification failed'
+      setError(
+        msg.includes('origin')
+          ? `${msg} — add this console’s domain under My website → Allowed domains.`
+          : msg,
+      )
     }
   }, [action, apiBase, mode, onReady, siteKey])
 
   return (
-    <div className="space-y-3">
-      <p className="text-xs text-zinc-500">
-        Runs a live human captcha against <span className="font-mono">{resolveApiBase(apiBase)}</span>
-        . This console origin must be on the site allowlist.
-      </p>
+    <div className="space-y-4">
       <button
         type="button"
         onClick={() => void run()}
         disabled={phase === 'checking' || phase === 'challenge'}
-        className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2 text-xs font-semibold text-white disabled:opacity-60 dark:bg-white dark:text-zinc-900"
+        className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:opacity-60 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
       >
         {(phase === 'checking' || phase === 'challenge') && (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          <Loader2 className="h-4 w-4 animate-spin" />
         )}
-        {phase === 'ready' && <ShieldCheck className="h-3.5 w-3.5" />}
-        {phase === 'error' && <AlertCircle className="h-3.5 w-3.5" />}
-        {phase === 'ready' ? 'Capability issued' : label}
+        {phase === 'ready' && <CheckCircle2 className="h-4 w-4 text-emerald-400" />}
+        {phase === 'error' && <AlertCircle className="h-4 w-4" />}
+        {phase === 'ready' ? 'Verified — pass issued' : label}
       </button>
-      {error && <p className="text-xs text-rose-600 dark:text-rose-400">{error}</p>}
-      {result && (
-        <div className="rounded-lg bg-zinc-50 p-3 font-mono text-[10px] text-zinc-600 dark:bg-zinc-900/50 dark:text-zinc-300">
-          class={result.class}
-          <div className="mt-1 break-all opacity-70">{result.capability.slice(0, 80)}…</div>
+
+      {error && (
+        <div className="flex items-start gap-2 rounded-lg bg-rose-500/10 px-3 py-2 text-xs text-rose-700 dark:text-rose-300">
+          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          {error}
+        </div>
+      )}
+
+      {result && phase === 'ready' && (
+        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+          <div className="flex items-center gap-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+            <ShieldCheck className="h-4 w-4" />
+            Success — your site can accept this visitor for “{action}”
+          </div>
+          <p className="mt-1 text-xs text-zinc-500">
+            In production, send this pass to your server in the{' '}
+            <code className="font-mono text-[11px]">X-Zexvro-Capability</code> header and verify it
+            with your secret key.
+          </p>
         </div>
       )}
     </div>
