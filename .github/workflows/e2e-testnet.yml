@@ -1,0 +1,65 @@
+# Full production / testnet readiness suite — MANUAL only.
+# Does not run on every PR/merge (keeps default CI fast).
+#
+# Run: GitHub → Actions → "E2E testnet / prod readiness" → Run workflow
+#
+# Optional repo secrets:
+#   GATE_ADMIN_API_KEY      — deeper Gate admin + agent E2E
+#   NFT_SMOKE_ACCESS_TOKEN  — authenticated NFT list
+#
+# Optional variables:
+#   GATE_URL, NFT_URL, DEPIN_URL, CONSOLE_URL, LAND_URL, PLATFORM_API_URL
+
+name: E2E testnet / prod readiness
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Target label (informational)'
+        required: false
+        default: 'prod'
+        type: choice
+        options:
+          - prod
+          - custom
+
+jobs:
+  e2e:
+    name: Full readiness suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Run e2e-testnet suite
+        env:
+          # Defaults live in scripts/e2e-testnet.mjs; override via repo Variables if needed.
+          CONSOLE_URL: ${{ vars.CONSOLE_URL }}
+          LAND_URL: ${{ vars.LAND_URL }}
+          GATE_URL: ${{ vars.GATE_URL }}
+          NFT_URL: ${{ vars.NFT_URL }}
+          DEPIN_URL: ${{ vars.DEPIN_URL }}
+          PLATFORM_API_URL: ${{ vars.PLATFORM_API_URL }}
+          DEPIN_PROBE_PATH: ${{ vars.DEPIN_PROBE_PATH }}
+          GATE_ADMIN_API_KEY: ${{ secrets.GATE_ADMIN_API_KEY }}
+          NFT_SMOKE_ACCESS_TOKEN: ${{ secrets.NFT_SMOKE_ACCESS_TOKEN }}
+          E2E_RETRIES: '8'
+          E2E_RETRY_MS: '8000'
+          E2E_STABLE_HITS: '2'
+        run: node scripts/e2e-testnet.mjs
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## E2E target: \`${{ inputs.target }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Ran \`scripts/e2e-testnet.mjs\` against live endpoints." >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Add repo secret \`GATE_ADMIN_API_KEY\` for full Gate admin/agent checks." >> "$GITHUB_STEP_SUMMARY"
