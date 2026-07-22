@@ -87,25 +87,75 @@ const cfg = {
 const results = []
 let failed = 0
 
+/** Values that must never appear in Actions logs (exact string match + patterns). */
+const secretValues = new Set(
+  [
+    cfg.gateAdminKey,
+    cfg.nftToken,
+    cfg.cognitoPass,
+    cfg.cognitoUser,
+    cfg.stellarSecret,
+    process.env.GATE_ADMIN_API_KEY,
+    process.env.NFT_SMOKE_ACCESS_TOKEN,
+    process.env.COGNITO_SMOKE_PASSWORD,
+    process.env.COGNITO_SMOKE_USERNAME,
+    process.env.DEPIN_BUYER_SECRET,
+    process.env.NFT_SPONSOR_SECRET,
+    process.env.STELLAR_PRIVATE_KEY,
+    process.env.COGNITO_ACCESS_TOKEN,
+  ].filter((v) => typeof v === 'string' && v.length > 0),
+)
+
+/** Register with GitHub Actions log masking (exact match only). */
+function maskSecret(value) {
+  if (!value || typeof value !== 'string') return
+  secretValues.add(value)
+  if (process.env.GITHUB_ACTIONS === 'true') {
+    // Actions masks exact matches of this string in subsequent log lines
+    console.log(`::add-mask::${value}`)
+  }
+}
+
+// Mask secrets known at boot (before any other logging)
+for (const v of [...secretValues]) maskSecret(v)
+
+function redact(input) {
+  let s = typeof input === 'string' ? input : String(input ?? '')
+  for (const secret of secretValues) {
+    if (secret && secret.length >= 4 && s.includes(secret)) {
+      s = s.split(secret).join('***')
+    }
+  }
+  // Stellar secret seeds (S…) and JWTs — belt and suspenders if they slip into error text
+  s = s.replace(/\bS[A-Za-z0-9]{50,}\b/g, 'S***')
+  s = s.replace(/\beyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g, 'eyJ***')
+  s = s.replace(/\bBearer\s+[A-Za-z0-9._~+/=-]{12,}/gi, 'Bearer ***')
+  s = s.replace(/("?(?:password|secret|privateKey|accessToken|idToken|refreshToken|apiKey|siteSecret)"?\s*[:=]\s*)(["']?)[^,"'\s}]+\2/gi, '$1$2***$2')
+  return s
+}
+
 function log(level, msg) {
   const ts = new Date().toISOString().slice(11, 19)
-  console.log(`[${ts}] ${level} ${msg}`)
+  console.log(`[${ts}] ${level} ${redact(msg)}`)
 }
 
 function pass(name, detail = '') {
-  results.push({ name, ok: true, detail })
-  log('OK  ', `${name}${detail ? ` — ${detail}` : ''}`)
+  const safe = redact(detail)
+  results.push({ name, ok: true, detail: safe })
+  log('OK  ', `${name}${safe ? ` — ${safe}` : ''}`)
 }
 
 function fail(name, detail = '') {
   failed += 1
-  results.push({ name, ok: false, detail })
-  log('FAIL', `${name}${detail ? ` — ${detail}` : ''}`)
+  const safe = redact(detail)
+  results.push({ name, ok: false, detail: safe })
+  log('FAIL', `${name}${safe ? ` — ${safe}` : ''}`)
 }
 
 function skip(name, detail = '') {
-  results.push({ name, ok: true, skipped: true, detail })
-  log('SKIP', `${name}${detail ? ` — ${detail}` : ''}`)
+  const safe = redact(detail)
+  results.push({ name, ok: true, skipped: true, detail: safe })
+  log('SKIP', `${name}${safe ? ` — ${safe}` : ''}`)
 }
 
 async function sleep(ms) {
@@ -272,7 +322,10 @@ async function runGateDeep() {
     siteKey = created.siteKey
     secretKey = created.secretKey
     siteId = created.siteId
-    pass('gate.admin.createSite', siteKey.slice(0, 20) + '…')
+    // Dynamic site credentials must not appear in Actions logs
+    maskSecret(siteKey)
+    maskSecret(secretKey)
+    pass('gate.admin.createSite', 'site created')
   } catch (e) {
     fail('gate.admin.createSite', e instanceof Error ? e.message : String(e))
     return
@@ -433,6 +486,11 @@ async function fetchCognitoAccessToken() {
   }
   const token = body?.AuthenticationResult?.AccessToken
   if (!token) throw new Error('Cognito login returned no AccessToken')
+  maskSecret(token)
+  const idToken = body?.AuthenticationResult?.IdToken
+  const refresh = body?.AuthenticationResult?.RefreshToken
+  if (idToken) maskSecret(idToken)
+  if (refresh) maskSecret(refresh)
   return token
 }
 
@@ -836,6 +894,8 @@ async function runDepin() {
         DEPIN_URL: `${cfg.depinUrl}${probePath}`,
         DEPIN_EXPECTED_RECIPIENT: expectedRecipient || process.env.DEPIN_EXPECTED_RECIPIENT || '',
         DEPIN_MAX_PAYMENT_ATOMIC: process.env.DEPIN_MAX_PAYMENT_ATOMIC || '10000',
+        // Quiet demo client — never echo keys, full settlement JSON, or upstream body in CI
+        DEPIN_DEMO_QUIET: '1',
       }
       if (!env.DEPIN_EXPECTED_RECIPIENT) {
         // re-fetch status for recipient
@@ -854,18 +914,26 @@ async function runDepin() {
           encoding: 'utf8',
           timeout: 120_000,
           cwd: join(root, 'services/depin'),
+          // Do not inherit process stdio — capture only so we control what hits Actions logs
         },
       )
       const out = `${r.stdout || ''}\n${r.stderr || ''}`.trim()
+      // Never log full child output (may contain addresses / payloads). Parse success only.
       if (r.status === 0 && /Access granted/i.test(out)) {
-        const settleLine = out.split('\n').find((l) => /Settlement:/i.test(l)) || ''
-        pass(
-          'depin.paid_settle',
-          `paid ${probePath} ${settleLine.slice(0, 120) || 'Access granted'}`.trim(),
-        )
+        const txMatch = out.match(/"transaction"\s*:\s*"([a-f0-9]{8,})"/i)
+        const txHint = txMatch ? `${txMatch[1].slice(0, 12)}…` : 'ok'
+        pass('depin.paid_settle', `paid ${probePath} settle=${txHint}`)
         ran = true
       } else {
-        throw new Error(out.slice(0, 400) || `demoClient exit ${r.status}`)
+        // Redacted short reason only — no full stdout dump
+        const reason = /buyer needs at least/i.test(out)
+          ? 'buyer needs testnet USDC'
+          : /trustline/i.test(out)
+            ? 'recipient trustline missing'
+            : /Expected HTTP 402/i.test(out)
+              ? 'expected 402 challenge missing'
+              : `demoClient exit ${r.status ?? 'n/a'}`
+        throw new Error(reason)
       }
     } catch (inner) {
       if (!ran) {
@@ -929,9 +997,9 @@ console.log(`gate     ${cfg.gateUrl}`)
 console.log(`nft      ${cfg.nftUrl}`)
 console.log(`depin    ${cfg.depinUrl}`)
 console.log(`platform ${cfg.platformUrl}`)
+// Presence only — never print secret values or usernames
 console.log(`adminKey ${cfg.gateAdminKey ? 'set' : 'missing'}`)
-console.log(`nftToken ${cfg.nftToken ? 'set' : 'missing'}`)
-console.log(`cognito  ${cfg.cognitoUser ? 'set' : 'missing'}`)
+console.log(`nftAuth  ${cfg.nftToken || cfg.cognitoUser ? 'set' : 'missing'}`)
 console.log(`stellar  ${cfg.stellarSecret ? 'set' : 'missing'}`)
 console.log(`chain    ${cfg.enableChainSmoke ? 'on' : 'off'}  paidDepin ${cfg.enablePaidDepin ? 'on' : 'off'}`)
 console.log('')

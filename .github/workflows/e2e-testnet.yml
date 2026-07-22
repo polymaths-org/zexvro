@@ -70,6 +70,7 @@ jobs:
           DEPIN_URL: ${{ vars.DEPIN_URL }}
           PLATFORM_API_URL: ${{ vars.PLATFORM_API_URL }}
           DEPIN_PROBE_PATH: ${{ vars.DEPIN_PROBE_PATH }}
+          # Secrets: GitHub masks exact values as ***. Script also redacts + ::add-mask:: for derived tokens.
           GATE_ADMIN_API_KEY: ${{ secrets.GATE_ADMIN_API_KEY }}
           NFT_SMOKE_ACCESS_TOKEN: ${{ secrets.NFT_SMOKE_ACCESS_TOKEN }}
           COGNITO_SMOKE_USERNAME: ${{ secrets.COGNITO_SMOKE_USERNAME }}
@@ -81,8 +82,13 @@ jobs:
           NFT_SPONSOR_SECRET: ${{ secrets.NFT_SPONSOR_SECRET }}
           E2E_CHAIN_SMOKE: ${{ inputs.chain_smoke && '1' || '0' }}
           E2E_PAID_DEPIN: ${{ inputs.paid_depin && '1' || '0' }}
+          E2E_QUIET: '1'
+          DEPIN_DEMO_QUIET: '1'
           E2E_RETRIES: '8'
           E2E_RETRY_MS: '8000'
           E2E_STABLE_HITS: '2'
           E2E_TIMEOUT_MS: '60000'
-        run: node scripts/e2e-testnet.mjs
+        # set +x: never echo commands that expand secrets; no env dump
+        run: |
+          set +x
+          node scripts/e2e-testnet.mjs
