@@ -1033,3 +1033,15 @@ Use `None` for empty fields. Do not delete fields.
 - Flicker: `pullFromAWS` every 8s replaced members with thin Dynamo list; detail poll restored → nabil3 vanish/return.
 - Fix: pull always `mergeMembersLists` with previous local members; detail in-flight dedupe + fingerprint skip; slower polls (12–15s); never demote active.
 - Leave: `leaveWorkspace` store action + `POST /api/workspaces/:id/leave` + Team UI button for non-owners.
+
+## 2026-07-23 - OpenCode with Nabil - Invite email missing ?token=
+
+- Problem: Some Brevo invite mails linked only to `/dashboard` (no accept token); others had full `/invite/accept?token=…`.
+- Cause: Lambda `send_invite_email` + `/api/invite/send` fell back to `/dashboard` when `token` was falsy; FE also fire-and-forget persisted invitations so accept scan could miss tokens.
+- Fix:
+  - `build_invite_accept_url(token)` — always `…/invite/accept?token=…` or 400; no dashboard fallback.
+  - `mailApi.sendWorkspaceInviteEmail` requires non-empty token before POST.
+  - `createInvitation` / `resendInvitation` **await** workspace PUT before sending mail.
+- Deployed: Lambda `zexvro-agent-backend` + Cloudflare Pages `zexvro` (`2a93a8b7.zexvro-7oq.pages.dev` → console.zexvro.in).
+- Verified: rbac vitest 36/36; no Lambda `/dashboard` fallback; console + `/invite/accept` 200.
+- Next: re-invite from console and confirm Brevo CTA includes `?token=`.

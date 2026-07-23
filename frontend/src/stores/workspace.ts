@@ -337,10 +337,19 @@ export const useWorkspaceStore = create<WorkspaceState>()(
 
       const next = get().workspaces.find(w => w.id === workspaceId);
       if (next) {
-        workspaceApi.update(workspaceId, {
-          members: next.members,
-          invitations: next.invitations,
-        }).catch(err => console.error('Failed to persist invitation:', err));
+        // Persist token to workspace before mail so prod accept (find_workspace_invite) can resolve it.
+        try {
+          await workspaceApi.update(workspaceId, {
+            members: next.members,
+            invitations: next.invitations,
+          });
+        } catch (err) {
+          console.error('Failed to persist invitation:', err);
+          const message = err instanceof Error ? err.message : 'Failed to persist invitation';
+          const e = new Error(message) as Error & { invite: TeamInvite };
+          e.invite = { ...invite, _mailStatus: 'failed' as const, _mailError: message } as TeamInvite;
+          throw e;
+        }
       }
 
       try {
@@ -439,7 +448,12 @@ export const useWorkspaceStore = create<WorkspaceState>()(
 
       const next = get().workspaces.find(w => w.id === workspaceId);
       if (next) {
-        workspaceApi.update(workspaceId, { invitations: next.invitations }).catch(() => undefined);
+        try {
+          await workspaceApi.update(workspaceId, { invitations: next.invitations });
+        } catch (err) {
+          console.error('Failed to persist resend invitation:', err);
+          throw err instanceof Error ? err : new Error('Failed to persist invitation');
+        }
       }
 
       try {

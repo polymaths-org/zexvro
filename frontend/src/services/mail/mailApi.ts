@@ -84,8 +84,14 @@ export async function sendWorkspaceInviteEmail(
   const base = mailApiBase();
   const url = `${base}${path}`;
 
+  const token = String(input.token || '').trim();
+  if (!token) {
+    throw new Error('Invite token is required — cannot send mail without accept link');
+  }
+
   const payload = {
     ...input,
+    token,
     acceptBaseUrl:
       input.acceptBaseUrl
       || (typeof window !== 'undefined' ? window.location.origin : undefined),

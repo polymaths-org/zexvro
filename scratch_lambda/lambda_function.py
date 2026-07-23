@@ -6,6 +6,7 @@ import csv
 import io
 import re
 from decimal import Decimal
+from urllib.parse import quote
 import boto3
 from boto3.dynamodb.conditions import Attr, Key
 
@@ -694,11 +695,18 @@ def find_by_sort_key(table, sort_key_name, sort_key_value):
     return items[0] if items else None
 
 
+def build_invite_accept_url(token, frontend_url=None):
+    """Always build a tokenized accept URL. Never fall back to bare /dashboard."""
+    clean = (token or "").strip()
+    if not clean:
+        raise ValueError("invite token is required for accept URL")
+    base = (frontend_url or os.environ.get("FRONTEND_URL") or "https://console.zexvro.in").rstrip("/")
+    return f"{base}/invite/accept?token={quote(clean, safe='')}"
+
+
 def send_invite_email(recipient_email, workspace_name, inviter_name, role, token=None, expires_at=None):
     """Send branded workspace invite via Brevo."""
-    frontend_url = os.environ.get("FRONTEND_URL", "https://console.zexvro.in").rstrip("/")
-    accept_path = f"/invite/accept?token={token}" if token else "/dashboard"
-    accept_url = f"{frontend_url}{accept_path}"
+    accept_url = build_invite_accept_url(token)
     expires_label = _format_invite_expiry(expires_at) if expires_at else ""
 
     try:
@@ -1853,11 +1861,16 @@ def lambda_handler(event, context):
         if not recipient_email or not EMAIL_RE.match(recipient_email):
             return respond(400, {"error": "invalid_request", "error_description": "valid email is required"})
 
-        token = body.get("token")
+        token = (body.get("token") or "").strip()
+        if not token:
+            return respond(400, {"error": "invalid_request", "error_description": "token is required"})
+
         role = body.get("role") or "Developer"
         workspace_name = body.get("workspaceName")
-        frontend_url = os.environ.get("FRONTEND_URL", "https://console.zexvro.in").rstrip("/")
-        accept_url = f"{frontend_url}/invite/accept?token={token}" if token else f"{frontend_url}/dashboard"
+        try:
+            accept_url = build_invite_accept_url(token)
+        except ValueError as exc:
+            return respond(400, {"error": "invalid_request", "error_description": str(exc)})
 
         try:
             send_res = send_invite_email(
@@ -1873,6 +1886,8 @@ def lambda_handler(event, context):
                 "messageId": send_res.get("MessageId"),
                 "acceptUrl": accept_url,
             })
+        except ValueError as exc:
+            return respond(400, {"error": "invalid_request", "error_description": str(exc)})
         except Exception as exc:
             return respond(502, {"error": "email_send_failed", "error_description": str(exc)})
 
