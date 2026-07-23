@@ -16,7 +16,7 @@ Coding agents (Codex, Claude, Cursor, OpenCode, etc.) must read this before buil
 
 | Assignee | Build |
 | --- | --- |
-| **Morph track** | Morph CLI + agentic system, CI/CD, Web2→Web3 transformation demo, Morph site/surface, shared memory that actually updates, Morph working in project dashboard |
+| **Morph track** | Morph on OpenCode (providers + agents) + ZEXVRO MCP tools, Lakebed arcade Web2→Web3 demo, Morph surface in dashboard, shared memory updates, CI/CD |
 | **Nabil** | RBAC, Zexvro credits, team management (invite fix, email display), workspace management + related UI, working audit logs, admin-curated options |
 | **Paris** | Remove unwanted/dummy UI (executions, service manager bloat), landing demos + demo icons, shell polish (Zer0 sidebar, Payroll→Finance, home metrics, need-help→docs), project settings UI revamp (Discord) |
 

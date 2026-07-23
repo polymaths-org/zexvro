@@ -1,5 +1,12 @@
 # ZEXVRO Shared Memory
 
+## 2026-07-23 - Morph reborn on OpenCode + Lakebed arcade
+
+- Service or area: Morph / demos
+- Files: removed `services/transformation-agent` (old Python CLI); added `services/morph` (OpenCode config, agents, ZEXVRO MCP, launcher); added `demos/arcade` Lakebed capsule.
+- Summary: Morph is OpenCode under ZEXVRO branding (keep all stock providers + optional custom `zexvro` provider via env). ZEXVRO MCP tools for Gate/NFT/Depin/memory/health. Demo arcade built + anonymous Lakebed deploy: https://bright-meadow-20f31c35f5.lakebed.app (`lakebed.json` deployId bound). Claim deploy before demo day so it does not expire.
+- Follow-ups: claim Lakebed deploy; Morph migrate path patches; platform Morph API for scoped tokens; dashboard Morph dock → OpenCode/MCP.
+
 ## 2026-07-22 - Gate captcha landed on main + verified
 
 - Branch: `main` @ `9b8d6cc` (fast-forward from merge/gate-captcha after main merge-in + lint fix)

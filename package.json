@@ -37,7 +37,11 @@
     "gate:agent-site-demo": "node scripts/gate-agent-site-demo.mjs",
     "gate:demo": "node scripts/gate-local-demo.mjs",
     "e2e:testnet": "node scripts/e2e-testnet.mjs",
-    "smoke:prod": "node scripts/e2e-testnet.mjs"
+    "smoke:prod": "node scripts/e2e-testnet.mjs",
+    "morph": "./services/morph/bin/morph",
+    "morph:mcp": "node services/morph/mcp/src/index.mjs",
+    "arcade:dev": "npx --yes lakebed@0.0.29 dev demos/arcade",
+    "arcade:deploy": "npx --yes lakebed@0.0.29 deploy demos/arcade"
   },
   "engines": {
     "node": ">=22"

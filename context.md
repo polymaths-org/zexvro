@@ -86,7 +86,7 @@ The repository currently contains:
 - Brand assets.
 - Shared memory workflow.
 - `frontend/`, the Vite + React frontend workspace.
-- `services/transformation-agent/` (Morph CLI skeleton) — first service scaffolded.
+- `services/morph/` — Morph = OpenCode + ZEXVRO MCP (old Python Morph CLI removed).
 - `services/nft-service/`, containing the Soroban NFT collection contract and its TypeScript API.
 - `services/depin/`, containing the TypeScript/Express x402 reverse proxy.
 
@@ -184,7 +184,7 @@ Status labels: incomplete / partial. Prefer finishing owned items over new featu
 
 **Morph track — build next**
 
-1. Morph CLI + agentic system (wire agent loop, LLM, audit trail).
+1. Morph on OpenCode + ZEXVRO MCP tools + Lakebed arcade demo migrate path.
 2. CI/CD for Morph / transformation flows.
 3. Web2 → Web3 transformation demo.
 4. Morph site / in-app Morph surface work.

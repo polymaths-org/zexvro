@@ -20,8 +20,14 @@ venv/
 *.db
 *.sqlite
 *.sqlite3
-services/transformation-agent/data/morph_memory.db
 services/depin/depin.config.json
+
+# Lakebed local artifacts
+.lakebed/
+demos/**/.lakebed/
+
+# Morph MCP local install
+services/morph/mcp/node_modules/
 
 # Packaging dumps / accidental archives (never commit secrets inside zips)
 *.zip

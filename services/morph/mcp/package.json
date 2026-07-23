@@ -1,0 +1,14 @@
+{
+  "name": "@zexvro/morph-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "ZEXVRO platform tools for Morph (OpenCode MCP)",
+  "scripts": {
+    "start": "node src/index.mjs",
+    "check": "node --check src/index.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

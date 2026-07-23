@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Morph launcher — OpenCode with Morph project config + agent.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+if ! command -v opencode >/dev/null 2>&1; then
+  echo "Morph requires OpenCode. Install:" >&2
+  echo "  curl -fsSL https://opencode.ai/install | bash" >&2
+  echo "  # or: npm i -g opencode-ai@latest" >&2
+  exit 1
+fi
+
+# Default agent unless user passed --agent
+AGENT_FLAG=()
+HAS_AGENT=0
+for arg in "$@"; do
+  if [[ "$arg" == "--agent" || "$arg" == --agent=* ]]; then
+    HAS_AGENT=1
+    break
+  fi
+done
+if [[ $HAS_AGENT -eq 0 ]]; then
+  AGENT_FLAG=(--agent morph)
+fi
+
+# Ensure MCP deps exist (quiet)
+if [[ -f "$ROOT/mcp/package.json" && ! -d "$ROOT/mcp/node_modules" ]]; then
+  echo "Installing Morph MCP dependencies…" >&2
+  npm --prefix "$ROOT/mcp" install --silent
+fi
+
+exec opencode "${AGENT_FLAG[@]}" "$@"
