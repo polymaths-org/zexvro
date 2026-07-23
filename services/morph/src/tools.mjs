@@ -1,5 +1,12 @@
 import { execFile } from 'node:child_process'
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
 import { toolLine } from './ui.mjs'
@@ -16,6 +23,7 @@ const IGNORED = new Set([
   '.venv',
   'venv',
   'coverage',
+  '.next',
 ])
 
 function safeJoin(workspace, relPath = '.') {
@@ -44,6 +52,14 @@ function env(name, fallback = '') {
   return v && String(v).trim() ? String(v).trim() : fallback
 }
 
+function redact(s, secrets = []) {
+  let out = String(s ?? '')
+  for (const secret of secrets) {
+    if (secret && secret.length > 4) out = out.split(secret).join('***')
+  }
+  return out
+}
+
 export function createToolRuntime(workspace) {
   const root = resolve(workspace)
   const platform = {
@@ -63,6 +79,7 @@ export function createToolRuntime(workspace) {
     token: env('ZEXVRO_ACCESS_TOKEN'),
     gateAdmin: env('ZEXVRO_GATE_ADMIN_KEY', env('GATE_ADMIN_API_KEY')),
   }
+  const secrets = [platform.token, platform.gateAdmin].filter(Boolean)
 
   const definitions = [
     {
@@ -85,7 +102,7 @@ export function createToolRuntime(workspace) {
           type: 'object',
           properties: {
             path: { type: 'string' },
-            maxChars: { type: 'number', description: 'Max characters to return (default 40000)' },
+            maxChars: { type: 'number' },
           },
           required: ['path'],
         },
@@ -95,7 +112,7 @@ export function createToolRuntime(workspace) {
       type: 'function',
       function: {
         name: 'write_file',
-        description: 'Write/create a text file in the workspace',
+        description: 'Create or overwrite a text file in the workspace',
         parameters: {
           type: 'object',
           properties: { path: { type: 'string' }, content: { type: 'string' } },
@@ -106,13 +123,29 @@ export function createToolRuntime(workspace) {
     {
       type: 'function',
       function: {
+        name: 'str_replace',
+        description: 'Replace an exact string once in a file (safer than full rewrite)',
+        parameters: {
+          type: 'object',
+          properties: {
+            path: { type: 'string' },
+            old_string: { type: 'string' },
+            new_string: { type: 'string' },
+          },
+          required: ['path', 'old_string', 'new_string'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
         name: 'search_files',
-        description: 'Search for a string/regex in workspace text files',
+        description: 'Search for a string in workspace text files',
         parameters: {
           type: 'object',
           properties: {
             query: { type: 'string' },
-            path: { type: 'string', description: 'Subdirectory to search' },
+            path: { type: 'string' },
             maxHits: { type: 'number' },
           },
           required: ['query'],
@@ -123,8 +156,7 @@ export function createToolRuntime(workspace) {
       type: 'function',
       function: {
         name: 'run_command',
-        description:
-          'Run a shell command in the workspace (timeout 60s). Prefer for npm/lakebed/tests. No destructive rm -rf / force push.',
+        description: 'Run a shell command in the workspace (timeout 90s). Prefer lakebed/npm/tests.',
         parameters: {
           type: 'object',
           properties: {
@@ -139,7 +171,7 @@ export function createToolRuntime(workspace) {
       type: 'function',
       function: {
         name: 'analyze_project',
-        description: 'High-level scan: languages, key dirs, likely Morph targets (arcade, gate, nft)',
+        description: 'Scan workspace for Morph targets (arcade, gate, nft, stack overview)',
         parameters: { type: 'object', properties: {} },
       },
     },
@@ -147,7 +179,7 @@ export function createToolRuntime(workspace) {
       type: 'function',
       function: {
         name: 'zexvro_health',
-        description: 'Check Gate / NFT / De-pin / platform API health',
+        description: 'Health-check Gate, NFT, De-pin services',
         parameters: { type: 'object', properties: {} },
       },
     },
@@ -155,7 +187,7 @@ export function createToolRuntime(workspace) {
       type: 'function',
       function: {
         name: 'gate_status',
-        description: 'GET ZEXVRO Gate /status',
+        description: 'GET Gate /status',
         parameters: { type: 'object', properties: {} },
       },
     },
@@ -163,7 +195,7 @@ export function createToolRuntime(workspace) {
       type: 'function',
       function: {
         name: 'gate_create_site',
-        description: 'Create Gate site (needs ZEXVRO_GATE_ADMIN_KEY). Returns siteKey; keep secretKey private.',
+        description: 'Create Gate site (needs ZEXVRO_GATE_ADMIN_KEY)',
         parameters: {
           type: 'object',
           properties: {
@@ -178,7 +210,7 @@ export function createToolRuntime(workspace) {
       type: 'function',
       function: {
         name: 'nft_health',
-        description: 'GET NFT service health (expect stellar:testnet)',
+        description: 'GET NFT /health (expect stellar:testnet)',
         parameters: { type: 'object', properties: {} },
       },
     },
@@ -186,15 +218,26 @@ export function createToolRuntime(workspace) {
       type: 'function',
       function: {
         name: 'depin_status',
-        description: 'GET De-pin status',
+        description: 'GET De-pin /status',
         parameters: { type: 'object', properties: {} },
       },
     },
     {
       type: 'function',
       function: {
+        name: 'depin_probe',
+        description: 'Probe unpaid De-pin route (expect 402)',
+        parameters: {
+          type: 'object',
+          properties: { path: { type: 'string' } },
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
         name: 'lakebed_deploy_hint',
-        description: 'How to redeploy demos/arcade after Morph changes',
+        description: 'Commands to redeploy demos/arcade after Morph changes',
         parameters: {
           type: 'object',
           properties: { capsuleDir: { type: 'string' } },
@@ -204,22 +247,24 @@ export function createToolRuntime(workspace) {
   ]
 
   async function execute(name, args = {}) {
-    toolLine(name, summarizeArgs(name, args))
+    toolLine(name, summarize(name, args))
     try {
       switch (name) {
         case 'list_dir': {
           const p = safeJoin(root, args.path || '.')
           if (!existsSync(p) || !statSync(p).isDirectory()) return `Not a directory: ${args.path || '.'}`
-          const entries = readdirSync(p, { withFileTypes: true })
-            .filter((e) => !IGNORED.has(e.name) && !e.name.startsWith('.'))
-            .slice(0, 200)
-            .map((e) => `${e.isDirectory() ? 'dir ' : 'file'} ${e.name}`)
-          return entries.join('\n') || '(empty)'
+          return (
+            readdirSync(p, { withFileTypes: true })
+              .filter((e) => !IGNORED.has(e.name) && !e.name.startsWith('.'))
+              .slice(0, 300)
+              .map((e) => `${e.isDirectory() ? 'dir ' : 'file'} ${e.name}`)
+              .join('\n') || '(empty)'
+          )
         }
         case 'read_file': {
           const p = safeJoin(root, args.path)
           if (!existsSync(p)) return `File not found: ${args.path}`
-          const max = Math.min(Number(args.maxChars) || 40_000, 80_000)
+          const max = Math.min(Number(args.maxChars) || 50_000, 100_000)
           let text = readFileSync(p, 'utf8')
           if (text.length > max) text = text.slice(0, max) + `\n… truncated ${text.length - max} chars`
           return text
@@ -230,10 +275,22 @@ export function createToolRuntime(workspace) {
           writeFileSync(p, String(args.content ?? ''), 'utf8')
           return `Wrote ${args.path} (${String(args.content ?? '').length} bytes)`
         }
+        case 'str_replace': {
+          const p = safeJoin(root, args.path)
+          if (!existsSync(p)) return `File not found: ${args.path}`
+          const text = readFileSync(p, 'utf8')
+          const old = String(args.old_string ?? '')
+          if (!old) return 'old_string empty'
+          if (!text.includes(old)) return 'old_string not found in file'
+          const count = text.split(old).length - 1
+          if (count > 1) return `old_string found ${count} times — make it unique`
+          writeFileSync(p, text.replace(old, String(args.new_string ?? '')), 'utf8')
+          return `Updated ${args.path}`
+        }
         case 'search_files': {
           const start = safeJoin(root, args.path || '.')
           const q = String(args.query || '')
-          const maxHits = Math.min(Number(args.maxHits) || 40, 100)
+          const maxHits = Math.min(Number(args.maxHits) || 50, 120)
           const hits = []
           const walk = (dir) => {
             if (hits.length >= maxHits) return
@@ -248,7 +305,7 @@ export function createToolRuntime(workspace) {
               if (IGNORED.has(e.name) || e.name.startsWith('.')) continue
               const full = join(dir, e.name)
               if (e.isDirectory()) walk(full)
-              else if (e.isFile() && e.name.match(/\.(ts|tsx|js|mjs|json|md|css|html)$/i)) {
+              else if (e.isFile() && /\.(ts|tsx|js|mjs|cjs|json|md|css|html|txt)$/i.test(e.name)) {
                 let text
                 try {
                   text = readFileSync(full, 'utf8')
@@ -258,7 +315,7 @@ export function createToolRuntime(workspace) {
                 const lines = text.split('\n')
                 for (let i = 0; i < lines.length; i++) {
                   if (lines[i].includes(q)) {
-                    hits.push(`${relative(root, full)}:${i + 1}: ${lines[i].trim().slice(0, 160)}`)
+                    hits.push(`${relative(root, full)}:${i + 1}: ${lines[i].trim().slice(0, 180)}`)
                     if (hits.length >= maxHits) break
                   }
                 }
@@ -271,47 +328,44 @@ export function createToolRuntime(workspace) {
         case 'run_command': {
           const cmd = String(args.command || '')
           if (!cmd) return 'Empty command'
-          if (/rm\s+-rf\s+\/|git\s+push\s+.*--force|mkfs|dd\s+if=/i.test(cmd)) {
+          if (/rm\s+-rf\s+[\/~]|git\s+push\s+.*--force|mkfs|dd\s+if=|:(){:|:&};:/i.test(cmd)) {
             return 'Blocked dangerous command'
           }
-          const timeout = Math.min((Number(args.timeoutSec) || 60) * 1000, 180_000)
+          const timeout = Math.min((Number(args.timeoutSec) || 90) * 1000, 180_000)
           try {
             const { stdout, stderr } = await execFileAsync('bash', ['-lc', cmd], {
               cwd: root,
               timeout,
-              maxBuffer: 2_000_000,
+              maxBuffer: 2_500_000,
               env: process.env,
             })
-            const out = `${stdout || ''}${stderr ? `\n[stderr]\n${stderr}` : ''}`.trim()
-            return out.slice(0, 30_000) || '(no output)'
+            return redact(`${stdout || ''}${stderr ? `\n[stderr]\n${stderr}` : ''}`.trim().slice(0, 40_000) || '(no output)', secrets)
           } catch (e) {
             const msg = e instanceof Error ? e.message : String(e)
             const stdout = e?.stdout ? String(e.stdout) : ''
             const stderr = e?.stderr ? String(e.stderr) : ''
-            return `Command failed: ${msg}\n${stdout}\n${stderr}`.slice(0, 30_000)
+            return redact(`Command failed: ${msg}\n${stdout}\n${stderr}`.slice(0, 40_000), secrets)
           }
         }
         case 'analyze_project': {
-          const hints = []
           const checks = [
-            ['demos/arcade', 'Lakebed Neon Run demo (primary Morph target)'],
-            ['demos/arcade/client/index.tsx', 'Arcade client UI'],
-            ['demos/arcade/server/index.ts', 'Arcade server capsule'],
+            ['demos/arcade', 'Neon Run Lakebed demo (primary Morph target)'],
+            ['demos/arcade/client/index.tsx', 'Arcade client'],
+            ['demos/arcade/server/index.ts', 'Arcade server'],
             ['demos/arcade/shared/platformer.ts', 'Platformer engine'],
-            ['services/agent-auth', 'Gate / captcha service source'],
+            ['demos/arcade/lakebed.json', 'Lakebed deploy binding'],
+            ['services/agent-auth', 'Gate source'],
             ['services/nft-service', 'NFT service'],
-            ['services/depin', 'De-pin x402 gateway'],
-            ['services/morph', 'Morph agent package'],
+            ['services/depin', 'De-pin gateway'],
+            ['services/morph', 'Morph agent'],
             ['package.json', 'Monorepo root'],
           ]
-          for (const [rel, note] of checks) {
-            if (existsSync(join(root, rel))) hints.push(`✓ ${rel} — ${note}`)
-            else hints.push(`· missing ${rel}`)
-          }
-          // language counts
+          const lines = checks.map(([rel, note]) =>
+            existsSync(join(root, rel)) ? `✓ ${rel} — ${note}` : `· missing ${rel}`,
+          )
           const counts = {}
           const walk = (dir, depth = 0) => {
-            if (depth > 4) return
+            if (depth > 5) return
             let entries
             try {
               entries = readdirSync(dir, { withFileTypes: true })
@@ -323,7 +377,7 @@ export function createToolRuntime(workspace) {
               const full = join(dir, e.name)
               if (e.isDirectory()) walk(full, depth + 1)
               else {
-                const ext = e.name.includes('.') ? e.name.split('.').pop() : 'none'
+                const ext = e.name.includes('.') ? e.name.split('.').pop() : '?'
                 counts[ext] = (counts[ext] || 0) + 1
               }
             }
@@ -331,10 +385,10 @@ export function createToolRuntime(workspace) {
           walk(root)
           const top = Object.entries(counts)
             .sort((a, b) => b[1] - a[1])
-            .slice(0, 12)
+            .slice(0, 15)
             .map(([k, v]) => `${k}:${v}`)
             .join(', ')
-          return `Workspace: ${root}\nExtensions: ${top}\n\nTargets:\n${hints.join('\n')}`
+          return `Workspace: ${root}\nFiles by ext: ${top}\n\nTargets:\n${lines.join('\n')}`
         }
         case 'zexvro_health': {
           const [gate, nft, depin] = await Promise.all([
@@ -371,23 +425,37 @@ export function createToolRuntime(workspace) {
               allowedOrigins: args.allowedOrigins,
             }),
           })
-          return JSON.stringify(
-            { ...r, warning: 'Do not commit secretKey. Use env/secrets only.' },
-            null,
-            2,
+          return redact(
+            JSON.stringify({ ...r, warning: 'Do not commit secretKey' }, null, 2),
+            secrets,
           )
         }
         case 'nft_health':
           return JSON.stringify(await httpJson(`${platform.nft}/health`), null, 2)
         case 'depin_status':
           return JSON.stringify(await httpJson(`${platform.depin}/status`), null, 2)
+        case 'depin_probe': {
+          let path = args.path || '/v1/weather'
+          if (!path.startsWith('/')) path = `/${path}`
+          const r = await httpJson(`${platform.depin}${path}`)
+          return JSON.stringify(
+            {
+              path,
+              status: r.status,
+              expected: '402 for unpaid protected routes',
+              body: typeof r.body === 'string' ? r.body.slice(0, 200) : r.body,
+            },
+            null,
+            2,
+          )
+        }
         case 'lakebed_deploy_hint': {
           const dir = args.capsuleDir || 'demos/arcade'
           return [
             `cd ${dir}`,
-            'npx lakebed@0.0.29 dev          # local',
-            'npx lakebed@0.0.29 deploy       # updates shared URL (lakebed.json)',
-            'npx lakebed auth login && npx lakebed claim   # before demo day (avoid expiry)',
+            'npx lakebed@0.0.29 deploy',
+            '# shared URL updates for everyone (see lakebed.json)',
+            'npx lakebed auth login && npx lakebed claim   # claim before demo day',
           ].join('\n')
         }
         default:
@@ -401,10 +469,9 @@ export function createToolRuntime(workspace) {
   return { definitions, execute, workspace: root }
 }
 
-function summarizeArgs(name, args) {
-  if (name === 'write_file') return String(args.path || '')
-  if (name === 'read_file') return String(args.path || '')
-  if (name === 'run_command') return String(args.command || '').slice(0, 80)
+function summarize(name, args) {
+  if (name === 'write_file' || name === 'read_file' || name === 'str_replace') return String(args.path || '')
+  if (name === 'run_command') return String(args.command || '').slice(0, 90)
   if (name === 'search_files') return String(args.query || '').slice(0, 60)
   return ''
 }

@@ -1,12 +1,9 @@
 import { systemPrompt } from './prompts.mjs'
 import { createToolRuntime } from './tools.mjs'
-import { assistantBlock, err, info, warn } from './ui.mjs'
+import { err, info } from './ui.mjs'
 
-/**
- * Self-contained Morph agent loop (OpenAI-compatible tools).
- */
 export class MorphAgent {
-  constructor({ workspace, provider, maxSteps = 24 }) {
+  constructor({ workspace, provider, maxSteps = 28 }) {
     this.workspace = workspace
     this.provider = provider
     this.maxSteps = maxSteps
@@ -28,7 +25,7 @@ export class MorphAgent {
       const res = await this.#complete()
       const choice = res.choices?.[0]
       if (!choice) {
-        const fallback = res.error?.message || JSON.stringify(res).slice(0, 400)
+        const fallback = res.error?.message || JSON.stringify(res).slice(0, 500)
         throw new Error(`Empty model response: ${fallback}`)
       }
 
@@ -38,7 +35,7 @@ export class MorphAgent {
       if (toolCalls.length > 0) {
         this.messages.push({
           role: 'assistant',
-          content: msg.content || null,
+          content: msg.content || '',
           tool_calls: toolCalls,
         })
         for (const call of toolCalls) {
@@ -61,26 +58,27 @@ export class MorphAgent {
 
       const text = msg.content || '(no content)'
       this.messages.push({ role: 'assistant', content: text })
-      // keep context bounded
-      if (this.messages.length > 60) {
-        this.messages = [this.messages[0], ...this.messages.slice(-50)]
+      if (this.messages.length > 70) {
+        this.messages = [this.messages[0], ...this.messages.slice(-55)]
       }
       return text
     }
 
-    return 'Stopped: max tool steps reached. Ask me to continue.'
+    return 'Stopped after max tool steps. Say “continue” to keep going.'
   }
 
   async #complete() {
     if (!this.provider.apiKey) {
-      throw new Error(
-        'No API key. Run: morph providers set --preset openai --api-key sk-...  (or set MORPH_API_KEY / OPENAI_API_KEY)',
-      )
+      throw new Error('No API key. In Morph run /connect to add a provider.')
     }
-    const url = `${this.provider.baseUrl}/chat/completions`
+    if (!this.provider.baseUrl) {
+      throw new Error('No base URL. Run /connect and set an OpenAI-compatible endpoint.')
+    }
+
+    const url = `${this.provider.baseUrl.replace(/\/$/, '')}/chat/completions`
     const body = {
       model: this.provider.model,
-      messages: this.messages.map(normalizeMessage),
+      messages: this.messages,
       tools: this.tools.definitions,
       tool_choice: 'auto',
       temperature: 0.2,
@@ -91,7 +89,7 @@ export class MorphAgent {
       headers: {
         'content-type': 'application/json',
         authorization: `Bearer ${this.provider.apiKey}`,
-        'user-agent': 'Morph/0.2 ZEXVRO',
+        'user-agent': 'Morph/0.3 ZEXVRO',
       },
       body: JSON.stringify(body),
     })
@@ -99,32 +97,18 @@ export class MorphAgent {
     const data = await res.json().catch(() => ({}))
     if (!res.ok) {
       const msg = data?.error?.message || data?.message || `HTTP ${res.status}`
-      throw new Error(`LLM error: ${msg}`)
+      throw new Error(`Model error: ${msg}`)
     }
     return data
   }
 }
 
-function normalizeMessage(m) {
-  // Some gateways dislike null content with tool_calls
-  if (m.role === 'assistant' && m.tool_calls) {
-    return {
-      role: 'assistant',
-      content: m.content || '',
-      tool_calls: m.tool_calls,
-    }
-  }
-  return m
-}
-
 export async function runOnce({ workspace, provider, prompt }) {
   const agent = new MorphAgent({ workspace, provider })
   info(`workspace ${workspace}`)
-  info(`provider  ${provider.name} · model ${provider.model}`)
+  info(`provider  ${provider.name} · ${provider.model}`)
   try {
-    const text = await agent.chat(prompt)
-    assistantBlock(text)
-    return text
+    return await agent.chat(prompt)
   } catch (e) {
     err(e instanceof Error ? e.message : String(e))
     throw e

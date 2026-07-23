@@ -1,18 +1,23 @@
-# Morph (self-contained harness)
+# Morph harness
 
-Morph is a **standalone** ZEXVRO agent:
+Self-contained ZEXVRO agent:
 
-- Own TUI (branded MORPH — not a third-party agent product)
+- Own TUI (MORPH logo, slash commands)
 - Own config (`~/.config/morph/config.json`)
-- Own tool loop + ZEXVRO platform tools
-- `/connect` for providers (OpenAI, Anthropic-compatible, custom OpenAI-compatible, key, model)
-
-No third-party agent branding in the UI.
+- Tool loop: repo tools + ZEXVRO Gate/NFT/De-pin
+- `/connect` for providers (endpoint + key + model)
 
 ## Install
 
-`bash services/morph/install.sh` or curl the same script from main.
+```bash
+bash services/morph/install.sh
+morph
+```
 
-## Start
+## Demo
 
-`morph` → Morph TUI → `/connect` → work in `demos/arcade` or any repo.
+```bash
+cd demos/arcade && morph
+# analyze → plan → implement
+npx lakebed@0.0.29 deploy
+```

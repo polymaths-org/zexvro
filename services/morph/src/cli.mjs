@@ -1,33 +1,33 @@
 import { resolve } from 'node:path'
 import { existsSync } from 'node:fs'
 import { launchTui } from './tui.mjs'
-import { banner, err, info, ok, warn } from './ui.mjs'
-import { resolveProvider, configPath, loadConfig, PRESETS } from './config.mjs'
+import { banner, err, info, ok } from './ui.mjs'
+import { resolveProvider, configPath } from './config.mjs'
 
 function printHelp() {
   console.log(`
 ${banner()}
-  Morph — ZEXVRO transformation agent (self-contained)
+  Morph — ZEXVRO transformation agent
 
   Install (once):
+    bash services/morph/install.sh
+    # or:
     curl -fsSL https://raw.githubusercontent.com/polymaths-org/zexvro/main/services/morph/install.sh | bash
-    # or:  bash services/morph/install.sh
 
   Start:
     morph
 
-  In Morph:
-    /connect     Add OpenAI · Anthropic-compatible · custom endpoint + API key + model
+  Inside Morph:
+    /connect     OpenAI · Anthropic-compatible · custom endpoint + key + model
     /providers   List providers
     /use <id>    Switch provider
     /model <id>  Set model
-    /help        Commands
-    /exit        Quit
+    /help /exit
 
   Other:
     morph run "prompt"    Headless one-shot
-    morph doctor          Setup check
-    morph install         Install to ~/.local/bin
+    morph doctor
+    morph install
     morph help
 `)
 }
@@ -45,8 +45,8 @@ async function doctor(workspace) {
   info(`config    ${configPath()}`)
   info(`provider  ${p.name}`)
   info(`model     ${p.model}`)
-  info(`baseUrl   ${p.baseUrl}`)
-  info(`apiKey    ${p.apiKey ? 'set' : 'missing — use /connect in morph'}`)
+  info(`baseUrl   ${p.baseUrl || '(none)'}`)
+  info(`apiKey    ${p.apiKey ? 'set' : 'missing — morph → /connect'}`)
   if (existsSync(resolve(workspace, 'demos/arcade'))) ok('demos/arcade present')
   if (existsSync(resolve(workspace, 'client/index.tsx'))) ok('Lakebed capsule cwd')
   console.log('')
@@ -102,6 +102,7 @@ export async function main(argv = process.argv.slice(2)) {
   }
   if (cmd === 'run') {
     const { runOnce } = await import('./agent.mjs')
+    const { assistantBlock } = await import('./ui.mjs')
     const prompt = cleaned.slice(1).join(' ').trim()
     if (!prompt) {
       err('Usage: morph run "prompt"')
@@ -115,10 +116,10 @@ export async function main(argv = process.argv.slice(2)) {
       process.exitCode = 1
       return
     }
-    await runOnce({ workspace, provider: p, prompt })
+    const text = await runOnce({ workspace, provider: p, prompt })
+    assistantBlock(text)
     return
   }
 
-  // Default: Morph TUI (self-contained, Morph-branded)
   process.exitCode = await launchTui({ workspace })
 }

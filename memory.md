@@ -1,5 +1,11 @@
 # ZEXVRO Shared Memory
 
+## 2026-07-23 - Morph fixed: self-contained TUI (resolve bug)
+
+- Fixed: `resolve is not defined` crash in TUI (missing path import).
+- Morph is fully self-contained: branded TUI, /connect providers, tools, install.sh with syntax smoke tests.
+- Start: `bash services/morph/install.sh` then `morph` then `/connect`.
+
 ## 2026-07-23 - Morph fully self-contained branded TUI
 
 - Summary: Removed third-party agent TUI branding. Morph has its own TUI with MORPH logo, /connect for OpenAI·Anthropic-compatible·custom endpoint+key+model, own config at ~/.config/morph. One-command install.sh. No foreign agent product names in the UI.

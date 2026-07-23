@@ -1,5 +1,3 @@
-/** Terminal styling — zero deps */
-
 const enabled = process.stdout.isTTY && !process.env.NO_COLOR
 
 const wrap =
@@ -20,7 +18,7 @@ export const c = {
 }
 
 export function banner() {
-  const lines = [
+  return [
     '',
     c.cyan('  ███╗   ███╗ ██████╗ ██████╗ ██████╗ ██╗  ██╗'),
     c.cyan('  ████╗ ████║██╔═══██╗██╔══██╗██╔══██╗██║  ██║'),
@@ -30,10 +28,9 @@ export function banner() {
     c.cyan('  ╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═╝╚═╝     ╚═╝  ╚═╝'),
     '',
     c.bold('  ZEXVRO transformation agent') + c.dim('  ·  Web2 → Web3'),
-    c.dim('  analyze · strategize · implement · wire Gate / NFT / De-pin'),
+    c.dim('  analyze · strategize · implement · Gate · NFT · De-pin'),
     '',
-  ]
-  return lines.join('\n')
+  ].join('\n')
 }
 
 export function info(msg) {
@@ -53,18 +50,16 @@ export function err(msg) {
 }
 
 export function toolLine(name, detail = '') {
-  console.log(c.magenta('  ⚙ ') + c.bold(name) + (detail ? c.dim(`  ${detail}`) : ''))
+  console.log(c.magenta('  ⚙  ') + c.bold(name) + (detail ? c.dim(`  ${detail}`) : ''))
 }
 
 export function assistantBlock(text) {
   console.log('')
-  console.log(c.cyan('  morph'))
-  for (const line of String(text).split('\n')) {
-    console.log('  ' + line)
-  }
+  console.log(c.bold(c.cyan('  morph')))
+  for (const line of String(text).split('\n')) console.log('  ' + line)
   console.log('')
 }
 
 export function userPrompt() {
-  return c.bold(c.white('you')) + c.dim(' › ')
+  return c.bold(c.white('  you')) + c.dim(' › ')
 }
