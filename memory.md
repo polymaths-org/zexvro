@@ -1,5 +1,10 @@
 # ZEXVRO Shared Memory
 
+## 2026-07-23 - Morph self-contained CLI (no OpenCode)
+
+- Summary: Morph no longer requires OpenCode. Standalone Node agent with interactive REPL, OpenAI-compatible multi-provider presets + custom base URL, tool loop (repo + ZEXVRO health/Gate/NFT/Depin), `morph install` → `~/.local/bin/morph`. Run in `demos/arcade` or monorepo root.
+- Start: `morph` or `npm run morph` after `morph providers set --preset … --api-key …`
+
 ## 2026-07-23 - Morph reborn on OpenCode + Lakebed arcade
 
 - Service or area: Morph / demos

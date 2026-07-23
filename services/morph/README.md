@@ -1,98 +1,93 @@
-# Morph — ZEXVRO transformation agent
+# Morph — self-contained ZEXVRO agent
 
-Morph is **OpenCode under ZEXVRO branding**, plus a **ZEXVRO MCP tool server** so the agent can migrate Web2 apps onto real platform services (Gate, NFT, De-pin, memory).
-
-## What this is
-
-| Piece | Path | Role |
-| --- | --- | --- |
-| OpenCode project config | `opencode.jsonc` | All built-in OpenCode providers **plus** optional ZEXVRO / custom OpenAI-compatible providers |
-| Morph agent | `agent/morph.md` | Default migrate agent (scan → plan → patch → wire platform) |
-| Morph ops agent | `agent/morph-ops.md` | Platform-only ops (no bulk rewrite) |
-| Instructions | `AGENTS.md` | Always-on Morph product rules |
-| ZEXVRO MCP | `mcp/` | Tools: Gate, NFT, De-pin, memory, health, deploy helpers |
-| Launcher | `bin/morph` | `morph` → `opencode` in this directory with Morph agent |
-
-The old Python/Textual Morph CLI was removed. Do not revive it.
-
-## Prerequisites
+**No OpenCode install required.** Morph is a standalone Node CLI with its own tool loop, multi-provider OpenAI-compatible support, and ZEXVRO platform tools.
 
 ```bash
-# OpenCode CLI (keeps all stock providers: Anthropic, OpenAI, Google, …)
-curl -fsSL https://opencode.ai/install | bash
-# or: npm i -g opencode-ai@latest
+# from anywhere after install
+morph
 
-opencode --version   # 1.18+ recommended
+# or from monorepo
+cd /path/to/zexvro
+npm run morph
+
+# in the game repo
+cd demos/arcade && morph
 ```
 
-## Quick start
+Then: *“Analyze this game, strategize a ZEXVRO Web2→Web3 migration, then implement it.”*
+
+## Install onto PATH
 
 ```bash
-# From monorepo root
-./services/morph/bin/morph
-
-# Or explicitly
-cd services/morph && opencode --agent morph
-
-# Headless migrate demo (after providers configured)
 cd services/morph
-opencode run --agent morph "Scan demos/arcade and propose a ZEXVRO Web3 migration plan"
+node bin/morph.mjs install
+# ensures ~/.local/bin/morph  (put ~/.local/bin on PATH)
 ```
 
-## Providers (keep OpenCode defaults + add yours)
-
-OpenCode already ships many providers. Morph **does not disable them**.
-
-Add custom / ZEXVRO endpoints via env (preferred — never commit keys):
+Or from monorepo root:
 
 ```bash
-export ZEXVRO_LLM_BASE_URL="https://your-openai-compatible.example/v1"
-export ZEXVRO_LLM_API_KEY="…"
-export ZEXVRO_LLM_MODEL="your-model-id"
+npm run morph -- install
 ```
 
-Then in Morph config the `zexvro` provider is enabled when those vars are set.  
-Or use OpenCode’s own UX:
+## First-time provider setup
+
+Morph keeps **presets** (OpenAI, OpenRouter, Groq, Together, DeepSeek, xAI, OpenCode Zen, custom). All use the standard OpenAI **tools** chat API.
 
 ```bash
-opencode providers login
-opencode providers list
-opencode models
+morph providers set --preset openai --api-key sk-... --model gpt-4.1
+# custom gateway
+morph providers set --preset custom \
+  --base-url https://my-gateway.example/v1 \
+  --api-key ... \
+  --model my-model
+
+morph providers          # list
+morph providers use openai
+morph doctor
 ```
 
-Demo day tip: pre-login one strong model, then use `/model` only if needed. Avoid teaching custom-endpoint JSON on stage.
-
-## ZEXVRO platform env (MCP tools)
+Env overrides (CI/demo):
 
 ```bash
-export ZEXVRO_API_URL="https://qkuostruh3.execute-api.us-east-1.amazonaws.com"
-export ZEXVRO_GATE_URL="https://api.zexvro.in/gate"
-export ZEXVRO_NFT_URL="https://iyk6idmup6.us-east-1.awsapprunner.com"
-export ZEXVRO_DEPIN_URL="https://sr9k3xpmbj.us-east-1.awsapprunner.com"
-export ZEXVRO_ACCESS_TOKEN="…"          # Cognito access token (short-lived)
-export ZEXVRO_GATE_ADMIN_KEY="…"        # Gate admin for site create (server-side only)
+export MORPH_BASE_URL=...
+export MORPH_API_KEY=...
+export MORPH_MODEL=...
+# aliases: ZEXVRO_LLM_* / OPENAI_API_KEY
 ```
 
-Install MCP deps once:
+Config file: `~/.config/morph/config.json` (mode 600).
+
+## Platform tools (optional)
 
 ```bash
-npm --prefix services/morph/mcp install
+export ZEXVRO_GATE_URL=https://api.zexvro.in/gate
+export ZEXVRO_NFT_URL=https://iyk6idmup6.us-east-1.awsapprunner.com
+export ZEXVRO_DEPIN_URL=https://sr9k3xpmbj.us-east-1.awsapprunner.com
+export ZEXVRO_ACCESS_TOKEN=…        # Cognito
+export ZEXVRO_GATE_ADMIN_KEY=…      # create Gate sites
 ```
 
-## Demo game (Lakebed)
+## Commands
 
-See [`../../demos/arcade/README.md`](../../demos/arcade/README.md).
+| Command | What |
+| --- | --- |
+| `morph` | Interactive session in **cwd** |
+| `morph run "…"` | One-shot |
+| `morph providers …` | Provider UX |
+| `morph doctor` | Readiness |
+| `morph install` | PATH wrapper |
 
-Morph’s job is to migrate that **hosted Web2 arcade** into Web3 using ZEXVRO services, then redeploy so the shared Lakebed URL updates for everyone.
+## Demo game
 
-## Branding
+- Local: `npm run arcade:dev`
+- Hosted: https://bright-meadow-20f31c35f5.lakebed.app  
+- After Morph implements: `cd demos/arcade && npx lakebed@0.0.29 deploy`
 
-- Product name: **Morph**
-- Visual assets: `assets/`
-- OpenCode remains the engine (TUI/web); Morph is the agent + tools + instructions layer
-- Full TUI skin/fork of OpenCode is optional later — do not block demo on a full fork
+## Architecture
 
-## Docs
+- **Agent loop:** OpenAI-compatible `tools` / `tool_calls` (self-contained)
+- **Tools:** list/read/write/search/run/analyze + Gate/NFT/De-pin health + lakebed hint
+- **Optional MCP:** `mcp/` still available for other harnesses; Morph CLI does **not** need it
 
-- [`HARNESS.md`](./HARNESS.md) — architecture and platform gaps
-- [`../../demos/arcade/README.md`](../../demos/arcade/README.md) — Lakebed demo app
+See `HARNESS.md` for platform gaps and demo-day plan.

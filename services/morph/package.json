@@ -1,0 +1,17 @@
+{
+  "name": "@zexvro/morph",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Morph — self-contained ZEXVRO Web2→Web3 transformation agent",
+  "bin": {
+    "morph": "./bin/morph.mjs"
+  },
+  "scripts": {
+    "start": "node bin/morph.mjs",
+    "check": "node --check bin/morph.mjs && node --check src/cli.mjs && node --check src/agent.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
