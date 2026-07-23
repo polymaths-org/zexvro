@@ -1,5 +1,9 @@
 # ZEXVRO Shared Memory
 
+## 2026-07-23 - Morph one-command install + native TUI /connect providers
+
+- Summary: `bash services/morph/install.sh` (or curl raw install.sh) installs OpenCode + morph on PATH. Default `morph` launches Morph-branded OpenCode TUI. Providers via in-TUI `/connect` (OpenAI/Anthropic/custom). No separate Morph provider CLI required for normal use.
+
 ## 2026-07-23 - Morph TUI = OpenCode engine + Morph branding/providers
 
 - Summary: Default `morph` launches full OpenCode TUI with Morph agent/theme/MCP. `morph providers set|add` is the easy custom-endpoint UX; stock OpenCode providers remain. Headless `morph run` kept. User never needs to run `opencode` directly after one-time engine install.

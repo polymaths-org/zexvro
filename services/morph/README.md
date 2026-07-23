@@ -1,94 +1,73 @@
 # Morph
 
-**You only run `morph`.**  
-
-Morph is ZEXVRO’s transformation agent. The full interactive experience is an **OpenCode TUI engine** with Morph branding, Morph agents, ZEXVRO MCP tools, and a **simpler provider UX** than OpenCode’s custom-endpoint flow.
+**One install. One command.** Full agent TUI with ZEXVRO branding.
 
 ```bash
-cd demos/arcade   # or monorepo root
-morph             # full TUI — /theme /models /session /undo …
+# Install everything (OpenCode engine + morph on PATH)
+curl -fsSL https://raw.githubusercontent.com/polymaths-org/zexvro/main/services/morph/install.sh | bash
+
+# Start
+morph
 ```
 
-## Why OpenCode under the hood?
+From a zexvro checkout:
 
-OpenCode already has the mature agent TUI (slash commands, sessions, tools, multi-provider). Rebuilding that from scratch would take months and look worse.  
+```bash
+bash services/morph/install.sh
+morph
+```
 
-Morph’s product layer:
+## In the TUI — providers (same as OpenCode)
 
-| Morph owns | OpenCode engine provides |
+Morph uses the OpenCode TUI, so provider setup is the **native** flow:
+
+1. Start `morph`
+2. Type **`/connect`** (or open the provider/connect command from the palette)
+3. Pick **OpenAI**, **Anthropic**, **Google**, or **custom OpenAI-compatible**
+4. Enter **base URL** (if custom), **API key**, **model**
+5. Chat — Morph agent is already selected
+
+You also get the usual slash commands: `/models`, `/theme`, `/session`, `/help`, …
+
+Default theme: **morph** (ZEXVRO cyan/dark). Agent: **morph**.
+
+## Workflow for demo day
+
+```bash
+cd demos/arcade   # or any repo
+morph
+# "Analyze this platformer, plan ZEXVRO migration (Gate + NFT), implement it"
+```
+
+Then redeploy the shared game:
+
+```bash
+npx lakebed@0.0.29 deploy
+# https://bright-meadow-20f31c35f5.lakebed.app
+```
+
+## What gets installed
+
+| Piece | Role |
 | --- | --- |
-| Branding (theme, agents, AGENTS.md) | Full TUI + `/` commands |
-| `morph providers set/add` (easy custom endpoints) | Stock providers (Anthropic, OpenAI, Google, …) |
-| ZEXVRO MCP tools (Gate/NFT/De-pin) | Tool loop, permissions, sessions |
-| `morph` single entrypoint | Rendering / UX chrome |
+| OpenCode | TUI engine (slash commands, sessions, providers) |
+| `~/.local/bin/morph` | Only command you run |
+| Morph agent + theme | Branding in `~/.config/opencode/` |
+| ZEXVRO MCP | Gate / NFT / De-pin tools when env is set |
 
-You do **not** need to learn or run `opencode` day-to-day. Install the engine once; always launch **Morph**.
-
-## Install
-
-```bash
-# 1) TUI engine (once)
-curl -fsSL https://opencode.ai/install | bash
-# or: npm i -g opencode-ai@latest
-
-# 2) Morph on PATH
-cd /path/to/zexvro
-npm run morph -- install     # → ~/.local/bin/morph
-```
-
-## Providers (better than OpenCode’s custom URL UX)
-
-```bash
-# presets
-morph providers set --preset openai --api-key sk-... --model gpt-4.1
-morph providers set --preset openrouter --api-key sk-or-... --model openai/gpt-4.1-mini
-morph providers set --preset xai --api-key ... --model grok-3
-
-# custom OpenAI-compatible (interactive)
-morph providers add
-
-# or flags
-morph providers set --preset custom \
-  --base-url https://my-gateway.example/v1 \
-  --api-key KEY \
-  --model my-model
-
-morph providers          # list
-morph providers use openai
-```
-
-Config: `~/.config/morph/config.json` (keys never committed).  
-
-On TUI start, Morph injects that as the **default Morph model** while **keeping all stock OpenCode providers** available via `/connect` / model picker.
-
-## Modes
-
-| Command | Mode |
-| --- | --- |
-| `morph` | **Default** — full Morph TUI |
-| `morph chat` | Simple REPL (no OpenCode UI) |
-| `morph run "…"` | Headless one-shot |
-| `morph doctor` | Setup check |
-
-## Demo game
-
-```bash
-cd demos/arcade && morph
-# "Analyze Neon Run and plan a ZEXVRO Web2→Web3 migration, then implement"
-```
-
-Live: https://bright-meadow-20f31c35f5.lakebed.app  
-
-After implement: `npx lakebed@0.0.29 deploy`
-
-## Platform tools
-
-Optional env for Gate/NFT/De-pin MCP inside the TUI:
+Optional platform env:
 
 ```bash
 export ZEXVRO_GATE_URL=https://api.zexvro.in/gate
 export ZEXVRO_NFT_URL=https://iyk6idmup6.us-east-1.awsapprunner.com
 export ZEXVRO_DEPIN_URL=https://sr9k3xpmbj.us-east-1.awsapprunner.com
 export ZEXVRO_ACCESS_TOKEN=…
-export ZEXVRO_GATE_ADMIN_KEY=…   # admin only
+export ZEXVRO_GATE_ADMIN_KEY=…
+```
+
+## Headless (CI / scripts)
+
+```bash
+export OPENAI_API_KEY=…   # or any OpenAI-compatible via MORPH_BASE_URL + MORPH_API_KEY
+morph run "Analyze demos/arcade and propose a migration plan"
 ```

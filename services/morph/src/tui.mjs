@@ -1,34 +1,53 @@
 /**
- * Morph TUI = OpenCode engine with Morph branding + provider UX.
- * User only runs `morph`. OpenCode is the TUI host (slash commands, sessions, etc.).
+ * Morph TUI host — OpenCode engine, Morph branding.
+ * Providers: use in-TUI /connect (OpenCode-native). Morph does not replace that UX.
  */
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { loadConfig, resolveProvider } from './config.mjs'
 import { err, info, ok, warn } from './ui.mjs'
 
-const MORPH_HOME = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+export const MORPH_HOME = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
 function findOpenCode() {
-  const pathEnv = process.env.PATH || ''
+  const pathEnv = [
+    join(process.env.HOME || '', '.opencode', 'bin'),
+    join(process.env.HOME || '', '.local', 'bin'),
+    process.env.PATH || '',
+  ].join(':')
   for (const dir of pathEnv.split(':')) {
+    if (!dir) continue
     const cand = join(dir, 'opencode')
     if (existsSync(cand)) return { cmd: cand, args: [] }
   }
-  return { cmd: 'npx', args: ['--yes', 'opencode-ai@latest'] }
+  return null
 }
 
-/** Morph branding + active provider (does not remove stock OpenCode providers). */
-export function buildRuntimeConfig() {
-  const provider = resolveProvider(loadConfig())
-  const mcpEntry = join(MORPH_HOME, 'mcp/src/index.mjs')
+/** Ensure OpenCode exists (called from install; launch still checks). */
+export function ensureOpenCodeInstalled() {
+  if (findOpenCode()) return true
+  info('Installing OpenCode TUI engine (one-time)…')
+  const r = spawnSync('bash', ['-lc', 'curl -fsSL https://opencode.ai/install | bash'], {
+    stdio: 'inherit',
+    env: process.env,
+  })
+  if (r.status !== 0) {
+    warn('curl install failed; trying npm -g opencode-ai')
+    const n = spawnSync('npm', ['i', '-g', 'opencode-ai@latest'], { stdio: 'inherit' })
+    if (n.status !== 0) return false
+  }
+  return Boolean(findOpenCode())
+}
 
-  const cfg = {
+/** Morph branding + ZEXVRO MCP only — no forced custom provider (use TUI /connect). */
+export function buildRuntimeConfig() {
+  const mcpEntry = join(MORPH_HOME, 'mcp/src/index.mjs')
+  return {
     $schema: 'https://opencode.ai/config.json',
     default_agent: 'morph',
     theme: 'morph',
+    username: 'morph',
     autoupdate: false,
     tools: {
       bash: true,
@@ -63,35 +82,8 @@ export function buildRuntimeConfig() {
       },
     },
   }
-
-  if (provider.apiKey && provider.baseUrl) {
-    const modelId = String(provider.model || 'default').replace(/[^a-zA-Z0-9._:/-]/g, '-')
-    cfg.provider = {
-      morph: {
-        name: `Morph · ${provider.name}`,
-        npm: '@ai-sdk/openai-compatible',
-        options: {
-          baseURL: provider.baseUrl,
-          apiKey: provider.apiKey,
-          timeout: 600_000,
-        },
-        models: {
-          [modelId]: {
-            name: provider.model || modelId,
-            tool_call: true,
-            limit: { context: 200_000, output: 16_384 },
-            modalities: { input: ['text', 'image'], output: ['text'] },
-          },
-        },
-      },
-    }
-    cfg.model = `morph/${modelId}`
-  }
-
-  return cfg
 }
 
-/** Install Morph agent + theme into ~/.config/opencode so TUI finds them in any cwd. */
 export function ensureMorphOpenCodeAssets() {
   const home = process.env.HOME
   if (!home) return
@@ -109,13 +101,6 @@ export function ensureMorphOpenCodeAssets() {
   if (existsSync(themeSrc)) {
     writeFileSync(join(themeDir, 'morph.json'), readFileSync(themeSrc, 'utf8'))
   }
-
-  // Morph product instructions always available as global soft default
-  const agentsSrc = join(MORPH_HOME, 'AGENTS.md')
-  if (existsSync(agentsSrc)) {
-    // do not overwrite user's personal AGENTS.md — write morph-specific companion
-    writeFileSync(join(base, 'MORPH.md'), readFileSync(agentsSrc, 'utf8'))
-  }
 }
 
 export function writeRuntimeConfigFile() {
@@ -126,46 +111,45 @@ export function writeRuntimeConfigFile() {
   return path
 }
 
-/**
- * Launch Morph TUI in workspace (OpenCode with Morph agent, theme, MCP, provider).
- */
 export function launchTui({ workspace, extraArgs = [] } = {}) {
   const cwd = resolve(workspace || process.cwd())
+
+  let oc = findOpenCode()
+  if (!oc) {
+    warn('OpenCode engine missing — installing…')
+    if (!ensureOpenCodeInstalled()) {
+      err('Could not install OpenCode. Run: curl -fsSL https://opencode.ai/install | bash')
+      return Promise.resolve(1)
+    }
+    oc = findOpenCode()
+    if (!oc) {
+      err('OpenCode still not on PATH. Open a new terminal, or: export PATH="$HOME/.opencode/bin:$PATH"')
+      return Promise.resolve(1)
+    }
+  }
+
   ensureMorphOpenCodeAssets()
   const runtimeConfig = writeRuntimeConfigFile()
-  const { cmd, args: baseArgs } = findOpenCode()
-  const provider = resolveProvider()
 
   const env = {
     ...process.env,
-    // Morph runtime config (theme, mcp, morph provider, default agent)
+    PATH: `${join(process.env.HOME || '', '.opencode', 'bin')}:${join(process.env.HOME || '', '.local', 'bin')}:${process.env.PATH || ''}`,
     OPENCODE_CONFIG: runtimeConfig,
     COLORTERM: process.env.COLORTERM || 'truecolor',
     MORPH_HOME: MORPH_HOME,
   }
 
-  const args = [...baseArgs, cwd, '--agent', 'morph', ...extraArgs]
+  const args = [...oc.args, cwd, '--agent', 'morph', ...extraArgs]
 
-  info(`TUI workspace: ${cwd}`)
-  info(`provider: ${provider.name} · ${provider.model}`)
-  if (!provider.apiKey) {
-    warn('No provider key yet — in TUI use /connect, or: morph providers set --preset openai --api-key …')
-  }
-  ok('Morph TUI — full slash commands (/theme /models /session …) · Morph branding')
+  info(`Morph · workspace ${cwd}`)
+  info('In TUI: type /connect  (add OpenAI / Anthropic / custom OpenAI-compatible / API key / model)')
+  ok('Starting Morph')
 
-  return new Promise((resolvePromise, reject) => {
-    const child = spawn(cmd, args, {
-      cwd,
-      env,
-      stdio: 'inherit',
-    })
+  return new Promise((resolvePromise) => {
+    const child = spawn(oc.cmd, args, { cwd, env, stdio: 'inherit' })
     child.on('error', (e) => {
-      err(`Failed to start Morph TUI: ${e.message}`)
-      err('Morph uses OpenCode as the TUI engine. Install once:')
-      err('  curl -fsSL https://opencode.ai/install | bash')
-      err('Or: npm i -g opencode-ai@latest')
-      err('You only ever run `morph` after that — not `opencode`.')
-      reject(e)
+      err(e.message)
+      resolvePromise(1)
     })
     child.on('exit', (code) => resolvePromise(code ?? 0))
   })
