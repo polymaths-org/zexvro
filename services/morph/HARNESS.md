@@ -1,23 +1,32 @@
-# Morph harness (self-contained)
+# Morph harness
 
-Morph is **not** OpenCode. It is a standalone agent CLI with:
+## Product shape
 
-- Interactive + one-shot modes
-- OpenAI-compatible multi-provider config (presets + custom base URL)
-- Built-in tools (repo + ZEXVRO platform)
-- Workspace = current directory (run inside `demos/arcade` or monorepo root)
+| You type | What runs |
+| --- | --- |
+| `morph` | **OpenCode TUI** with Morph agent, theme, MCP, provider |
+| `morph providers set/add` | Clean custom-endpoint UX (writes `~/.config/morph/config.json`) |
+| `morph run "…"` | Headless self-contained loop (no TUI) |
+| `morph chat` | Plain REPL fallback |
 
-OpenCode was evaluated as a host runtime; product requirement is **`morph` only**.
+## Why OpenCode for TUI
 
-## Demo path
+Full `/` command surface, sessions, model switcher, permissions, streaming — already production-grade. Morph layers branding + ZEXVRO tools + easier providers. Rebuilding that TUI in-house is not demo-viable.
+
+## Branding
+
+- Theme: `themes/morph.json` → installed to `~/.config/opencode/themes/morph.json`
+- Agents: `agent/morph.md`, `morph-ops.md` → `~/.config/opencode/agent/`
+- Instructions: `AGENTS.md` / `MORPH.md`
+- Default agent: `morph`
+
+## Providers
+
+- **All OpenCode stock providers** remain (TUI `/connect`)
+- **Morph presets** (OpenAI, OpenRouter, Groq, xAI, custom URL, …) set default Morph model at TUI launch via runtime config inject
+
+## Demo
 
 1. `cd demos/arcade && morph`
-2. “Analyze this platformer and plan ZEXVRO migration (Gate + NFT + optional De-pin).”
-3. “Implement the plan.”
-4. `npx lakebed@0.0.29 deploy` → shared URL updates.
-
-## Still to add (platform)
-
-- Morph service API for scoped tokens (avoid raw admin keys on laptops)
-- Project bindings store (siteKey / collectionId)
-- Official embed snippets for Lakebed/Preact
+2. Analyze → plan → implement ZEXVRO migration
+3. `npx lakebed@0.0.29 deploy`

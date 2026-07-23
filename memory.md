@@ -1,5 +1,9 @@
 # ZEXVRO Shared Memory
 
+## 2026-07-23 - Morph TUI = OpenCode engine + Morph branding/providers
+
+- Summary: Default `morph` launches full OpenCode TUI with Morph agent/theme/MCP. `morph providers set|add` is the easy custom-endpoint UX; stock OpenCode providers remain. Headless `morph run` kept. User never needs to run `opencode` directly after one-time engine install.
+
 ## 2026-07-23 - Morph self-contained CLI (no OpenCode)
 
 - Summary: Morph no longer requires OpenCode. Standalone Node agent with interactive REPL, OpenAI-compatible multi-provider presets + custom base URL, tool loop (repo + ZEXVRO health/Gate/NFT/Depin), `morph install` → `~/.local/bin/morph`. Run in `demos/arcade` or monorepo root.
