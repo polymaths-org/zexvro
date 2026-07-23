@@ -9,8 +9,9 @@ type BrandIntroProps = {
 };
 
 /**
- * Fullscreen brand intro — only for marketing `/`.
- * Plays on every visit; skip with click, Escape, Enter, or Space.
+ * Fullscreen brand intro — only for marketing `/` first visit.
+ * Parent decides when to mount (skipped for ?code= CLI links and return visits).
+ * Skip with click, Escape, Enter, or Space.
  */
 export default function BrandIntro({ onFinished }: BrandIntroProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);

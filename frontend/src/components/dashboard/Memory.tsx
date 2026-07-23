@@ -1,74 +1,168 @@
-import React, { useState } from 'react';
-import { 
-  Brain, Plus, Search, Filter, HelpCircle, CheckCircle2, 
-  X, AlertTriangle, ChevronRight, Bookmark, ArrowUpRight, ShieldCheck 
+import React, { useMemo, useState } from 'react';
+import {
+  AlertTriangle,
+  BookOpen,
+  CheckCircle2,
+  ChevronRight,
+  Copy,
+  FileCode2,
+  Filter,
+  GitBranch,
+  Layers,
+  Plus,
+  Search,
+  Terminal,
+  X,
 } from 'lucide-react';
-import { MemoryEntry } from '../../types';
-import { mockMemoryEntries } from '../../data/mock';
-import { motion, AnimatePresence } from 'motion/react';
+import type { MemoryEntry, MemoryLabel } from '../../types';
+import { AnimatePresence, motion } from 'motion/react';
+
+const AREAS = [
+  'Morph',
+  'Gate',
+  'NFT',
+  'De-pin',
+  'Zer0',
+  'Frontend',
+  'Backend',
+  'Infra',
+  'Other',
+] as const;
+
+const LABELS: { id: MemoryLabel | 'all'; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'decision', label: 'Decisions' },
+  { id: 'blocker', label: 'Blockers' },
+  { id: 'handoff', label: 'Handoffs' },
+  { id: 'context', label: 'Context' },
+  { id: 'migration', label: 'Migrations' },
+  { id: 'general', label: 'Notes' },
+];
 
 interface MemoryProps {
   memoryEntries: MemoryEntry[];
   setMemoryEntries: React.Dispatch<React.SetStateAction<MemoryEntry[]>>;
   openNewMemoryModal: boolean;
   setOpenNewMemoryModal: (open: boolean) => void;
+  /** Scope label for header */
+  scopeLabel?: string;
+  workspaceId?: string;
+  projectId?: string;
+  /** Extra Morph platform keys (siteKey refs, collection ids, etc.) */
+  morphMeta?: Record<string, unknown>;
+  loading?: boolean;
+  saveError?: string | null;
 }
 
-export default function Memory({ 
-  memoryEntries, 
-  setMemoryEntries, 
-  openNewMemoryModal, 
-  setOpenNewMemoryModal 
-}: MemoryProps) {
-  
-  // Filters
-  const [searchTerm, setSearchTerm] = useState('');
-  const [labelFilter, setLabelFilter] = useState<'all' | 'decision' | 'blocker' | 'handoff'>('all');
-  const [serviceFilter, setServiceFilter] = useState('all');
+function labelStyles(label: MemoryLabel) {
+  switch (label) {
+    case 'decision':
+      return 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400';
+    case 'blocker':
+      return 'bg-red-500/10 text-red-600 border-red-500/20 dark:text-red-400';
+    case 'handoff':
+      return 'bg-sky-500/10 text-sky-600 border-sky-500/20 dark:text-sky-400';
+    case 'migration':
+      return 'bg-violet-500/10 text-violet-600 border-violet-500/20 dark:text-violet-400';
+    case 'context':
+      return 'bg-amber-500/10 text-amber-700 border-amber-500/20 dark:text-amber-400';
+    default:
+      return 'bg-zinc-500/10 text-zinc-600 border-zinc-500/20 dark:text-zinc-400';
+  }
+}
 
-  // Form states
-  const [newSrv, setNewSrv] = useState('Zero-Knowledge Privacy Pool');
+function copyText(text: string) {
+  void navigator.clipboard?.writeText(text);
+}
+
+export default function Memory({
+  memoryEntries,
+  setMemoryEntries,
+  openNewMemoryModal,
+  setOpenNewMemoryModal,
+  scopeLabel = 'This project',
+  workspaceId,
+  projectId,
+  morphMeta,
+  loading,
+  saveError,
+}: MemoryProps) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [labelFilter, setLabelFilter] = useState<MemoryLabel | 'all'>('all');
+  const [areaFilter, setAreaFilter] = useState('all');
+  const [copied, setCopied] = useState('');
+
+  const [newSrv, setNewSrv] = useState<string>('Morph');
   const [newFiles, setNewFiles] = useState('');
   const [newSummary, setNewSummary] = useState('');
   const [newDecisions, setNewDecisions] = useState('');
   const [newFollowups, setNewFollowups] = useState('');
   const [newBlockers, setNewBlockers] = useState('');
   const [newVerification, setNewVerification] = useState('');
-  const [newLabel, setNewLabel] = useState<'decision' | 'blocker' | 'handoff' | 'general'>('decision');
-
-  // Validation state
+  const [newLabel, setNewLabel] = useState<MemoryLabel>('decision');
   const [validationError, setValidationError] = useState('');
 
-  // Handle creation of memory entry
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { all: memoryEntries.length };
+    for (const e of memoryEntries) {
+      c[e.label] = (c[e.label] || 0) + 1;
+    }
+    return c;
+  }, [memoryEntries]);
+
+  const filteredEntries = useMemo(() => {
+    return memoryEntries
+      .filter((m) => {
+        const q = searchTerm.toLowerCase();
+        const matchesSearch =
+          !q ||
+          m.summary.toLowerCase().includes(q) ||
+          m.service.toLowerCase().includes(q) ||
+          m.decisions.some((d) => d.toLowerCase().includes(q)) ||
+          m.blockers.some((b) => b.toLowerCase().includes(q));
+        const matchesLabel = labelFilter === 'all' || m.label === labelFilter;
+        const matchesArea = areaFilter === 'all' || m.service === areaFilter;
+        return matchesSearch && matchesLabel && matchesArea;
+      })
+      .slice()
+      .sort((a, b) => {
+        const ta = a.createdAt ? Date.parse(a.createdAt) : 0;
+        const tb = b.createdAt ? Date.parse(b.createdAt) : 0;
+        return tb - ta;
+      });
+  }, [memoryEntries, searchTerm, labelFilter, areaFilter]);
+
+  const morphMetaEntries = useMemo(() => {
+    if (!morphMeta) return [] as [string, unknown][];
+    return Object.entries(morphMeta).filter(([k]) => k.startsWith('morph:') || k.includes('collection') || k.includes('gate') || k.includes('site'));
+  }, [morphMeta]);
+
   const handleCreateMemory = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSummary.trim()) {
-      setValidationError('Summary is a required field');
-      return;
-    }
-    if (!newVerification.trim()) {
-      setValidationError('Verification results are required to commit to memory');
+      setValidationError('Add a short summary so the next person (or Morph) gets it.');
       return;
     }
 
+    const now = new Date();
     const newEntry: MemoryEntry = {
       id: `mem-${Date.now()}`,
       service: newSrv,
-      filesChanged: newFiles.split(',').map(f => f.trim()).filter(Boolean),
-      summary: newSummary,
-      decisions: newDecisions.split('\n').map(d => d.trim()).filter(Boolean),
-      followUps: newFollowups.split('\n').map(f => f.trim()).filter(Boolean),
-      blockers: newBlockers.split('\n').map(b => b.trim()).filter(Boolean),
-      verification: newVerification,
+      filesChanged: newFiles.split(',').map((f) => f.trim()).filter(Boolean),
+      summary: newSummary.trim(),
+      decisions: newDecisions.split('\n').map((d) => d.trim()).filter(Boolean),
+      followUps: newFollowups.split('\n').map((f) => f.trim()).filter(Boolean),
+      blockers: newBlockers.split('\n').map((b) => b.trim()).filter(Boolean),
+      verification: newVerification.trim(),
       date: 'Just now',
-      owner: 'Workspace',
-      label: newLabel
+      createdAt: now.toISOString(),
+      owner: 'You',
+      source: 'human',
+      label: newLabel,
     };
 
     setMemoryEntries([newEntry, ...memoryEntries]);
-
-    // Reset forms
-    setNewSrv('Zero-Knowledge Privacy Pool');
+    setNewSrv('Morph');
     setNewFiles('');
     setNewSummary('');
     setNewDecisions('');
@@ -80,328 +174,446 @@ export default function Memory({
     setOpenNewMemoryModal(false);
   };
 
-  // Filter logic
-  const filteredEntries = memoryEntries.filter(m => {
-    const matchesSearch = m.summary.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          m.service.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesLabel = labelFilter === 'all' || m.label === labelFilter;
-    const matchesService = serviceFilter === 'all' || m.service === serviceFilter;
+  const doCopy = (text: string, id: string) => {
+    copyText(text);
+    setCopied(id);
+    window.setTimeout(() => setCopied(''), 1500);
+  };
 
-    return matchesSearch && matchesLabel && matchesService;
-  });
+  const cliLines = [
+    'morph login',
+    workspaceId ? `morph use ${workspaceId}${projectId ? ` ${projectId}` : ''}` : 'morph use <workspaceId>',
+    'morph bind',
+    'morph',
+  ];
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-5xl space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-xl sm:text-2xl font-semibold font-heading tracking-tight flex items-center gap-2">
-            <Brain className="h-5 w-5 text-brand-blue" />
-            Agent Shared Memory
+          <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-zinc-950 dark:text-white sm:text-2xl">
+            <BookOpen className="h-5 w-5 text-zinc-500" />
+            Shared memory
           </h1>
-          <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
-            Decentralized operational knowledge ledger synced across human operators and autonomous agents
+          <p className="mt-1 max-w-xl text-sm text-zinc-500 dark:text-zinc-400">
+            Decisions, blockers, and context for <span className="font-medium text-zinc-700 dark:text-zinc-300">{scopeLabel}</span>.
+            Humans and Morph both read this — write what the next agent needs.
           </p>
+          {(workspaceId || projectId) && (
+            <p className="mt-2 font-mono text-[11px] text-zinc-400">
+              {workspaceId && <span>ws:{workspaceId.slice(0, 12)}{workspaceId.length > 12 ? '…' : ''}</span>}
+              {projectId && <span className="ml-2">project:{projectId.slice(0, 12)}{projectId.length > 12 ? '…' : ''}</span>}
+            </p>
+          )}
         </div>
         <button
+          type="button"
           onClick={() => setOpenNewMemoryModal(true)}
-          className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg bg-zinc-900 text-white dark:bg-white dark:text-zinc-950 hover:bg-zinc-800 dark:hover:bg-zinc-100 font-medium text-xs transition-colors self-start sm:self-auto cursor-pointer"
+          className="inline-flex items-center justify-center gap-1.5 self-start rounded-lg bg-zinc-900 px-3.5 py-2 text-xs font-medium text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-100"
         >
           <Plus className="h-3.5 w-3.5" />
-          New Memory Entry
+          Add note
         </button>
       </div>
 
-      {/* Filters bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-3.5 rounded-lg border border-zinc-200 dark:border-[#27272A] bg-white dark:bg-[#0A0A0B]">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-zinc-400 dark:text-zinc-500" />
+      {saveError && (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+          Could not save to platform memory: {saveError}
+        </div>
+      )}
+
+      {/* Morph CLI strip */}
+      <div className="overflow-hidden rounded-xl border border-zinc-200 bg-zinc-950 text-zinc-100 dark:border-white/10">
+        <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10">
+              <Terminal className="h-4 w-4 text-cyan-300" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-white">Morph CLI</p>
+              <p className="mt-0.5 text-xs leading-5 text-zinc-400">
+                Login links Morph to this ZEXVRO account. Bind the repo folder so migrations land on the right workspace.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => doCopy(cliLines.join('\n'), 'cli')}
+            className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[11px] font-medium text-zinc-200 transition hover:bg-white/10"
+          >
+            <Copy className="h-3 w-3" />
+            {copied === 'cli' ? 'Copied' : 'Copy setup'}
+          </button>
+        </div>
+        <pre className="overflow-x-auto border-t border-white/10 bg-black/40 px-4 py-3 font-mono text-[11px] leading-6 text-cyan-100/90">
+          {cliLines.map((line) => (
+            <div key={line}>
+              <span className="text-zinc-500 select-none">$ </span>
+              {line}
+            </div>
+          ))}
+        </pre>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {[
+          { label: 'Entries', value: memoryEntries.length, icon: Layers },
+          { label: 'Blockers', value: counts.blocker || 0, icon: AlertTriangle },
+          { label: 'Decisions', value: counts.decision || 0, icon: CheckCircle2 },
+          { label: 'Morph notes', value: memoryEntries.filter((e) => e.source === 'morph' || e.service === 'Morph').length, icon: GitBranch },
+        ].map((s) => (
+          <div
+            key={s.label}
+            className="rounded-lg border border-zinc-200 bg-white px-3 py-2.5 dark:border-white/[0.08] dark:bg-[#0A0A0B]"
+          >
+            <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-zinc-400">
+              <s.icon className="h-3 w-3" />
+              {s.label}
+            </div>
+            <p className="mt-1 text-lg font-semibold tabular-nums text-zinc-950 dark:text-white">{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Morph platform bindings */}
+      {morphMetaEntries.length > 0 && (
+        <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-white/[0.08] dark:bg-[#0A0A0B]">
+          <div className="mb-3 flex items-center gap-2">
+            <FileCode2 className="h-4 w-4 text-violet-500" />
+            <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Morph bindings</h2>
+            <span className="text-[10px] text-zinc-400">IDs Morph wrote for this account (no secrets)</span>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {morphMetaEntries.map(([k, v]) => (
+              <div
+                key={k}
+                className="flex items-start justify-between gap-2 rounded-md border border-zinc-100 bg-zinc-50/80 px-2.5 py-2 font-mono text-[11px] dark:border-white/[0.06] dark:bg-white/[0.02]"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-zinc-500">{k}</p>
+                  <p className="mt-0.5 break-all text-zinc-800 dark:text-zinc-200">
+                    {typeof v === 'string' ? v : JSON.stringify(v)}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="shrink-0 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                  onClick={() => doCopy(typeof v === 'string' ? v : JSON.stringify(v), k)}
+                  title="Copy"
+                >
+                  <Copy className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Filters */}
+      <div className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-3 dark:border-white/[0.08] dark:bg-[#0A0A0B] sm:flex-row sm:items-center">
+        <div className="relative min-w-0 flex-1">
+          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
           <input
-            type="text"
-            placeholder="Search decisions, summaries..."
+            type="search"
+            placeholder="Search decisions, blockers, files…"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-4 py-1.5 rounded-md border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30 text-xs text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:border-brand-blue"
+            className="w-full rounded-md border border-zinc-200 bg-zinc-50/80 py-2 pl-9 pr-3 text-xs text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-300 focus:outline-none dark:border-white/10 dark:bg-white/[0.03] dark:text-zinc-100"
           />
         </div>
-
-        <div className="flex items-center gap-2 font-mono text-xs">
-          {/* Label selector filter */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Filter className="hidden h-3.5 w-3.5 text-zinc-400 sm:block" />
+          {LABELS.map((l) => (
+            <button
+              key={l.id}
+              type="button"
+              onClick={() => setLabelFilter(l.id)}
+              className={`rounded-md px-2 py-1 text-[11px] font-medium transition ${
+                labelFilter === l.id
+                  ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950'
+                  : 'text-zinc-500 hover:bg-zinc-100 dark:hover:bg-white/[0.06]'
+              }`}
+            >
+              {l.label}
+              {l.id !== 'all' && counts[l.id] ? (
+                <span className="ml-1 opacity-60">{counts[l.id]}</span>
+              ) : null}
+            </button>
+          ))}
           <select
-            value={labelFilter}
-            onChange={(e) => setLabelFilter(e.target.value as any)}
-            className="px-2.5 py-1.5 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#0A0A0B] text-zinc-500"
+            value={areaFilter}
+            onChange={(e) => setAreaFilter(e.target.value)}
+            className="rounded-md border border-zinc-200 bg-transparent px-2 py-1 text-[11px] text-zinc-600 dark:border-white/10 dark:text-zinc-300"
           >
-            <option value="all">Type: All</option>
-            <option value="decision">Decisions</option>
-            <option value="blocker">Blockers</option>
-            <option value="handoff">Handoffs</option>
-          </select>
-
-          {/* Service selector filter */}
-          <select
-            value={serviceFilter}
-            onChange={(e) => setServiceFilter(e.target.value)}
-            className="px-2.5 py-1.5 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#0A0A0B] text-zinc-500"
-          >
-            <option value="all">Service: All</option>
-            <option value="Zero-Knowledge Privacy Pool">ZK Privacy Pool</option>
-            <option value="A-2-A Trade Pipeline">A-2-A Trade Pipeline</option>
-            <option value="De-pin">De-pin</option>
+            <option value="all">All areas</option>
+            {AREAS.map((a) => (
+              <option key={a} value={a}>
+                {a}
+              </option>
+            ))}
           </select>
         </div>
       </div>
 
-      {/* Memory catalog grid/list */}
-      <div className="space-y-4">
-        {filteredEntries.length === 0 ? (
-          <div className="text-center py-12 border border-dashed border-zinc-200 dark:border-zinc-800 rounded-lg">
-            <p className="text-xs text-zinc-400">No memory entries match the criteria.</p>
+      {/* Feed */}
+      <div className="space-y-3">
+        {loading ? (
+          <div className="rounded-xl border border-dashed border-zinc-200 py-16 text-center text-xs text-zinc-400 dark:border-white/10">
+            Loading shared memory…
+          </div>
+        ) : filteredEntries.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-zinc-200 px-6 py-14 text-center dark:border-white/10">
+            <BookOpen className="mx-auto h-8 w-8 text-zinc-300 dark:text-zinc-600" />
+            <p className="mt-3 text-sm font-medium text-zinc-700 dark:text-zinc-300">No notes yet</p>
+            <p className="mx-auto mt-1 max-w-sm text-xs leading-5 text-zinc-500">
+              Add a decision or handoff so the next person — or Morph — does not re-learn the same context.
+            </p>
+            <button
+              type="button"
+              onClick={() => setOpenNewMemoryModal(true)}
+              className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/[0.04]"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add first note
+            </button>
           </div>
         ) : (
           filteredEntries.map((m) => (
-            <motion.div
+            <article
               key={m.id}
-              layout
-              className="p-5 rounded-lg border border-zinc-200 dark:border-[#27272A] bg-white dark:bg-[#0A0A0B] space-y-4 hover:border-zinc-300 dark:hover:border-zinc-800 transition-colors"
+              className="rounded-xl border border-zinc-200 bg-white p-4 transition hover:border-zinc-300 dark:border-white/[0.08] dark:bg-[#0A0A0B] dark:hover:border-white/15 sm:p-5"
             >
-              {/* Card top bar */}
-              <div className="flex items-start justify-between gap-3 border-b border-zinc-100 dark:border-zinc-800/80 pb-3">
-                <div className="flex items-center gap-2.5">
-                  <div className={`p-1 rounded mt-0.5 ${
-                    m.label === 'decision' 
-                      ? 'bg-emerald-500/10 text-emerald-500' 
-                      : m.label === 'blocker'
-                      ? 'bg-red-500/10 text-red-500 animate-pulse'
-                      : 'bg-brand-blue/10 text-brand-blue'
-                  }`}>
-                    <Bookmark className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <span className="text-xs font-bold text-zinc-900 dark:text-white font-mono">{m.service}</span>
-                    <p className="text-[10px] text-zinc-400 mt-0.5">Source: <span className="text-zinc-500 dark:text-zinc-300">{m.owner}</span> • {m.date}</p>
-                  </div>
-                </div>
-
-                <span className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold border uppercase tracking-wider ${
-                  m.label === 'decision'
-                    ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
-                    : m.label === 'blocker'
-                    ? 'bg-red-500/10 text-red-500 border-red-500/20'
-                    : 'bg-brand-blue/10 text-brand-blue border-brand-blue/20'
-                }`}>
-                  {m.label}
-                </span>
-              </div>
-
-              {/* Memory Summary content */}
-              <div className="space-y-3.5 text-xs">
-                <div>
-                  <span className="text-[10px] font-mono font-bold text-zinc-400 dark:text-zinc-500 uppercase block">Knowledge Summary</span>
-                  <p className="text-zinc-800 dark:text-zinc-200 leading-relaxed mt-1 font-sans">{m.summary}</p>
-                </div>
-
-                {m.decisions.length > 0 && (
-                  <div>
-                    <span className="text-[10px] font-mono font-bold text-zinc-400 dark:text-zinc-500 uppercase block">Decisions locked</span>
-                    <ul className="list-disc pl-4 space-y-1 text-zinc-700 dark:text-zinc-300 mt-1 font-mono text-[11px]">
-                      {m.decisions.map((d, dIdx) => <li key={dIdx}>{d}</li>)}
-                    </ul>
-                  </div>
-                )}
-
-                {m.blockers.length > 0 && (
-                  <div>
-                    <span className="text-[10px] font-mono font-bold text-red-400 uppercase block">Active system blockers</span>
-                    <ul className="list-disc pl-4 space-y-1 text-red-400 mt-1 font-mono text-[11px]">
-                      {m.blockers.map((b, bIdx) => <li key={bIdx}>{b}</li>)}
-                    </ul>
-                  </div>
-                )}
-
-                {m.followUps.length > 0 && (
-                  <div>
-                    <span className="text-[10px] font-mono font-bold text-zinc-400 dark:text-zinc-500 uppercase block">Planned Follow-ups</span>
-                    <ul className="list-disc pl-4 space-y-1 text-zinc-600 dark:text-zinc-400 mt-1 font-mono text-[11px]">
-                      {m.followUps.map((f, fIdx) => <li key={fIdx}>{f}</li>)}
-                    </ul>
-                  </div>
-                )}
-
-                {/* Verification line */}
-                <div className="p-3 bg-zinc-50/50 dark:bg-zinc-900/30 border border-zinc-100 dark:border-zinc-800/80 rounded-md font-mono text-[10.5px] leading-relaxed flex items-start gap-2 text-zinc-500 dark:text-zinc-400">
-                  <ShieldCheck className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="font-bold uppercase text-[9.5px] text-emerald-500 block">Cryptographic Verification: Passed</span>
-                    {m.verification}
-                  </div>
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <span className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${labelStyles(m.label)}`}>
+                    {m.label}
+                  </span>
+                  <span className="text-xs font-semibold text-zinc-900 dark:text-white">{m.service}</span>
+                  <span className="text-[11px] text-zinc-400">
+                    {m.source === 'morph' ? 'Morph' : m.owner} · {m.date}
+                  </span>
                 </div>
               </div>
 
-              {/* Files touched footer */}
-              <div className="flex flex-wrap items-center gap-2 border-t border-zinc-100 dark:border-zinc-800/60 pt-3 font-mono text-[10px] text-zinc-400">
-                <span className="uppercase">Files Touched:</span>
-                {m.filesChanged.length > 0 ? m.filesChanged.map((f) => (
-                  <span key={f} className="px-1.5 py-0.5 rounded border border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 text-[9px] text-zinc-500">{f}</span>
-                )) : <span className="text-zinc-500 italic">None</span>}
-              </div>
-            </motion.div>
+              <p className="mt-3 text-sm leading-6 text-zinc-800 dark:text-zinc-200">{m.summary}</p>
+
+              {m.decisions.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-400">Decisions</p>
+                  <ul className="mt-1 space-y-1 text-xs text-zinc-600 dark:text-zinc-300">
+                    {m.decisions.map((d) => (
+                      <li key={d} className="flex gap-2">
+                        <ChevronRight className="mt-0.5 h-3 w-3 shrink-0 text-emerald-500" />
+                        <span>{d}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {m.blockers.length > 0 && (
+                <div className="mt-3 rounded-md border border-red-500/15 bg-red-500/5 px-3 py-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-red-500">Blockers</p>
+                  <ul className="mt-1 space-y-1 text-xs text-red-600/90 dark:text-red-300/90">
+                    {m.blockers.map((b) => (
+                      <li key={b}>{b}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {m.followUps.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-400">Next</p>
+                  <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-zinc-600 dark:text-zinc-400">
+                    {m.followUps.map((f) => (
+                      <li key={f}>{f}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {m.verification && (
+                <p className="mt-3 text-[11px] leading-5 text-zinc-500">
+                  <span className="font-medium text-zinc-600 dark:text-zinc-400">How to verify: </span>
+                  {m.verification}
+                </p>
+              )}
+
+              {m.filesChanged.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-1.5 border-t border-zinc-100 pt-3 dark:border-white/[0.06]">
+                  {m.filesChanged.map((f) => (
+                    <span
+                      key={f}
+                      className="rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 font-mono text-[10px] text-zinc-600 dark:border-white/10 dark:bg-white/[0.03] dark:text-zinc-400"
+                    >
+                      {f}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </article>
           ))
         )}
       </div>
 
-      {/* New Memory Modal */}
+      {/* Modal */}
       <AnimatePresence>
         {openNewMemoryModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
-            <motion.div 
+          <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto p-0 sm:items-center sm:p-4">
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setOpenNewMemoryModal(false)}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            ></motion.div>
-
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.98, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.98, y: 10 }}
-              className="relative w-full max-w-xl rounded-lg border border-zinc-200 dark:border-[#27272A] bg-white dark:bg-[#0A0A0B] p-6 shadow-2xl z-10"
+              className="absolute inset-0 bg-black/50 backdrop-blur-[2px]"
+            />
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 12 }}
+              className="relative z-10 w-full max-w-lg rounded-t-xl border border-zinc-200 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-[#0A0A0B] sm:rounded-xl sm:p-6"
             >
-              <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
-                <h3 className="text-sm font-semibold text-zinc-950 dark:text-white font-heading">Commit new decision to shared memory</h3>
-                <button onClick={() => setOpenNewMemoryModal(false)} className="text-zinc-400 hover:text-zinc-600">
+              <div className="flex items-center justify-between border-b border-zinc-100 pb-3 dark:border-white/[0.06]">
+                <h3 className="text-sm font-semibold text-zinc-950 dark:text-white">Add to shared memory</h3>
+                <button type="button" onClick={() => setOpenNewMemoryModal(false)} className="text-zinc-400 hover:text-zinc-600">
                   <X className="h-4 w-4" />
                 </button>
               </div>
 
-              <form onSubmit={handleCreateMemory} className="space-y-4 mt-4 text-xs">
-                {/* Service area selection */}
-                <div>
-                  <label className="block text-[10px] font-mono font-semibold text-zinc-500 uppercase mb-1">Service Module Area</label>
-                  <select
-                    value={newSrv}
-                    onChange={(e) => setNewSrv(e.target.value)}
-                    className="w-full px-2.5 py-2 rounded border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#0A0A0B] text-zinc-800 dark:text-zinc-200 focus:outline-none"
-                  >
-                    <option value="Zero-Knowledge Privacy Pool">Zero-Knowledge Privacy Pool</option>
-                    <option value="A-2-A Trade Pipeline">A-2-A Trade Pipeline</option>
-                    <option value="Captcha-like Agent Authentication Service">Captcha-like Agent Auth</option>
-                    <option value="De-pin">De-pin</option>
-                  </select>
-                </div>
-
-                {/* Entry Label */}
-                <div>
-                  <label className="block text-[10px] font-mono font-semibold text-zinc-500 uppercase mb-1">Memory Entry Label</label>
-                  <div className="flex gap-2">
-                    {['decision', 'blocker', 'handoff', 'general'].map((lbl) => (
-                      <button
-                        key={lbl}
-                        type="button"
-                        onClick={() => setNewLabel(lbl as any)}
-                        className={`px-3 py-1.5 rounded font-mono text-[10px] border uppercase transition-all cursor-pointer ${
-                          newLabel === lbl
-                            ? 'bg-zinc-950 text-white dark:bg-white dark:text-zinc-950 font-bold border-zinc-950 dark:border-white'
-                            : 'border-zinc-200 dark:border-zinc-800 text-zinc-400'
-                        }`}
-                      >
-                        {lbl}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Summary (Required, validates visually) */}
-                <div>
-                  <label className="block text-[10px] font-mono font-semibold text-zinc-500 uppercase mb-1">
-                    Knowledge Summary <span className="text-red-500">*</span>
-                  </label>
-                  <textarea
-                    required
-                    rows={2}
-                    placeholder="Provide a concise summary of this memory entry..."
-                    value={newSummary}
-                    onChange={(e) => setNewSummary(e.target.value)}
-                    className={`w-full px-2.5 py-1.5 rounded border bg-zinc-50/20 dark:bg-zinc-900/10 text-zinc-900 dark:text-zinc-100 focus:outline-none ${
-                      validationError && !newSummary ? 'border-red-500' : 'border-zinc-200 dark:border-zinc-800'
-                    }`}
-                  />
-                </div>
-
-                {/* Decisions Locked */}
-                <div>
-                  <label className="block text-[10px] font-mono font-semibold text-zinc-500 uppercase mb-1">Decisions Locked (one per line)</label>
-                  <textarea
-                    rows={2}
-                    placeholder="e.g. Standardize proof curves to BN254"
-                    value={newDecisions}
-                    onChange={(e) => setNewDecisions(e.target.value)}
-                    className="w-full px-2.5 py-1.5 rounded border border-zinc-200 dark:border-zinc-800 bg-zinc-50/20 dark:bg-zinc-900/10 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-brand-blue"
-                  />
-                </div>
-
-                {/* Verification (Required, validates visually) */}
-                <div>
-                  <label className="block text-[10px] font-mono font-semibold text-zinc-500 uppercase mb-1">
-                    Verification Method & Results <span className="text-red-500">*</span>
-                  </label>
-                  <textarea
-                    required
-                    rows={2}
-                    placeholder="Provide exact testing, simulations, or proofs validating this decision..."
-                    value={newVerification}
-                    onChange={(e) => setNewVerification(e.target.value)}
-                    className={`w-full px-2.5 py-1.5 rounded border bg-zinc-50/20 dark:bg-zinc-900/10 text-zinc-900 dark:text-zinc-100 focus:outline-none ${
-                      validationError && !newVerification ? 'border-red-500' : 'border-zinc-200 dark:border-zinc-800'
-                    }`}
-                  />
-                </div>
-
-                {/* Files and Follow-ups */}
+              <form onSubmit={handleCreateMemory} className="mt-4 space-y-3.5 text-xs">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[10px] font-mono font-semibold text-zinc-500 uppercase mb-1">Files Changed (comma separated)</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. src/proof.ts"
-                      value={newFiles}
-                      onChange={(e) => setNewFiles(e.target.value)}
-                      className="w-full px-2.5 py-1.5 rounded border border-zinc-200 dark:border-zinc-800 bg-zinc-50/30 dark:bg-zinc-900/20 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-brand-blue"
+                    <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-zinc-500">Area</label>
+                    <select
+                      value={newSrv}
+                      onChange={(e) => setNewSrv(e.target.value)}
+                      className="w-full rounded-md border border-zinc-200 bg-transparent px-2.5 py-2 dark:border-white/10"
+                    >
+                      {AREAS.map((a) => (
+                        <option key={a} value={a}>
+                          {a}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-zinc-500">Type</label>
+                    <select
+                      value={newLabel}
+                      onChange={(e) => setNewLabel(e.target.value as MemoryLabel)}
+                      className="w-full rounded-md border border-zinc-200 bg-transparent px-2.5 py-2 dark:border-white/10"
+                    >
+                      {LABELS.filter((l) => l.id !== 'all').map((l) => (
+                        <option key={l.id} value={l.id}>
+                          {l.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+                    Summary <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    required
+                    rows={2}
+                    placeholder="What should the next person or Morph know?"
+                    value={newSummary}
+                    onChange={(e) => setNewSummary(e.target.value)}
+                    className="w-full rounded-md border border-zinc-200 bg-zinc-50/50 px-2.5 py-2 text-zinc-900 focus:border-zinc-300 focus:outline-none dark:border-white/10 dark:bg-white/[0.03] dark:text-zinc-100"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+                    Decisions (one per line)
+                  </label>
+                  <textarea
+                    rows={2}
+                    placeholder="e.g. Use Gate on score submit only"
+                    value={newDecisions}
+                    onChange={(e) => setNewDecisions(e.target.value)}
+                    className="w-full rounded-md border border-zinc-200 bg-transparent px-2.5 py-2 dark:border-white/10"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+                      Blockers (one per line)
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={newBlockers}
+                      onChange={(e) => setNewBlockers(e.target.value)}
+                      className="w-full rounded-md border border-zinc-200 bg-transparent px-2.5 py-2 dark:border-white/10"
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-mono font-semibold text-zinc-500 uppercase mb-1">Blockers (one per line)</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Missing Horizon registry API"
-                      value={newBlockers}
-                      onChange={(e) => setNewBlockers(e.target.value)}
-                      className="w-full px-2.5 py-1.5 rounded border border-zinc-200 dark:border-zinc-800 bg-zinc-50/30 dark:bg-zinc-900/20 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-brand-blue"
+                    <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+                      Follow-ups (one per line)
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={newFollowups}
+                      onChange={(e) => setNewFollowups(e.target.value)}
+                      className="w-full rounded-md border border-zinc-200 bg-transparent px-2.5 py-2 dark:border-white/10"
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+                    Files (comma-separated)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="src/server.ts, client/index.tsx"
+                    value={newFiles}
+                    onChange={(e) => setNewFiles(e.target.value)}
+                    className="w-full rounded-md border border-zinc-200 bg-transparent px-2.5 py-2 font-mono dark:border-white/10"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+                    How to verify (optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. npm test · redeploy Lakebed · hit unpaid tip → 402"
+                    value={newVerification}
+                    onChange={(e) => setNewVerification(e.target.value)}
+                    className="w-full rounded-md border border-zinc-200 bg-transparent px-2.5 py-2 dark:border-white/10"
+                  />
                 </div>
 
                 {validationError && (
-                  <div className="p-2.5 border border-red-500/20 bg-red-500/5 text-red-500 rounded flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4" />
-                    <span>{validationError}</span>
+                  <div className="flex items-center gap-2 rounded-md border border-red-500/20 bg-red-500/5 px-2.5 py-2 text-red-500">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    {validationError}
                   </div>
                 )}
 
-                <div className="flex items-center justify-end gap-3 pt-4 border-t border-zinc-100 dark:border-zinc-800">
+                <div className="flex justify-end gap-2 border-t border-zinc-100 pt-4 dark:border-white/[0.06]">
                   <button
                     type="button"
                     onClick={() => setOpenNewMemoryModal(false)}
-                    className="px-3.5 py-2 text-xs font-semibold text-zinc-400 hover:text-zinc-600"
+                    className="px-3 py-2 text-xs font-medium text-zinc-500"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 text-xs font-semibold rounded bg-zinc-950 text-white dark:bg-white dark:text-zinc-950 hover:bg-zinc-800 dark:hover:bg-zinc-100 cursor-pointer"
+                    className="rounded-lg bg-zinc-900 px-4 py-2 text-xs font-semibold text-white dark:bg-white dark:text-zinc-950"
                   >
-                    Commit to Shared Memory
+                    Save note
                   </button>
                 </div>
               </form>

@@ -56,6 +56,8 @@ export interface CollaborationNote {
   ownerNeeded: string;
 }
 
+export type MemoryLabel = 'decision' | 'blocker' | 'handoff' | 'context' | 'migration' | 'general';
+
 export interface MemoryEntry {
   id: string;
   service: string;
@@ -64,10 +66,15 @@ export interface MemoryEntry {
   decisions: string[];
   followUps: string[];
   blockers: string[];
+  /** Optional how-we-know / how-to-verify (not crypto-admin jargon). */
   verification: string;
   date: string;
+  /** ISO timestamp when available (for sorting). */
+  createdAt?: string;
   owner: string;
-  label: 'decision' | 'blocker' | 'handoff' | 'general';
+  /** human | morph | cli | system */
+  source?: 'human' | 'morph' | 'cli' | 'system';
+  label: MemoryLabel;
 }
 
 export interface AuditLog {

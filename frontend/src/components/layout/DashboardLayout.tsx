@@ -719,8 +719,8 @@ export default function DashboardLayout() {
     <div className={`min-h-screen font-sans antialiased text-zinc-900 dark:text-zinc-100 bg-zinc-50 dark:bg-[#050505] transition-colors duration-200 ${
       density === 'compact' ? 'text-xs' : 'text-sm'
     }`}>
-      {/* One-time platform boot after login (localStorage). */}
-      <PlatformBootup active={Boolean(userSession)} />
+      {/* One-time platform boot after login — never during CLI ?code= activation. */}
+      <PlatformBootup active={Boolean(userSession) && !activationCode} />
       <div className="flex min-h-screen">
 
         {/* Desktop Sidebar */}

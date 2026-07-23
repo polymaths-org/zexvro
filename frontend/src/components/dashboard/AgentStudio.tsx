@@ -40,10 +40,10 @@ interface AgentStudioProps {
 }
 
 const SUGGESTED_PROMPTS = [
-  { icon: FileSearch, label: 'Scan repository', prompt: 'Scan my repository structure and summarize the codebase architecture.' },
-  { icon: Rocket, label: 'Migration steps', prompt: 'Explain the key steps for migrating a Web2 app to Web3 infrastructure.' },
-  { icon: TerminalSquare, label: 'CLI status', prompt: 'Check the current CLI connection status and show what tools are available.' },
-  { icon: Wrench, label: 'Service readiness', prompt: 'Review the readiness of all 6 MVP services and list next actions for each.' },
+  { icon: FileSearch, label: 'Scan app', prompt: 'How should I scan a Web2 app for Gate, NFT, and De-pin fit before migrating with Morph CLI?' },
+  { icon: Rocket, label: 'Migration plan', prompt: 'Outline a short ZEXVRO Web2→Web3 migration plan (Gate + NFT testnet, optional De-pin).' },
+  { icon: TerminalSquare, label: 'CLI setup', prompt: 'What are the morph login / use / bind steps so Morph can use my ZEXVRO account?' },
+  { icon: Wrench, label: 'Shared memory', prompt: 'What should I write to shared memory so the next agent understands project decisions and blockers?' },
 ];
 
 function relativeTime(ts: number): string {
@@ -410,6 +410,28 @@ export default function AgentStudio({ cliConnected = false, cliLastActive = null
             </button>
           </div>
           <div className="flex-1 overflow-y-auto p-4 text-xs">
+            {/* CLI setup */}
+            <div className="mb-5 rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-white/10 dark:bg-white/[0.03]">
+              <p className="mb-2 font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500" style={{ fontSize: '10px' }}>
+                Morph CLI
+              </p>
+              <p className="mb-2 text-[11px] leading-4 text-zinc-500 dark:text-zinc-400">
+                Link your ZEXVRO account so Morph can use Gate, NFT, and memory as you.
+              </p>
+              <pre className="overflow-x-auto rounded-md bg-zinc-950 p-2.5 font-mono text-[10px] leading-5 text-cyan-100/90">
+{`morph login
+morph use <workspaceId>
+cd your-app && morph bind
+morph`}
+              </pre>
+              <a
+                href="/dashboard"
+                className="mt-2 inline-flex text-[11px] font-medium text-violet-600 hover:underline dark:text-violet-400"
+              >
+                Shared memory →
+              </a>
+            </div>
+
             {/* Workspace */}
             <div className="mb-5">
               <p className="mb-2 font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500" style={{ fontSize: '10px' }}>Workspace</p>

@@ -1,5 +1,59 @@
 # ZEXVRO Shared Memory
 
+## 2026-07-23 - CLI device-code login: skip intro, show auth
+
+- Service or area: Console frontend (Cloudflare Pages `zexvro` / console.zexvro.in)
+- Files: `frontend/src/routes/router.tsx`, `MarketingPage.tsx`, `BrandIntro.tsx`, `PlatformBootup.tsx`, `DashboardLayout.tsx` (+ Shared Memory / Agent Studio polish in same FE ship)
+- Summary: `/?code=` and `/?activate=` no longer land on marketing BrandIntro. MarketingRoute redirects to `/dashboard?…` so AuthOverlay + CliActivation show. Intro video only on first marketing visit (`zexvro.marketing.intro.seen`); skipped for CLI links and return visits. Platform boot skipped during activation.
+- Decisions: Accepted - device links must never play intro. Accepted - production deploy uses same App Runner + API Gateway + Gate URLs as live console.
+- Follow-ups: Morph install package still local (login URL prefers `/dashboard?code=`); backend lambda still emits `/?code=` which FE now handles.
+- Verification: commit + `wrangler pages deploy` to project `zexvro`.
+
+
+## 2026-07-23 - Shared Memory UI (dev) + Morph dock polish + memory schema
+
+- **Dashboard Shared Memory:** Redesigned for developers (not admin ledger): decisions/blockers/handoffs/context/migrations, area filters, Morph CLI setup strip, Morph bindings panel (`morph:*` keys). Optional verification, no “crypto admin” copy.
+- **Agent Studio:** Context sidebar shows `morph login / use / bind` setup.
+- **CLI:** `morph memory add` appends structured MemoryEntry to `projectMemory:*` / `workspaceMemory:*`.
+- **Schema:** `services/morph/lib/memory-schema.mjs` + Morph agent seed documents write format for later agents.
+- **Install:** clearer post-install steps. P0 (scoped tokens, user Gate API) deferred for demo polish path.
+
+## 2026-07-23 - Morph ZEXVRO account auth (device login + MCP session)
+
+- **Shipped:** `morph login` (device-code → console approve → `~/.local/share/morph/zexvro-auth.json`), `logout`, `whoami`/`status`, `workspaces`, `use`, `bind` (`.morph/project.json`), `memory`.
+- **MCP:** reads login store + project bind; tools `zexvro_whoami`, workspaces, memory_get/put aligned with platform `/api/memory` merge; NFT tools use Bearer from login.
+- **Libs:** `services/morph/lib/*` — separate from LLM provider keys (`morph providers add` / `/connect`).
+- **Docs:** `services/morph/PLATFORM.md` — remaining for perfect Morph (scoped tokens, user Gate API, credits, dashboard dock, etc.).
+- **Not yet:** user-scoped Gate create (still admin key), scoped agent tokens, dashboard Morph dock, credits/RBAC gates.
+- Flow: `morph login` → `morph use` → `morph bind` → `morph`.
+
+## 2026-07-23 - Morph = forked OpenCode application (not wrapper)
+
+- **Correction:** Thin OpenCode wrapper still showed OPENCODE splash + felt like OpenCode config. Wrong.
+- **Now:** Morph is a Morph-branded **fork** of OpenCode: logo patch, XDG app name `morph` → `~/.config/morph`, config files `morph.json(c)`, project dir `.morph/`.
+- **Layout:** `engine/` (apply-branding, prepare-src, build), `seed/` → `~/.config/morph`, `mcp/`, `bin/morph`.
+- **Run modes:** (1) bun-run branded source after `prepare-src` (2) optional `build.sh` standalone `morph-engine` binary (needs disk).
+- **Local only — no push.** Verify: splash MORPH, config `~/.config/morph`.
+
+## 2026-07-23 - Morph = OpenCode engine + Morph skin (v1.0)
+
+- Earlier wrapper approach (OPENCODE_CONFIG env). Superseded by full Morph fork branding above.
+
+## 2026-07-23 - Morph skills corrected (no arcade skill)
+
+- Arcade / Neon Run is a **demo migration target**, not a Morph skill or Morph product feature.
+- Skills are ZEXVRO only: `web2-web3`, `gate`, `nft`, `depin`. Removed `skills/arcade.md` and workspace auto-load.
+- Prompt + docs state demo apps are sample targets; same analyze→plan→ship loop as any customer app.
+
+## 2026-07-23 - Morph skills + system prompt (Web2→Web3 harness)
+
+- Service: `services/morph` v0.4.0
+- Lean skills under `skills/*.md` (ZEXVRO services only after correction)
+- System prompt: Morph voice, fit table, see→plan→ship→prove; keyword skill routing
+- Tools: `list_skills`, `load_skill`, `analyze_project`
+- TUI: `/skills`, `/skill <id>`
+- Start: `bash services/morph/install.sh` → `morph` → `/connect`
+
 ## 2026-07-23 - Morph fixed: self-contained TUI (resolve bug)
 
 - Fixed: `resolve is not defined` crash in TUI (missing path import).

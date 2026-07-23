@@ -11,14 +11,23 @@ type PlatformBootupProps = {
   active: boolean;
 };
 
+function isCliActivationUrl(): boolean {
+  if (typeof window === 'undefined') return false;
+  const params = new URLSearchParams(window.location.search);
+  return params.has('code') || params.has('activate');
+}
+
 /**
  * One-time fullscreen platform boot after login → dashboard.
+ * Skipped for Morph/CLI device-code links (?code= / ?activate=).
  * Stored in localStorage so it does not replay every route change.
  */
 export default function PlatformBootup({ active }: PlatformBootupProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const finishedRef = useRef(false);
-  const [open, setOpen] = useState(() => active && !hasSeenPlatformBootup());
+  const [open, setOpen] = useState(
+    () => active && !hasSeenPlatformBootup() && !isCliActivationUrl(),
+  );
   const [src, setSrc] = useState(() => getPlatformBootupSrc());
 
   const finish = () => {
@@ -29,7 +38,7 @@ export default function PlatformBootup({ active }: PlatformBootupProps) {
   };
 
   useEffect(() => {
-    if (!active || hasSeenPlatformBootup()) {
+    if (!active || hasSeenPlatformBootup() || isCliActivationUrl()) {
       setOpen(false);
       return;
     }

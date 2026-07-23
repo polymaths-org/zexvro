@@ -63,6 +63,23 @@ function AppFallback() {
 }
 
 function MarketingRoute() {
+  // Morph / CLI device link: /?code=ABCD-1234 must never show marketing intro.
+  // Send users to the console auth + CliActivation flow.
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('code') || params.has('activate')) {
+      const next = `/dashboard${window.location.search}`;
+      if (window.location.pathname + window.location.search !== next) {
+        window.location.replace(next);
+      }
+    }
+  }, []);
+
+  const params = new URLSearchParams(window.location.search);
+  if (params.has('code') || params.has('activate')) {
+    return <AppFallback />;
+  }
+
   return (
     <React.Suspense fallback={<AppFallback />}>
       <MarketingPage />
@@ -114,21 +131,42 @@ function WorkspaceMemoryScreen() {
 
   const [memoryEntries, setMemoryEntries] = React.useState<MemoryEntry[]>([]);
   const [memoryLoaded, setMemoryLoaded] = React.useState(false);
+  const [morphMeta, setMorphMeta] = React.useState<Record<string, unknown>>({});
+  const [loadError, setLoadError] = React.useState<string | null>(null);
+  const [saveError, setSaveError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     let cancelled = false;
     setMemoryLoaded(false);
-    memoryApi.get()
-      .then(response => {
+    setLoadError(null);
+    memoryApi
+      .get()
+      .then((response) => {
         if (cancelled) return;
-        const savedEntries = response.memory?.[memoryKey];
-        setMemoryEntries(Array.isArray(savedEntries) ? savedEntries as MemoryEntry[] : []);
+        const bag = response.memory || {};
+        const savedEntries = bag[memoryKey];
+        setMemoryEntries(Array.isArray(savedEntries) ? (savedEntries as MemoryEntry[]) : []);
+        const meta: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(bag)) {
+          if (
+            k.startsWith('morph:') ||
+            k.includes('siteKey') ||
+            k.includes('collectionId') ||
+            k.includes('gateSite') ||
+            k.includes('deployUrl')
+          ) {
+            meta[k] = v;
+          }
+        }
+        setMorphMeta(meta);
         setMemoryLoaded(true);
       })
-      .catch(err => {
+      .catch((err) => {
         if (cancelled) return;
         console.error('Failed to load shared memory from AWS:', err);
         setMemoryEntries([]);
+        setLoadError(err instanceof Error ? err.message : 'Failed to load');
+        setMemoryLoaded(true);
       });
 
     return () => {
@@ -142,8 +180,10 @@ function WorkspaceMemoryScreen() {
       window.clearTimeout(saveTimerRef.current);
     }
     saveTimerRef.current = window.setTimeout(() => {
-      memoryApi.update({ [memoryKey]: memoryEntries }).catch(err => {
+      setSaveError(null);
+      memoryApi.update({ [memoryKey]: memoryEntries }).catch((err) => {
         console.error('Failed to save shared memory to AWS:', err);
+        setSaveError(err instanceof Error ? err.message : 'Save failed');
       });
     }, 500);
 
@@ -154,12 +194,24 @@ function WorkspaceMemoryScreen() {
     };
   }, [memoryEntries, memoryKey, memoryLoaded]);
 
+  const scopeLabel = projectId
+    ? 'This project'
+    : workspaceId
+      ? 'This workspace'
+      : 'Shared memory';
+
   return (
     <Memory
       memoryEntries={memoryEntries}
       setMemoryEntries={setMemoryEntries}
       openNewMemoryModal={openNewMemoryModal}
       setOpenNewMemoryModal={setOpenNewMemoryModal}
+      scopeLabel={scopeLabel}
+      workspaceId={typeof workspaceId === 'string' ? workspaceId : undefined}
+      projectId={typeof projectId === 'string' ? projectId : undefined}
+      morphMeta={morphMeta}
+      loading={!memoryLoaded && !loadError}
+      saveError={saveError || loadError}
     />
   );
 }
