@@ -21,6 +21,7 @@ EMPLOYEES_TABLE_NAME = os.environ.get("EMPLOYEES_TABLE", "zexvro-employees")
 PAYROLL_TABLE_NAME = os.environ.get("PAYROLL_TABLE", "zexvro-payroll-runs")
 PAYROLL_TAXONOMY_TABLE_NAME = os.environ.get("PAYROLL_TAXONOMY_TABLE", "zexvro-payroll-taxonomy")
 WAITLIST_TABLE_NAME = os.environ.get("WAITLIST_TABLE", "zexvro-waitlist")
+AUDIT_TABLE_NAME = os.environ.get("AUDIT_TABLE", "zexvro-workspace-audit")
 WAITLIST_ADMIN_SECRET = (os.environ.get("WAITLIST_ADMIN_SECRET") or "").strip()
 
 devices_table = dynamodb.Table(DEVICES_TABLE_NAME)
@@ -31,6 +32,7 @@ employees_table = dynamodb.Table(EMPLOYEES_TABLE_NAME)
 payroll_runs_table = dynamodb.Table(PAYROLL_TABLE_NAME)
 payroll_taxonomy_table = dynamodb.Table(PAYROLL_TAXONOMY_TABLE_NAME)
 waitlist_table = dynamodb.Table(WAITLIST_TABLE_NAME)
+audit_table = dynamodb.Table(AUDIT_TABLE_NAME)
 
 EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 ec2 = boto3.client("ec2", region_name=os.environ.get("AWS_REGION", "us-east-1"))
@@ -603,6 +605,113 @@ def find_workspace_by_id(workspace_id):
         return found
     except Exception:
         return None
+
+
+def append_audit_event(
+    workspace_id,
+    *,
+    action,
+    actor_id=None,
+    actor_email=None,
+    target=None,
+    project_id=None,
+    meta=None,
+    severity="info",
+):
+    """
+    Append-only workspace audit row. Fail-open: log and return None on error
+    so primary mutations are not blocked by audit outages.
+    """
+    ws = (workspace_id or "").strip()
+    if not ws or not action:
+        return None
+    now_ms = int(time.time() * 1000)
+    event_id = str(uuid.uuid4())
+    # Zero-padded ms + uuid so query KeyCondition RANGE is chronological.
+    event_key = f"{now_ms:013d}#{event_id}"
+    item = {
+        "workspaceId": ws,
+        "eventKey": event_key,
+        "eventId": event_id,
+        "action": str(action)[:128],
+        "actorId": (actor_id or "")[:128] or None,
+        "actorEmail": (actor_email or "").strip().lower()[:256] or None,
+        "target": (target or "")[:512] or None,
+        "projectId": (project_id or "").strip()[:128] or None,
+        "meta": meta if isinstance(meta, dict) else {},
+        "severity": severity if severity in ("info", "warning", "critical") else "info",
+        "createdAt": now_ms,
+    }
+    try:
+        audit_table.put_item(Item=to_dynamodb_value(item))
+        return {
+            "id": event_id,
+            "eventKey": event_key,
+            "workspaceId": ws,
+            "action": item["action"],
+            "actorId": item.get("actorId") or "",
+            "actorEmail": item.get("actorEmail") or "",
+            "target": item.get("target") or "",
+            "projectId": item.get("projectId") or "",
+            "meta": item.get("meta") or {},
+            "severity": item["severity"],
+            "createdAt": now_ms,
+        }
+    except Exception as exc:
+        print(f"[append_audit_event] failed ws={ws} action={action}: {exc}")
+        return None
+
+
+def list_audit_events(workspace_id, *, limit=50, cursor=None, project_id=None):
+    """List audit events newest-first for a workspace (optional project filter)."""
+    ws = (workspace_id or "").strip()
+    if not ws:
+        return [], None
+    limit = max(1, min(int(limit or 50), 100))
+    kwargs = {
+        "KeyConditionExpression": Key("workspaceId").eq(ws),
+        "ScanIndexForward": False,
+        "Limit": limit,
+    }
+    if cursor:
+        try:
+            kwargs["ExclusiveStartKey"] = {
+                "workspaceId": ws,
+                "eventKey": cursor,
+            }
+        except Exception:
+            pass
+    try:
+        res = audit_table.query(**kwargs)
+    except Exception as exc:
+        print(f"[list_audit_events] query failed: {exc}")
+        return [], None
+
+    items = res.get("Items") or []
+    events = []
+    pid_filter = (project_id or "").strip()
+    for raw in items:
+        if pid_filter and (raw.get("projectId") or "") != pid_filter:
+            continue
+        events.append({
+            "id": raw.get("eventId") or (raw.get("eventKey") or "").split("#")[-1],
+            "eventKey": raw.get("eventKey"),
+            "workspaceId": raw.get("workspaceId") or ws,
+            "action": raw.get("action") or "",
+            "actorId": raw.get("actorId") or "",
+            "actorEmail": raw.get("actorEmail") or "",
+            "target": raw.get("target") or "",
+            "projectId": raw.get("projectId") or "",
+            "meta": raw.get("meta") or {},
+            "severity": raw.get("severity") or "info",
+            "createdAt": int(raw.get("createdAt") or 0),
+        })
+
+    next_cursor = None
+    lek = res.get("LastEvaluatedKey")
+    if lek and lek.get("eventKey"):
+        next_cursor = lek["eventKey"]
+    return events, next_cursor
 
 
 def require_workspace_access(workspace_id, username, email=None):
@@ -1187,13 +1296,70 @@ def lambda_handler(event, context):
             return role_err
 
         # Allow Owner/Admin to update members + invitations (IAM invite flow).
+        now_ms = int(time.time() * 1000)
         updated = update_item(
             workspaces_table,
             {"ownerId": username, "workspaceId": workspace_id},
-            {**body, "updatedAt": int(time.time() * 1000)},
+            {**body, "updatedAt": now_ms},
             {"ownerId", "workspaceId", "id", "createdAt"},
         )
+        caller_email = _caller_email(event, username)
+        changed = [k for k in ("name", "plan", "settings", "members", "invitations") if k in body]
+        if changed:
+            append_audit_event(
+                workspace_id,
+                action="workspace.updated",
+                actor_id=username,
+                actor_email=caller_email,
+                target=workspace_id,
+                meta={"fields": changed},
+            )
         return respond(200, {"status": "success", "workspace": normalize_workspace_item(updated)})
+
+    # Route: GET /api/workspaces/{id}/audit — durable workspace audit ledger
+    elif (
+        path.startswith("/api/workspaces/")
+        and path.endswith("/audit")
+        and http_method == "GET"
+    ):
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        parts = path.strip("/").split("/")
+        # workspaces / {id} / audit
+        if len(parts) < 3:
+            return respond(400, {"error": "invalid_request", "error_description": "workspaceId required"})
+        workspace_id = parts[1]
+        caller_email = _caller_email(event, username)
+        workspace, access_err = require_workspace_access(workspace_id, username, email=caller_email)
+        if access_err:
+            return access_err
+        if not workspace:
+            workspace = find_workspace_by_id(workspace_id)
+        if not workspace:
+            return respond(404, {"error": "not_found", "error_description": "Workspace not found"})
+        role = resolve_workspace_member_role(workspace, username, email=caller_email)
+        if not role:
+            return respond(403, {
+                "error": "forbidden",
+                "error_description": "You are not a member of this workspace",
+            })
+        query = get_query_params(event)
+        try:
+            limit = int(query.get("limit") or 50)
+        except (TypeError, ValueError):
+            limit = 50
+        events, next_cursor = list_audit_events(
+            workspace_id,
+            limit=limit,
+            cursor=query.get("cursor"),
+            project_id=query.get("projectId"),
+        )
+        return respond(200, {
+            "events": events,
+            "nextCursor": next_cursor,
+            "workspaceId": workspace_id,
+        })
 
     elif path.startswith("/api/workspaces/") and http_method == "DELETE":
         username, auth_error = require_username(event, headers)
@@ -1253,6 +1419,15 @@ def lambda_handler(event, context):
             "owner": body.get("owner", username),
         }
         projects_table.put_item(Item=to_dynamodb_value(item))
+        append_audit_event(
+            workspace_id,
+            action="project.created",
+            actor_id=username,
+            actor_email=caller_email,
+            target=body.get("name") or project_id,
+            project_id=project_id,
+            meta={"projectId": project_id},
+        )
         return respond(200, {"status": "success", "project": normalize_project_item(item)})
 
     # Route: PUT/DELETE /api/projects/{id}
@@ -1881,6 +2056,21 @@ def lambda_handler(event, context):
                 token=token,
                 expires_at=body.get("expiresAt"),
             )
+            caller_email = _caller_email(event, username)
+            ws_id = (body.get("workspaceId") or "").strip()
+            if ws_id:
+                append_audit_event(
+                    ws_id,
+                    action="invite.sent",
+                    actor_id=username,
+                    actor_email=caller_email,
+                    target=recipient_email,
+                    meta={
+                        "role": role,
+                        "inviteId": body.get("inviteId") or "",
+                        "workspaceName": workspace_name or "",
+                    },
+                )
             return respond(200, {
                 "status": "success",
                 "messageId": send_res.get("MessageId"),
@@ -1987,6 +2177,19 @@ def lambda_handler(event, context):
             {"members": members, "invitations": invitations, "updatedAt": now_ms},
             {"ownerId", "workspaceId", "id"},
         )
+        if status != "accepted":
+            append_audit_event(
+                workspace_id,
+                action="invite.accepted",
+                actor_id=username,
+                actor_email=invite_email or caller_email,
+                target=invite_email or caller_email,
+                meta={
+                    "role": role,
+                    "inviteId": invite.get("id") or "",
+                    "workspaceName": workspace_name,
+                },
+            )
         return respond(200, {
             "status": "success",
             "workspaceId": workspace_id,
@@ -2040,6 +2243,21 @@ def lambda_handler(event, context):
             {"ownerId": username, "workspaceId": workspace_id},
             {"invitations": invitations, "members": members, "updatedAt": now_ms},
             {"ownerId", "workspaceId", "id"},
+        )
+        caller_email = _caller_email(event, username)
+        revoked_email = ""
+        for inv in workspace.get("invitations") or []:
+            if inv.get("id") == invite_id:
+                revoked_email = (inv.get("email") or "").strip().lower()
+                break
+        append_audit_event(
+            workspace_id,
+            action="invite.revoked",
+            actor_id=username,
+            actor_email=caller_email,
+            target=revoked_email or invite_id,
+            meta={"inviteId": invite_id},
+            severity="warning",
         )
         return respond(200, {"status": "success", "workspace": normalize_workspace_item(updated)})
 

@@ -69,6 +69,20 @@ export const api = {
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
 };
 
+export type WorkspaceAuditEvent = {
+  id: string;
+  eventKey?: string;
+  workspaceId: string;
+  action: string;
+  actorId?: string;
+  actorEmail?: string;
+  target?: string;
+  projectId?: string;
+  meta?: Record<string, unknown>;
+  severity?: 'info' | 'warning' | 'critical';
+  createdAt: number;
+};
+
 export const workspaceApi = {
   list: () => api.get<{ workspaces: any[] }>('/api/workspaces'),
   get: (id: string) => api.get<{ workspace: any }>(`/api/workspaces/${encodeURIComponent(id)}`),
@@ -76,6 +90,17 @@ export const workspaceApi = {
   update: (id: string, data: any) => api.put<any>(`/api/workspaces/${id}`, data),
   delete: (id: string) => api.delete<any>(`/api/workspaces/${id}`),
   invite: (id: string, member: any) => api.post<any>(`/api/workspaces/${id}/invite`, member),
+  /** Durable append-only audit ledger (Lambda → Dynamo). */
+  listAudit: (id: string, opts?: { limit?: number; cursor?: string; projectId?: string }) => {
+    const params = new URLSearchParams();
+    if (opts?.limit) params.set('limit', String(opts.limit));
+    if (opts?.cursor) params.set('cursor', opts.cursor);
+    if (opts?.projectId) params.set('projectId', opts.projectId);
+    const q = params.toString();
+    return api.get<{ events: WorkspaceAuditEvent[]; nextCursor?: string | null; workspaceId: string }>(
+      `/api/workspaces/${encodeURIComponent(id)}/audit${q ? `?${q}` : ''}`,
+    );
+  },
 };
 
 export const projectApi = {

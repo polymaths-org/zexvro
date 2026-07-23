@@ -1045,3 +1045,14 @@ Use `None` for empty fields. Do not delete fields.
 - Deployed: Lambda `zexvro-agent-backend` + Cloudflare Pages `zexvro` (`2a93a8b7.zexvro-7oq.pages.dev` → console.zexvro.in).
 - Verified: rbac vitest 36/36; no Lambda `/dashboard` fallback; console + `/invite/accept` 200.
 - Next: re-invite from console and confirm Brevo CTA includes `?token=`.
+
+## 2026-07-23 - OpenCode with Nabil - Phase 1 durable workspace audit
+
+- Service: workspace IAM / audit ledger (Nabil plan Phase 1).
+- Infra: DynamoDB table `zexvro-workspace-audit` (pk workspaceId, sk eventKey) created; Lambda env `AUDIT_TABLE`.
+- Lambda: `append_audit_event` (fail-open), `list_audit_events`, `GET /api/workspaces/{id}/audit`.
+- Emit: invite.sent / invite.accepted / invite.revoked, workspace.updated, project.created.
+- FE: `workspaceApi.listAudit`; WorkspaceActivity + ProjectAudit load remote ledger (derived fallback if empty).
+- Tests: `scripts/test_audit_helpers.py` 5/5; rbac 36/36; tsc clean; Lambda + Pages deploy.
+- Phase 0: console + invite/accept 200; invite token fix already live.
+- Next: Phase 2 ZCR credits (after invite smoke with real users); re-invite to populate ledger.
