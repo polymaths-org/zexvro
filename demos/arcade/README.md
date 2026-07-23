@@ -1,6 +1,6 @@
 # ZEXVRO Arcade (Web2 → Web3 Morph demo)
 
-Lakebed capsule: a tiny **browser clicker game**. Morph migrates it to Web3 by wiring:
+Lakebed capsule: **Neon Run** — original canvas **platformer** (coins, enemies, spikes, flag). Morph migrates it to Web3 by wiring:
 
 - **Gate** — captcha / anti-bot on score submit  
 - **NFT** — skins / victory badge (Stellar testnet)  

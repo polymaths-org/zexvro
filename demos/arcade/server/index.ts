@@ -7,7 +7,7 @@ import { clampScore, cleanPlayerName, type GameMode } from '../shared/game'
  * Scores stored as strings (Lakebed v0 scalar types: string | boolean only).
  */
 export default capsule({
-  name: 'ZEXVRO Arcade',
+  name: 'ZEXVRO Neon Run',
 
   schema: {
     scores: table({
@@ -82,7 +82,7 @@ export default capsule({
     status: endpoint({ method: 'GET', path: '/api/status' }, () =>
       json({
         ok: true,
-        product: 'zexvro-arcade',
+        product: 'zexvro-neon-run',
       }),
     ),
 

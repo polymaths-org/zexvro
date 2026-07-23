@@ -10,7 +10,8 @@ export type ScoreRow = {
   updatedAt: string
 }
 
-export type SkinId = 'default' | 'neon' | 'gold'
+/** Re-export skin id from platformer engine for server/client shared typing */
+export type { SkinId } from './platformer'
 
 export function cleanPlayerName(value: string): string {
   return value.trim().slice(0, 24) || 'anon'
