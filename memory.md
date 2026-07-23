@@ -1,5 +1,9 @@
 # ZEXVRO Shared Memory
 
+## 2026-07-23 - Morph fully self-contained branded TUI
+
+- Summary: Removed third-party agent TUI branding. Morph has its own TUI with MORPH logo, /connect for OpenAI·Anthropic-compatible·custom endpoint+key+model, own config at ~/.config/morph. One-command install.sh. No foreign agent product names in the UI.
+
 ## 2026-07-23 - Morph one-command install + native TUI /connect providers
 
 - Summary: `bash services/morph/install.sh` (or curl raw install.sh) installs OpenCode + morph on PATH. Default `morph` launches Morph-branded OpenCode TUI. Providers via in-TUI `/connect` (OpenAI/Anthropic/custom). No separate Morph provider CLI required for normal use.

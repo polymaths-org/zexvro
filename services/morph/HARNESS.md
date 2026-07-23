@@ -1,32 +1,18 @@
-# Morph harness
+# Morph (self-contained harness)
 
-## Product shape
+Morph is a **standalone** ZEXVRO agent:
 
-| You type | What runs |
-| --- | --- |
-| `morph` | **OpenCode TUI** with Morph agent, theme, MCP, provider |
-| `morph providers set/add` | Clean custom-endpoint UX (writes `~/.config/morph/config.json`) |
-| `morph run "…"` | Headless self-contained loop (no TUI) |
-| `morph chat` | Plain REPL fallback |
+- Own TUI (branded MORPH — not a third-party agent product)
+- Own config (`~/.config/morph/config.json`)
+- Own tool loop + ZEXVRO platform tools
+- `/connect` for providers (OpenAI, Anthropic-compatible, custom OpenAI-compatible, key, model)
 
-## Why OpenCode for TUI
+No third-party agent branding in the UI.
 
-Full `/` command surface, sessions, model switcher, permissions, streaming — already production-grade. Morph layers branding + ZEXVRO tools + easier providers. Rebuilding that TUI in-house is not demo-viable.
+## Install
 
-## Branding
+`bash services/morph/install.sh` or curl the same script from main.
 
-- Theme: `themes/morph.json` → installed to `~/.config/opencode/themes/morph.json`
-- Agents: `agent/morph.md`, `morph-ops.md` → `~/.config/opencode/agent/`
-- Instructions: `AGENTS.md` / `MORPH.md`
-- Default agent: `morph`
+## Start
 
-## Providers
-
-- **All OpenCode stock providers** remain (TUI `/connect`)
-- **Morph presets** (OpenAI, OpenRouter, Groq, xAI, custom URL, …) set default Morph model at TUI launch via runtime config inject
-
-## Demo
-
-1. `cd demos/arcade && morph`
-2. Analyze → plan → implement ZEXVRO migration
-3. `npx lakebed@0.0.29 deploy`
+`morph` → Morph TUI → `/connect` → work in `demos/arcade` or any repo.
