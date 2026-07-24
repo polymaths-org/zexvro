@@ -1,5 +1,13 @@
 # ZEXVRO Shared Memory
 
+## 2026-07-25 - REQWID offline: missing VITE_AGENT_AUTH_API_URL
+
+- Symptom: console REQWID "Protection service is offline" + `Unexpected token '<' ... not valid JSON`
+- Cause: production Pages build used default `/api/agent-auth`; CF Pages returns SPA HTML for that path
+- Gate itself was healthy (`https://api.zexvro.in/gate`, photo bank 96 files)
+- Fix: `deploy-production.sh` exports `VITE_AGENT_AUTH_API_URL=https://api.zexvro.in/gate`; client host-aware fallback; redeployed Pages `6dcaee68`
+
+
 ## 2026-07-25 - Push merged main + production deploy
 
 - Pushed `2f33e63` (merge Morph/Gate + Nabil platform) to `origin/main`
