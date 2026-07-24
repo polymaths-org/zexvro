@@ -25,7 +25,10 @@ export default function WorkspaceCredits() {
   const [error, setError] = useState<string | null>(null);
   const [promoCode, setPromoCode] = useState('');
   const [promoMsg, setPromoMsg] = useState<string | null>(null);
+  const [promoStatus, setPromoStatus] = useState<string | null>(null);
+  const [promoValid, setPromoValid] = useState<boolean | null>(null);
   const [promoBusy, setPromoBusy] = useState(false);
+  const [validateBusy, setValidateBusy] = useState(false);
   const [envBusy, setEnvBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -49,16 +52,47 @@ export default function WorkspaceCredits() {
     void load();
   }, [load]);
 
+  const validate = async () => {
+    if (!workspaceId || !promoCode.trim()) return;
+    setValidateBusy(true);
+    setPromoMsg(null);
+    setPromoStatus(null);
+    setPromoValid(null);
+    try {
+      const res = await workspaceApi.validatePromo(workspaceId, promoCode.trim());
+      setPromoValid(!!res.valid);
+      setPromoStatus(res.status);
+      setPromoMsg(res.message || (res.valid ? 'Valid' : 'Invalid'));
+    } catch (err) {
+      setPromoValid(false);
+      setPromoStatus('error');
+      setPromoMsg(err instanceof Error ? err.message : 'Validate failed');
+    } finally {
+      setValidateBusy(false);
+    }
+  };
+
   const redeem = async () => {
     if (!workspaceId || !promoCode.trim()) return;
     setPromoBusy(true);
     setPromoMsg(null);
     try {
+      // Always validate first for clear status messaging
+      const check = await workspaceApi.validatePromo(workspaceId, promoCode.trim());
+      setPromoValid(!!check.valid);
+      setPromoStatus(check.status);
+      if (!check.valid) {
+        setPromoMsg(check.message || 'Promo cannot be redeemed');
+        return;
+      }
       const res = await workspaceApi.redeemPromo(workspaceId, promoCode.trim());
-      setPromoMsg(`Redeemed +${res.tx?.amount ?? ''} ZCR. Balance: ${res.balance?.balance ?? '—'} ZCR`);
+      setPromoMsg(`Redeemed +${res.tx?.amount ?? check.creditAmount ?? ''} ZCR. Balance: ${res.balance?.balance ?? '—'} ZCR`);
+      setPromoStatus('redeemed');
+      setPromoValid(null);
       setPromoCode('');
       await load();
     } catch (err) {
+      setPromoValid(false);
       setPromoMsg(err instanceof Error ? err.message : 'Redeem failed');
     } finally {
       setPromoBusy(false);
@@ -171,14 +205,27 @@ export default function WorkspaceCredits() {
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
               <Ticket className="h-3.5 w-3.5" /> Redeem promo
             </div>
-            <div className="mt-3 flex gap-2">
+            <div className="mt-3 flex flex-wrap gap-2">
               <input
                 value={promoCode}
-                onChange={e => setPromoCode(e.target.value.toUpperCase())}
-                placeholder="LAUNCH100"
+                onChange={e => {
+                  setPromoCode(e.target.value.toUpperCase());
+                  setPromoValid(null);
+                  setPromoStatus(null);
+                  setPromoMsg(null);
+                }}
+                placeholder="ZXR-…"
                 disabled={!canWrite || promoBusy}
                 className="h-9 min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-2.5 font-mono text-xs uppercase outline-none dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
               />
+              <button
+                type="button"
+                disabled={!canWrite || validateBusy || promoBusy || !promoCode.trim()}
+                onClick={() => void validate()}
+                className="rounded-lg border border-zinc-200 px-3 text-xs font-medium text-zinc-700 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-200"
+              >
+                Check
+              </button>
               <button
                 type="button"
                 disabled={!canWrite || promoBusy || !promoCode.trim()}
@@ -188,9 +235,26 @@ export default function WorkspaceCredits() {
                 Redeem
               </button>
             </div>
-            {promoMsg ? <p className="mt-2 text-[11px] text-zinc-500">{promoMsg}</p> : null}
+            {promoMsg ? (
+              <p
+                className={`mt-2 text-[11px] ${
+                  promoValid === true
+                    ? 'text-emerald-500'
+                    : promoValid === false
+                      ? 'text-amber-500'
+                      : promoStatus === 'redeemed'
+                        ? 'text-emerald-500'
+                        : 'text-zinc-500'
+                }`}
+              >
+                {promoStatus && promoStatus !== 'redeemed' ? (
+                  <span className="mr-1 font-mono uppercase opacity-80">[{promoStatus}]</span>
+                ) : null}
+                {promoMsg}
+              </p>
+            ) : null}
             <p className="mt-2 text-[11px] text-zinc-400">
-              Credit packs via NFT checkout land in a later top-up flow.
+              One-time per workspace · Check validity before redeem · Expired / already used codes are rejected.
             </p>
           </div>
         </div>

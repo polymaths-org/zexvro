@@ -120,6 +120,10 @@ export type PromoCode = {
   note?: string;
   eligibleEnvironments?: string[];
   createdAt?: number;
+  oneTime?: boolean;
+  isExpired?: boolean;
+  isExhausted?: boolean;
+  remainingRedemptions?: number | null;
 };
 
 export const workspaceApi = {
@@ -168,6 +172,18 @@ export const workspaceApi = {
       `/api/workspaces/${encodeURIComponent(id)}/credits/redeem`,
       { code },
     ),
+  validatePromo: (id: string, code: string) =>
+    api.post<{
+      valid: boolean;
+      status: string;
+      message: string;
+      code?: string;
+      creditAmount?: number;
+      promo?: PromoCode;
+      fresh?: boolean;
+      expiresAt?: number;
+      redeemedAt?: number;
+    }>(`/api/workspaces/${encodeURIComponent(id)}/credits/validate-promo`, { code }),
 };
 
 export type PlatformMember = {
@@ -229,11 +245,13 @@ export const platformApi = {
     api.post<{ status: string; balance: CreditBalance }>('/api/platform/credits/grant', body),
   listPromos: () => api.get<{ promos: PromoCode[] }>('/api/platform/promo-codes'),
   createPromo: (body: {
-    code: string;
+    code?: string;
     creditAmount: number;
     maxRedemptions?: number | null;
     maxPerWorkspace?: number;
     expiresAt?: number | null;
+    expiresInDays?: number | null;
+    autoGenerate?: boolean;
     note?: string;
   }) => api.post<{ status: string; promo: PromoCode }>('/api/platform/promo-codes', body),
   disablePromo: (code: string) =>

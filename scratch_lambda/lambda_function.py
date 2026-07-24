@@ -1715,9 +1715,36 @@ def lambda_handler(event, context):
             return respond(400, {
                 "error": getattr(exc, "code", "promo_error"),
                 "error_description": getattr(exc, "message", str(exc)),
+                "status": getattr(exc, "code", "promo_error"),
             })
         except Exception as exc:
             return respond(502, {"error": "credits_error", "error_description": str(exc)})
+
+    # --- Credits: POST validate promo (no redeem) ---
+    elif (
+        path.startswith("/api/workspaces/")
+        and path.endswith("/credits/validate-promo")
+        and http_method == "POST"
+    ):
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        parts = path.strip("/").split("/")
+        workspace_id = parts[2] if len(parts) >= 4 else ""
+        caller_email = _caller_email(event, username)
+        workspace, access_err = require_workspace_access(workspace_id, username, email=caller_email)
+        if access_err:
+            return access_err
+        if not workspace:
+            workspace = find_workspace_by_id(workspace_id)
+        if not workspace or not resolve_workspace_member_role(workspace, username, email=caller_email):
+            return respond(403, {"error": "forbidden", "error_description": "Not a workspace member"})
+        code = (body.get("code") or "").strip()
+        try:
+            result = get_credits_service().validate_promo(workspace_id, code)
+            return respond(200, result)
+        except Exception as exc:
+            return respond(502, {"error": "promo_error", "error_description": str(exc)})
 
     # --- Internal top-up (NFT service payment gateway) ---
     elif path == "/api/internal/credits/topup" and http_method == "POST":
@@ -1886,16 +1913,33 @@ def lambda_handler(event, context):
         if denied:
             return denied
         try:
+            auto_gen = bool(body.get("autoGenerate") or body.get("generate") or not (body.get("code") or "").strip())
+            expires_at = body.get("expiresAt")
+            expires_in_days = body.get("expiresInDays")
+            if expires_at is None and expires_in_days is not None:
+                try:
+                    days = int(expires_in_days)
+                    if days > 0:
+                        expires_at = int(time.time() * 1000) + days * 24 * 60 * 60 * 1000
+                except (TypeError, ValueError):
+                    expires_at = None
+            # Default max redemptions = 1 (one-time code) unless explicitly set
+            max_red = body.get("maxRedemptions")
+            if max_red is None or max_red == "":
+                max_red = 1
+            else:
+                max_red = int(max_red)
             promo = get_credits_service().create_promo(
                 body.get("code") or "",
                 int(body.get("creditAmount") or 0),
-                max_redemptions=body.get("maxRedemptions"),
-                max_per_workspace=int(body.get("maxPerWorkspace") or 1),
+                max_redemptions=max_red,
+                max_per_workspace=1,
                 starts_at=body.get("startsAt"),
-                expires_at=body.get("expiresAt"),
+                expires_at=expires_at,
                 created_by=username,
                 note=body.get("note") or "",
                 eligible_environments=body.get("eligibleEnvironments"),
+                auto_generate=auto_gen,
             )
             return respond(200, {"status": "success", "promo": promo})
         except Exception as exc:

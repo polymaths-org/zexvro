@@ -36,8 +36,16 @@ export default function PlatformAdmin() {
   const [grantAmount, setGrantAmount] = useState('100');
   const [grantMsg, setGrantMsg] = useState<string | null>(null);
 
-  const [promoForm, setPromoForm] = useState({ code: '', creditAmount: '100', maxRedemptions: '', note: '' });
+  const [promoForm, setPromoForm] = useState({
+    code: '',
+    creditAmount: '100',
+    maxRedemptions: '1',
+    expiresInDays: '30',
+    note: '',
+    autoGenerate: true,
+  });
   const [promoMsg, setPromoMsg] = useState<string | null>(null);
+  const [lastGenerated, setLastGenerated] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -105,15 +113,28 @@ export default function PlatformAdmin() {
 
   const createPromo = async () => {
     setPromoMsg(null);
+    setLastGenerated(null);
     try {
-      await platformApi.createPromo({
-        code: promoForm.code.trim().toUpperCase(),
+      const res = await platformApi.createPromo({
+        code: promoForm.autoGenerate ? undefined : promoForm.code.trim().toUpperCase(),
+        autoGenerate: promoForm.autoGenerate || !promoForm.code.trim(),
         creditAmount: parseInt(promoForm.creditAmount, 10) || 0,
-        maxRedemptions: promoForm.maxRedemptions ? parseInt(promoForm.maxRedemptions, 10) : null,
+        maxRedemptions: promoForm.maxRedemptions ? parseInt(promoForm.maxRedemptions, 10) : 1,
+        expiresInDays: promoForm.expiresInDays ? parseInt(promoForm.expiresInDays, 10) : null,
         note: promoForm.note,
       });
-      setPromoMsg('Promo created');
-      setPromoForm({ code: '', creditAmount: '100', maxRedemptions: '', note: '' });
+      const code = res.promo?.code || '';
+      setLastGenerated(code);
+      setPromoMsg(`Promo created${code ? `: ${code}` : ''}`);
+      setPromoForm(f => ({
+        ...f,
+        code: '',
+        creditAmount: '100',
+        maxRedemptions: '1',
+        expiresInDays: '30',
+        note: '',
+        autoGenerate: true,
+      }));
       await load();
     } catch (err) {
       setPromoMsg(err instanceof Error ? err.message : 'Create failed');
@@ -378,12 +399,27 @@ export default function PlatformAdmin() {
             <Ticket className="h-4 w-4" /> Create promo code
           </h2>
           <div className="mt-4 space-y-3">
-            <input
-              value={promoForm.code}
-              onChange={e => setPromoForm(f => ({ ...f, code: e.target.value.toUpperCase() }))}
-              placeholder="CODE"
-              className="h-9 w-full rounded-lg border border-zinc-200 bg-white px-3 font-mono text-xs uppercase dark:border-zinc-800 dark:bg-zinc-950"
-            />
+            <label className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-300">
+              <input
+                type="checkbox"
+                checked={promoForm.autoGenerate}
+                onChange={e => setPromoForm(f => ({ ...f, autoGenerate: e.target.checked }))}
+                className="rounded border-zinc-400"
+              />
+              Auto-generate random code (recommended)
+            </label>
+            {!promoForm.autoGenerate ? (
+              <input
+                value={promoForm.code}
+                onChange={e => setPromoForm(f => ({ ...f, code: e.target.value.toUpperCase() }))}
+                placeholder="CUSTOM-CODE"
+                className="h-9 w-full rounded-lg border border-zinc-200 bg-white px-3 font-mono text-xs uppercase dark:border-zinc-800 dark:bg-zinc-950"
+              />
+            ) : (
+              <p className="rounded-lg border border-dashed border-zinc-700/60 bg-zinc-950/40 px-3 py-2 font-mono text-[11px] text-zinc-400">
+                System will create a code like ZXR-A7K2M9QX
+              </p>
+            )}
             <div className="grid grid-cols-2 gap-2">
               <input
                 value={promoForm.creditAmount}
@@ -394,27 +430,50 @@ export default function PlatformAdmin() {
                 className="h-9 rounded-lg border border-zinc-200 bg-white px-3 text-xs dark:border-zinc-800 dark:bg-zinc-950"
               />
               <input
-                value={promoForm.maxRedemptions}
-                onChange={e => setPromoForm(f => ({ ...f, maxRedemptions: e.target.value }))}
+                value={promoForm.expiresInDays}
+                onChange={e => setPromoForm(f => ({ ...f, expiresInDays: e.target.value }))}
                 type="number"
                 min={1}
-                placeholder="Max redemptions (opt)"
+                placeholder="Expiry (days)"
                 className="h-9 rounded-lg border border-zinc-200 bg-white px-3 text-xs dark:border-zinc-800 dark:bg-zinc-950"
               />
             </div>
+            <input
+              value={promoForm.maxRedemptions}
+              onChange={e => setPromoForm(f => ({ ...f, maxRedemptions: e.target.value }))}
+              type="number"
+              min={1}
+              placeholder="Max redemptions (default 1 = one-time)"
+              className="h-9 w-full rounded-lg border border-zinc-200 bg-white px-3 text-xs dark:border-zinc-800 dark:bg-zinc-950"
+            />
             <input
               value={promoForm.note}
               onChange={e => setPromoForm(f => ({ ...f, note: e.target.value }))}
               placeholder="Internal note"
               className="h-9 w-full rounded-lg border border-zinc-200 bg-white px-3 text-xs dark:border-zinc-800 dark:bg-zinc-950"
             />
+            <p className="text-[10px] text-zinc-500">
+              Rules: one redeem per workspace · optional global max · expiry enforced · validate before redeem.
+            </p>
             <button
               type="button"
               onClick={() => void createPromo()}
               className="rounded-lg bg-zinc-900 px-3 py-2 text-xs font-medium text-white dark:bg-white dark:text-zinc-900"
             >
-              Create promo
+              {promoForm.autoGenerate ? 'Generate & create' : 'Create promo'}
             </button>
+            {lastGenerated ? (
+              <div className="flex items-center justify-between gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2">
+                <span className="font-mono text-xs font-semibold text-emerald-400">{lastGenerated}</span>
+                <button
+                  type="button"
+                  className="text-[10px] font-medium text-emerald-300 hover:underline"
+                  onClick={() => void navigator.clipboard?.writeText(lastGenerated)}
+                >
+                  Copy
+                </button>
+              </div>
+            ) : null}
             {promoMsg ? <p className="text-[11px] text-zinc-500">{promoMsg}</p> : null}
           </div>
         </section>
@@ -434,12 +493,19 @@ export default function PlatformAdmin() {
                   <th className="px-5 py-3 font-semibold uppercase">Code</th>
                   <th className="px-5 py-3 font-semibold uppercase">ZCR</th>
                   <th className="px-5 py-3 font-semibold uppercase">Redeemed</th>
+                  <th className="px-5 py-3 font-semibold uppercase">Expires</th>
                   <th className="px-5 py-3 font-semibold uppercase">Status</th>
                   <th className="px-5 py-3 font-semibold uppercase text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/80">
-                {promos.map(p => (
+                {promos.map(p => {
+                  const label = p.isExpired
+                    ? 'expired'
+                    : p.isExhausted
+                      ? 'exhausted'
+                      : p.status;
+                  return (
                   <tr key={p.code}>
                     <td className="px-5 py-3 font-mono font-semibold text-zinc-900 dark:text-white">{p.code}</td>
                     <td className="px-5 py-3 tabular-nums">{p.creditAmount}</td>
@@ -447,9 +513,19 @@ export default function PlatformAdmin() {
                       {p.redeemedCount ?? 0}
                       {p.maxRedemptions != null ? ` / ${p.maxRedemptions}` : ''}
                     </td>
-                    <td className="px-5 py-3 uppercase text-zinc-500">{p.status}</td>
+                    <td className="px-5 py-3 text-zinc-500">
+                      {p.expiresAt ? new Date(p.expiresAt).toLocaleDateString() : '—'}
+                    </td>
+                    <td className="px-5 py-3 uppercase text-zinc-500">{label}</td>
                     <td className="px-5 py-3 text-right">
-                      {p.status === 'active' ? (
+                      <button
+                        type="button"
+                        className="mr-2 text-[11px] font-medium text-zinc-400 hover:text-zinc-200"
+                        onClick={() => void navigator.clipboard?.writeText(p.code)}
+                      >
+                        Copy
+                      </button>
+                      {p.status === 'active' && !p.isExpired ? (
                         <button
                           type="button"
                           className="text-[11px] font-medium text-amber-600"
@@ -462,7 +538,8 @@ export default function PlatformAdmin() {
                       )}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

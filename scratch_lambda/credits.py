@@ -9,6 +9,8 @@ Zexvro platform credits (ZCR).
 from __future__ import annotations
 
 import os
+import secrets
+import string
 import time
 import uuid
 from decimal import Decimal
@@ -424,6 +426,17 @@ class CreditsService:
         }
 
     # --- promos ---
+    @staticmethod
+    def generate_code(length: int = 10, prefix: str = "ZXR") -> str:
+        """Cryptographically random promo code, e.g. ZXR-A7K2M9QX."""
+        alphabet = string.ascii_uppercase + string.digits
+        # Avoid ambiguous chars
+        alphabet = alphabet.replace("O", "").replace("0", "").replace("I", "").replace("1", "").replace("L", "")
+        n = max(6, min(int(length or 10), 16))
+        body = "".join(secrets.choice(alphabet) for _ in range(n))
+        pre = (prefix or "ZXR").strip().upper()[:8] or "ZXR"
+        return f"{pre}-{body}"
+
     def create_promo(
         self,
         code: str,
@@ -436,19 +449,43 @@ class CreditsService:
         created_by: str = "",
         note: str = "",
         eligible_environments: Optional[list] = None,
+        auto_generate: bool = False,
     ) -> dict:
         clean = (code or "").strip().upper()
-        if not clean or len(clean) < 3:
+        if auto_generate or not clean:
+            # Retry a few times on rare collision
+            for _ in range(8):
+                candidate = self.generate_code()
+                existing = self.promo_table.get_item(Key={"code": candidate}).get("Item")
+                if not existing:
+                    clean = candidate
+                    break
+            else:
+                clean = self.generate_code(length=12)
+        if len(clean) < 3:
             raise ValueError("code must be at least 3 characters")
         amount = int(credit_amount)
         if amount <= 0:
             raise ValueError("creditAmount must be positive")
+        # Default: one-time redeem globally AND once per workspace
+        if max_redemptions is None:
+            max_redemptions = 1
+        max_redemptions = max(1, int(max_redemptions))
+        # Always enforce single redeem per workspace (platform rule)
+        max_per_workspace = 1
+        if expires_at is not None:
+            expires_at = _int(expires_at)
+            if expires_at > 0 and expires_at < 10_000_000_000:
+                # seconds → ms
+                expires_at = expires_at * 1000
         now = int(time.time() * 1000)
+        if expires_at and expires_at <= now:
+            raise ValueError("expiresAt must be in the future")
         row = {
             "code": clean,
             "creditAmount": amount,
             "maxRedemptions": max_redemptions,
-            "maxPerWorkspace": max(1, int(max_per_workspace or 1)),
+            "maxPerWorkspace": max_per_workspace,
             "startsAt": starts_at,
             "expiresAt": expires_at,
             "status": "active",
@@ -458,11 +495,15 @@ class CreditsService:
             "eligibleEnvironments": eligible_environments or ["testnet", "mainnet"],
             "createdAt": now,
             "updatedAt": now,
+            "oneTime": True,
         }
-        self.promo_table.put_item(
-            Item=_to_ddb(row),
-            ConditionExpression="attribute_not_exists(code)",
-        )
+        try:
+            self.promo_table.put_item(
+                Item=_to_ddb(row),
+                ConditionExpression="attribute_not_exists(code)",
+            )
+        except Exception as exc:
+            raise ValueError(f"Promo code already exists or could not be saved: {exc}") from exc
         return self._public_promo(row)
 
     def list_promos(self) -> list:
@@ -481,6 +522,12 @@ class CreditsService:
         return self._public_promo(res["Attributes"])
 
     def _public_promo(self, item: dict) -> dict:
+        expires = item.get("expiresAt")
+        now = int(time.time() * 1000)
+        expired = bool(expires and _int(expires) < now)
+        redeemed = _int(item.get("redeemedCount"))
+        max_r = item.get("maxRedemptions")
+        exhausted = max_r is not None and redeemed >= _int(max_r)
         return {
             "code": item.get("code"),
             "creditAmount": _int(item.get("creditAmount")),
@@ -489,11 +536,114 @@ class CreditsService:
             "startsAt": item.get("startsAt"),
             "expiresAt": item.get("expiresAt"),
             "status": item.get("status") or "active",
-            "redeemedCount": _int(item.get("redeemedCount")),
+            "redeemedCount": redeemed,
             "createdBy": item.get("createdBy") or "",
             "note": item.get("note") or "",
             "eligibleEnvironments": item.get("eligibleEnvironments") or ["testnet", "mainnet"],
             "createdAt": _int(item.get("createdAt")),
+            "oneTime": True,
+            "isExpired": expired,
+            "isExhausted": exhausted,
+            "remainingRedemptions": (
+                None if max_r is None else max(0, _int(max_r) - redeemed)
+            ),
+        }
+
+    def validate_promo(self, workspace_id: str, code: str) -> dict:
+        """
+        Check promo without redeeming.
+        status: valid | invalid | disabled | expired | not_started |
+                exhausted | already_redeemed | env_ineligible
+        """
+        ws = (workspace_id or "").strip()
+        clean = (code or "").strip().upper()
+        if not clean:
+            return {
+                "valid": False,
+                "status": "invalid",
+                "message": "Enter a promo code",
+                "code": "",
+            }
+        promo = self.promo_table.get_item(Key={"code": clean}).get("Item")
+        if not promo:
+            return {
+                "valid": False,
+                "status": "invalid",
+                "message": "Promo code is invalid",
+                "code": clean,
+            }
+        pub = self._public_promo(promo)
+        now = int(time.time() * 1000)
+        if (promo.get("status") or "") != "active":
+            return {
+                "valid": False,
+                "status": "disabled",
+                "message": "Promo code is disabled",
+                "code": clean,
+                "promo": pub,
+            }
+        starts = promo.get("startsAt")
+        if starts and _int(starts) > now:
+            return {
+                "valid": False,
+                "status": "not_started",
+                "message": "Promo code is not active yet",
+                "code": clean,
+                "promo": pub,
+            }
+        expires = promo.get("expiresAt")
+        if expires and _int(expires) < now:
+            return {
+                "valid": False,
+                "status": "expired",
+                "message": "Promo code has expired",
+                "code": clean,
+                "promo": pub,
+                "expiresAt": _int(expires),
+            }
+        # Prefer workspace-specific "already redeemed" over global exhausted
+        if ws:
+            existing = self.redemption_table.get_item(
+                Key={"code": clean, "workspaceId": ws}
+            ).get("Item")
+            if existing:
+                return {
+                    "valid": False,
+                    "status": "already_redeemed",
+                    "message": "This workspace already redeemed this code (one-time only)",
+                    "code": clean,
+                    "promo": pub,
+                    "redeemedAt": existing.get("redeemedAt"),
+                }
+            env = self.get_workspace_env(ws)
+            eligible = promo.get("eligibleEnvironments") or ["testnet", "mainnet"]
+            if env not in eligible:
+                return {
+                    "valid": False,
+                    "status": "env_ineligible",
+                    "message": f"Promo not valid for {env}",
+                    "code": clean,
+                    "promo": pub,
+                }
+        max_global = promo.get("maxRedemptions")
+        redeemed = _int(promo.get("redeemedCount"))
+        if max_global is not None and redeemed >= _int(max_global):
+            return {
+                "valid": False,
+                "status": "exhausted",
+                "message": "Promo code has already been fully redeemed",
+                "code": clean,
+                "promo": pub,
+            }
+        amount = _int(promo.get("creditAmount"))
+        return {
+            "valid": True,
+            "status": "valid",
+            "message": f"Valid · +{amount} ZCR · one-time redeem",
+            "code": clean,
+            "creditAmount": amount,
+            "promo": pub,
+            "fresh": True,
         }
 
     def redeem_promo(
@@ -506,38 +656,18 @@ class CreditsService:
     ) -> dict:
         ws = (workspace_id or "").strip()
         clean = (code or "").strip().upper()
-        if not clean:
-            raise ValueError("code required")
+        # Re-use validation layer
+        check = self.validate_promo(ws, clean)
+        if not check.get("valid"):
+            raise PromoError(check.get("status") or "invalid", check.get("message") or "Invalid promo")
+
         promo = self.promo_table.get_item(Key={"code": clean}).get("Item")
         if not promo:
-            raise PromoError("not_found", "Promo code not found")
-        if (promo.get("status") or "") != "active":
-            raise PromoError("disabled", "Promo code is disabled")
+            raise PromoError("invalid", "Promo code is invalid")
+
         now = int(time.time() * 1000)
-        starts = promo.get("startsAt")
-        expires = promo.get("expiresAt")
-        if starts and _int(starts) > now:
-            raise PromoError("not_started", "Promo code is not active yet")
-        if expires and _int(expires) < now:
-            raise PromoError("expired", "Promo code has expired")
-
-        env = self.get_workspace_env(ws)
-        eligible = promo.get("eligibleEnvironments") or ["testnet", "mainnet"]
-        if env not in eligible:
-            raise PromoError("env_ineligible", f"Promo not valid for {env}")
-
-        max_global = promo.get("maxRedemptions")
-        redeemed = _int(promo.get("redeemedCount"))
-        if max_global is not None and redeemed >= _int(max_global):
-            raise PromoError("exhausted", "Promo code redemption limit reached")
-
-        # per-workspace uniqueness
-        existing = self.redemption_table.get_item(Key={"code": clean, "workspaceId": ws}).get("Item")
-        if existing:
-            raise PromoError("already_redeemed", "This workspace already redeemed this code")
-
         amount = _int(promo.get("creditAmount"))
-        # record redemption first (condition)
+        # record redemption first (condition) — one-time per workspace
         try:
             self.redemption_table.put_item(
                 Item=_to_ddb({
@@ -551,7 +681,7 @@ class CreditsService:
                 ConditionExpression="attribute_not_exists(workspaceId)",
             )
         except Exception:
-            raise PromoError("already_redeemed", "This workspace already redeemed this code")
+            raise PromoError("already_redeemed", "This workspace already redeemed this code (one-time only)")
 
         try:
             self.promo_table.update_item(
@@ -580,6 +710,7 @@ class CreditsService:
             target=clean,
             meta={"amount": amount},
         )
+        result["validation"] = {"status": "redeemed", "message": f"Redeemed +{amount} ZCR"}
         return result
 
 
