@@ -59,6 +59,10 @@ export interface CheckoutIntentRecord {
   updatedAt: string
   transactionHash?: string
   failureReason?: string
+  /** Platform ZCR grant after paid checkout (credit packs). */
+  creditWorkspaceId?: string
+  creditZcrAmount?: number
+  creditPackId?: string
 }
 
 export interface DeploymentResult {

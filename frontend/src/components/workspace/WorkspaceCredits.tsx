@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from '@tanstack/react-router';
-import { Coins, RefreshCw, Ticket, AlertTriangle, Flame, Snowflake } from 'lucide-react';
+import {
+  Coins,
+  RefreshCw,
+  Ticket,
+  AlertTriangle,
+  Flame,
+  Snowflake,
+  ShoppingCart,
+  ExternalLink,
+} from 'lucide-react';
 import {
   workspaceApi,
   type CreditBalance,
@@ -9,6 +18,14 @@ import {
 import { useWorkspaceStore } from '../../stores/workspace';
 import { useWorkspaceRbac } from '../../rbac/useWorkspaceRbac';
 import RequirePermission, { AccessDenied } from '../../rbac/RequirePermission';
+
+type Pack = {
+  id: string;
+  name: string;
+  zcrAmount: number;
+  usdcPrice: string;
+  description?: string;
+};
 
 export default function WorkspaceCredits() {
   const { workspaceId } = useParams({ strict: false });
@@ -21,6 +38,9 @@ export default function WorkspaceCredits() {
   const [environment, setEnvironment] = useState<'testnet' | 'mainnet'>('testnet');
   const [burnsOnUse, setBurnsOnUse] = useState(false);
   const [ledger, setLedger] = useState<CreditLedgerEvent[]>([]);
+  const [packs, setPacks] = useState<Pack[]>([]);
+  const [nftCollectionId, setNftCollectionId] = useState<string | null>(null);
+  const [purchaseMode, setPurchaseMode] = useState('sandbox');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [promoCode, setPromoCode] = useState('');
@@ -30,17 +50,27 @@ export default function WorkspaceCredits() {
   const [promoBusy, setPromoBusy] = useState(false);
   const [validateBusy, setValidateBusy] = useState(false);
   const [envBusy, setEnvBusy] = useState(false);
+  const [buyBusy, setBuyBusy] = useState<string | null>(null);
+  const [buyMsg, setBuyMsg] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!workspaceId) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await workspaceApi.getCredits(workspaceId);
+      const [res, catalog] = await Promise.all([
+        workspaceApi.getCredits(workspaceId),
+        workspaceApi.listCreditPacks().catch(() => null),
+      ]);
       setBalance(res.credits);
       setEnvironment(res.environment || 'testnet');
       setBurnsOnUse(!!res.burnsOnUse);
       setLedger(res.recent || []);
+      if (catalog) {
+        setPacks(catalog.packs || []);
+        setNftCollectionId(catalog.nftCollectionId || null);
+        setPurchaseMode(catalog.purchaseMode || 'sandbox');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load credits');
     } finally {
@@ -77,7 +107,6 @@ export default function WorkspaceCredits() {
     setPromoBusy(true);
     setPromoMsg(null);
     try {
-      // Always validate first for clear status messaging
       const check = await workspaceApi.validatePromo(workspaceId, promoCode.trim());
       setPromoValid(!!check.valid);
       setPromoStatus(check.status);
@@ -86,7 +115,9 @@ export default function WorkspaceCredits() {
         return;
       }
       const res = await workspaceApi.redeemPromo(workspaceId, promoCode.trim());
-      setPromoMsg(`Redeemed +${res.tx?.amount ?? check.creditAmount ?? ''} ZCR. Balance: ${res.balance?.balance ?? '—'} ZCR`);
+      setPromoMsg(
+        `Redeemed +${res.tx?.amount ?? check.creditAmount ?? ''} ZCR. Balance: ${res.balance?.balance ?? '—'} ZCR`,
+      );
       setPromoStatus('redeemed');
       setPromoValid(null);
       setPromoCode('');
@@ -101,27 +132,56 @@ export default function WorkspaceCredits() {
 
   const switchEnv = async (next: 'testnet' | 'mainnet') => {
     if (!workspace || !canWrite || !workspaceId) return;
+    if (next === environment) return;
     if (next === 'mainnet') {
       const ok = window.confirm(
-        'Switch to MAINNET?\n\nPlatform ZCR will burn when services are used. Testnet never burns credits.',
+        'Switch to MAINNET?\n\nPlatform ZCR will burn when services are used. You can switch back to Testnet anytime.',
       );
       if (!ok) return;
     }
     setEnvBusy(true);
+    setError(null);
     try {
-      const networkLabel = next === 'mainnet' ? 'Stellar Mainnet' : 'Stellar Testnet';
+      // Dedicated API — reliable even when ownerId ≠ Cognito username
+      const res = await workspaceApi.setEnvironment(workspaceId, next);
+      const env = (res.environment || next) as 'testnet' | 'mainnet';
+      setEnvironment(env);
+      setBurnsOnUse(env === 'mainnet');
       updateWorkspace(workspace.id, {
         settings: {
           ...workspace.settings,
-          environment: next,
-          defaultNetwork: networkLabel,
+          environment: env,
+          defaultNetwork: env === 'mainnet' ? 'Stellar Mainnet' : 'Stellar Testnet',
         },
-      });
-      setEnvironment(next);
-      setBurnsOnUse(next === 'mainnet');
+        environment: env,
+      } as any);
       await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to switch environment');
     } finally {
       setEnvBusy(false);
+    }
+  };
+
+  const buyPack = async (packId: string) => {
+    if (!workspaceId || !canWrite) return;
+    setBuyBusy(packId);
+    setBuyMsg(null);
+    try {
+      const res = await workspaceApi.purchaseCreditPack(workspaceId, { packId });
+      if (res.granted) {
+        setBuyMsg(res.message || `+${res.pack?.zcrAmount ?? ''} ZCR added`);
+        await load();
+      } else if (res.nftCheckoutUrl) {
+        setBuyMsg('Opening NFT checkout for USDC payment…');
+        window.open(res.nftCheckoutUrl, '_blank', 'noopener,noreferrer');
+      } else {
+        setBuyMsg(res.message || 'Purchase initiated');
+      }
+    } catch (err) {
+      setBuyMsg(err instanceof Error ? err.message : 'Purchase failed');
+    } finally {
+      setBuyBusy(null);
     }
   };
 
@@ -170,7 +230,11 @@ export default function WorkspaceCredits() {
 
           <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-[#080809]">
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
-              {burnsOnUse ? <Flame className="h-3.5 w-3.5 text-orange-500" /> : <Snowflake className="h-3.5 w-3.5 text-sky-500" />}
+              {burnsOnUse ? (
+                <Flame className="h-3.5 w-3.5 text-orange-500" />
+              ) : (
+                <Snowflake className="h-3.5 w-3.5 text-sky-500" />
+              )}
               Environment
             </div>
             <p className="mt-3 text-lg font-semibold uppercase tracking-wide text-zinc-900 dark:text-white">
@@ -185,20 +249,30 @@ export default function WorkspaceCredits() {
                   type="button"
                   disabled={envBusy || environment === 'testnet'}
                   onClick={() => void switchEnv('testnet')}
-                  className="rounded-md border border-zinc-200 px-2.5 py-1 text-[11px] font-medium disabled:opacity-40 dark:border-zinc-700"
+                  className={`rounded-md border px-2.5 py-1 text-[11px] font-medium disabled:opacity-40 dark:border-zinc-700 ${
+                    environment === 'testnet'
+                      ? 'border-sky-500/50 bg-sky-500/15 text-sky-600 dark:text-sky-400'
+                      : 'border-zinc-200 text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-900'
+                  }`}
                 >
-                  Testnet
+                  {envBusy && environment !== 'testnet' ? '…' : 'Testnet'}
                 </button>
                 <button
                   type="button"
                   disabled={envBusy || environment === 'mainnet'}
                   onClick={() => void switchEnv('mainnet')}
-                  className="rounded-md bg-zinc-900 px-2.5 py-1 text-[11px] font-medium text-white disabled:opacity-40 dark:bg-white dark:text-zinc-900"
+                  className={`rounded-md px-2.5 py-1 text-[11px] font-medium disabled:opacity-40 ${
+                    environment === 'mainnet'
+                      ? 'bg-orange-500 text-white'
+                      : 'bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200'
+                  }`}
                 >
-                  Mainnet
+                  {envBusy && environment !== 'mainnet' ? '…' : 'Mainnet'}
                 </button>
               </div>
-            ) : null}
+            ) : (
+              <p className="mt-3 text-[11px] text-zinc-500">Owner/Admin can switch environment.</p>
+            )}
           </div>
 
           <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-[#080809]">
@@ -238,13 +312,11 @@ export default function WorkspaceCredits() {
             {promoMsg ? (
               <p
                 className={`mt-2 text-[11px] ${
-                  promoValid === true
+                  promoValid === true || promoStatus === 'redeemed'
                     ? 'text-emerald-500'
                     : promoValid === false
                       ? 'text-amber-500'
-                      : promoStatus === 'redeemed'
-                        ? 'text-emerald-500'
-                        : 'text-zinc-500'
+                      : 'text-zinc-500'
                 }`}
               >
                 {promoStatus && promoStatus !== 'redeemed' ? (
@@ -253,11 +325,71 @@ export default function WorkspaceCredits() {
                 {promoMsg}
               </p>
             ) : null}
-            <p className="mt-2 text-[11px] text-zinc-400">
-              One-time per workspace · Check validity before redeem · Expired / already used codes are rejected.
-            </p>
           </div>
         </div>
+
+        {/* Buy credits */}
+        <section className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-[#080809]">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-100 px-5 py-3 dark:border-zinc-800">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-white">
+              <ShoppingCart className="h-4 w-4" /> Buy credits
+            </h2>
+            <span className="text-[10px] uppercase tracking-wide text-zinc-400">
+              {purchaseMode === 'nft' ? 'NFT payment rail' : 'Platform pack (instant grant)'}
+            </span>
+          </div>
+          <div className="p-5">
+            <p className="mb-4 text-xs text-zinc-500">
+              Purchase ZCR for this workspace. Packs grant credits immediately.
+              {nftCollectionId
+                ? ' A live Credit Pack NFT collection is configured for USDC checkout.'
+                : ' Founders can set ZCR_NFT_COLLECTION_ID on the API to route packs through NFT USDC checkout.'}
+            </p>
+            {packs.length === 0 ? (
+              <p className="text-xs text-zinc-500">No packs available.</p>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-3">
+                {packs.map(pack => (
+                  <div
+                    key={pack.id}
+                    className="flex flex-col rounded-xl border border-zinc-200 p-4 dark:border-zinc-800"
+                  >
+                    <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">{pack.name}</p>
+                    <p className="mt-2 text-2xl font-semibold tabular-nums text-zinc-900 dark:text-white">
+                      {pack.zcrAmount.toLocaleString()}
+                      <span className="ml-1 text-sm font-medium text-zinc-400">ZCR</span>
+                    </p>
+                    <p className="mt-1 text-sm text-zinc-500">${pack.usdcPrice} USDC</p>
+                    {pack.description ? (
+                      <p className="mt-2 flex-1 text-[11px] text-zinc-400">{pack.description}</p>
+                    ) : (
+                      <div className="flex-1" />
+                    )}
+                    <button
+                      type="button"
+                      disabled={!canWrite || buyBusy === pack.id}
+                      onClick={() => void buyPack(pack.id)}
+                      className="mt-4 inline-flex items-center justify-center gap-1.5 rounded-lg bg-zinc-900 px-3 py-2 text-xs font-medium text-white disabled:opacity-40 dark:bg-white dark:text-zinc-900"
+                    >
+                      {buyBusy === pack.id ? '…' : 'Buy pack'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {buyMsg ? <p className="mt-3 text-[11px] text-emerald-500">{buyMsg}</p> : null}
+            {nftCollectionId ? (
+              <a
+                href={`/nft/collections/${nftCollectionId}?workspaceId=${encodeURIComponent(workspaceId || '')}`}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-3 inline-flex items-center gap-1 text-[11px] font-medium text-sky-500 hover:underline"
+              >
+                Open NFT credit pack collection <ExternalLink className="h-3 w-3" />
+              </a>
+            ) : null}
+          </div>
+        </section>
 
         <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-[#080809]">
           <div className="border-b border-zinc-100 px-5 py-3 dark:border-zinc-800">
@@ -286,7 +418,10 @@ export default function WorkspaceCredits() {
                         {row.type === 'consume' || row.type === 'consume_skipped' ? '−' : '+'}
                         {row.amount}
                       </td>
-                      <td className="px-5 py-3 text-zinc-500">{row.service}{row.action ? `.${row.action}` : ''}</td>
+                      <td className="px-5 py-3 text-zinc-500">
+                        {row.service}
+                        {row.action ? `.${row.action}` : ''}
+                      </td>
                       <td className="px-5 py-3 font-mono uppercase text-zinc-400">{row.environment || '—'}</td>
                       <td className="px-5 py-3 font-mono tabular-nums text-zinc-500">{row.balanceAfter}</td>
                       <td className="px-5 py-3 text-right text-zinc-400">

@@ -1294,13 +1294,21 @@ export default function DashboardLayout() {
                 <>
                   <span
                     className={`hidden sm:inline-flex items-center rounded-md border px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${
-                      (currentWorkspace.settings?.environment || currentWorkspace.environment || 'testnet') === 'mainnet'
+                      (currentWorkspace.environment
+                        || currentWorkspace.settings?.environment
+                        || (String(currentWorkspace.settings?.defaultNetwork || '').toLowerCase().includes('main')
+                          ? 'mainnet'
+                          : 'testnet')) === 'mainnet'
                         ? 'border-orange-500/40 bg-orange-500/10 text-orange-600 dark:text-orange-400'
                         : 'border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-400'
                     }`}
-                    title="Workspace environment — ZCR burns only on mainnet"
+                    title="Workspace environment — ZCR burns only on mainnet. Switch on Credits page."
                   >
-                    {(currentWorkspace.settings?.environment || currentWorkspace.environment || 'testnet') === 'mainnet'
+                    {(currentWorkspace.environment
+                      || currentWorkspace.settings?.environment
+                      || (String(currentWorkspace.settings?.defaultNetwork || '').toLowerCase().includes('main')
+                        ? 'mainnet'
+                        : 'testnet')) === 'mainnet'
                       ? 'Mainnet'
                       : 'Testnet'}
                   </span>

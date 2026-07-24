@@ -144,6 +144,11 @@ export const workspaceApi = {
       `/api/workspaces/${encodeURIComponent(id)}/audit${q ? `?${q}` : ''}`,
     );
   },
+  setEnvironment: (id: string, environment: 'testnet' | 'mainnet') =>
+    api.post<{ status: string; environment: string; workspace: any }>(
+      `/api/workspaces/${encodeURIComponent(id)}/environment`,
+      { environment },
+    ),
   getCredits: (id: string) =>
     api.get<{
       credits: CreditBalance;
@@ -151,6 +156,32 @@ export const workspaceApi = {
       burnsOnUse: boolean;
       recent: CreditLedgerEvent[];
     }>(`/api/workspaces/${encodeURIComponent(id)}/credits`),
+  listCreditPacks: () =>
+    api.get<{
+      packs: Array<{
+        id: string;
+        name: string;
+        zcrAmount: number;
+        usdcPrice: string;
+        description?: string;
+      }>;
+      nftCollectionId?: string | null;
+      purchaseMode: string;
+      currency: string;
+      paymentAsset: string;
+    }>('/api/credits/packs'),
+  purchaseCreditPack: (
+    id: string,
+    body: { packId: string; nftOnly?: boolean; ref?: string },
+  ) =>
+    api.post<{
+      status: string;
+      pack: { id: string; name: string; zcrAmount: number; usdcPrice: string };
+      nftCheckoutUrl?: string | null;
+      granted: boolean;
+      balance?: CreditBalance;
+      message?: string;
+    }>(`/api/workspaces/${encodeURIComponent(id)}/credits/purchase`, body),
   listCreditLedger: (id: string, opts?: { limit?: number; cursor?: string }) => {
     const params = new URLSearchParams();
     if (opts?.limit) params.set('limit', String(opts.limit));

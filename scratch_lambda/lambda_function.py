@@ -622,6 +622,33 @@ def get_credits_service():
     )
 
 
+def _credit_pack_catalog():
+    """Platform credit packs (ZCR). NFT collection can map packId → sale SKU later."""
+    return [
+        {
+            "id": "zcr_100",
+            "name": "Starter",
+            "zcrAmount": 100,
+            "usdcPrice": "5.00",
+            "description": "100 ZCR for light platform usage",
+        },
+        {
+            "id": "zcr_500",
+            "name": "Builder",
+            "zcrAmount": 500,
+            "usdcPrice": "20.00",
+            "description": "500 ZCR for teams shipping on Zexvro",
+        },
+        {
+            "id": "zcr_2000",
+            "name": "Scale",
+            "zcrAmount": 2000,
+            "usdcPrice": "70.00",
+            "description": "2000 ZCR for production workloads",
+        },
+    ]
+
+
 def scan_all_workspaces():
     """Paginated full table scan of workspaces."""
     items = []
@@ -1502,24 +1529,47 @@ def lambda_handler(event, context):
             return auth_error
 
         workspace_id = path.split("/")[-1]
+        caller_email = _caller_email(event, username)
+        # Prefer owner key, but fall back to scan so env/settings updates work when
+        # Cognito username != Dynamo ownerId (email vs username mismatch).
         res = workspaces_table.get_item(Key={"ownerId": username, "workspaceId": workspace_id})
         workspace = res.get("Item")
+        if not workspace and caller_email:
+            res = workspaces_table.get_item(Key={"ownerId": caller_email, "workspaceId": workspace_id})
+            workspace = res.get("Item")
+        if not workspace:
+            workspace = find_workspace_by_id(workspace_id)
         if not workspace:
             return respond(404, {"error": "not_found", "error_description": "Workspace not found"})
 
-        _, role_err = require_workspace_role(workspace, username, _SETTINGS_WRITE_ROLES)
+        _, role_err = require_workspace_role(workspace, username, _SETTINGS_WRITE_ROLES, email=caller_email)
         if role_err:
             return role_err
 
-        # Allow Owner/Admin to update members + invitations (IAM invite flow).
+        owner_key = workspace.get("ownerId") or username
+        # Merge settings so environment/defaultNetwork updates stick
+        updates = {k: v for k, v in body.items() if k not in ("ownerId", "workspaceId", "id", "createdAt")}
+        if "settings" in updates and isinstance(updates.get("settings"), dict):
+            prev = workspace.get("settings") if isinstance(workspace.get("settings"), dict) else {}
+            merged = {**prev, **updates["settings"]}
+            env = (merged.get("environment") or "").strip().lower()
+            if env not in ("testnet", "mainnet"):
+                net = str(merged.get("defaultNetwork") or "").lower()
+                env = "mainnet" if "main" in net and "test" not in net else "testnet"
+            merged["environment"] = env
+            if env == "mainnet":
+                merged["defaultNetwork"] = merged.get("defaultNetwork") or "Stellar Mainnet"
+            else:
+                merged["defaultNetwork"] = merged.get("defaultNetwork") or "Stellar Testnet"
+            updates["settings"] = merged
+
         now_ms = int(time.time() * 1000)
         updated = update_item(
             workspaces_table,
-            {"ownerId": username, "workspaceId": workspace_id},
-            {**body, "updatedAt": now_ms},
+            {"ownerId": owner_key, "workspaceId": workspace_id},
+            {**updates, "updatedAt": now_ms},
             {"ownerId", "workspaceId", "id", "createdAt"},
         )
-        caller_email = _caller_email(event, username)
         changed = [k for k in ("name", "plan", "settings", "members", "invitations") if k in body]
         if changed:
             append_audit_event(
@@ -1531,6 +1581,58 @@ def lambda_handler(event, context):
                 meta={"fields": changed},
             )
         return respond(200, {"status": "success", "workspace": normalize_workspace_item(updated)})
+
+    # Dedicated environment switch (testnet ↔ mainnet)
+    elif (
+        path.startswith("/api/workspaces/")
+        and path.endswith("/environment")
+        and http_method == "POST"
+    ):
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        parts = path.strip("/").split("/")
+        workspace_id = parts[2] if len(parts) >= 4 else ""
+        caller_email = _caller_email(event, username)
+        workspace = find_workspace_by_id(workspace_id)
+        if not workspace:
+            return respond(404, {"error": "not_found", "error_description": "Workspace not found"})
+        _, role_err = require_workspace_role(workspace, username, _SETTINGS_WRITE_ROLES, email=caller_email)
+        if role_err:
+            return role_err
+        env = (body.get("environment") or "").strip().lower()
+        if env not in ("testnet", "mainnet"):
+            return respond(400, {
+                "error": "invalid_request",
+                "error_description": "environment must be testnet or mainnet",
+            })
+        prev = workspace.get("settings") if isinstance(workspace.get("settings"), dict) else {}
+        settings = {
+            **prev,
+            "environment": env,
+            "defaultNetwork": "Stellar Mainnet" if env == "mainnet" else "Stellar Testnet",
+        }
+        owner_key = workspace.get("ownerId") or username
+        now_ms = int(time.time() * 1000)
+        updated = update_item(
+            workspaces_table,
+            {"ownerId": owner_key, "workspaceId": workspace_id},
+            {"settings": settings, "updatedAt": now_ms},
+            {"ownerId", "workspaceId", "id", "createdAt"},
+        )
+        append_audit_event(
+            workspace_id,
+            action="workspace.environment_changed",
+            actor_id=username,
+            actor_email=caller_email,
+            target=env,
+            meta={"environment": env},
+        )
+        return respond(200, {
+            "status": "success",
+            "environment": env,
+            "workspace": normalize_workspace_item(updated),
+        })
 
     # Route: GET /api/workspaces/{id}/audit — durable workspace audit ledger
     elif (
@@ -1719,6 +1821,91 @@ def lambda_handler(event, context):
             })
         except Exception as exc:
             return respond(502, {"error": "credits_error", "error_description": str(exc)})
+
+    # Credit pack catalog (platform currency purchase SKUs)
+    elif path == "/api/credits/packs" and http_method == "GET":
+        packs = _credit_pack_catalog()
+        return respond(200, {
+            "packs": packs,
+            "nftCollectionId": (os.environ.get("ZCR_NFT_COLLECTION_ID") or "").strip() or None,
+            "purchaseMode": "nft" if (os.environ.get("ZCR_NFT_COLLECTION_ID") or "").strip() else "sandbox",
+            "currency": "ZCR",
+            "paymentAsset": "USDC",
+        })
+
+    # Purchase credit pack — sandbox grant (always) + NFT checkout link when collection configured
+    elif (
+        path.startswith("/api/workspaces/")
+        and path.endswith("/credits/purchase")
+        and http_method == "POST"
+    ):
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        parts = path.strip("/").split("/")
+        workspace_id = parts[2] if len(parts) >= 4 else ""
+        caller_email = _caller_email(event, username)
+        workspace = find_workspace_by_id(workspace_id)
+        if not workspace:
+            return respond(404, {"error": "not_found", "error_description": "Workspace not found"})
+        _, role_err = require_workspace_role(workspace, username, _SETTINGS_WRITE_ROLES, email=caller_email)
+        if role_err:
+            return role_err
+        pack_id = (body.get("packId") or "").strip()
+        packs = {p["id"]: p for p in _credit_pack_catalog()}
+        pack = packs.get(pack_id)
+        if not pack:
+            return respond(400, {"error": "invalid_pack", "error_description": "Unknown packId"})
+        collection_id = (os.environ.get("ZCR_NFT_COLLECTION_ID") or "").strip()
+        frontend = (os.environ.get("FRONTEND_URL") or "https://console.zexvro.in").rstrip("/")
+        nft_checkout_url = None
+        if collection_id:
+            from urllib.parse import urlencode
+            q = urlencode({
+                "workspaceId": workspace_id,
+                "zcrAmount": str(pack["zcrAmount"]),
+                "packId": pack_id,
+            })
+            nft_checkout_url = f"{frontend}/nft/collections/{collection_id}?{q}"
+
+        # Sandbox / platform pack purchase: grant ZCR immediately (idempotent ref optional)
+        # Real USDC settlement is via NFT checkout → internal topup; this path is for
+        # founders/dev and workspaces until Credit Pack collection is configured.
+        allow_sandbox = (os.environ.get("ZCR_ALLOW_SANDBOX_PURCHASE") or "1").strip() not in ("0", "false", "no")
+        grant_result = None
+        if allow_sandbox and not body.get("nftOnly"):
+            ref = (body.get("ref") or "").strip() or f"pack_purchase:{pack_id}:{workspace_id}:{int(time.time())}"
+            try:
+                grant_result = get_credits_service().grant(
+                    workspace_id,
+                    int(pack["zcrAmount"]),
+                    reason=f"pack_purchase:{pack_id}",
+                    actor_id=username,
+                    actor_email=caller_email,
+                    ref=ref,
+                    meta={
+                        "packId": pack_id,
+                        "usdcPrice": pack.get("usdcPrice"),
+                        "mode": "sandbox" if not collection_id else "platform_pack",
+                    },
+                    tx_type="topup",
+                )
+            except Exception as exc:
+                return respond(502, {"error": "credits_error", "error_description": str(exc)})
+
+        return respond(200, {
+            "status": "success",
+            "pack": pack,
+            "nftCheckoutUrl": nft_checkout_url,
+            "granted": grant_result is not None,
+            "balance": (grant_result or {}).get("balance"),
+            "tx": (grant_result or {}).get("tx"),
+            "message": (
+                f"+{pack['zcrAmount']} ZCR added to workspace"
+                if grant_result
+                else "Open NFT checkout to complete USDC purchase"
+            ),
+        })
 
     # --- Credits: POST validate promo (no redeem) ---
     elif (

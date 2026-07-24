@@ -57,6 +57,13 @@ interface CollectionMetadataInput {
 const DEFAULT_TESTNET_PAYMENT_TOKEN =
   'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC'
 
+export type CreditTopupHooks = {
+  platformCreditsUrl?: string
+  platformInternalSecret?: string
+  creditCollectionIds?: string[]
+  defaultZcrAmount?: number
+}
+
 export class NftService {
   constructor(
     private readonly repository: NftRepository,
@@ -66,6 +73,7 @@ export class NftService {
     private readonly now: () => Date = () => new Date(),
     private readonly paymentTokenAddress: string = DEFAULT_TESTNET_PAYMENT_TOKEN,
     private readonly localMetadataBaseUrl?: string,
+    private readonly creditHooks: CreditTopupHooks = {},
   ) {}
 
   async uploadMedia(input: {
@@ -545,6 +553,9 @@ export class NftService {
     collectionId: string
     buyerAddress: string
     tokenId?: number
+    creditWorkspaceId?: string
+    creditZcrAmount?: number
+    creditPackId?: string
   }): Promise<CheckoutIntentRecord> {
     const existing = await this.repository.findCheckoutIntentByIdempotencyKey(
       input.idempotencyKey,
@@ -594,6 +605,14 @@ export class NftService {
       ).toISOString(),
       createdAt: createdAt.toISOString(),
       updatedAt: createdAt.toISOString(),
+      ...(input.creditWorkspaceId
+        ? {
+            creditWorkspaceId: input.creditWorkspaceId,
+            creditZcrAmount:
+              input.creditZcrAmount ?? this.creditHooks.defaultZcrAmount ?? 100,
+            creditPackId: input.creditPackId,
+          }
+        : {}),
     }
     await this.repository.saveCheckoutIntent(intent)
     return intent
@@ -662,6 +681,7 @@ export class NftService {
         updatedAt: this.now().toISOString(),
       }
       await this.repository.saveCheckoutIntent(confirmed)
+      await this.maybeGrantPlatformCredits(confirmed, collection)
       return confirmed
     } catch (error) {
       const failed: CheckoutIntentRecord = {
@@ -677,6 +697,57 @@ export class NftService {
         'checkout_submission_failed',
         'The signed checkout could not be submitted to Stellar',
       )
+    }
+  }
+
+  private async maybeGrantPlatformCredits(
+    intent: CheckoutIntentRecord,
+    collection: CollectionRecord,
+  ): Promise<void> {
+    const url = this.creditHooks.platformCreditsUrl?.replace(/\/$/, '')
+    const secret = this.creditHooks.platformInternalSecret
+    if (!url || !secret) return
+
+    const creditCollections = new Set(this.creditHooks.creditCollectionIds || [])
+    const isCreditCollection =
+      creditCollections.has(collection.id) ||
+      /zcr|credit.?pack|platform.?credit/i.test(
+        `${collection.name} ${collection.symbol} ${collection.description}`,
+      )
+    const workspaceId = intent.creditWorkspaceId
+    const amount =
+      intent.creditZcrAmount ?? this.creditHooks.defaultZcrAmount ?? 100
+    if (!isCreditCollection || !workspaceId || amount <= 0) return
+
+    try {
+      const res = await fetch(`${url}/api/internal/credits/topup`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Internal-Secret': secret,
+        },
+        body: JSON.stringify({
+          workspaceId,
+          amount,
+          nftCheckoutId: intent.id,
+          collectionId: collection.id,
+          tokenId: intent.tokenId,
+          txHash: intent.transactionHash,
+          packId: intent.creditPackId,
+        }),
+      })
+      if (!res.ok) {
+        const text = await res.text().catch(() => '')
+        console.error(
+          `[credits.topup] failed ${res.status} workspace=${workspaceId} amount=${amount}: ${text}`,
+        )
+      } else {
+        console.log(
+          `[credits.topup] ok workspace=${workspaceId} amount=${amount} checkout=${intent.id}`,
+        )
+      }
+    } catch (err) {
+      console.error('[credits.topup] network error', err)
     }
   }
 

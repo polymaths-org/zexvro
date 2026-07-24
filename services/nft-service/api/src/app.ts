@@ -81,6 +81,10 @@ const checkoutSchema = z.object({
   buyerAddress: stellarAccount,
   /** Optional. When omitted the API allocates the next free token ID. */
   tokenId: z.number().int().min(0).max(4_294_967_295).optional(),
+  /** Platform ZCR credit pack purchase: grant after confirmed checkout. */
+  creditWorkspaceId: z.string().min(1).max(128).optional(),
+  creditZcrAmount: z.number().int().min(1).max(1_000_000).optional(),
+  creditPackId: z.string().min(1).max(64).optional(),
 })
 
 const signedCheckoutSchema = z.object({
@@ -416,6 +420,13 @@ export function createApp(service: NftService, options: CreateAppOptions) {
         collectionId: input.collectionId,
         buyerAddress: input.buyerAddress,
         ...(input.tokenId === undefined ? {} : { tokenId: input.tokenId }),
+        ...(input.creditWorkspaceId
+          ? {
+              creditWorkspaceId: input.creditWorkspaceId,
+              creditZcrAmount: input.creditZcrAmount,
+              creditPackId: input.creditPackId,
+            }
+          : {}),
       })
       response.status(201).json({ intent: presentPublicIntent(intent) })
     }),
@@ -777,6 +788,13 @@ export function createApp(service: NftService, options: CreateAppOptions) {
         collectionId: input.collectionId,
         buyerAddress: input.buyerAddress,
         ...(input.tokenId === undefined ? {} : { tokenId: input.tokenId }),
+        ...(input.creditWorkspaceId
+          ? {
+              creditWorkspaceId: input.creditWorkspaceId,
+              creditZcrAmount: input.creditZcrAmount,
+              creditPackId: input.creditPackId,
+            }
+          : {}),
       })
       response.status(201).json({ intent: presentIntent(intent, subject) })
     }),

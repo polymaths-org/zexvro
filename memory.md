@@ -1078,3 +1078,11 @@ Use `None` for empty fields. Do not delete fields.
   - Cloudflare Pages project `zexvro` → console.zexvro.in
 - Smoke: console 200, auth-gated API 401 (expected), invite route 200, NFT health 200
 - Tests: credits 7/7, audit helpers pass
+
+## 2026-07-24 - OpenCode with Nabil - Fix env switch + credit pack purchase
+
+- Fix: testnet↔mainnet switch via `POST /api/workspaces/:id/environment` (owner scan fallback; settings merge).
+- Credits UI: both env buttons always clickable; shell badge reads environment correctly.
+- Purchase: `GET /api/credits/packs` + `POST .../credits/purchase` (Starter/Builder/Scale packs, instant ZCR grant).
+- NFT gateway hook: checkout can carry `creditWorkspaceId`/`creditZcrAmount`; on confirm NFT service posts internal topup (needs App Runner env: PLATFORM_CREDITS_URL, PLATFORM_INTERNAL_SECRET, ZCR_CREDIT_COLLECTION_IDS).
+- Deployed Lambda + Cloudflare Pages. NFT App Runner redeploy still required for live USDC pack→ZCR path.
