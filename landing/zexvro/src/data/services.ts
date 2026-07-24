@@ -1,6 +1,6 @@
 import { ServiceItem } from '../types';
 
-/** Six MVP services from ZEXVRO context.md */
+/** Five MVP services from ZEXVRO context.md (A2A removed from MVP) */
 export const activeServices: ServiceItem[] = [
   {
     id: 'zer0',
@@ -23,18 +23,8 @@ export const activeServices: ServiceItem[] = [
     hologramColor: 'from-amber-500/20 via-orange-500/10 to-transparent',
   },
   {
-    id: 'a2a',
-    name: 'A2A Trade',
-    shortDesc: 'Agent-to-agent negotiation and settlement',
-    fullDesc:
-      'Trusted pipeline for agents to approach, negotiate, and complete trades with clear identity, offer state, and settlement boundaries — without blind custody.',
-    iconName: 'RefreshCw',
-    techDetails: ['Offer / counteroffer', 'Identity bounds', 'Settlement state', 'Auth rules'],
-    hologramColor: 'from-cyan-500/20 via-teal-500/10 to-transparent',
-  },
-  {
-    id: 'agent-auth',
-    name: 'Agent Auth',
+    id: 'reqwid',
+    name: 'REQWID',
     shortDesc: 'Human vs agent classification for product flows',
     fullDesc:
       'SDK/API that labels internet users as human or agent with confidence scores. Foundation for HDM-style human data markets and gated access — without claiming perfect detection.',
@@ -43,8 +33,8 @@ export const activeServices: ServiceItem[] = [
     hologramColor: 'from-blue-500/20 via-indigo-500/10 to-transparent',
   },
   {
-    id: 'nft',
-    name: 'NFT Service',
+    id: 'nfto',
+    name: 'NFTo',
     shortDesc: 'Deploy and sell NFTs without chain complexity',
     fullDesc:
       'Guided collection create, mint, sale, and embed checkout on Stellar/Soroban. Built for indie studios and product teams who want NFTs — not wallets and gas lectures.',
@@ -53,13 +43,13 @@ export const activeServices: ServiceItem[] = [
     hologramColor: 'from-pink-500/20 via-purple-500/10 to-transparent',
   },
   {
-    id: 'depin',
-    name: 'De-pin',
+    id: 'dedsec',
+    name: 'DEDSEC',
     shortDesc: 'x402 paid access gateway for APIs & compute',
     fullDesc:
       'HTTP 402 payment challenges in front of resources. Verify Soroban auth, settle USDC per request, fail closed — economic access control for agent traffic and free-tier abuse.',
     iconName: 'CreditCard',
-    techDetails: ['x402 v2', 'USDC exact', 'Replay protection', 'Access Shield'],
+    techDetails: ['x402 v2', 'USDC exact', 'Replay protection', 'Edge enforcement'],
     hologramColor: 'from-emerald-500/20 via-teal-500/10 to-transparent',
   },
 ];

@@ -36,7 +36,6 @@ describe('De-pin configuration', () => {
 
   it.each([
     { method: 'POST' },
-    { network: 'stellar:pubnet' },
     { price: '$0' },
     { route: '/../admin' },
     { route: '/health' },
@@ -50,6 +49,15 @@ describe('De-pin configuration', () => {
         providers: [{ ...valid.providers[0], ...change }],
       }),
     ).toThrow()
+  })
+
+  it('accepts stellar:pubnet providers for mainnet x402', () => {
+    const config = parseConfig({
+      ...valid,
+      facilitatorUrl: 'https://channels.openzeppelin.com/x402',
+      providers: [{ ...valid.providers[0], network: 'stellar:pubnet' }],
+    })
+    expect(config.providers[0]?.network).toBe('stellar:pubnet')
   })
 
   it('rejects duplicate method and route pairs', () => {

@@ -1,5 +1,74 @@
 # ZEXVRO Shared Memory
 
+## 2026-07-25 - Push + tomorrow checklist (GN)
+
+- Pushing session WIP on `main` (NFT mainnet, ZCR UX, nav, Settings, auth fix).
+- **Tomorrow (2026-07-26) checklist** also in `context.md`:
+  1. Fix Credit system (E2E pack pay + grant + ledger)
+  2. Update Landing page
+  3. Update Legals
+  4. Check Morph (agent + memory; no dummy surfaces)
+  5. Smoke NFTo mainnet Settings / mint
+- GN — pick up from checklist; do not invent parallel backlog.
+
+## 2026-07-25 - NFTo Settings on live routes (CollectionList + Studio)
+
+- Bug: Settings was only on unused `CollectionDashboard`; live `/nft` uses `CollectionList` + `CollectionStudio`.
+- Fix: **Settings** on NFTo list header + per-row gear; Settings on collection studio header.
+- Modal: Freighter Testnet/Mainnet, service status, rename/description/royalty via `updateNftCollection`.
+
+## 2026-07-25 - ZCR NFT checkout + nav + NFT network toggle (Paris)
+
+- **ZCR pack collection** wired to `c516b900-b3a0-4997-9ca5-1ca3f9270f4f`:
+  - Lambda `zexvro-agent-backend` `ZCR_NFT_COLLECTION_ID`
+  - App Runner NFT `ZCR_CREDIT_COLLECTION_IDS` (same id)
+- Credits UI: `openNftCheckout` (`frontend/src/lib/nftCheckout.ts`) — same Freighter popup as SDK `openCheckout`; pack buy opens checkout then refreshes ledger.
+- NFT dashboard: Testnet/Mainnet Freighter preference toggle; fixed hardcoded “testnet” / broken template strings.
+- Project nav: removed dummy Morph (`transformation`); Agentic = Morph Agent + Shared Memory only; **REQWID under Security & Insights**.
+- Note: hosted NFT API remains mainnet; Freighter pref is for wallet signing UX. Credit pack sale must be live on that collection with USDC price.
+
+## 2026-07-25 - NFTo Auth InvalidInput fix (preserve signed auth)
+
+- Symptom: `HostError: Error(Auth, InvalidInput)` on mint/sale submit after Freighter sign (contract `CBRVAE…`).
+- Cause: `submitWithFreshSponsorSequence` rebuilt the host-function op **without** Freighter-signed Soroban `auth` entries; `prepareTransaction` then refilled simulation auth → invalid/unsigned auth on-chain.
+- Fix: rebuild with `Operation.invokeHostFunction({ func, auth: originalOp.auth })` so signed entries survive sequence refresh; clearer `authorization_invalid` mapping; FE JSON sign uses mainnet RPC placeholder when passphrase is public.
+- Deployed App Runner image `zexvro-nft-api:authfix-20260725012729` (still pubnet). Retry: prepare → Freighter sign → submit once.
+
+## 2026-07-25 - NFTo App Runner cut over to mainnet
+
+- Root AWS account `290294660486` via CLI.
+- WASM already on pubnet: `4beb4b6f90eb65291db698ca148903cf1946b20b7ffb381f5b1e25fe779af700`.
+- Sponsor `GCD4…` already had **18 XLM** on mainnet (Secrets Manager `zexvro/nft/sponsor-secret` unchanged).
+- Fixed TS build (`exactOptionalPropertyTypes` in `app.ts` / `server.ts`), built/pushed `zexvro-nft-api:mainnet-20260725011109`.
+- App Runner `zexvro-nft-api` updated: mainnet RPC/passphrase/USDC SAC + new WASM hash + new image.
+- **Health live:** `network: stellar:pubnet`, `stellarConfigured: true`, paymentToken Circle USDC mainnet.
+- URL: https://iyk6idmup6.us-east-1.awsapprunner.com/health
+- Note: hosted NFT is **mainnet-only** now; local `.env` may still be testnet. Top up sponsor if fee balance drops.
+
+## 2026-07-25 - NFTo mainnet WASM installed
+
+- Service: `services/nft-service` collection contract
+- Action: `stellar contract upload` on Public network with identity `zexvro-privacy` (`GADWIZ…`)
+- **WASM hash:** `4beb4b6f90eb65291db698ca148903cf1946b20b7ffb381f5b1e25fe779af700`
+- Tx: https://stellar.expert/explorer/public/tx/51c6bd8e4dfbfaed9f6b00a6cd390f3ce82e8d0ae441ac45fc796aba93fce346
+- Deployer balance after upload: ~26.7 XLM (was ~45.4 after +30 fund)
+- Artifact: `services/nft-service/mainnet-wasm.env`
+- Hosted cutover completed in entry above.
+
+## 2026-07-25 - Console UI batch (Paris): sidebar, NFT Freighter, icons, security honesty
+
+- Service/area: frontend console polish (Paris tickets)
+- Files: `DashboardLayout.tsx`, `ProjectOverview.tsx`, `ProjectSettings.tsx`, `WorkspaceOverview.tsx`, `WorkspaceSecurity.tsx`, `Services.tsx`, `nftApi.ts`, `stellarWallet.ts`, `CollectionDashboard.tsx`, `frontend/public/services/*`
+- Done:
+  - Project sidebar: **Finance → Zer0**; Morph not under Services; REQWID only when enabled; Services Manager stays under Services
+  - NFT Freighter: stopped forcing Testnet on `getPublicKey`; passphrase prefers API health then `zexvro_nft_network_pref`; project settings / NFTo open hydrates pref from `serviceNetworks.nfto`
+  - Project overview metrics: enabled services / wallet balances / network prefs / team (no fake “needs configuration” spam)
+  - Workspace overview balances: Horizon from Zer0 settings or project mainnet pref
+  - Security: local-only draft tokens + explicit not-API-backed banner; persists per workspace in localStorage
+  - Service icons: transparent PNGs under `/services/{zer0,nfto,dedsec,reqwid}-32.png` used in sidebar + Services Manager
+- Still blocked: NFT mainnet WASM upload (`TxInsufficientBalance` on deployer); hosted NFT App Runner mainnet env after upload
+- Verification: `cd frontend && npm run lint` (tsc clean)
+
 ## 2026-07-23 - CLI device-code login: skip intro, show auth
 
 - Service or area: Console frontend (Cloudflare Pages `zexvro` / console.zexvro.in)
@@ -164,12 +233,12 @@ If a detail is only a work update, keep it here.
 
 | Service | Owner | Current status | Edit rule |
 | --- | --- | --- | --- |
-| Zero-Knowledge Privacy Pool (Zer0) | Paris / `paris-29` | **Complete (product UI)** — suite, privacy pool, stealth, settings client-facing | Ask before changing core proving/pool design; product UX marked complete 2026-07-17 |
-| Transformation Agent (Morph) | Morph track (was Paris / `paris-29`) | **In Progress — CLI built; agentic + demo + CI/CD remaining** | Morph assignee builds CLI/agent/CI/demo/surface. Shared memory must actually update. |
-| A-2-A Trade Pipeline | Rushi / `Wraient` | Planned | Ask or record coordination before changing protocol, wallet, or negotiation design |
-| ZEXVRO Gate (Agent Auth + Captcha) | Rushi / `Wraient` | **Local-ready on `gate-captcha-local`** — dual-channel human captcha + agent Ed25519/PoP; AWS deploy blocked until owner approves | Coordinate before changing Gate protocol, captcha engine, or class integrity |
-| NFT Service | Nabil / `n4bi10p` + Paris | **Complete (product UI)** — create cinema, studio dashboard, public checkout, SDK, docs | Ask before changing minting, metadata, checkout, or NFT model |
-| De-pin | Nabil / `n4bi10p` | **In progress** — CORS/status harden on branch; full Access Shield product testing **tomorrow** | Follow exact per-request x402 scope; redeploy App Runner before claiming live CORS |
+| Zer0 (Zero-Knowledge Privacy Pool) | Paris / `paris-29` | **Complete (product UI)** — suite, privacy pool, stealth, settings client-facing | Ask before changing core proving/pool design; product UX marked complete 2026-07-17 |
+| Morph (Transformation Agent) | Morph track (was Paris / `paris-29`) | **In Progress — CLI rebuilt on OpenCode + MCP; demo/CI remaining** | Morph assignee builds CLI/agent/CI/demo/surface. Shared memory must actually update. |
+| REQWID (Agent Auth / Gate) | Rushi / `Wraient` | **On main** — dual-channel human captcha + agent Ed25519/PoP; hosted Gate API | Coordinate before changing Gate protocol, captcha engine, or class integrity |
+| NFTo (NFT Service) | Nabil / `n4bi10p` + Paris | **Complete (product UI)** — create cinema, studio dashboard, public checkout, SDK, docs | Ask before changing minting, metadata, checkout, or NFT model |
+| DEDSEC (x402 gateway; code `services/depin`) | Nabil / `n4bi10p` | **In progress** — gateway + optional Gate bind | Follow exact per-request x402 scope; code paths still say depin |
+| ~~A-2-A Trade Pipeline~~ | — | **Out of MVP** | Do not market or treat as core service; scaffold may remain |
 
 Shared areas that need extra care:
 
@@ -191,7 +260,7 @@ Shared areas that need extra care:
 3. Do not silently change shared contracts.
 4. Do not introduce secrets or credentials.
 5. Do not commit `.env` files.
-6. Keep De-pin v1 on standard x402 exact per-request payments; streaming and sessions are deferred.
+6. Keep DEDSEC v1 on standard x402 exact per-request payments; streaming and sessions are deferred.
 7. Do not treat locally tested code as a deployed integration.
 8. Update this file after meaningful changes.
 9. Commit the code/docs change and memory update together.
@@ -269,7 +338,7 @@ Use `None` for empty fields. Do not delete fields.
 - Decision: Accepted - README stays brand-level and should not explain individual services.
 - Decision: Accepted - Detailed service context belongs in `context.md`.
 - Decision: Accepted - Work state, decisions, blockers, and handoffs belong in `memory.md`.
-- Decision: Accepted - MVP priority is the six unique services before generic PaaS features.
+- Decision: Accepted - MVP priority is the five unique services before generic PaaS features (A2A out of MVP as of 2026-07-24).
 - Decision: Accepted - Frontend direction is Vite + React.
 - Decision: Accepted - Prefer Stellar Network for Web3/backend pieces where technically appropriate.
 - Decision: Accepted - Morph is the product name for Transformation Agent.
@@ -1257,3 +1326,56 @@ Use `None` for empty fields. Do not delete fields.
 - Summary: Merged 5 new Nabil commits (platform directory, auto promo codes, prod deploy, env switch both ways, credit pack NFT wallet checkout). Only conflict: `memory.md` (kept both histories).
 - Follow-ups: reapply UI cleanup stash.
 - Verification: no conflict markers after resolve.
+
+## 2026-07-23 - Codex with Paris - Marketing docs + marketing.zip kit
+
+- Service or area: Marketing / brand surfaces (docs + export pack).
+- Files changed: `context.md` (Marketing Surfaces), `design.md` (Marketing Design), `docs/marketing.md` (new), `README.md`, `AGENTS.md`, `memory.md`, local `marketing.zip`.
+- Summary: Documented landing, in-app welcome, product cinema, presentation, and brand kit paths; split marketing vs dashboard design rules; claim-safe service messaging; built shareable `marketing.zip`.
+- Decisions: Accepted - Marketing claim-aligned with MVP status.
+- Follow-ups: Paris landing demos/icons ticket still open.
+- Verification: Docs sections present.
+
+## 2026-07-24 - Codex with Paris - MVP service renames + drop A2A
+
+- Summary: Product names — **NFTo**, **REQWID**, **DEDSEC**; A2A out of MVP. Five services: Zer0 · Morph · REQWID · NFTo · DEDSEC.
+- Decisions: Accepted - product names in UI/docs; keep code path IDs.
+
+## 2026-07-24 - Codex with Paris - UI cleanup + network prefs
+
+- Service or area: Paris shell polish + project network UI.
+- Files: `ProjectOverview`, `ProjectSettings`, `Services`, `WorkspaceOverview`, `DashboardLayout`, `router` (executions removed), `stores/types` + `project` (`serviceNetworks`), deleted `ProjectExecutions.tsx`.
+- Summary: Removed fake Executions; slimmed Services Manager; sidebar **Zer0**; need-help → `/docs`; `max-w-5xl` layout; project default + per-service Testnet/Mainnet prefs (Zer0 wires Horizon; NFTo/DEDSEC mainnet locked honestly).
+- Decisions: Accepted - UI-first network model; Zer0 sidebar product name.
+- Follow-ups: Wire NFTo/DEDSEC mainnet when owners ship endpoints.
+- Verification: frontend lint clean after reapply.
+
+## 2026-07-24 - Codex with Paris - Mainnet pay NetworkError + overview projects
+
+- Service or area: Zer0 mainnet shielded pay + workspace overview.
+- Root cause: privacy pool hard-coded testnet; saved Soroban URL often Horizon / mainnet.stellar.org (not JSON-RPC) → browser NetworkError on fetch.
+- Fix: configurePrivacyPoolNetwork + RPC validation/fallbacks; auto-heal bad URL on pay; mainnet Circle USDC/EURC issuers; clear error if mainnet shielded pools not deployed (VITE_ZER0_CONTRACT_*_MAINNET).
+- Overview: Customer→Projects rename, projects section first, Customize widgets (overviewWidgets persist).
+- Verification: frontend lint clean.
+
+## 2026-07-24 - Codex with Paris - Mainnet privacy pools LIVE
+
+- Funded deployer GADWIZ… with 50 XLM; first script run hit **testnet** due to env default — fixed script to force `--rpc-url` + public passphrase.
+- Deployed 4 mainnet pools (wasm `13926cfd…`, SAC `CAS3J7G…`):
+  - 1 XLM: `CAMBCV544D7EI72HBXZ4BPEVVMOCIUN6ZBSMPFWX73NRTW7INWUTJRFW`
+  - 10: `CC5H2MOIYZSCPZ7GOSUKHIOMHWQRXWJNHEZVYRBGGOGI2FLEOUA3BY6N`
+  - 100: `CCLAKHWCPLJDZBFNFHI4E5EUZ23E4HJPETBU5CI3M3TXHSKT4QVBMM3Y`
+  - 1000: `CDRN2ZBO7OBGZYC653FHKQCBQAJWRIEXMHQSPDVMHGW7MQGQB67Q5DEE`
+- Remaining deployer balance ~15.4 XLM after fees.
+- FE: hard-coded MAINNET_POOL_DEFAULTS + `.env` / `.env.example` updated; private pay enabled when mainnet selected.
+- Explorer: stellar.expert public links for each C… id.
+- Follow-ups: seed anonymity (optional); Cloudflare Pages env if production build does not pick local `.env`.
+
+## 2026-07-24 - Codex with Paris - NFTo / DEDSEC / REQWID mainnet rails
+
+- Shared helpers: `frontend/src/lib/stellarNetwork.ts` (CAIP testnet/pubnet, explorers, OZ facilitators, USDC SACs).
+- **DEDSEC**: config/domain accept `stellar:pubnet`; payment registers both schemes; wizard network + OZ mainnet facilitator; `depin.config.mainnet.example.json`.
+- **NFTo**: API health reports network/passphrase/rpc/paymentToken from env; FE explorers + Freighter passphrase follow health; Project Settings marks nfto/dedsec mainnetReady.
+- **REQWID**: off-chain only — no chain toggle (documented in Project Settings).
+- NFT collection WASM mainnet upload blocked: deployer `TxInsufficientBalance` (~15 XLM left). Ops: fund more + `stellar contract upload` → set `NFT_COLLECTION_WASM_HASH` + mainnet sponsor on App Runner.
+- Verification: depin config tests 14/14; frontend `tsc --noEmit` clean.

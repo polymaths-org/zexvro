@@ -190,7 +190,8 @@ export function createDepinApp(options: DepinAppOptions) {
       multiInstanceSafe,
       capabilities: {
         scheme: 'exact',
-        network: 'stellar:testnet',
+        network: config.providers[0]?.network ?? 'stellar:testnet',
+        networks: [...new Set(config.providers.map((p) => p.network))],
         facilitatorUrl: config.facilitatorUrl,
         facilitatorAuthConfigured: facilitator.authConfigured,
         facilitatorOzChannels: facilitator.ozChannels,

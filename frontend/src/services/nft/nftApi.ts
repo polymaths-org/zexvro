@@ -15,11 +15,70 @@ export interface NftServiceHealth {
   status: 'ok';
   service: 'nft-service';
   capabilities: {
-    network: 'stellar:testnet';
+    network: 'stellar:testnet' | 'stellar:pubnet';
+    networkPassphrase?: string;
+    rpcUrl?: string;
+    paymentTokenAddress?: string;
     pinningConfigured: boolean;
     stellarConfigured: boolean;
     storageMode: 'local' | 's3' | 'pinata';
   };
+}
+
+/** Cached last health for explorers / Freighter passphrase. */
+let lastNftHealth: NftServiceHealth | null = null;
+
+export function getCachedNftHealth(): NftServiceHealth | null {
+  return lastNftHealth;
+}
+
+export function setCachedNftHealth(health: NftServiceHealth | null) {
+  lastNftHealth = health;
+}
+
+export function nftNetworkLabel(health?: NftServiceHealth | null): string {
+  const n = health?.capabilities?.network || lastNftHealth?.capabilities?.network;
+  return n === 'stellar:pubnet' ? 'Mainnet' : 'Testnet';
+}
+
+export function nftNetworkPassphrase(health?: NftServiceHealth | null): string {
+  const fromApi = health?.capabilities?.networkPassphrase || lastNftHealth?.capabilities?.networkPassphrase;
+  if (fromApi?.trim()) return fromApi.trim();
+  const n = health?.capabilities?.network || lastNftHealth?.capabilities?.network;
+  if (n === 'stellar:pubnet') {
+    return 'Public Global Stellar Network ; September 2015';
+  }
+  // Prefer project preference when API has not reported network yet.
+  try {
+    const pref = localStorage.getItem('zexvro_nft_network_pref');
+    if (pref === 'mainnet' || pref === 'stellar:pubnet') {
+      return 'Public Global Stellar Network ; September 2015';
+    }
+  } catch { /* ignore */ }
+  return 'Test SDF Network ; September 2015';
+}
+
+/** UI / project preference for NFT Freighter when API is still testnet-hosted. */
+export function setNftNetworkPreference(env: 'testnet' | 'mainnet') {
+  try {
+    localStorage.setItem('zexvro_nft_network_pref', env);
+  } catch { /* ignore */ }
+}
+
+export function getNftNetworkPreference(): 'testnet' | 'mainnet' {
+  try {
+    const pref = localStorage.getItem('zexvro_nft_network_pref');
+    if (pref === 'mainnet' || pref === 'stellar:pubnet') return 'mainnet';
+  } catch { /* ignore */ }
+  const n = lastNftHealth?.capabilities?.network;
+  return n === 'stellar:pubnet' ? 'mainnet' : 'testnet';
+}
+
+export function nftExplorerBase(health?: NftServiceHealth | null): string {
+  const n = health?.capabilities?.network || lastNftHealth?.capabilities?.network;
+  return n === 'stellar:pubnet'
+    ? 'https://stellar.expert/explorer/public'
+    : 'https://stellar.expert/explorer/testnet';
 }
 
 export interface NftMediaAsset {
@@ -278,6 +337,11 @@ export async function getNftServiceHealth(signal?: AbortSignal) {
       'NFT health payload is missing capabilities. Is VITE_NFT_API_URL set to the App Runner NFT API?',
     );
   }
+  // Normalize network if API is older (no pubnet yet).
+  if (health.capabilities.network !== 'stellar:pubnet' && health.capabilities.network !== 'stellar:testnet') {
+    health.capabilities.network = 'stellar:testnet';
+  }
+  setCachedNftHealth(health);
   return health;
 }
 

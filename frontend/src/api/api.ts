@@ -178,6 +178,7 @@ export const workspaceApi = {
       status: string;
       pack: { id: string; name: string; zcrAmount: number; usdcPrice: string };
       nftCheckoutUrl?: string | null;
+      nftCollectionId?: string | null;
       granted: boolean;
       balance?: CreditBalance;
       message?: string;
@@ -533,14 +534,23 @@ import {
 } from 'stellar-sdk';
 import { signTransaction as freighterSign } from '@stellar/freighter-api';
 
-/** Known USDC/EURC testnet issuers (Stellar Development Foundation) */
+/** Known USDC/EURC issuers — testnet (SDF) vs mainnet (Circle). */
 const TESTNET_ISSUERS: Record<string, string> = {
   USDC: 'GBBD47IF6LWK7P7M7SC3DEUQ7OCSEZUO7UHYE2442BENPDUXZUCMV32V',
   EURC: 'GB3Q6QDZYADPKVZGQ5G4Y3XSZFCR5B4XHY7G2T2GK4YRQO6G4SP6YO3G',
 };
+const MAINNET_ISSUERS: Record<string, string> = {
+  // Circle USDC + EURC on Stellar public network
+  USDC: 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN',
+  EURC: 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN',
+};
 
 function isTestnet(horizonUrl: string): boolean {
-  return horizonUrl.includes('testnet');
+  const u = (horizonUrl || '').toLowerCase();
+  if (!u.trim()) return true;
+  if (u.includes('testnet') || u.includes('futurenet')) return true;
+  if (u.includes('horizon.stellar.org')) return false;
+  return u.includes('test');
 }
 
 function getNetworkPassphrase(horizonUrl: string): string {
@@ -549,8 +559,14 @@ function getNetworkPassphrase(horizonUrl: string): string {
 
 function getStellarAsset(currency: string, horizonUrl: string): Asset {
   if (currency === 'XLM') return Asset.native();
-  const issuer = TESTNET_ISSUERS[currency];
-  if (!issuer) throw new Error(`Unknown asset: ${currency}. Only XLM, USDC, EURC are supported.`);
+  const issuers = isTestnet(horizonUrl) ? TESTNET_ISSUERS : MAINNET_ISSUERS;
+  const issuer = issuers[currency];
+  if (!issuer) {
+    throw new Error(
+      `Unknown asset: ${currency} on ${isTestnet(horizonUrl) ? 'testnet' : 'mainnet'}. `
+      + 'Only XLM, USDC, EURC are supported.',
+    );
+  }
   return new Asset(currency, issuer);
 }
 

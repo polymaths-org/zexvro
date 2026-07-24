@@ -13,7 +13,7 @@ import WorkspaceOverview from '../components/workspace/WorkspaceOverview';
 import ProjectsIndex from '../components/workspace/ProjectsIndex';
 import Payroll from '../components/workspace/Payroll';
 import ProjectOverview from '../components/project/ProjectOverview';
-import ProjectExecutions from '../components/project/ProjectExecutions';
+
 import Zer0Layout from '../components/zer0/Zer0Layout';
 import Zer0Dashboard from '../components/zer0/Zer0Dashboard';
 import Zer0People from '../components/zer0/Zer0People';
@@ -464,12 +464,6 @@ const projectOverviewRoute = createRoute({
   component: ProjectOverview,
 });
 
-const projectExecutionsRoute = createRoute({
-  getParentRoute: () => dashboardLayoutRoute,
-  path: '/dashboard/w/$workspaceId/p/$projectId/executions',
-  component: ProjectExecutions,
-});
-
 const projectProjectsRoute = createRoute({
   getParentRoute: () => dashboardLayoutRoute,
   path: '/dashboard/w/$workspaceId/p/$projectId/projects',
@@ -739,7 +733,6 @@ const routeTree = rootRoute.addChildren([
     platformAdminRoute,
     projectRootRoute,
     projectOverviewRoute,
-    projectExecutionsRoute,
     projectProjectsRoute,
     projectServicesRoute,
     projectZer0LayoutRoute.addChildren([

@@ -3,6 +3,7 @@ import {
   BASE_FEE,
   Client,
   Keypair,
+  Operation,
   StrKey,
   TransactionBuilder,
   contract,
@@ -116,11 +117,24 @@ export function simulationFailureToApiError(error: unknown): ApiError | undefine
       'Primary sale price must be greater than zero.',
     )
   }
+  if (
+    /Error\(Auth,\s*InvalidInput\)/i.test(message) ||
+    message.includes('Auth, InvalidInput') ||
+    message.includes('invalid authorization')
+  ) {
+    return new ApiError(
+      422,
+      'authorization_invalid',
+      'Soroban rejected the signed authorization (Auth InvalidInput). Re-open the mint/sale flow, ensure Freighter is on Mainnet, sign again with the owner/minter wallet, and submit without refreshing the page.',
+      { simulationError: message },
+    )
+  }
   if (contractError === '6') {
     return new ApiError(
       409,
       'primary_sale_not_configured',
-      'Primary sale is not configured for this collection yet. The creator must sign and submit sale configuration before buyers can prepare checkout.',
+      'Primary sale is not configured for this collection. Set a sale price before purchase.',
+      { simulationError: message },
     )
   }
 
@@ -469,9 +483,23 @@ export class StellarNftChainGateway implements NftChainGateway {
     transaction: AssembledTransaction<unknown>,
   ): Promise<SubmissionResult> {
     const built = transaction.built
-    const operation = built?.toEnvelope().v1().tx().operations()[0]
-    if (operation === undefined) {
+    const originalOp = built?.operations[0] as
+      | StellarOperation.InvokeHostFunction
+      | undefined
+    if (originalOp === undefined || originalOp.type !== 'invokeHostFunction') {
       throw new ApiError(400, 'invalid_transaction', 'Expected one contract invocation')
+    }
+
+    // Keep Freighter-signed Soroban auth entries. prepareTransaction/assembleTransaction
+    // only preserves auth when the rebuild already carries non-empty `auth`.
+    // Using envelope XDR ops previously dropped signed entries → HostError Auth InvalidInput.
+    const signedAuth = originalOp.auth ?? []
+    if (signedAuth.length === 0) {
+      throw new ApiError(
+        422,
+        'missing_authorization',
+        'The contract authorization entries are not fully signed',
+      )
     }
 
     const account = await this.server.getAccount(this.sponsor.publicKey())
@@ -479,17 +507,31 @@ export class StellarNftChainGateway implements NftChainGateway {
       fee: BASE_FEE,
       networkPassphrase: this.config.networkPassphrase,
     })
-      .addOperation(operation)
+      .addOperation(
+        Operation.invokeHostFunction({
+          func: originalOp.func,
+          auth: signedAuth,
+          ...(originalOp.source ? { source: originalOp.source } : {}),
+        }),
+      )
       .setTimeout(60)
       .build()
-    const prepared = await this.server.prepareTransaction(rebuilt)
+
+    let prepared
+    try {
+      prepared = await this.server.prepareTransaction(rebuilt)
+    } catch (error) {
+      throw simulationFailureToApiError(error) ?? error
+    }
     prepared.sign(this.sponsor)
     const sent = await this.server.sendTransaction(prepared)
     if (sent.status !== 'PENDING' && sent.status !== 'DUPLICATE') {
+      const detail = (sent as unknown as { errorResultXdr?: unknown }).errorResultXdr
       throw new ApiError(
         502,
         'stellar_submission_failed',
         `Stellar rejected transaction submission with status ${sent.status}`,
+        typeof detail === 'string' ? { errorResultXdr: detail } : undefined,
       )
     }
 
@@ -499,10 +541,21 @@ export class StellarNftChainGateway implements NftChainGateway {
         return { transactionHash: sent.hash, status: 'confirmed' }
       }
       if (result.status === rpc.Api.GetTransactionStatus.FAILED) {
-        throw new ApiError(
-          502,
-          'stellar_transaction_failed',
-          'The sponsored Stellar transaction failed on-chain',
+        const resultXdr =
+          'resultXdr' in result && result.resultXdr
+            ? String(result.resultXdr)
+            : undefined
+        const mapped = resultXdr
+          ? simulationFailureToApiError(new Error(`HostError: ${resultXdr}`))
+          : undefined
+        throw (
+          mapped ??
+          new ApiError(
+            502,
+            'stellar_transaction_failed',
+            'The sponsored Stellar transaction failed on-chain',
+            resultXdr ? { resultXdr } : undefined,
+          )
         )
       }
       await new Promise((resolve) => setTimeout(resolve, 1_000))

@@ -19,9 +19,9 @@ import { AnimatePresence, motion } from 'motion/react';
 
 const AREAS = [
   'Morph',
-  'Gate',
-  'NFT',
-  'De-pin',
+  'REQWID',
+  'NFTo',
+  'DEDSEC',
   'Zer0',
   'Frontend',
   'Backend',

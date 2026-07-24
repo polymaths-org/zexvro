@@ -62,7 +62,7 @@ function deriveLocalItems(
     ...projects.map(project => ({
       id: `project_${project.id}`,
       type: 'project' as const,
-      message: `Customer project "${project.name}" created`,
+      message: `Project "${project.name}" created`,
       actor: project.owner || workspace.ownerId || 'workspace',
       time: project.createdAt,
     })),

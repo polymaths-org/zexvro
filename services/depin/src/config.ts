@@ -46,7 +46,7 @@ const providerSchema = z.object({
   recipient: z.string().refine(validateStellarDestinationAddress, {
     message: 'Recipient must be a valid Stellar destination address',
   }),
-  network: z.literal('stellar:testnet'),
+  network: z.enum(['stellar:testnet', 'stellar:pubnet']),
   timeoutMs: z.number().int().min(100).max(60_000),
   upstreamSecretRef: z
     .string()

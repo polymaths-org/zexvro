@@ -374,7 +374,7 @@ export default function SettingsView({
               {[
                 { key: 'service-readiness-checks', label: 'Service readiness checks', desc: 'Show setup checks before enabling a service' },
                 { key: 'agent-git-commits', label: 'Agent Git proposals', desc: 'Allows agents to draft changes for human review' },
-                { key: 'high-frequency-arbitrage', label: 'Trade safety guards', desc: 'Shows planned limits for A-2-A trading flows' },
+                { key: 'high-frequency-arbitrage', label: 'Trade safety guards', desc: 'Reserved; A2A Trade is out of MVP' },
                 { key: 'stellar-mainnet-beta', label: 'Stellar Mainnet Bridge', desc: 'Connects mainnet Horizon endpoints' }
               ].map((flag) => {
                 const isActive = flags[flag.key as keyof typeof flags];

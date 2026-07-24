@@ -39,8 +39,7 @@ export default function Projects({
   const availableTemplates = [
     { id: 'stellar-smart-contract-starter', name: 'Stellar Smart Contract Starter (Rust)', desc: 'Pre-configured Soroban contract template with test suites' },
     { id: 'privacy-pool-api', name: 'Privacy Pool API starter', desc: 'Zero-Knowledge Privacy Pool setup template' },
-    { id: 'trade-pipeline-agent', name: 'A-2-A Trade Pipeline Agent (Go)', desc: 'Agent negotiation and wallet-policy starter' },
-    { id: 'depin-telemetry-connector', name: 'De-pin Telemetry Connector (Rust)', desc: 'Secure node monitoring connector configured for Horizon' }
+    { id: 'dedsec-telemetry-connector', name: 'DEDSEC Telemetry Connector (Rust)', desc: 'Secure gateway monitoring connector configured for Horizon' }
   ];
 
   // Handle service toggling inside form
@@ -162,11 +161,11 @@ export default function Projects({
             className="px-2.5 py-1.5 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#0A0A0B] text-xs text-zinc-500 dark:text-zinc-400 focus:outline-none cursor-pointer"
           >
             <option value="all">Service: All</option>
-            <option value="privacy">ZK Pool</option>
-            <option value="transformation">Transform Agent</option>
-            <option value="trade">Trade Pipeline</option>
-            <option value="auth">Agent Auth</option>
-            <option value="depin">De-pin</option>
+            <option value="privacy">Zer0</option>
+            <option value="transformation">Morph</option>
+            <option value="auth">REQWID</option>
+            <option value="nft">NFTo</option>
+            <option value="depin">DEDSEC</option>
           </select>
 
           <button 

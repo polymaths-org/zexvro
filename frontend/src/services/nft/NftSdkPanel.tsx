@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import {
+ useMemo, useState } from 'react';
 import {
   Check,
   Code2,
@@ -10,7 +11,10 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
-import { getNftApiBaseUrl } from './nftApi';
+import { getNftApiBaseUrl,
+  nftExplorerBase,
+  nftNetworkLabel,
+} from './nftApi';
 
 export type SdkSnippetTab = 'popup' | 'custom' | 'backend' | 'script';
 

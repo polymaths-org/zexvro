@@ -6,7 +6,12 @@ import type {
   Zer0PrivacyPreset,
 } from './types';
 import { proofApi, payrollApi, stellar, zkWorkerApi } from '../api/api';
-import { shieldPayAmount as zkShieldPayAmount, planShieldPay, getNotes as getZkNotes } from '../api/privacyPool';
+import {
+  shieldPayAmount as zkShieldPayAmount,
+  planShieldPay,
+  getNotes as getZkNotes,
+  configurePrivacyPoolNetwork,
+} from '../api/privacyPool';
 import { useWorkspaceStore } from './workspace';
 import { isPaymentInFlight, usePaymentSession } from './paymentSession';
 import { useStealthStore } from './stealth';
@@ -415,6 +420,28 @@ export const useZer0Store = create<Zer0State>()(
     },
 
     processPayment: async (paymentId) => {
+      // Freighter + Soroban RPC must match Zer0 Settings network (never leave stale testnet RPC).
+      {
+        const s = get().settings;
+        const horizonUrl = s.horizonUrl || 'https://horizon-testnet.stellar.org';
+        let sorobanRpcUrl = s.sorobanRpcUrl || '';
+        const onMain =
+          !horizonUrl.toLowerCase().includes('testnet')
+          && !horizonUrl.toLowerCase().includes('futurenet');
+        // Auto-heal bad saved URLs (horizon.stellar.org is NOT a Soroban RPC).
+        if (onMain && (
+          !sorobanRpcUrl
+          || sorobanRpcUrl.includes('horizon')
+          || sorobanRpcUrl === 'https://mainnet.stellar.org'
+          || sorobanRpcUrl.includes('testnet')
+        )) {
+          sorobanRpcUrl = 'https://mainnet.sorobanrpc.com';
+          set(st => ({
+            settings: { ...st.settings, sorobanRpcUrl },
+          }));
+        }
+        configurePrivacyPoolNetwork({ horizonUrl, sorobanRpcUrl });
+      }
       const state = get();
       const payment = state.payments.find(p => p.id === paymentId);
       if (!payment) {
@@ -1243,6 +1270,7 @@ export const useZer0Store = create<Zer0State>()(
     },
 
     updateSettings: (updates) => {
+      let nextSettings = { ...get().settings, ...updates };
       set(s => {
         const next = { ...s.settings, ...updates };
         // Normalize currency so bad/missing values never wipe a saved default
@@ -1253,15 +1281,30 @@ export const useZer0Store = create<Zer0State>()(
               ? (c as Zer0Currency)
               : s.settings.defaultCurrency || 'XLM';
         }
+        nextSettings = next;
         return { settings: next };
       });
+      if (
+        updates.horizonUrl !== undefined
+        || updates.sorobanRpcUrl !== undefined
+      ) {
+        configurePrivacyPoolNetwork({
+          horizonUrl: nextSettings.horizonUrl,
+          sorobanRpcUrl: nextSettings.sorobanRpcUrl,
+        });
+      }
       if (typeof updates.preferFreighterSigning === 'boolean') {
         import('../api/privacyPool').then(m => m.setForceFreighterSigning(updates.preferFreighterSigning!));
       }
     },
 
-    resetSettings: () =>
-      set({ settings: { ...DEFAULT_SETTINGS } }),
+    resetSettings: () => {
+      set({ settings: { ...DEFAULT_SETTINGS } });
+      configurePrivacyPoolNetwork({
+        horizonUrl: DEFAULT_SETTINGS.horizonUrl,
+        sorobanRpcUrl: DEFAULT_SETTINGS.sorobanRpcUrl,
+      });
+    },
   }),
   {
     name: 'zexvro_zer0',
@@ -1290,10 +1333,14 @@ export const useZer0Store = create<Zer0State>()(
       if (typeof mergedSettings.preferFreighterSigning !== 'boolean') {
         mergedSettings.preferFreighterSigning = true;
       }
-      // Apply signing preference immediately after rehydrate
-      import('../api/privacyPool').then(m =>
-        m.setForceFreighterSigning(!!mergedSettings.preferFreighterSigning),
-      );
+      // Align Freighter passphrase + RPC with rehydrated network before any pay.
+      import('../api/privacyPool').then(m => {
+        m.configurePrivacyPoolNetwork({
+          horizonUrl: mergedSettings.horizonUrl,
+          sorobanRpcUrl: mergedSettings.sorobanRpcUrl,
+        });
+        m.setForceFreighterSigning(!!mergedSettings.preferFreighterSigning);
+      });
       // After rehydrate, clear orphan Processing / Queued rows from prior sessions
       queueMicrotask(() => {
         try {

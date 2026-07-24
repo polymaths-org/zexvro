@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import {
+  useEffect, useMemo, useState } from 'react';
 import { useParams } from '@tanstack/react-router';
 import {
   CircleAlert,
@@ -17,6 +18,9 @@ import {
   type NftInventorySummary,
   type NftCheckoutIntent,
   type PublicNftCollection,
+  nftExplorerBase,
+  nftNetworkLabel,
+  nftNetworkPassphrase,
 } from './nftApi';
 import { formatWalletError, getPublicKey, isWalletAvailable, signTransaction } from './stellarWallet';
 
@@ -148,7 +152,7 @@ export default function PublicCollection() {
       if (walletAddress !== checkoutIntent.buyerAddress) {
         throw new Error(`Connected wallet must be ${checkoutIntent.buyerAddress}`);
       }
-      const signedTransaction = await signTransaction(checkoutIntent.serializedTransaction);
+      const signedTransaction = await signTransaction(checkoutIntent.serializedTransaction, nftNetworkPassphrase());
       const result = await submitPublicCheckoutIntent({
         intentId: checkoutIntent.id,
         signedTransaction,
@@ -159,7 +163,7 @@ export default function PublicCollection() {
       }
       setConfirmedHash(hash);
       setCheckoutIntent({ ...result.intent, status: 'confirmed', transactionHash: hash });
-      setStatusNote('Purchase confirmed on Stellar testnet.');
+      setStatusNote('Purchase confirmed on ${nftNetworkLabel()}.');
     } catch (error) {
       console.error('[nft/checkout] sign', error);
       setCheckoutError(errorMessage(error));
@@ -241,13 +245,13 @@ export default function PublicCollection() {
               </div>
               <div className="mt-3 flex items-center justify-between gap-3 text-sm">
                 <span className="text-zinc-500">Network</span>
-                <span className="text-zinc-200">Stellar testnet</span>
+                <span className="text-zinc-200">{nftNetworkLabel()}</span>
               </div>
               {collection.contractId && (
                 <div className="mt-3 flex items-center justify-between gap-3 text-sm">
                   <span className="text-zinc-500">Contract</span>
                   <a
-                    href={`https://stellar.expert/explorer/testnet/contract/${collection.contractId}`}
+                    href={`${nftExplorerBase()}/contract/${collection.contractId}`}
                     target="_blank"
                     rel="noreferrer"
                     className="inline-flex items-center gap-1 font-mono text-xs text-brand-blue"
@@ -331,7 +335,7 @@ export default function PublicCollection() {
 
             {confirmedHash && (
               <a
-                href={`https://stellar.expert/explorer/testnet/tx/${confirmedHash}`}
+                href={`${nftExplorerBase()}/tx/${confirmedHash}`}
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex w-full items-center justify-center gap-2 text-sm text-emerald-300"

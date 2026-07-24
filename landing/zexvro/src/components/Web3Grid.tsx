@@ -488,7 +488,7 @@ export const Web3Grid: React.FC = () => {
               ref={magicSubRef}
               className="text-sm font-semibold text-white/60 max-w-md mx-auto leading-relaxed"
             >
-              Zer0 · Morph · A2A · Agent Auth · NFTs · De-pin
+              Zer0 · Morph · REQWID · NFTo · DEDSEC
             </p>
           </div>
 
@@ -552,7 +552,7 @@ export const Web3Grid: React.FC = () => {
               ref={carTitleRef}
               className="font-sans text-2xl sm:text-3xl md:text-4xl font-black text-white tracking-tight"
             >
-              Six services.
+              Five services.
               <span className="block sm:inline"> Built for real product work.</span>
             </h3>
             <p

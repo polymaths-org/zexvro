@@ -115,7 +115,11 @@ const upload = multer({
 const asyncRoute = (handler: RequestHandler): RequestHandler => handler
 
 export interface NftServiceCapabilities {
-  network: 'stellar:testnet'
+  network: 'stellar:testnet' | 'stellar:pubnet'
+  /** Stellar network passphrase used by the API (Freighter must match). */
+  networkPassphrase?: string
+  rpcUrl?: string
+  paymentTokenAddress?: string
   pinningConfigured: boolean
   stellarConfigured: boolean
   storageMode: 'local' | 's3' | 'pinata'
@@ -423,8 +427,12 @@ export function createApp(service: NftService, options: CreateAppOptions) {
         ...(input.creditWorkspaceId
           ? {
               creditWorkspaceId: input.creditWorkspaceId,
-              creditZcrAmount: input.creditZcrAmount,
-              creditPackId: input.creditPackId,
+              ...(input.creditZcrAmount === undefined
+                ? {}
+                : { creditZcrAmount: input.creditZcrAmount }),
+              ...(input.creditPackId === undefined
+                ? {}
+                : { creditPackId: input.creditPackId }),
             }
           : {}),
       })
@@ -791,8 +799,12 @@ export function createApp(service: NftService, options: CreateAppOptions) {
         ...(input.creditWorkspaceId
           ? {
               creditWorkspaceId: input.creditWorkspaceId,
-              creditZcrAmount: input.creditZcrAmount,
-              creditPackId: input.creditPackId,
+              ...(input.creditZcrAmount === undefined
+                ? {}
+                : { creditZcrAmount: input.creditZcrAmount }),
+              ...(input.creditPackId === undefined
+                ? {}
+                : { creditPackId: input.creditPackId }),
             }
           : {}),
       })

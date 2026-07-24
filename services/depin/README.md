@@ -2,7 +2,7 @@
 
 De-pin is a fail-closed reverse proxy for idempotent HTTP APIs. It uses x402 v2 `exact` payments over Stellar testnet USDC and the official `@x402/stellar` server implementation.
 
-**Product framing for teammates:** De-pin is the economic enforcement plane of **ZEXVRO Access Shield**—helping platforms stop industrial free-tier farming and agent spam by requiring pay-per-request access. Full narrative, architecture, and non-goals: [`docs/access_shield.md`](../../docs/access_shield.md). The gateway MVP below is what is implemented today; Access Shield control-plane UI is proposed.
+**Product name: DEDSEC** (code path remains `services/depin`). Economic enforcement plane for paid edge access—helping platforms stop industrial free-tier farming and agent spam by requiring pay-per-request access. Historical framing: [`docs/access_shield.md`](../../docs/access_shield.md). The gateway MVP below is what is implemented today; full control-plane UI is proposed.
 
 ## Request flow
 
@@ -88,7 +88,7 @@ Manual unpaid probe:
 curl -i http://127.0.0.1:4102/v1/nft-health
 ```
 
-From the frontend, open **Resource Gateway → De-pin x402 Gateway** and use **Probe 402**. The screen shows settle readiness and multi-instance state.
+From the frontend, open **Resource Gateway → DEDSEC** and use **Probe 402**. The screen shows settle readiness and multi-instance state.
 
 ## Paid settle smoke
 

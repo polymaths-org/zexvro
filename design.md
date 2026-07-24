@@ -389,6 +389,85 @@ Agent UI should not:
 - Do not place the dashboard inside a large decorative card.
 - Do not explain every service at length in the main UI.
 
+## Marketing Design
+
+Product UI and marketing UI share brand DNA but different jobs. Dashboard = operator clarity. Marketing = narrative, trust, and conversion.
+
+### Split (Accepted)
+
+| Surface | Goal | Layout / motion |
+| --- | --- | --- |
+| Logged-in app (`frontend/` dashboard) | Operate services | Dense, sidebar, borders > shadows, ≤250ms UI motion |
+| In-app welcome (`frontend/src/marketing/`) | Brand handoff into console | Single glass panel, short brand intro, one CTA |
+| Public landing (`landing/zexvro/`) | Explain platform + waitlist | Full-bleed hero, service showcase, team, waitlist |
+| Product cinema (`frontend/public/marketing/`) | Make create/mint/boot feel premium | Short loops, silent-safe, brand loader, no hype text spam |
+| Pitch / presentation (`presentation/`) | Founder demo + captions | Dark frame, Montserrat captions, logo corner, restrained lower-thirds |
+
+### Marketing personality
+
+Should feel:
+
+- Cinematic but controlled.
+- High contrast black / white / zinc.
+- Modular (cubes, grid, glass) consistent with the mark.
+- Technical confidence without crypto carnival.
+
+Should not feel:
+
+- Neon arcade or meme-coin.
+- Beige editorial / warm lifestyle.
+- Generic purple SaaS gradient walls.
+- Dashboard chrome (sidebars, dense tables) on the public landing.
+
+### Landing visual system
+
+- **Background:** near-black (`#050505` / pure black) with glass panels, subtle border `white/10–12`, soft inset highlight.
+- **Glass:** `backdrop-blur` + low white fill; keep readable contrast for body copy.
+- **Hero:** oversized wordmark / mark energy is OK; product app still avoids huge hero type inside dashboard.
+- **Accents:** one narrow accent per section (service hologram tints from `landing/zexvro/src/data/services.ts` are illustrative only — do not flood the page).
+- **3D / shaders:** optional on landing; always provide image fallbacks and respect reduced motion.
+- **CTAs:** primary = solid white on dark / solid black on light; secondary = bordered glass.
+- **Typography:** Inter / Geist / Satoshi for UI; Montserrat Bold–Black acceptable for pitch captions only.
+- **Radius:** landing may use larger radius (16–24px) on marketing cards; dashboard stays ≤8px.
+
+### Brand intro and loaders
+
+- Brand intro video: logo assembly / platform boot — short, silent-friendly, ends on solid brand frame.
+- Loading GIFs: prefer transparent / no-bg variants for overlays (`zexvro-laoding-ani-nobg.gif` naming is historical; do not rename in product without updating imports).
+- NFT / Zer0 cinema: mission-brief → fuel/assemble (optional) → launch/settle; keep stages product-accurate.
+
+### Presentation / caption rules
+
+- Captions: high-contrast white (or near-white) with soft shadow; avoid thin gray type.
+- Prefer Montserrat ExtraBold / Black for short lower-thirds; do not cover faces or key UI.
+- Corner logo: small symbol or wordmark; never stretch.
+- Export both full render and `_preview` when files are large.
+- Do not burn inaccurate product claims into captions.
+
+### Marketing copy rules
+
+- Lead with developer outcome: privacy, deploy, migrate, pay-per-request, agent-ready.
+- Service names: **Zer0**, **Morph**, **REQWID**, **NFTo**, **DEDSEC**. A2A Trade is out of MVP.
+- Status language: “available,” “in progress,” “coming,” “planned” — match `context.md`.
+- Banned: “guaranteed detection,” “multi-chain,” “print money,” empty “revolutionary.”
+
+### Social / export assets
+
+| Use | Asset |
+| --- | --- |
+| README / large lockup | `assets/brand/logo2.png` |
+| Avatar / favicon / corner | `assets/brand/logo.png` |
+| Horizontal wordmark | `assets/brand/typo-logo.png` |
+| Brand board reference | `assets/brand/brand-design.png` |
+| Shareable kit | `marketing.zip` (see `docs/marketing.md`) |
+
+### Do not (marketing)
+
+- Do not reuse dashboard density patterns as the whole landing page.
+- Do not invent sixth-plus services not in the MVP map.
+- Do not put secrets, env files, or private wallet material in public kits.
+- Do not claim Cloudflare/AWS production status without a recorded deploy in `memory.md`.
+
 ## Implementation Notes
 
 For Tailwind/shadcn builds, map the design tokens into CSS variables and support `.dark`.
@@ -402,4 +481,7 @@ Use this file when creating:
 - theme settings.
 - chart styles.
 - app layout.
+- landing marketing sections (`landing/zexvro/`).
+- brand intro / cinema overlays.
+- pitch caption styles.
 

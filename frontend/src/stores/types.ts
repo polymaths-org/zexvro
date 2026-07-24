@@ -106,8 +106,11 @@ export interface Project {
   owner: string;
   framework?: string;
   branch?: string;
+  /** Project default chain preference: testnet | mainnet (legacy "Stellar Testnet" strings still accepted). */
   network: string;
   enabledServices?: string[];
+  /** Per-service chain preference. REQWID/Morph are off-chain (ignored for Stellar). */
+  serviceNetworks?: Partial<Record<'zer0' | 'nfto' | 'dedsec' | 'reqwid' | 'morph', 'testnet' | 'mainnet'>>;
 }
 
 export interface Environment {

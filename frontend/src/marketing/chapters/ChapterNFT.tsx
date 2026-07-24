@@ -5,7 +5,7 @@ export default function ChapterNFT() {
     <ServiceChapter
       id="nft"
       index="05"
-      service="NFT Service"
+      service="NFTo"
       headline="Digital asset workflows should read like product flows."
       body="The NFT service is part of the MVP map, but the implementation shape is early. The marketing story stays at the product layer: define assets, issue them cleanly, and operate them through platform controls when the backend direction is ready."
       status="Draft"

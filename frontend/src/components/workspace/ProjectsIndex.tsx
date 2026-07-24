@@ -41,10 +41,10 @@ export default function ProjectsIndex({ initialShowWizard = false }: { initialSh
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="mx-auto max-w-5xl space-y-6">
+      <div className="flex items-center justify-between border-b border-zinc-200 pb-5 dark:border-zinc-900">
         <div>
-          <h1 className="text-lg font-semibold text-zinc-900 dark:text-white">Projects</h1>
+          <h1 className="text-2xl font-semibold text-zinc-950 dark:text-white">Projects</h1>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
             {projects.length} project{projects.length !== 1 ? 's' : ''} in this workspace
           </p>
@@ -271,12 +271,11 @@ function CreateProjectWizard({ onClose, onCreate, existingProjectNames }: {
           {step === 1 && (
             <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1">
               {[
-                { id: 'srv-privacy', label: 'Zero-Knowledge Privacy Pool (Zer0)', desc: 'Private transactions and zero-knowledge payroll with Stellar settlement.' },
-                { id: 'srv-transformation', label: 'Transformation Agent (Morph)', desc: 'Codebase analysis and automated Web2 → Web3 migrations.' },
-                { id: 'srv-trade', label: 'Agent-to-Agent Trade Pipeline', desc: 'Secure agent-to-agent negotiations and asset settlements.' },
-                { id: 'srv-agent-auth', label: 'Agent Authentication Service', desc: 'Verify human vs agent boundary with CAPTCHA-like controls.' },
-                { id: 'srv-nft', label: 'NFT Service', desc: 'Simple NFT deployment and drop management.' },
-                { id: 'srv-depin', label: 'Access Shield (x402)', desc: 'Exact USDC-per-request gateway for protected HTTP routes.' },
+                { id: 'srv-privacy', label: 'Zer0', desc: 'Private transactions and zero-knowledge payroll with Stellar settlement.' },
+                { id: 'srv-transformation', label: 'Morph', desc: 'Codebase analysis and automated Web2 → Web3 migrations.' },
+                { id: 'srv-agent-auth', label: 'REQWID', desc: 'Verify human vs agent boundary with CAPTCHA-like controls.' },
+                { id: 'srv-nft', label: 'NFTo', desc: 'Simple NFT deployment and drop management.' },
+                { id: 'srv-depin', label: 'DEDSEC', desc: 'Exact USDC-per-request gateway for protected HTTP routes.' },
               ].map(s => {
                 const isSelected = enabledServices.includes(s.id);
                 return (

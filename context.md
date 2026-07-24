@@ -28,7 +28,7 @@ Every agent must start here:
 | Category | Unified Web3 PaaS |
 | Product style | Clean, simple, professional, understandable |
 | UI references | Vercel and Cloudflare |
-| MVP priority | Six unique Web3 services first |
+| MVP priority | Five unique Web3 services first |
 | Secondary priority | DB, deploy, hosting, security, connectors, and standard PaaS features if time allows |
 
 Brand assets:
@@ -113,13 +113,13 @@ Frontend workspace notes:
 
 ## Team Ownership
 
-There are three developers. Each developer owns two MVP services.
+There are three developers. MVP is five services (A2A Trade removed from MVP).
 
 | Developer | Alias | Owns |
 | --- | --- | --- |
-| Paris | `paris-29` | Zero-Knowledge Privacy Pool, Transformation Agent (Morph) |
-| Rushi | `Wraient` | A-2-A Trade Pipeline, Captcha-like Agent Authentication Service |
-| Nabil | `n4bi10p` | NFT Service, De-pin |
+| Paris | `paris-29` | Zer0 (Zero-Knowledge Privacy Pool), Morph (Transformation Agent) |
+| Rushi | `Wraient` | REQWID (Agent Authentication Service) |
+| Nabil | `n4bi10p` | NFTo (NFT Service), DEDSEC (x402 gateway; code path `services/depin`) |
 
 Ownership means:
 
@@ -208,6 +208,20 @@ Status labels: incomplete / partial. Prefer finishing owned items over new featu
 4. Project settings revamp (including Discord settings) where pure UI.
 5. Misc cleanup not owned by Morph/Nabil.
 
+### Tomorrow checklist (2026-07-26 — Paris / shared)
+
+Priority handoff after 2026-07-25 mainnet NFT + credits UX ship. Do not treat as done until verified end-to-end.
+
+| # | Task | Owner | Notes |
+| --- | --- | --- | --- |
+| 1 | **Fix Credit system (ZCR)** | Paris UI + Nabil/platform | Pack buy: select amount → confirm USDC → Freighter; collection `c516b900-…` on Lambda + NFT App Runner. Verify grant after on-chain pay, ledger, burn gate, promo redeem. Primary sale must be live on Credit Pack collection. |
+| 2 | **Update Landing page** | Paris | Demos, demo icons, product names (Zer0 · Morph · REQWID · NFTo · DEDSEC), marketing polish per `design.md` / `docs/marketing.md`. |
+| 3 | **Update Legals** | Paris / shared | Terms, privacy, cookies, marketing footer links — keep accurate for mainnet + credits. |
+| 4 | **Check Morph** | Morph track (+ Paris shell if dummy surfaces) | Confirm Morph Agent + Shared Memory only (no dummy Morph under Services); E2E Morph login/bind/memory; note blockers for Morph track. |
+| 5 | Smoke NFTo mainnet | Paris | Settings on list + studio; Freighter mainnet; mint/sale after Auth InvalidInput fix (`authfix` image). |
+
+Shipped 2026-07-25 (partial): NFTo WASM + App Runner pubnet; ZCR collection env; credits two-step buy; NFTo Settings; nav (REQWID under Security).
+
 ## Service Map
 
 ### 1. Zero-Knowledge Privacy Pool (Zer0)
@@ -283,38 +297,12 @@ Unknowns:
 
 - Repository ingestion strategy.
 
-### 3. A-2-A Trade Pipeline
+### 3. REQWID (Agent Authentication / Gate)
 
-Owner: Rushi / `Wraient`
-
-Problem:
-
-- Agents need a trusted way to approach other agents, negotiate, and complete trades.
-
-MVP intent:
-
-- Provide an agent-to-agent trade pipeline.
-- Let agents represent offers, counteroffers, wallet intent, and settlement state.
-- Support negotiation between agents with clear identity and transaction boundaries.
-
-Agent boundaries:
-
-- Do not implement wallet custody assumptions without an explicit decision.
-- Do not let agents spend funds without user-controlled authorization rules.
-- Record any message protocol, offer schema, settlement flow, or wallet interface in `memory.md`.
-
-Unknowns:
-
-- Negotiation protocol.
-- Wallet model.
-- Agent identity standard.
-- Settlement mechanism.
-- Dispute or cancellation flow.
-
-### 4. Captcha-Like Agent Authentication Service (ZEXVRO Gate)
-
+Product name: **REQWID**  
+Former names: ZEXVRO Gate, Captcha-like Agent Authentication Service, Agent Auth  
 Owner: Rushi / `Wraient`  
-Product name: **ZEXVRO Gate** (code: `services/agent-auth`, SDK `@zexvro/gate`)
+Code: `services/agent-auth`, SDK `@zexvro/gate` (package name may stay gate)
 
 Problem:
 
@@ -356,10 +344,12 @@ Remaining before production third-party use:
 - CDN/npm SDK distribution; photo bank for image captcha types.
 - Console Pages deploy only with `VITE_AGENT_AUTH_API_URL` + graceful offline UI.
 
-### 5. NFT Service
+### 4. NFTo (NFT Service)
 
+Product name: **NFTo**  
 Owner: Nabil / `n4bi10p` (API/chain) + Paris (dashboard/product UX)  
-Status: **Complete (product UI)** — 2026-07-17
+Status: **Complete (product UI)** — 2026-07-17  
+Code path: `services/nft-service/`, `packages/nft-checkout-sdk`
 
 Problem:
 
@@ -377,7 +367,7 @@ Shipped product surface:
 - Create wizard with mission-brief cinema through Freighter, NFT Launch finale, success modal (dashboard / manage / delete).
 - Collection studio: overview (graphs + full dashboard/public URLs), sale, mint, ledger analytics, integrate SDK, delete/archive.
 - Public collection + embed checkout; nftApi defaults to hosted App Runner when env empty.
-- Docs: `/docs` → Services → NFT Collections.
+- Docs: `/docs` → Services → NFTo.
 
 Architecture decisions:
 
@@ -411,10 +401,13 @@ Remaining integration work (ops, not product-UI incomplete):
 - Partner game origins must be listed in `CORS_ALLOWED_ORIGINS`.
 - New collection deploys use WASM hash with instance TTL bumps; older collections keep prior WASM until redeployed.
 
-### 6. De-pin (x402 Agentic Resource Gateway) + Access Shield direction
+### 5. DEDSEC (x402 Agentic Resource Gateway)
 
+Product name: **DEDSEC**  
+Former names: De-pin, Access Shield (strategic framing)  
 Owner: Nabil / `n4bi10p`  
-Status: **In progress** — product testing planned next (do not treat as complete)
+Status: **In progress** — product testing planned next (do not treat as complete)  
+Code path: `services/depin/` (folder name unchanged)
 
 Problem (shipping MVP):
 
@@ -434,9 +427,9 @@ MVP intent (implemented gateway):
 
 Strategic intent (**Proposed** — document for teammates; not fully productized UI):
 
-- Position De-pin as the enforcement plane of **ZEXVRO Access Shield**: an edge economic firewall big platforms put in front of expensive APIs.
-- Combine with (future) Agent Auth classification (Rushi), policy/rate cards, and settlement receipts—not as a WAF clone and not as offensive anti-farm tooling.
-- Full product one-pager: `docs/access_shield.md`.
+- Position DEDSEC as the enforcement plane for paid edge access: an economic firewall big platforms put in front of expensive APIs.
+- Combine with (future) REQWID classification (Rushi), policy/rate cards, and settlement receipts—not as a WAF clone and not as offensive anti-farm tooling.
+- Historical one-pager (pre-rename): `docs/access_shield.md`.
 
 Architecture decisions:
 
@@ -449,7 +442,7 @@ Architecture decisions:
 - Abuse controls: request IDs, authorization replay protection, unpaid-request rate limits, bounded response buffering, structured redacted audit logs, and upstream timeouts.
 - Multi-instance: `DEPIN_STATE_BACKEND=memory|file` (redis reserved); managed config via `DEPIN_CONFIG_JSON` → `DEPIN_CONFIG_URL` → `DEPIN_CONFIG_PATH`.
 - Streaming payments, time-based sessions, custom facilitators, provider marketplace UI, and physical-device adapters are deferred.
-- POST/completions and streaming chat gateways are **roadmap** for Access Shield (v1 remains GET/HEAD exact).
+- POST/completions and streaming chat gateways are **roadmap** for DEDSEC (v1 remains GET/HEAD exact).
 
 Agent boundaries:
 
@@ -458,8 +451,8 @@ Agent boundaries:
 - Do not build the proxy without defining the resource provider registration model.
 - Keep the gateway lightweight and composable.
 - Do not build offensive farm tooling (OTP bots, credential theft, ban evasion). Platform **defense** only.
-- Do not claim Access Shield is fully shipped; keep product expansion marked Proposed until accepted by the team.
-- Coordinate Agent Auth identity/challenge design with Rushi; do not fork a second classifier under De-pin.
+- Do not claim DEDSEC is fully shipped; keep product expansion marked Proposed until accepted by the team.
+- Coordinate REQWID identity/challenge design with Rushi; do not fork a second classifier under DEDSEC.
 
 Remaining integration work (active — test tomorrow):
 
@@ -469,7 +462,7 @@ Remaining integration work (active — test tomorrow):
 - Prefer managed config via `DEPIN_CONFIG_JSON` or `DEPIN_CONFIG_URL` in containers; local file remains the dev default.
 - Provider onboarding UI and richer ownership model remain product follow-ups.
 - Optional OZ Channels facilitator + `OZ_API_KEY` for production-like settle.
-- Access Shield roadmap: rate cards, POST/stream patterns, platform control-plane UI, multi-region anti-replay.
+- DEDSEC roadmap: rate cards, POST/stream patterns, platform control-plane UI, multi-region anti-replay.
 - Add an agent client SDK only after the standard x402 client path is exercised in more environments.
 
 ## Shared Platform Areas
@@ -480,7 +473,7 @@ These are not primary MVP services yet, but they will likely become shared modul
 | --- | --- | --- | --- |
 | Auth / RBAC | Cognito flow exists; full RBAC incomplete | Nabil | Preserve Cognito; do not invent parallel auth |
 | Accounts / workspaces / team | Browser-local prototype; invite + email display incomplete | Nabil | Multi-user + server auth needs in mind |
-| Credits / billing (platform) | Zexvro credits incomplete | Nabil | Keep NFT checkout + De-pin payments in service trust boundaries |
+| Credits / billing (platform) | Zexvro credits incomplete | Nabil | Keep NFTo checkout + DEDSEC payments in service trust boundaries |
 | Deployment / CI/CD | Not finished | Morph track | Prefer service-driven CI over generic hosting |
 | Database | Not designed | — | Choose storage after data models are clearer |
 | Connectors | Not designed | — | Add only when a service needs one |
@@ -488,12 +481,90 @@ These are not primary MVP services yet, but they will likely become shared modul
 | Agent / shared memory | Partial; must actually update | Morph track | Separate user, project, task memory, logs, secrets |
 | Dashboard UI cleanup / landing | Partial; remove dummy + update demos | Paris | Follow `design.md`; remove unwired UI first |
 
+## Marketing Surfaces
+
+Marketing is a first-class surface for launch, demos, waitlist, and investor/pitch work. It must stay claim-safe with MVP status and never invent shipped features.
+
+### Locations
+
+| Surface | Path | Role |
+| --- | --- | --- |
+| Public landing (standalone) | `landing/zexvro/` | Primary marketing site: hero, five services, team, waitlist |
+| In-app welcome | `frontend/src/marketing/` | Minimal glass welcome + brand intro before `/dashboard` |
+| Product cinema / motion | `frontend/public/marketing/` | NFT/Zer0/boot cinema clips, loaders, hero stills used inside product |
+| Presentation / pitch media | `presentation/` | Caption builds, pro/cinema edits of founder demo footage |
+| Brand lockups | `assets/brand/` | logo, logo2, typo-logo, brand-design |
+| Marketing kit export | `marketing.zip` | Shareable pack (brand + motion + presentation finals + copy); rebuild with docs below |
+
+### Messaging (stable)
+
+- **One sentence:** ZEXVRO is a unified Web3 PaaS that helps teams move from Web2 to Web3 infrastructure through private, verifiable, agent-ready services.
+- **Category:** Unified Web3 PaaS — developer-first, not a crypto wallet or token dashboard.
+- **Style refs:** Vercel / Cloudflare clarity; Stellar where chain rails matter.
+- **Five MVP services (always name consistently):** Zer0 · Morph · REQWID · NFTo · DEDSEC.
+- **Out of MVP:** A2A Trade (removed from MVP; do not market as a core service).
+- **Status honesty:** Only claim complete what `context.md` / `memory.md` mark complete (e.g. NFTo + Zer0 product UI). Morph, REQWID, DEDSEC expansion stay partial / planned / proposed as documented.
+- **Avoid:** token hype, “perfect detection,” multi-chain claims, “fully shipped DEDSEC,” gas/wallet lectures as the hero.
+
+### Landing service blurbs (source of truth for marketing copy)
+
+Keep landing copy aligned with `landing/zexvro/src/data/services.ts` and service sections above:
+
+| Service | Short line |
+| --- | --- |
+| Zer0 | Zero-knowledge privacy for business payments |
+| Morph | Transformation agent for Web2 → Web3 migration |
+| REQWID | Human vs agent classification for product flows |
+| NFTo | Deploy and sell NFTs without chain complexity |
+| DEDSEC | x402 paid access gateway for APIs & compute |
+
+### Ownership
+
+| Area | Owner |
+| --- | --- |
+| Landing demos + demo icons + marketing polish | Paris |
+| Product cinema inside NFT / Zer0 flows | Paris (product) + service owners for accuracy |
+| Morph demo / transformation marketing | Morph track |
+| Pitch presentation media builds | Paris (local `presentation/` tooling) |
+
+### Marketing kit (`marketing.zip`)
+
+Portable handoff for design, social, and pitch. Contents (rebuild recipe):
+
+```bash
+# From repo root — regenerates marketing.zip (gitignored; do not commit secrets)
+rm -rf /tmp/zexvro-marketing-kit && mkdir -p /tmp/zexvro-marketing-kit/{brand,motion,presentation,landing-dist,docs}
+cp assets/brand/* /tmp/zexvro-marketing-kit/brand/
+cp frontend/public/marketing/*.{mp4,gif,webp} /tmp/zexvro-marketing-kit/motion/ 2>/dev/null || true
+cp presentation/IMG_1817_pro.mp4 presentation/IMG_1817_pro_preview.mp4 \
+  presentation/IMG_1817_cinema_preview.mp4 presentation/*_preview_sheet.jpg \
+  presentation/img1817_transcript.json /tmp/zexvro-marketing-kit/presentation/ 2>/dev/null || true
+cp -R landing/zexvro/dist/* /tmp/zexvro-marketing-kit/landing-dist/ 2>/dev/null || true
+cp docs/marketing.md design.md README.md /tmp/zexvro-marketing-kit/docs/
+cp docs/marketing.md /tmp/zexvro-marketing-kit/README.md
+(cd /tmp && zip -r zexvro-marketing-kit.zip zexvro-marketing-kit -x "*.env*" "*node_modules*") \
+  || python3 -c "import zipfile,pathlib; r=pathlib.Path('/tmp/zexvro-marketing-kit'); z=zipfile.ZipFile('/tmp/zexvro-marketing-kit.zip','w',zipfile.ZIP_DEFLATED); 
+[z.write(p,'zexvro-marketing-kit/'+str(p.relative_to(r))) for p in r.rglob('*') if p.is_file()]; z.close()"
+mv /tmp/zexvro-marketing-kit.zip ./marketing.zip
+```
+
+Do not put `.env`, Cognito secrets, or wallet seeds in the kit. Prefer previews over multi-hundred-MB intermediates when sharing externally.
+
+### Agent rules (marketing)
+
+- Follow `design.md` → **Marketing Design** for landing/pitch; follow product dashboard rules for in-app UI.
+- Do not overclaim service readiness.
+- Prefer `assets/brand/logo2.png` for large brand moments; symbol for compact/social avatars.
+- Update demos/icons under Paris landing tickets before inventing new campaign systems.
+- Record marketing direction changes in `memory.md`.
+
 ## Product Design Rules
 
 - Use a calm, professional interface.
 - Avoid crypto-native clutter.
 - Use readable labels and predictable navigation.
-- Design like a developer platform, not a marketing-only website.
+- Design the **logged-in platform** like a developer console, not a marketing microsite.
+- Landing and pitch surfaces may be cinematic; still keep claims precise.
 - Keep first screens actionable.
 - Make service status, setup state, errors, and next actions clear.
 - Prefer precise product copy over hype.
@@ -523,7 +594,8 @@ Use the right file:
 - `README.md`: public-facing project overview.
 - `context.md`: stable product and architecture context.
 - `memory.md`: chronological work state, decisions, blockers, handoffs.
-- `design.md`: visual system, themes, typography, brand usage, UI behavior, and motion rules.
+- `design.md`: visual system, themes, typography, brand usage, product + marketing UI, and motion rules.
+- `docs/marketing.md`: marketing kit brief, service one-liners, motion inventory, claim-safe copy.
 - Future service READMEs: service-local setup, API, architecture, and ownership.
 
 ## Decision Levels
@@ -587,5 +659,5 @@ Current verification entry points:
 - Frontend: `cd frontend && npm run lint && npm test && npm run build && npm run test:e2e`.
 - NFT contract: commands in `services/nft-service/README.md`.
 - NFT API: `cd services/nft-service/api && npm run lint && npm test && npm run build`.
-- De-pin: `cd services/depin && npm run lint && npm test && npm run build`.
+- DEDSEC (code: `services/depin`): `cd services/depin && npm run lint && npm test && npm run build`.
 - Required environment variables are documented in the repository-root `.env.example`. Folder-level `.env.example` files are pointers only. Never commit real `.env` values.

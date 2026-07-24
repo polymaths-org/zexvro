@@ -1,0 +1,22 @@
+{
+  "port": 4102,
+  "facilitatorUrl": "https://channels.openzeppelin.com/x402",
+  "maxUpstreamResponseBytes": 10485760,
+  "replayTtlMs": 600000,
+  "unpaidRateLimit": {
+    "maxRequests": 30,
+    "windowMs": 60000
+  },
+  "providers": [
+    {
+      "route": "/v1/paid-resource",
+      "method": "GET",
+      "upstreamUrl": "https://httpbin.org/get",
+      "description": "Mainnet x402 protected resource (Circle USDC on stellar:pubnet)",
+      "price": "$0.001",
+      "recipient": "REPLACE_WITH_MAINNET_G_ADDRESS_WITH_USDC_TRUSTLINE",
+      "network": "stellar:pubnet",
+      "timeoutMs": 5000
+    }
+  ]
+}

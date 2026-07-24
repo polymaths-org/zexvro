@@ -618,12 +618,11 @@ export default function DashboardApp() {
       id: 'services',
       label: 'MVP Services',
       subItems: [
-        { id: 'services', label: 'Privacy Pool', icon: 'privacy' },
-        { id: 'services', label: 'Transformation', icon: 'transform' },
-        { id: 'services', label: 'Trade Pipeline', icon: 'trade' },
-        { id: 'services', label: 'Agent Auth', icon: 'auth' },
-        { id: 'services', label: 'NFT Service', icon: 'nft' },
-        { id: 'services', label: 'De-pin', icon: 'depin' },
+        { id: 'services', label: 'Zer0', icon: 'privacy' },
+        { id: 'services', label: 'Morph', icon: 'transform' },
+        { id: 'services', label: 'REQWID', icon: 'auth' },
+        { id: 'services', label: 'NFTo', icon: 'nft' },
+        { id: 'services', label: 'DEDSEC', icon: 'depin' },
       ],
     },
     {

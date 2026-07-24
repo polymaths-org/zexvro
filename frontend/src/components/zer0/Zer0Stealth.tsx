@@ -117,7 +117,7 @@ export default function Zer0Stealth() {
   }), [importedIdentities, orgIdentity, outbound, inbound]);
 
   return (
-    <div className="space-y-5 max-w-4xl">
+    <div className="space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-lg font-bold text-zinc-900 dark:text-white flex items-center gap-2">

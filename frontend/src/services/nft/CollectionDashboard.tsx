@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import {
+  useCallback, useEffect, useState } from 'react';
 import {
   Archive,
   ArrowRight,
@@ -19,6 +20,7 @@ import {
   RadioTower,
   RefreshCw,
   RotateCcw,
+  Settings,
   ShieldCheck,
   ShoppingCart,
   Sparkles,
@@ -46,9 +48,15 @@ import {
   type NftMintedItem,
   type NftServiceHealth,
   type PreparedNftTransaction,
+  nftExplorerBase,
+  nftNetworkLabel,
+  nftNetworkPassphrase,
+  getNftNetworkPreference,
+  setNftNetworkPreference,
 } from './nftApi';
 import { formatWalletError, getPublicKey, isWalletAvailable, signTransaction } from './stellarWallet';
 import NftSdkPanel from './NftSdkPanel';
+import { useProjectStore } from '../../stores/project';
 
 interface CollectionDashboardProps {
   workspaceId: string;
@@ -120,6 +128,17 @@ const STATUS_STYLE = {
 };
 
 export default function CollectionDashboard({ workspaceId, accessToken, onCreate }: CollectionDashboardProps) {
+  const projects = useProjectStore(s => s.projects);
+  useEffect(() => {
+    const project = projects.find(p => p.workspaceId === workspaceId && (p.enabledServices || []).includes('srv-nft'))
+      || projects.find(p => p.workspaceId === workspaceId);
+    const pref = project?.serviceNetworks?.nfto
+      || (String(project?.network || '').toLowerCase().includes('main') ? 'mainnet' : undefined);
+    if (pref === 'mainnet' || pref === 'testnet') setNftNetworkPreference(pref);
+  }, [projects, workspaceId]);
+
+  const [nftNetPref, setNftNetPref] = useState<'testnet' | 'mainnet'>(() => getNftNetworkPreference());
+  const [studioSettingsOpen, setStudioSettingsOpen] = useState(false);
   const [collections, setCollections] = useState<ApiNftCollection[]>([]);
   const [browserDrafts, setBrowserDrafts] = useState<NftCollection[]>([]);
   const [health, setHealth] = useState<NftServiceHealth | null>(null);
@@ -258,6 +277,24 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
     } catch {
       setActionError(url);
     }
+  };
+
+  const applyNetworkPref = (env: 'testnet' | 'mainnet') => {
+    setNftNetworkPreference(env);
+    setNftNetPref(env);
+    const project = projects.find(p => p.workspaceId === workspaceId && (p.enabledServices || []).includes('srv-nft'))
+      || projects.find(p => p.workspaceId === workspaceId);
+    if (project) {
+      useProjectStore.getState().updateProject(project.id, {
+        serviceNetworks: {
+          ...(project.serviceNetworks || {}),
+          nfto: env,
+        },
+      });
+    }
+    setActionMessage(
+      `NFTo Freighter preference → ${env === 'mainnet' ? 'Mainnet' : 'Testnet'}. Hosted API rail: ${nftNetworkLabel(health)}.`,
+    );
   };
 
   const openEdit = (collection: ApiNftCollection) => {
@@ -403,8 +440,8 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
         setLastMintTxHash(intent.autoSubmitted.transactionHash);
         setActionMessage(
           intent.tokenId === undefined
-            ? 'Token minted on Stellar testnet.'
-            : `Token #${intent.tokenId} minted on Stellar testnet.`,
+            ? `Token minted on ${nftNetworkLabel()}.`
+            : `Token #${intent.tokenId} minted on Stellar ${nftNetworkLabel()}.`,
         );
       } else {
         setActionMessage(
@@ -427,7 +464,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
     setActionMessage('');
     try {
       if (!(await isWalletAvailable())) {
-        throw new Error('Freighter is not available in this browser. Unlock Freighter, allow this site, and use Testnet.');
+        throw new Error(`Freighter is not available. Unlock Freighter, allow this site, and switch to Stellar ${nftNetworkLabel()}.`);
       }
       const walletAddress = await getPublicKey();
       const operatorAddress = mintOperator.trim() || mintCollection.ownerAddress;
@@ -437,7 +474,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
       ) {
         setActionMessage(`Connected wallet ${walletAddress.slice(0, 6)}... differs from required minter. Continue only if this key is authorized.`);
       }
-      const signedTransaction = await signTransaction(mintIntent.serializedTransaction);
+      const signedTransaction = await signTransaction(mintIntent.serializedTransaction, nftNetworkPassphrase());
       const tokenId = mintAssignedTokenId ?? mintIntent.tokenId;
       const result = await submitNftMint({
         collectionId: mintCollection.id,
@@ -462,8 +499,8 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
       const mintedId = result.item?.tokenId ?? tokenId;
       setActionMessage(
         mintedId === undefined
-          ? 'Token signed and minted on Stellar testnet.'
-          : `Token #${mintedId} signed and minted on Stellar testnet.`,
+          ? `Token signed and minted on ${nftNetworkLabel()}.`
+          : `Token #${mintedId} signed and minted on Stellar ${nftNetworkLabel()}.`,
       );
     } catch (error) {
       reportActionError(error, setActionError);
@@ -503,7 +540,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
             ? { ...collection, primarySale: configuredSale }
             : collection,
         ));
-        setActionMessage('Sale configuration is live on Stellar testnet.');
+        setActionMessage(`Sale configuration is live on ${nftNetworkLabel()}.`);
         await loadRemoteData(undefined, true);
       } else {
         setActionMessage('Sale configuration transaction prepared.');
@@ -522,7 +559,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
     setActionMessage('');
     try {
       if (!(await isWalletAvailable())) {
-        throw new Error('Freighter is not available in this browser. Unlock Freighter, allow this site, use Testnet, or rely on the local sponsor auto-submit path.');
+        throw new Error(`Freighter is not available. Unlock Freighter, allow this site, use Stellar ${nftNetworkLabel()}, or rely on sponsor auto-submit.`);
       }
       const walletAddress = await getPublicKey();
       if (
@@ -532,7 +569,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
       ) {
         setActionMessage(`Connected wallet ${walletAddress.slice(0, 6)}... differs from required signers. Continue only if this key is authorized.`);
       }
-      const signedTransaction = await signTransaction(saleIntent.serializedTransaction);
+      const signedTransaction = await signTransaction(saleIntent.serializedTransaction, nftNetworkPassphrase());
       const priceAtomic = usdcToAtomic(salePrice) || '0';
       const result = await submitNftSaleConfig({
         collectionId: saleCollection.id,
@@ -563,7 +600,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
           status: 'confirmed',
         },
       });
-      setActionMessage('Sale configuration signed and confirmed on Stellar testnet.');
+      setActionMessage(`Sale configuration signed and confirmed on ${nftNetworkLabel()}.`);
       await loadRemoteData(undefined, true);
     } catch (error) {
       reportActionError(error, setActionError);
@@ -585,7 +622,11 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
         royaltyBps: editDraft.royaltyBps,
       }, accessToken);
       setEditingCollection(null);
-      setActionMessage('Failed collection record updated.');
+      setActionMessage(
+        editingCollection.status === 'live'
+          ? 'Collection metadata updated (dashboard / public page). On-chain contract name is fixed after deploy.'
+          : 'Collection record updated.',
+      );
       await loadRemoteData(undefined, true);
     } catch (error) {
       setActionError(errorMessage(error));
@@ -601,14 +642,24 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
         <div>
           <div className="mb-2 flex items-center gap-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">
             <Gamepad2 className="h-4 w-4 text-brand-blue" />
-            NFT Service
+            NFTo
           </div>
           <h1 className="text-2xl font-semibold text-zinc-950 dark:text-white">Collections</h1>
           <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-500 dark:text-zinc-400">
-            Deploy and inspect creator-controlled game asset collections on Stellar testnet.
+            Deploy and inspect creator-controlled game asset collections on Stellar {nftNetworkLabel(health)}.
+            Freighter network preference is separate from the hosted API rail.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setStudioSettingsOpen(true)}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-zinc-200 px-4 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900"
+            title="NFTo settings: network, rename collections"
+          >
+            <Settings className="h-4 w-4" />
+            Settings
+          </button>
           <button
             type="button"
             aria-label="Refresh collections"
@@ -657,7 +708,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
         <div className="flex items-center gap-2 bg-white px-3 py-2.5 text-xs dark:bg-[#050506]">
           <ShieldCheck className={`h-4 w-4 ${health?.capabilities?.stellarConfigured ? 'text-emerald-500' : 'text-zinc-400'}`} />
           <span className="text-zinc-500 dark:text-zinc-400">Stellar</span>
-          <span className="ml-auto font-medium text-zinc-800 dark:text-zinc-200">{health?.capabilities?.stellarConfigured ? 'Testnet ready' : 'Not configured'}</span>
+          <span className="ml-auto font-medium text-zinc-800 dark:text-zinc-200">{health?.capabilities?.stellarConfigured ? `${nftNetworkLabel(health)} ready` : 'Not configured'}</span>
         </div>
         <div className="flex items-center gap-2 bg-white px-3 py-2.5 text-xs dark:bg-[#050506]">
           <CloudUpload className={`h-4 w-4 ${health?.capabilities?.pinningConfigured ? 'text-emerald-500' : 'text-zinc-400'}`} />
@@ -702,7 +753,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
           </span>
           <h2 className="mt-5 text-lg font-semibold text-zinc-950 dark:text-white">No collections yet</h2>
           <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-zinc-500 dark:text-zinc-400">
-            The collection flow uploads its media and deploys a collection contract to Stellar testnet through the NFT API.
+            The collection flow uploads media and deploys a collection contract to {nftNetworkLabel(health)} through the NFT API.
           </p>
           <button
             type="button"
@@ -776,7 +827,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
                         <td className="px-3 py-3.5">
                           {collection.contractId ? (
                             <a
-                              href={`https://stellar.expert/explorer/testnet/contract/${collection.contractId}`}
+                              href={`${nftExplorerBase()}/contract/${collection.contractId}`}
                               target="_blank"
                               rel="noreferrer"
                               title={collection.contractId}
@@ -868,6 +919,15 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
                                 </button>
                                 <button
                                   type="button"
+                                  onClick={() => openEdit(collection)}
+                                  disabled={busyCollectionId === collection.id}
+                                  title="Settings — rename, description, royalty"
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-zinc-200 text-zinc-500 transition hover:border-zinc-300 hover:text-zinc-950 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-800 dark:hover:border-zinc-700 dark:hover:text-white"
+                                >
+                                  <Settings className="h-4 w-4" />
+                                </button>
+                                <button
+                                  type="button"
                                   onClick={() => void archiveCollection(collection)}
                                   disabled={busyCollectionId === collection.id}
                                   title="Archive collection (hides from public; contract stays live)"
@@ -885,6 +945,15 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
                                   className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-zinc-200 text-zinc-500 transition hover:border-zinc-300 hover:text-zinc-950 dark:border-zinc-800 dark:hover:border-zinc-700 dark:hover:text-white"
                                 >
                                   <Boxes className="h-4 w-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => openEdit(collection)}
+                                  disabled={busyCollectionId === collection.id}
+                                  title="Settings — rename, description"
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-zinc-200 text-zinc-500 transition hover:border-zinc-300 hover:text-zinc-950 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-800 dark:hover:border-zinc-700 dark:hover:text-white"
+                                >
+                                  <Settings className="h-4 w-4" />
                                 </button>
                                 <button
                                   type="button"
@@ -975,13 +1044,131 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
         </>
       )}
 
+      {studioSettingsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <section className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-lg border border-zinc-200 bg-white p-5 shadow-2xl dark:border-zinc-800 dark:bg-[#0A0A0B]">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-base font-semibold text-zinc-950 dark:text-white">NFTo settings</h2>
+                <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                  Network preference, service status, and collection metadata.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStudioSettingsOpen(false)}
+                aria-label="Close settings"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-zinc-200 text-zinc-500 transition hover:text-zinc-950 dark:border-zinc-800 dark:hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-5 space-y-5">
+              <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Freighter network</p>
+                <p className="mt-1 text-[11px] text-zinc-500">
+                  Used when signing mint / sale txs. Hosted API is currently{' '}
+                  <span className="font-medium text-zinc-700 dark:text-zinc-300">{nftNetworkLabel(health)}</span>.
+                </p>
+                <div className="mt-3 inline-flex rounded-md border border-zinc-200 p-0.5 dark:border-zinc-800">
+                  {(['testnet', 'mainnet'] as const).map((env) => (
+                    <button
+                      key={env}
+                      type="button"
+                      onClick={() => applyNetworkPref(env)}
+                      className={`rounded px-3 py-1.5 text-[11px] font-semibold transition ${
+                        nftNetPref === env
+                          ? 'bg-zinc-950 text-white dark:bg-white dark:text-zinc-950'
+                          : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+                      }`}
+                    >
+                      {env === 'mainnet' ? 'Mainnet' : 'Testnet'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Service</p>
+                <dl className="mt-3 space-y-2 text-xs">
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-zinc-500">API</dt>
+                    <dd className="font-medium text-zinc-800 dark:text-zinc-200">{health ? 'Connected' : 'Unavailable'}</dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-zinc-500">Stellar rail</dt>
+                    <dd className="font-medium text-zinc-800 dark:text-zinc-200">
+                      {health?.capabilities?.stellarConfigured ? nftNetworkLabel(health) : 'Not configured'}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-zinc-500">Storage</dt>
+                    <dd className="font-medium capitalize text-zinc-800 dark:text-zinc-200">
+                      {health?.capabilities?.storageMode || '—'}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+
+              <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Rename collection</p>
+                <p className="mt-1 text-[11px] text-zinc-500">
+                  Open settings on a collection to change name, symbol, description, or royalty display.
+                </p>
+                {collections.length === 0 ? (
+                  <p className="mt-3 text-xs text-zinc-500">No collections yet.</p>
+                ) : (
+                  <ul className="mt-3 max-h-48 space-y-1.5 overflow-y-auto">
+                    {collections.map((c) => (
+                      <li key={c.id}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setStudioSettingsOpen(false);
+                            openEdit(c);
+                          }}
+                          className="flex w-full items-center justify-between gap-2 rounded-md border border-zinc-100 px-3 py-2 text-left text-xs transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:border-zinc-700 dark:hover:bg-zinc-900/50"
+                        >
+                          <span className="min-w-0">
+                            <span className="block truncate font-medium text-zinc-900 dark:text-white">{c.name}</span>
+                            <span className="font-mono text-[10px] text-zinc-400">{c.symbol} · {c.status}</span>
+                          </span>
+                          <Edit3 className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setStudioSettingsOpen(false)}
+                className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white dark:bg-white dark:text-zinc-950"
+              >
+                Done
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
       {editingCollection && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <section className="w-full max-w-lg rounded-lg border border-zinc-200 bg-white p-5 shadow-2xl dark:border-zinc-800 dark:bg-[#0A0A0B]">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-base font-semibold text-zinc-950 dark:text-white">Edit failed collection</h2>
-                <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Changes apply to the next deployment retry.</p>
+                <h2 className="text-base font-semibold text-zinc-950 dark:text-white">Collection settings</h2>
+                <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                  {editingCollection.status === 'live'
+                    ? 'Rename and update dashboard metadata. On-chain contract identity stays fixed after deploy.'
+                    : editingCollection.status === 'failed'
+                      ? 'Edit before retrying deployment.'
+                      : 'Update collection metadata.'}
+                </p>
               </div>
               <button
                 type="button"
@@ -1010,7 +1197,9 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
                     ...previous,
                     symbol: event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10),
                   }))}
-                  className="mt-2 w-full rounded-md border border-zinc-200 bg-white px-3 py-2.5 font-mono text-sm text-zinc-950 outline-none transition focus:border-brand-blue dark:border-zinc-800 dark:bg-[#050506] dark:text-white"
+                  disabled={editingCollection.status === 'live'}
+                  title={editingCollection.status === 'live' ? 'Symbol is fixed for live collections' : undefined}
+                  className="mt-2 w-full rounded-md border border-zinc-200 bg-white px-3 py-2.5 font-mono text-sm text-zinc-950 outline-none transition focus:border-brand-blue disabled:opacity-60 dark:border-zinc-800 dark:bg-[#050506] dark:text-white"
                 />
               </label>
               <label className="block text-sm font-medium text-zinc-800 dark:text-zinc-200">
@@ -1040,6 +1229,11 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
                   <span className="text-sm text-zinc-500">%</span>
                 </div>
               </label>
+              {editingCollection.contractId ? (
+                <p className="text-[11px] font-mono text-zinc-400 break-all">
+                  Contract {editingCollection.contractId}
+                </p>
+              ) : null}
             </div>
 
             <div className="mt-6 flex justify-end gap-2">
@@ -1052,7 +1246,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
               </button>
               <button
                 type="button"
-                disabled={busyCollectionId === editingCollection.id}
+                disabled={busyCollectionId === editingCollection.id || !editDraft.name.trim()}
                 onClick={() => void saveEdit()}
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-zinc-950 px-4 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
               >
@@ -1122,7 +1316,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
                   <div>
                     <span className="text-xs text-zinc-500 dark:text-zinc-400">Transaction</span>
                     <a
-                      href={`https://stellar.expert/explorer/testnet/tx/${saleIntent.autoSubmitted.transactionHash}`}
+                      href={`${nftExplorerBase()}/tx/${saleIntent.autoSubmitted.transactionHash}`}
                       target="_blank"
                       rel="noreferrer"
                       className="mt-1 inline-flex items-center gap-1.5 font-mono text-xs text-brand-blue hover:underline"
@@ -1171,7 +1365,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
                   {atomicToUsdc(saleCollection.primarySale.priceAtomic)} XLM
                 </p>
                 <a
-                  href={`https://stellar.expert/explorer/testnet/tx/${saleCollection.primarySale.transactionHash}`}
+                  href={`${nftExplorerBase()}/tx/${saleCollection.primarySale.transactionHash}`}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-1.5 font-mono text-xs text-brand-blue hover:underline"
@@ -1263,7 +1457,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
                   <div>
                     <span className="text-xs text-zinc-500 dark:text-zinc-400">Transaction</span>
                     <a
-                      href={`https://stellar.expert/explorer/testnet/tx/${mintIntent.autoSubmitted?.transactionHash || lastMintTxHash}`}
+                      href={`${nftExplorerBase()}/tx/${mintIntent.autoSubmitted?.transactionHash || lastMintTxHash}`}
                       target="_blank"
                       rel="noreferrer"
                       className="mt-1 inline-flex items-center gap-1.5 font-mono text-xs text-brand-blue hover:underline"
@@ -1367,7 +1561,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
                         <td className="px-3 py-2 capitalize text-zinc-600 dark:text-zinc-300">{item.source}</td>
                         <td className="px-3 py-2">
                           <a
-                            href={`https://stellar.expert/explorer/testnet/tx/${item.transactionHash}`}
+                            href={`${nftExplorerBase()}/tx/${item.transactionHash}`}
                             target="_blank"
                             rel="noreferrer"
                             className="inline-flex items-center gap-1 font-mono text-xs text-brand-blue hover:underline"

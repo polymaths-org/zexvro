@@ -15,15 +15,19 @@ import {
   DEFAULT_FACILITATOR_URL,
   EMPTY_PROVIDER_DRAFT,
   OZ_CHANNELS_TESTNET,
+  OZ_CHANNELS_MAINNET,
   buildGatewayConfig,
+  facilitatorForNetwork,
   formatConfigJson,
   hostedDeployInstructions,
   loadProviderDrafts,
   localDeployInstructions,
+  normalizeDepinNetwork,
   sanitizeProviderDraft,
   saveProviderDrafts,
   validateProviderDraft,
   type DepinHttpMethod,
+  type DepinNetwork,
   type DepinProviderDraft,
 } from './depinConfig';
 
@@ -139,11 +143,11 @@ export default function ProtectRouteWizard({
       <header className="border-b border-zinc-200 pb-5 dark:border-zinc-900">
         <div className="mb-2 flex items-center gap-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">
           <Shield className="h-4 w-4 text-brand-blue" />
-          Access Shield
+          DEDSEC
         </div>
         <h1 className="text-2xl font-semibold text-zinc-950 dark:text-white">Protect a route</h1>
         <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-500 dark:text-zinc-400">
-          Build a provider entry for exact per-request Stellar testnet USDC. The gateway loads config at boot —
+          Build a provider entry for exact per-request Stellar USDC (testnet or mainnet / pubnet). The gateway loads config at boot —
           export JSON, apply it, restart, then Probe 402. This wizard does not create a live route by itself.
         </p>
       </header>
@@ -260,8 +264,26 @@ export default function ProtectRouteWizard({
               className={`font-mono ${fieldClass()}`}
             />
             <span className="mt-1 block text-[11px] text-zinc-400">
-              Must be a classic account with USDC trustline. Do not use the USDC SAC C-address.
+              Must be a classic account with USDC trustline on the selected network. Do not use the USDC SAC C-address.
             </span>
+          </label>
+          <label className="block">
+            <span className={labelClass()}>Network</span>
+            <select
+              value={draft.network}
+              onChange={(e) => {
+                const network = normalizeDepinNetwork(e.target.value) as DepinNetwork;
+                update('network', network);
+                // Keep facilitator aligned with network when using OZ Channels.
+                if (facilitatorUrl.includes('openzeppelin.com')) {
+                  setFacilitatorUrl(facilitatorForNetwork(network));
+                }
+              }}
+              className={fieldClass()}
+            >
+              <option value="stellar:testnet">stellar:testnet (practice USDC)</option>
+              <option value="stellar:pubnet">stellar:pubnet (mainnet USDC)</option>
+            </select>
           </label>
           <label className="block">
             <span className={labelClass()}>Facilitator URL (full config)</span>
@@ -272,11 +294,13 @@ export default function ProtectRouteWizard({
             >
               <option value={DEFAULT_FACILITATOR_URL}>x402.org (unpaid probes OK)</option>
               <option value={OZ_CHANNELS_TESTNET}>OpenZeppelin Channels testnet (paid settle)</option>
+              <option value={OZ_CHANNELS_MAINNET}>OpenZeppelin Channels mainnet (paid settle)</option>
             </select>
           </label>
           <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-xs leading-5 text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950/40 dark:text-zinc-400">
-            Network is fixed to <code className="text-[11px]">stellar:testnet</code> for this MVP.
-            Paid settle with Channels also needs <code className="text-[11px]">OZ_API_KEY</code> in the gateway env.
+            Network is written into the provider JSON as <code className="text-[11px]">{draft.network}</code>.
+            Paid settle with Channels needs <code className="text-[11px]">OZ_API_KEY</code> in the gateway env
+            (mainnet key from OZ, not the testnet generator).
           </div>
           {errors.length > 0 && (
             <div className="space-y-1 rounded-lg border border-amber-500/25 bg-amber-500/5 px-3 py-2.5 text-xs text-amber-800 dark:text-amber-200" role="alert">

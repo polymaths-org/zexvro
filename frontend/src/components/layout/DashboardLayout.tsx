@@ -19,6 +19,8 @@ import {
   type UserSession,
 } from '../../auth/cognito';
 import { buildAgentChatPayload, loadAgentSettingsFromAWS } from '../../agent/settings';
+import AuthOverlay from '../auth/AuthOverlay';
+import BrandLoader from '../BrandLoader';
 import CliActivation from '../auth/CliActivation';
 import PlatformBootup from '../PlatformBootup';
 import {
@@ -73,21 +75,31 @@ type CustomIconName =
   | 'privacy' | 'transform' | 'trade' | 'auth' | 'nft' | 'depin'
   | 'transactions' | 'payroll';
 
+const SERVICE_ICON_SRC: Partial<Record<CustomIconName, string>> = {
+  agent: MORPH_LOGO,
+  privacy: '/services/zer0-32.png',
+  nft: '/services/nfto-32.png',
+  depin: '/services/dedsec-32.png',
+  auth: '/services/reqwid-32.png',
+};
+
 function CustomIcon({ name, className = '' }: { name: CustomIconName; className?: string }) {
-  if (name === 'agent') {
+  const brandSrc = SERVICE_ICON_SRC[name];
+  if (brandSrc) {
+    const invert = name === 'agent' || name === 'privacy' || name === 'depin';
     return (
       <img
-        src={MORPH_LOGO}
+        src={brandSrc}
         alt=""
         aria-hidden="true"
-        className={`scale-95 object-contain invert dark:invert-0 ${className}`}
+        className={`object-contain ${invert ? 'invert dark:invert-0' : ''} ${className}`}
       />
     );
   }
 
   const common = 'fill-none stroke-current stroke-[1.8] stroke-linecap-round stroke-linejoin-round';
   const accent = 'fill-current stroke-none';
-  const icons: Record<Exclude<CustomIconName, 'agent'>, React.ReactNode> = {
+  const icons: Record<Exclude<CustomIconName, 'agent' | 'privacy' | 'nft' | 'depin' | 'auth'>, React.ReactNode> = {
     overview: (
       <>
         <path className={common} d="M5 6.5h5.2v5.2H5zM13.8 6.5H19v3.8h-5.2zM5 15h5.2v2.5H5zM13.8 13.2H19v4.3h-5.2z" />
@@ -143,12 +155,6 @@ function CustomIcon({ name, className = '' }: { name: CustomIconName; className?
         <path className={common} d="M9 5.8v3.4M15 10.3v3.4M11.5 14.8v3.4" />
       </>
     ),
-    privacy: (
-      <>
-        <path className={common} d="M7.2 10.5h9.6v7.2H7.2zM9 10.5V8.2a3 3 0 0 1 6 0v2.3" />
-        <path className={common} d="M12 13.2v1.9" />
-      </>
-    ),
     transform: (
       <>
         <path className={common} d="M5.2 7.2h5.6v5.6H5.2zM13.2 11.2h5.6v5.6h-5.6z" />
@@ -159,24 +165,6 @@ function CustomIcon({ name, className = '' }: { name: CustomIconName; className?
       <>
         <path className={common} d="M6 8.2h9.5l-2-2.1M18 15.8H8.5l2 2.1" />
         <path className={common} d="M15.5 8.2 18 10.7M8.5 15.8 6 13.3" />
-      </>
-    ),
-    auth: (
-      <>
-        <path className={common} d="M8.8 12.2a3 3 0 1 1 2.4 2.9L9 17.3H6.8v-2.2z" />
-        <path className={common} d="M14.5 6.3c2 .5 3.5 2 4 4M14.4 9.3c.7.3 1.2.8 1.4 1.5" />
-      </>
-    ),
-    nft: (
-      <>
-        <path className={common} d="M12 4.8 18.2 12 12 19.2 5.8 12z" />
-        <path className={common} d="M8.9 12h6.2M12 8.4v7.2" />
-      </>
-    ),
-    depin: (
-      <>
-        <path className={common} d="M12 12.2a2.3 2.3 0 1 0 0-4.6 2.3 2.3 0 0 0 0 4.6ZM5.8 17.8a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6ZM18.2 17.8a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6Z" />
-        <path className={common} d="m10.1 11.2-2.8 3.2M13.9 11.2l2.8 3.2M7.6 16h8.8" />
       </>
     ),
     transactions: (
@@ -194,9 +182,11 @@ function CustomIcon({ name, className = '' }: { name: CustomIconName; className?
     ),
   };
 
+  const glyph = icons[name as keyof typeof icons];
+  if (!glyph) return null;
   return (
     <svg className={`scale-[1.28] ${className}`} viewBox="0 0 24 24" aria-hidden="true">
-      {icons[name]}
+      {glyph}
     </svg>
   );
 }
@@ -251,7 +241,7 @@ const SIDEBAR_CATEGORIES: Array<{
     label: 'Workspace Management',
     items: [
       { to: 'overview', label: 'Overview', icon: 'overview' },
-      { to: 'projects', label: 'Projects / Environments', icon: 'projects' },
+      { to: 'projects', label: 'Projects', icon: 'projects' },
       { to: 'team', label: 'Team', icon: 'team' },
       { to: 'credits', label: 'Credits (ZCR)', icon: 'payroll' },
       { to: 'audit', label: 'Audit Log', icon: 'security' },
@@ -259,17 +249,11 @@ const SIDEBAR_CATEGORIES: Array<{
     ],
   },
   {
-    id: 'zer0-service',
-    label: 'Payroll',
+    // Full Zer0 nav lives in Zer0Layout sub-sidebar — shell only links into the product.
+    id: 'finance',
+    label: 'Finance',
     items: [
-      { to: 'zer0', label: 'Overview', icon: 'privacy' },
-      { to: 'zer0/people', label: 'Team directory', icon: 'team' },
-      { to: 'zer0/payroll', label: 'Payroll runs', icon: 'payroll' },
-      { to: 'zer0/pay', label: 'Send payment', icon: 'payroll' },
-      { to: 'zer0/history', label: 'Payment ledger', icon: 'transactions' },
-      { to: 'zer0/proofs', label: 'Payment proofs', icon: 'security' },
-      { to: 'zer0/data-preview', label: 'What stays private', icon: 'security' },
-      { to: 'zer0/settings', label: 'Payroll settings', icon: 'settings' },
+      { to: 'zer0', label: 'Zer0', icon: 'privacy' },
     ],
   },
   {
@@ -311,7 +295,9 @@ export default function DashboardLayout() {
   const addMember = useWorkspaceStore(s => s.addMember);
   const { can, canSection, role: currentRole } = useWorkspaceRbac(workspaceId);
 
-  const [userSession, setUserSession] = useState<UserSession | null>(() => readStoredSession());
+  // Never paint the dashboard until stored session is validated (or confirmed absent).
+  const [userSession, setUserSession] = useState<UserSession | null>(null);
+  const [authReady, setAuthReady] = useState(false);
 
   const [cliConnected, setCliConnected] = useState(false);
   const [cliLastActive, setCliLastActive] = useState<number | null>(null);
@@ -331,9 +317,9 @@ export default function DashboardLayout() {
     return code ? code.toUpperCase() : null;
   });
   const [expandedCats, setExpandedCats] = useState<Record<string, boolean>>({
-    'workspace-management': true, 'zer0-service': true, services: true, 'agentic-operation': true, 'security-section': true,
-    'project-core': true, 'project-services': true, 'project-digital-assets': true, 'project-resource-gateway': true,
-    'project-agentic': true, 'project-security': true, 'project-admin': true,
+    'workspace-management': true, finance: true, services: true, 'agentic-operation': true, 'security-section': true,
+    'project-core': true, 'project-finance': true, 'project-services': true, 'project-digital-assets': true,
+    'project-resource-gateway': true, 'project-agentic': true, 'project-security': true, 'project-admin': true,
   });
   const [agentWidgetOpen, setAgentWidgetOpen] = useState(false);
   const [widgetMessages, setWidgetMessages] = useState<WidgetMessage[]>([]);
@@ -343,6 +329,36 @@ export default function DashboardLayout() {
   const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
   const currentWorkspace = workspaces.find(w => w.id === workspaceId) || workspaces[0] || null;
   const currentPath = routerState.location.pathname;
+
+  // Preloader auth gate: validate Cognito session before any dashboard chrome.
+  useEffect(() => {
+    let cancelled = false;
+    const bootAuth = async () => {
+      const stored = readStoredSession();
+      if (!stored) {
+        if (!cancelled) {
+          setUserSession(null);
+          setAuthReady(true);
+        }
+        return;
+      }
+      try {
+        await ensureValidAccessToken(stored);
+        if (cancelled) return;
+        setUserSession(readStoredSession());
+      } catch {
+        if (cancelled) return;
+        clearStoredSession();
+        setUserSession(null);
+      } finally {
+        if (!cancelled) setAuthReady(true);
+      }
+    };
+    void bootAuth();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!userSession) return;
@@ -361,28 +377,33 @@ export default function DashboardLayout() {
 
   const dynamicProjectCategories = React.useMemo(() => {
     const enabled = currentProject?.enabledServices || [];
-    const serviceItems: Array<{ to: string; label: string; icon: CustomIconName }> = [];
-    // Always expose primary surfaces on project routes so users can open them
-    // even when the project was created without selecting services.
+    // Finance owns Zer0 (same IA as workspace shell). Morph lives under Agentic only.
+    const financeItems: Array<{ to: string; label: string; icon: CustomIconName }> = [];
+    if (enabled.includes('srv-privacy') || enabled.length === 0) {
+      financeItems.push({ to: 'zer0', label: 'Zer0', icon: 'privacy' as const });
+    }
+    // Services Manager only — no dummy Morph under Services.
+    const serviceItems: Array<{ to: string; label: string; icon: CustomIconName }> = [
+      { to: 'services', label: 'Services Manager', icon: 'services' as const },
+    ];
     const digitalAssetItems: Array<{ to: string; label: string; icon: CustomIconName }> = [
-      { to: 'nft', label: 'NFT Collections', icon: 'nft' as const },
+      { to: 'nft', label: 'NFTo', icon: 'nft' as const },
     ];
     const resourceGatewayItems: Array<{ to: string; label: string; icon: CustomIconName }> = [
-      { to: 'depin', label: 'De-pin x402 Gateway', icon: 'depin' as const },
+      { to: 'depin', label: 'DEDSEC', icon: 'depin' as const },
     ];
-    if (enabled.includes('srv-privacy')) {
-      serviceItems.push({ to: 'zer0', label: 'Payroll', icon: 'privacy' as const });
+    // Morph Agent + Shared Memory only (no dummy Morph / transformation surface).
+    const agenticItems: Array<{ to: string; label: string; icon: CustomIconName }> = [
+      { to: 'agent', label: 'Morph Agent', icon: 'agent' as const },
+      { to: 'memory', label: 'Shared Memory', icon: 'memory' as const },
+    ];
+    const securityItems: Array<{ to: string; label: string; icon: CustomIconName }> = [
+      { to: 'security', label: 'Security', icon: 'security' as const },
+    ];
+    if (enabled.includes('srv-agent-auth') || enabled.length === 0) {
+      securityItems.push({ to: 'agent-auth', label: 'REQWID', icon: 'auth' as const });
     }
-    if (enabled.includes('srv-transformation')) {
-      serviceItems.push({ to: 'transformation', label: 'Transformation Agent', icon: 'transform' as const });
-    }
-    if (enabled.includes('srv-trade')) {
-      serviceItems.push({ to: 'trade', label: 'A-2-A Trade Pipeline', icon: 'trade' as const });
-    }
-    if (enabled.includes('srv-agent-auth')) {
-      serviceItems.push({ to: 'agent-auth', label: 'Agent Authentication', icon: 'auth' as const });
-    }
-    serviceItems.push({ to: 'services', label: 'Services Manager', icon: 'services' as const });
+    securityItems.push({ to: 'analytics', label: 'Analytics', icon: 'analytics' as const });
 
     return [
       {
@@ -390,8 +411,12 @@ export default function DashboardLayout() {
         label: 'Project Core',
         items: [
           { to: 'overview', label: 'Overview', icon: 'overview' as const },
-          { to: 'executions', label: 'Executions & Runs', icon: 'deployments' as const },
         ],
+      },
+      {
+        id: 'project-finance',
+        label: 'Finance',
+        items: financeItems,
       },
       {
         id: 'project-services',
@@ -411,18 +436,12 @@ export default function DashboardLayout() {
       {
         id: 'project-agentic',
         label: 'Agentic Operation',
-        items: [
-          { to: 'agent', label: 'Morph Agent', icon: 'agent' as const },
-          { to: 'memory', label: 'Shared Memory', icon: 'memory' as const },
-        ],
+        items: agenticItems,
       },
       {
         id: 'project-security',
         label: 'Security & Insights',
-        items: [
-          { to: 'security', label: 'Security', icon: 'security' as const },
-          { to: 'analytics', label: 'Analytics', icon: 'analytics' as const },
-        ],
+        items: securityItems,
       },
       {
         id: 'project-admin',
@@ -446,24 +465,21 @@ export default function DashboardLayout() {
   }
 
   const SECTION_LABELS: Record<string, string> = {
-    nft: 'NFT',
-    depin: 'De-pin',
+    nft: 'NFTo',
+    depin: 'DEDSEC',
     zer0: 'Zer0',
-    'agent-auth': 'Agent Auth',
+    'agent-auth': 'REQWID',
     overview: 'Overview',
     services: 'Services',
     settings: 'Settings',
     credits: 'Credits',
-    executions: 'Executions',
     members: 'Members',
     audit: 'Audit',
     agent: 'Agent',
     memory: 'Memory',
     security: 'Security',
     analytics: 'Analytics',
-    transformation: 'Transformation',
-    trade: 'Trade',
-    platform: 'Platform',
+    transformation: 'Morph',
   };
   const currentSectionLabel =
     SECTION_LABELS[activeSection]
@@ -775,17 +791,19 @@ export default function DashboardLayout() {
     item.label.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  if (!userSession) {
-    // Lazy import auth overlay
-    const AuthOverlay = React.lazy(() => import('../auth/AuthOverlay'));
+  if (!authReady) {
+    return <BrandLoader fullscreen size="lg" label="Checking session" />;
+  }
 
+  if (!userSession) {
     return (
-      <React.Suspense fallback={null}>
-        <AuthOverlay onSuccess={(session) => {
+      <AuthOverlay
+        onSuccess={(session) => {
           persistSession(session);
           setUserSession(session);
-        }} />
-      </React.Suspense>
+          setAuthReady(true);
+        }}
+      />
     );
   }
 
@@ -1205,46 +1223,26 @@ export default function DashboardLayout() {
               </div>
             )}
 
-            {/* Support footer */}
+            {/* Docs footer */}
             <div className="border-t border-zinc-100 dark:border-zinc-850/40 p-3 shrink-0">
               {!sidebarCollapsed ? (
-                currentWorkspace ? (
-                  <Link to="/dashboard/w/$workspaceId/settings" params={{ workspaceId: currentWorkspace.id }} className="group flex w-full items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-zinc-50/70 px-3 py-2.5 text-left transition hover:border-zinc-300 hover:bg-white dark:border-zinc-800 dark:bg-zinc-950/30 dark:hover:border-zinc-700 dark:hover:bg-zinc-900/50">
-                    <span className="flex min-w-0 items-center gap-2.5">
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-500/10 text-blue-500">
-                        <HelpCircle className="h-4 w-4" />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-xs font-semibold leading-none text-zinc-855 dark:text-zinc-200">Need help?</span>
-                        <span className="mt-1 block truncate text-[10px] text-zinc-400">Contact support</span>
-                      </span>
-                    </span>
-                    <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-zinc-400 transition group-hover:text-blue-500" />
-                  </Link>
-                ) : (
-                  <div className="flex w-full items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-zinc-50/70 px-3 py-2.5 text-left opacity-70 dark:border-zinc-800 dark:bg-zinc-950/30">
+                <a href="/docs" className="group flex w-full items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-zinc-50/70 px-3 py-2.5 text-left transition hover:border-zinc-300 hover:bg-white dark:border-zinc-800 dark:bg-zinc-950/30 dark:hover:border-zinc-700 dark:hover:bg-zinc-900/50">
                   <span className="flex min-w-0 items-center gap-2.5">
                     <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-500/10 text-blue-500">
                       <HelpCircle className="h-4 w-4" />
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-xs font-semibold leading-none text-zinc-855 dark:text-zinc-200">Need help?</span>
-                      <span className="mt-1 block truncate text-[10px] text-zinc-400">Contact support</span>
+                      <span className="mt-1 block truncate text-[10px] text-zinc-400">Open docs</span>
                     </span>
                   </span>
-                </div>
-                )
+                  <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-zinc-400 transition group-hover:text-blue-500" />
+                </a>
               ) : (
                 <div className="flex justify-center py-1">
-                  {currentWorkspace ? (
-                    <Link to="/dashboard/w/$workspaceId/settings" params={{ workspaceId: currentWorkspace.id }} className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-500/10 text-blue-500 transition hover:bg-blue-500/15" title="Contact support">
-                      <HelpCircle className="h-4 w-4" />
-                    </Link>
-                  ) : (
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-500/10 text-blue-500 opacity-70" title="Contact support">
+                  <a href="/docs" className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-500/10 text-blue-500 transition hover:bg-blue-500/15" title="Open docs">
                     <HelpCircle className="h-4 w-4" />
-                  </div>
-                  )}
+                  </a>
                 </div>
               )}
             </div>
@@ -1327,10 +1325,10 @@ export default function DashboardLayout() {
                   >
                     Platform
                   </Link>
-                  <Link to="/dashboard/w/$workspaceId/settings" params={{ workspaceId: currentWorkspace.id }} className="hidden sm:inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-900 dark:hover:text-white">
+                  <a href="/docs" className="hidden sm:inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-900 dark:hover:text-white">
                     <HelpCircle className="h-3.5 w-3.5 text-zinc-400" />
-                    Support
-                  </Link>
+                    Docs
+                  </a>
                 </>
               )}
               <button onClick={() => setSearchOpen(true)} className="md:hidden p-1.5 rounded text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-900 cursor-pointer">

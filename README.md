@@ -38,11 +38,16 @@ The product direction is simple: Vercel/Cloudflare-level clarity, Web3-native ra
 This repository currently holds the project foundation:
 
 - `AGENTS.md` - agent boot checklist, remaining work, ticket owners.
-- `context.md` - product, team, stack, setup, and active remaining work.
+- `context.md` - product, team, stack, setup, active remaining work, and marketing surfaces.
 - `memory.md` - shared working memory for developers and agents.
-- `design.md` - visual system, themes, typography, and UI rules.
-- `frontend/` - Vite + React frontend workspace.
+- `design.md` - visual system, themes, typography, product + marketing UI rules.
+- `docs/marketing.md` - marketing kit brief, service one-liners, motion inventory.
+- `frontend/` - Vite + React frontend workspace (dashboard + in-app welcome).
+- `landing/zexvro/` - standalone public landing site.
+- `frontend/public/marketing/` - product cinema and brand motion assets.
+- `presentation/` - pitch / founder-demo caption builds.
 - `assets/brand/` - logo, typo logo, and brand design assets.
+- `marketing.zip` - optional local export pack (gitignored); rebuild via `context.md`.
 
 Before starting work, read `context.md` and `memory.md`. After meaningful changes, update `memory.md` and commit the memory update with the code.
 

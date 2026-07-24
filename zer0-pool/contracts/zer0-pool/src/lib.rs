@@ -14,6 +14,8 @@ const TREE_DEPTH: u32 = 20;
 pub enum DataKey {
     Admin,
     Denomination,
+    /// Native XLM SAC (or other SEP-41) used for withdraw transfers.
+    Token,
     MerkleRoot,
     CommitmentCount,
     Commitment(u32),
@@ -46,13 +48,21 @@ pub struct Zer0Pool;
 
 #[contractimpl]
 impl Zer0Pool {
-    pub fn initialize(env: Env, admin: Address, denomination: i128) -> Result<(), PoolError> {
+    /// `token` = native XLM SAC for this network
+    /// (testnet: CDLZFC3…, mainnet: CAS3J7G…).
+    pub fn initialize(
+        env: Env,
+        admin: Address,
+        denomination: i128,
+        token: Address,
+    ) -> Result<(), PoolError> {
         if env.storage().instance().has(&DataKey::Admin) {
             return Err(PoolError::AlreadyInitialized);
         }
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Denomination, &denomination);
+        env.storage().instance().set(&DataKey::Token, &token);
         env.storage().instance().set(&DataKey::CommitmentCount, &0u32);
 
         let zero = BytesN::<32>::from_array(&env, &[0u8; 32]);
@@ -114,14 +124,10 @@ impl Zer0Pool {
 
         env.storage().persistent().set(&DataKey::Nullifier(nullifier_hash.clone()), &true);
         let denomination: i128 = env.storage().instance().get(&DataKey::Denomination).unwrap();
+        let token: Address = env.storage().instance().get(&DataKey::Token).unwrap();
         let pool_addr = env.current_contract_address();
         env.events().publish((symbol_short!("withdraw"), nullifier_hash, to.clone()), ());
-        let sac = soroban_sdk::token::Client::new(
-            &env,
-            &Address::from_string(&soroban_sdk::String::from_str(
-                &env, "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
-            )),
-        );
+        let sac = soroban_sdk::token::Client::new(&env, &token);
         sac.transfer(&pool_addr, &to, &denomination);
         Ok(())
     }
@@ -137,6 +143,9 @@ impl Zer0Pool {
     }
     pub fn get_denomination(env: Env) -> i128 {
         env.storage().instance().get(&DataKey::Denomination).unwrap()
+    }
+    pub fn get_token(env: Env) -> Address {
+        env.storage().instance().get(&DataKey::Token).unwrap()
     }
     pub fn is_nullifier_spent(env: Env, nullifier_hash: BytesN<32>) -> bool {
         env.storage().persistent().get(&DataKey::Nullifier(nullifier_hash)).unwrap_or(false)

@@ -3,7 +3,7 @@ import type { Service } from '../types';
 export const serviceCatalog: Service[] = [
   {
     id: 'srv-privacy',
-    name: 'Zero-Knowledge Privacy Pool',
+    name: 'Zer0',
     owner: 'Unassigned',
     status: 'configuring',
     description: 'Private transaction workflow for companies that need Web3 verification without public transaction detail exposure.',
@@ -13,7 +13,7 @@ export const serviceCatalog: Service[] = [
   },
   {
     id: 'srv-transformation',
-    name: 'Transformation Agent',
+    name: 'Morph',
     owner: 'Unassigned',
     status: 'configuring',
     description: 'Repository inspection and Web2-to-Web3 migration planning with human approval before any code-changing action.',
@@ -22,18 +22,8 @@ export const serviceCatalog: Service[] = [
     category: 'transformation',
   },
   {
-    id: 'srv-trade',
-    name: 'A-2-A Trade Pipeline',
-    owner: 'Unassigned',
-    status: 'configuring',
-    description: 'Agent-to-agent negotiation and settlement pipeline. Protocol and wallet rules still need owner decisions.',
-    progress: 0,
-    lastActivity: 'Needs protocol draft',
-    category: 'trade',
-  },
-  {
     id: 'srv-agent-auth',
-    name: 'ZEXVRO Gate (Agent Auth)',
+    name: 'REQWID',
     owner: 'Rushi / Wraient',
     status: 'configuring',
     description: 'Dual-channel human/agent capability gate with policy modes, SDK (@zexvro/gate), and anti-relay challenges. Not a puzzle CAPTCHA.',
@@ -43,7 +33,7 @@ export const serviceCatalog: Service[] = [
   },
   {
     id: 'srv-nft',
-    name: 'NFT Service',
+    name: 'NFTo',
     owner: 'Unassigned',
     status: 'inactive',
     description: 'Simple NFT deployment and management flow for non-Web3 users such as indie game developers and small studios.',
@@ -53,7 +43,7 @@ export const serviceCatalog: Service[] = [
   },
   {
     id: 'srv-depin',
-    name: 'Access Shield (De-pin x402)',
+    name: 'DEDSEC',
     owner: 'Platform',
     status: 'configuring',
     description: 'Exact per-request Stellar testnet USDC for protected HTTP routes (x402 GET/HEAD). Dashboard: protect-route config builder, probe 402, integrate snippets, and docs.',

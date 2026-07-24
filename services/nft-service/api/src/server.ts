@@ -79,8 +79,12 @@ const service = new NftService(
   config.STELLAR_USDC_CONTRACT,
   metadataBaseUrl,
   {
-    platformCreditsUrl: config.PLATFORM_CREDITS_URL,
-    platformInternalSecret: config.PLATFORM_INTERNAL_SECRET,
+    ...(config.PLATFORM_CREDITS_URL === undefined
+      ? {}
+      : { platformCreditsUrl: config.PLATFORM_CREDITS_URL }),
+    ...(config.PLATFORM_INTERNAL_SECRET === undefined
+      ? {}
+      : { platformInternalSecret: config.PLATFORM_INTERNAL_SECRET }),
     creditCollectionIds: config.ZCR_CREDIT_COLLECTION_IDS,
     defaultZcrAmount: config.ZCR_DEFAULT_AMOUNT,
   },
@@ -93,7 +97,13 @@ createApp(service, {
   }),
   allowedOrigins: config.CORS_ALLOWED_ORIGINS,
   capabilities: {
-    network: 'stellar:testnet',
+    network: config.STELLAR_NETWORK_PASSPHRASE.includes('Test SDF')
+      || config.STELLAR_NETWORK_PASSPHRASE.toLowerCase().includes('testnet')
+      ? 'stellar:testnet'
+      : 'stellar:pubnet',
+    networkPassphrase: config.STELLAR_NETWORK_PASSPHRASE,
+    rpcUrl: config.STELLAR_RPC_URL,
+    paymentTokenAddress: config.STELLAR_USDC_CONTRACT,
     pinningConfigured,
     stellarConfigured:
       config.STELLAR_SPONSOR_SECRET !== undefined &&

@@ -19,7 +19,7 @@ export interface DepinProvider {
   description: string;
   price: string;
   recipient: string;
-  network: 'stellar:testnet';
+  network: 'stellar:testnet' | 'stellar:pubnet';
   timeoutMs: number;
   upstreamOrigin: string;
   upstreamSecretRequired: boolean;
@@ -37,7 +37,8 @@ export interface DepinStatus {
   multiInstanceSafe?: boolean;
   capabilities: {
     scheme: 'exact';
-    network: 'stellar:testnet';
+    network: 'stellar:testnet' | 'stellar:pubnet';
+    networks?: Array<'stellar:testnet' | 'stellar:pubnet'>;
     facilitatorUrl: string;
     facilitatorAuthConfigured?: boolean;
     facilitatorOzChannels?: boolean;

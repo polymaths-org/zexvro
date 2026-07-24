@@ -1,4 +1,45 @@
+# Zexvro public site — https://zexvro.in
 User-agent: *
 Allow: /
+Allow: /favicon.ico
+Allow: /favicon-v2.ico
+Allow: /icons/
+Allow: /og-image.png
+Allow: /brand-mark.png
+Allow: /logo.png
+Allow: /logo-transparent.png
+Allow: /site.webmanifest
+Allow: /sitemap.xml
+
+# Decorative UI / hero art — do not feed Google Images
+Disallow: /cubes.png
+Disallow: /mobile_statue.png
+Disallow: /deploy-nfts-clicks.png
+Disallow: /web2.png
+Disallow: /web3.png
+Disallow: /paris1.png
+Disallow: /paris2.png
+Disallow: /rushi1.png
+Disallow: /rushi2.png
+Disallow: /fonts/
+
+# Image-only bots: same policy
+User-agent: Googlebot-Image
+Allow: /favicon.ico
+Allow: /favicon-v2.ico
+Allow: /icons/
+Allow: /og-image.png
+Allow: /brand-mark.png
+Allow: /logo.png
+Allow: /logo-transparent.png
+Disallow: /cubes.png
+Disallow: /mobile_statue.png
+Disallow: /deploy-nfts-clicks.png
+Disallow: /web2.png
+Disallow: /web3.png
+Disallow: /paris1.png
+Disallow: /paris2.png
+Disallow: /rushi1.png
+Disallow: /rushi2.png
 
 Sitemap: https://zexvro.in/sitemap.xml

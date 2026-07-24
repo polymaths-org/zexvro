@@ -318,8 +318,7 @@ Content-Type: application/json
         <ul className="list-disc pl-5 text-xs text-zinc-600 dark:text-zinc-400 space-y-2 mb-4">
           <li><strong>Morph Chat Agent</strong> — Conversational interface for project management, code generation, and system queries.</li>
           <li><strong>Transformation Agent</strong> — AST-based code refactoring engine for automated syntax upgrades.</li>
-          <li><strong>Trade Pipeline</strong> — Automated A2A asset swap negotiation with slippage protection.</li>
-          <li><strong>Agent Auth</strong> — Identity verification and access token management for inter-agent communication.</li>
+          <li><strong>REQWID</strong> — Human vs agent classification and access control for product flows.</li>
         </ul>
         <H3>Agent Memory</H3>
         <P>Each project has a shared memory store where agents persist conversation context, user preferences, and learned patterns. Memory entries can be viewed, edited, or deleted from the Memory screen.</P>
@@ -328,13 +327,13 @@ Content-Type: application/json
   },
   {
     id: 'nft-service',
-    title: 'NFT Collections',
+    title: 'NFTo',
     category: 'Services',
     icon: Layers,
     content: (
       <div>
         <P>
-          The NFT Service deploys creator-owned Soroban collection contracts on Stellar testnet.
+          NFTo deploys creator-owned Soroban collection contracts on Stellar testnet.
           Use it for game items, drops, and primary sales with a fixed XLM price.
         </P>
         <H3>What is a collection?</H3>
@@ -373,22 +372,21 @@ Content-Type: application/json
           revenue from primary-sale unit price × items.
         </P>
         <Callout type="tip">
-          Open a project → NFT Collections → create a collection → open its dashboard for Sale, Mint, Ledger, and Integrate.
+          Open a project → NFTo → create a collection → open its dashboard for Sale, Mint, Ledger, and Integrate.
         </Callout>
       </div>
     ),
   },
   {
     id: 'access-shield',
-    title: 'Access Shield (De-pin x402)',
+    title: 'DEDSEC (x402 Gateway)',
     category: 'Services',
     icon: RadioTower,
     content: (
       <div>
         <P>
-          Access Shield is ZEXVRO&apos;s economic edge for HTTP APIs and agent tool-loops.
-          The shipping enforcement plane is <strong>De-pin</strong>: an x402 reverse proxy that requires
-          exact Stellar testnet USDC per request before origin traffic is released.
+          <strong>DEDSEC</strong> is ZEXVRO&apos;s economic edge for HTTP APIs and agent tool-loops:
+          an x402 reverse proxy that requires exact Stellar testnet USDC per request before origin traffic is released.
         </P>
         <Callout type="info">
           Status: gateway MVP is live (GET/HEAD, exact scheme, probe + paid settle path). Full multi-tenant
@@ -398,7 +396,7 @@ Content-Type: application/json
         <H3>What problem does it solve?</H3>
         <P>
           Free-tier farming, shared cookies, and unlimited agent loops abuse flat API keys and daily quotas.
-          Access Shield makes each call have a price so resale and spam become uneconomic, while legitimate
+          DEDSEC makes each call have a price so resale and spam become uneconomic, while legitimate
           paid/agent access stays attributable via payment receipts.
         </P>
 
@@ -426,7 +424,7 @@ Client → GET /v1/resource + PAYMENT-SIGNATURE
 
         <H3>Dashboard: Protect, Probe, Integrate</H3>
         <ul className="list-disc pl-5 text-xs text-zinc-600 dark:text-zinc-400 space-y-1 mb-4">
-          <li><strong>Overview</strong> — how Access Shield works + live readiness (Gateway / Scheme / Settle / State).</li>
+          <li><strong>Overview</strong> — how DEDSEC works + live readiness (Gateway / Scheme / Settle / State).</li>
           <li><strong>Routes</strong> — live providers from <code>/status</code>; Probe 402 without spending USDC.</li>
           <li><strong>Protect route</strong> — wizard builds provider JSON + full <code>depin.config.json</code> (copy/download). Apply offline and restart the gateway.</li>
           <li><strong>Integrate</strong> — curl, paid demo client, config, and env snippets (same product pattern as NFT SDK).</li>
@@ -490,11 +488,11 @@ npm --prefix services/depin run demo:client`} />
         <ul className="list-disc pl-5 text-xs text-zinc-600 dark:text-zinc-400 space-y-1 mb-4">
           <li>GET and HEAD only — no streaming, sessions, or mutable POST compute in v1</li>
           <li>No live create/delete provider API — config at boot</li>
-          <li>Agent Auth classification and full rate-card policy are roadmap, not this gateway</li>
+          <li>REQWID classification and full rate-card policy are roadmap, not this gateway</li>
         </ul>
 
         <Callout type="tip">
-          Open a project → Resource Gateway → De-pin x402 Gateway → Overview for the flow, Protect route to build JSON,
+          Open a project → Resource Gateway → DEDSEC → Overview for the flow, Protect route to build JSON,
           Routes to Probe 402, Integrate for client snippets.
         </Callout>
       </div>
@@ -518,11 +516,11 @@ npm --prefix services/depin run demo:client`} />
           <li>Zustand persistence for all data (employees, payments, proofs, pool)</li>
           <li>API client layer with DynamoDB-ready endpoints</li>
         </ul>
-        <H3>v2.1.0 — Access Shield product UI</H3>
+        <H3>v2.1.0 — DEDSEC product UI</H3>
         <ul className="list-disc pl-5 text-xs text-zinc-600 dark:text-zinc-400 space-y-1 mb-4">
-          <li>De-pin dashboard: Overview, Routes, Protect route wizard, Integrate panel</li>
+          <li>DEDSEC dashboard: Overview, Routes, Protect route wizard, Integrate panel</li>
           <li>Config builder export (copy/download depin.config.json) + deploy steps</li>
-          <li>Docs topic: Access Shield (De-pin x402)</li>
+          <li>Docs topic: DEDSEC (x402 gateway)</li>
         </ul>
         <H3>v1.2.0 — Documentation Library</H3>
         <ul className="list-disc pl-5 text-xs text-zinc-600 dark:text-zinc-400 space-y-1 mb-4">

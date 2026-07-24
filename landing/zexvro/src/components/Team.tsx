@@ -129,14 +129,15 @@ export const Team: React.FC = () => {
                 <div className="relative shrink-0 w-[min(42vw,220px)] sm:w-[240px] md:w-[280px] aspect-[3/4] sm:aspect-auto sm:h-[420px] md:h-[500px] overflow-hidden rounded-3xl border border-white/10 bg-neutral-950">
                   <img
                     src={m.img}
-                    alt={m.name}
+                    alt={`${m.name}, ${m.role} at Zexvro`}
                     className={`absolute inset-0 h-full w-full object-cover object-center transition-opacity duration-300 ${
                       isActive ? 'opacity-0' : 'opacity-100'
                     }`}
                   />
                   <img
                     src={m.imgHover}
-                    alt={`${m.name} alternate`}
+                    alt=""
+                    role="presentation"
                     className={`absolute inset-0 h-full w-full object-cover object-center transition-opacity duration-300 ${
                       isActive ? 'opacity-100' : 'opacity-0'
                     }`}
