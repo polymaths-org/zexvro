@@ -19,6 +19,13 @@ import {
   type UserSession,
 } from '../../auth/cognito';
 import { buildAgentChatPayload, loadAgentSettingsFromAWS } from '../../agent/settings';
+import { MorphReply } from '../../agent/MorphReply';
+import {
+  extractMorphActions,
+  mergeSuggestedActions,
+  quickStartActions,
+  type MorphAction,
+} from '../../agent/morphActions';
 import AuthOverlay from '../auth/AuthOverlay';
 import BrandLoader from '../BrandLoader';
 import CliActivation from '../auth/CliActivation';
@@ -229,6 +236,7 @@ type WidgetMessage = {
   sender: 'user' | 'agent';
   text: string;
   time: string;
+  actions?: MorphAction[];
 };
 
 const SIDEBAR_CATEGORIES: Array<{
@@ -620,6 +628,20 @@ export default function DashboardLayout() {
     );
   }, [isHydrated, workspaces.length, userSession, createWorkspace]);
 
+  const morphRouteContext = {
+    workspaceId: currentWorkspace?.id || workspaceId,
+    projectId,
+    workspaceName: currentWorkspace?.name,
+    projectName: currentProject?.name,
+    currentScreen: currentSectionLabel,
+    path: currentPath,
+  };
+
+  const goMorph = (path: string) => {
+    setAgentWidgetOpen(false);
+    navigate({ to: path as '/' });
+  };
+
   const handleSendWidgetMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!widgetInput.trim()) return;
@@ -634,15 +656,21 @@ export default function DashboardLayout() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(buildAgentChatPayload(
           currentSectionLabel,
-          [{ role: 'user', content: `Current screen: ${currentSectionLabel}\n\n${prompt}` }],
+          [{ role: 'user', content: prompt }],
+          undefined,
+          morphRouteContext,
         )),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error?.message || data.error || `Agent request failed with ${response.status}`);
+      const raw = data.choices?.[0]?.message?.content || data.text || 'No response returned.';
+      const { cleanText, actions: modelActions } = extractMorphActions(String(raw), morphRouteContext);
+      const actions = mergeSuggestedActions(prompt, modelActions, morphRouteContext, 2);
       setWidgetMessages(prev => [...prev, {
         id: Date.now() + 1, sender: 'agent',
-        text: data.choices?.[0]?.message?.content || data.text || 'No response returned.',
-        time: 'Just now'
+        text: cleanText || String(raw),
+        time: 'Just now',
+        actions,
       }]);
     } catch (err) {
       setWidgetMessages(prev => [...prev, {
@@ -1545,21 +1573,62 @@ export default function DashboardLayout() {
                 <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
                   {widgetMessages.length === 0 && !widgetThinking ? (
                     <div className="flex min-h-full flex-col justify-center">
-                      <div className="mb-10 flex justify-center">
-                        <img src={MORPH_ILLUSTRATION} alt="Morph" className="h-36 w-36 object-contain" />
+                      <div className="mb-8 flex justify-center">
+                        <img src={MORPH_ILLUSTRATION} alt="Morph" className="h-32 w-32 object-contain" />
                       </div>
                       <div className="space-y-2">
                         <h4 className="text-2xl font-semibold tracking-tight text-white">Hello, workspace</h4>
-                        <p className="text-xl font-semibold text-zinc-400">Ask Morph anything.</p>
+                        <p className="text-lg font-semibold text-zinc-400">Ask how — Morph opens the page.</p>
                       </div>
-                      <p className="mt-5 max-w-sm text-sm leading-6 text-zinc-500">Messages are sent to the same opencode proxy as Agentic Operations.</p>
+                      <p className="mt-4 max-w-sm text-sm leading-6 text-zinc-500">
+                        Platform guide with one-click jumps to REQWID, NFTo, credits, team, and more.
+                      </p>
+                      <div className="mt-6 flex flex-wrap gap-2">
+                        {quickStartActions(morphRouteContext).map((a) => (
+                          <button
+                            key={a.id}
+                            type="button"
+                            onClick={() => goMorph(a.path)}
+                            className="rounded-full border border-white/15 bg-white/[0.06] px-3 py-1.5 text-xs font-medium text-zinc-100 transition hover:bg-white/10"
+                          >
+                            {a.label}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {[
+                          'How do I add captcha with REQWID?',
+                          'How do I buy ZCR credits?',
+                          'How do I mint an NFT?',
+                        ].map((q) => (
+                          <button
+                            key={q}
+                            type="button"
+                            onClick={() => {
+                              setWidgetInput(q);
+                            }}
+                            className="rounded-lg border border-violet-500/30 bg-violet-500/10 px-2.5 py-1.5 text-left text-[11px] text-violet-200 transition hover:bg-violet-500/20"
+                          >
+                            {q}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   ) : (
                     <div className="space-y-4 text-sm">
                       {widgetMessages.map((msg) => (
                         <div key={msg.id} className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}>
-                          <div className={`max-w-[88%] rounded-lg px-4 py-3 ${msg.sender === 'user' ? 'bg-violet-500 text-white' : 'border border-white/10 bg-white/[0.05] text-zinc-100'}`}>
-                            <p className="whitespace-pre-line leading-6">{msg.text}</p>
+                          <div className={`max-w-[92%] rounded-lg px-4 py-3 ${msg.sender === 'user' ? 'bg-violet-500 text-white' : 'border border-white/10 bg-white/[0.05] text-zinc-100'}`}>
+                            {msg.sender === 'agent' ? (
+                              <MorphReply
+                                text={msg.text}
+                                actions={msg.actions || []}
+                                onNavigate={goMorph}
+                                dark
+                              />
+                            ) : (
+                              <p className="whitespace-pre-line leading-6">{msg.text}</p>
+                            )}
                           </div>
                           <span className="mt-1 px-1 text-xs text-zinc-500">{msg.time}</span>
                         </div>
@@ -1579,12 +1648,12 @@ export default function DashboardLayout() {
                 </div>
                 <div className="shrink-0 border-t border-white/10 p-4">
                   <form onSubmit={handleSendWidgetMessage} className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 py-2 shadow-inner">
-                    <input type="text" value={widgetInput} onChange={(e) => setWidgetInput(e.target.value)} placeholder="Ask Morph" className="min-w-0 flex-1 bg-transparent px-1 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none" />
+                    <input type="text" value={widgetInput} onChange={(e) => setWidgetInput(e.target.value)} placeholder="How do I… ?" className="min-w-0 flex-1 bg-transparent px-1 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none" />
                     <button type="submit" disabled={!widgetInput.trim() || widgetThinking} className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-violet-500 text-white transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-50" title="Send">
                       <Send className="h-4 w-4" />
                     </button>
                   </form>
-                  <p className="mt-3 text-xs leading-5 text-zinc-500">Morph can make mistakes. Review proposals before approval.</p>
+                  <p className="mt-3 text-xs leading-5 text-zinc-500">Replies include one-click jumps. Morph can still be wrong — verify before production changes.</p>
                 </div>
               </motion.aside>
             )}

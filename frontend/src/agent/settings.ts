@@ -1,4 +1,5 @@
 import { memoryApi } from '../api/api';
+import { buildMorphSystemPrompt, type MorphRouteContext } from './platformKb';
 
 /** Platform Morph assistant defaults (server holds the real key in production). */
 export const OPENCODE_PROVIDER = 'codexin';
@@ -68,18 +69,33 @@ export function buildAgentChatPayload(
   workspace: string,
   messages: AgentChatMessage[],
   settings: AgentSettings = loadAgentSettings(),
+  routeContext?: MorphRouteContext,
 ) {
   const apiKey = settings.apiKey.trim();
   const baseUrl = settings.baseUrl.trim();
   const provider = settings.provider.trim() || defaultAgentSettings.provider;
   const model = settings.model.trim() || defaultAgentSettings.model;
 
+  const hasSystem = messages.some((m) => m.role === 'system');
+  const withSystem: AgentChatMessage[] = hasSystem
+    ? messages
+    : [
+        {
+          role: 'system',
+          content: buildMorphSystemPrompt(routeContext || {}),
+        },
+        ...messages,
+      ];
+
   return {
     workspace,
-    messages,
+    messages: withSystem,
     provider,
     model,
     apiKey: apiKey || undefined,
     baseUrl: baseUrl || undefined,
   };
 }
+
+export { buildMorphSystemPrompt };
+export type { MorphRouteContext };

@@ -22,7 +22,15 @@ import {
   loadAgentSettings,
   loadAgentSettingsFromAWS,
 } from '../../agent/settings';
-import { SYSTEM_PROMPT as STELLAR_SYSTEM_PROMPT } from '../../agent/stellarKb';
+import { MorphReply } from '../../agent/MorphReply';
+import {
+  extractMorphActions,
+  mergeSuggestedActions,
+  type MorphAction,
+} from '../../agent/morphActions';
+import { useNavigate, useParams } from '@tanstack/react-router';
+import { useWorkspaceStore } from '../../stores/workspace';
+import { useProjectStore } from '../../stores/project';
 
 const MORPH_LOGO = '/morph/morph-logo.svg';
 const MORPH_ILLUSTRATION = '/morph/morph-illustration-transparent.png';
@@ -32,6 +40,7 @@ interface Message {
   sender: 'user' | 'agent';
   text: string;
   timestamp: number;
+  actions?: MorphAction[];
 }
 
 interface AgentStudioProps {
@@ -40,10 +49,10 @@ interface AgentStudioProps {
 }
 
 const SUGGESTED_PROMPTS = [
-  { icon: FileSearch, label: 'Scan app', prompt: 'How should I scan a Web2 app for Gate, NFT, and De-pin fit before migrating with Morph CLI?' },
-  { icon: Rocket, label: 'Migration plan', prompt: 'Outline a short ZEXVRO Web2→Web3 migration plan (Gate + NFT testnet, optional De-pin).' },
-  { icon: TerminalSquare, label: 'CLI setup', prompt: 'What are the morph login / use / bind steps so Morph can use my ZEXVRO account?' },
-  { icon: Wrench, label: 'Shared memory', prompt: 'What should I write to shared memory so the next agent understands project decisions and blockers?' },
+  { icon: FileSearch, label: 'Add captcha', prompt: 'How do I protect checkout with REQWID captcha on my site?' },
+  { icon: Rocket, label: 'NFT collection', prompt: 'How do I create an NFT collection and mint on NFTo?' },
+  { icon: TerminalSquare, label: 'Buy ZCR', prompt: 'How do I buy or redeem ZCR credits for this workspace?' },
+  { icon: Wrench, label: 'CLI Morph', prompt: 'How do I connect Morph CLI to this workspace and migrate a Web2 app?' },
 ];
 
 function relativeTime(ts: number): string {
@@ -54,80 +63,6 @@ function relativeTime(ts: number): string {
   return `${Math.floor(diff / 3600)}h ago`;
 }
 
-function renderMessageContent(text: string) {
-  // Simple markdown-like rendering: code blocks, inline code, bold
-  const parts: React.ReactNode[] = [];
-  const lines = text.split('\n');
-  let inCodeBlock = false;
-  let codeLines: string[] = [];
-  let codeLang = '';
-
-  lines.forEach((line, lineIdx) => {
-    if (line.startsWith('```')) {
-      if (!inCodeBlock) {
-        inCodeBlock = true;
-        codeLang = line.slice(3).trim();
-        codeLines = [];
-      } else {
-        parts.push(
-          <pre key={`code-${lineIdx}`} className="my-2 overflow-x-auto rounded-md border border-zinc-200 bg-zinc-100 p-3 text-xs leading-5 dark:border-white/10 dark:bg-black/40">
-            <code className="font-mono text-zinc-800 dark:text-zinc-200">{codeLines.join('\n')}</code>
-          </pre>
-        );
-        inCodeBlock = false;
-        codeLines = [];
-        codeLang = '';
-      }
-      return;
-    }
-
-    if (inCodeBlock) {
-      codeLines.push(line);
-      return;
-    }
-
-    // Process inline formatting
-    let processed: React.ReactNode = line;
-
-    // Inline code
-    if (line.includes('`')) {
-      const segs = line.split(/`([^`]+)`/);
-      processed = segs.map((seg, i) =>
-        i % 2 === 1
-          ? <code key={i} className="rounded bg-zinc-200 px-1.5 py-0.5 font-mono text-[11px] dark:bg-white/10">{seg}</code>
-          : <span key={i}>{seg}</span>
-      );
-    }
-
-    // Bold
-    if (typeof processed === 'string' && processed.includes('**')) {
-      const segs = processed.split(/\*\*([^*]+)\*\*/);
-      processed = segs.map((seg, i) =>
-        i % 2 === 1
-          ? <strong key={i} className="font-semibold">{seg}</strong>
-          : <span key={i}>{seg}</span>
-      );
-    }
-
-    parts.push(
-      <span key={`line-${lineIdx}`} className="block">
-        {processed || '\u00A0'}
-      </span>
-    );
-  });
-
-  // Flush unclosed code block
-  if (inCodeBlock && codeLines.length > 0) {
-    parts.push(
-      <pre key="code-final" className="my-2 overflow-x-auto rounded-md border border-zinc-200 bg-zinc-100 p-3 text-xs leading-5 dark:border-white/10 dark:bg-black/40">
-        <code className="font-mono text-zinc-800 dark:text-zinc-200">{codeLines.join('\n')}</code>
-      </pre>
-    );
-  }
-
-  return <>{parts}</>;
-}
-
 const IS_LOCAL_HOST = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 const API_BASE_URL = import.meta.env.VITE_API_URL ||
   (IS_LOCAL_HOST
@@ -136,6 +71,24 @@ const API_BASE_URL = import.meta.env.VITE_API_URL ||
 const AGENT_CHAT_URL = IS_LOCAL_HOST ? '/api/agent/chat' : `${API_BASE_URL}/api/chat`;
 
 export default function AgentStudio({ cliConnected = false, cliLastActive = null }: AgentStudioProps) {
+  const navigate = useNavigate();
+  const params = useParams({ strict: false }) as { workspaceId?: string; projectId?: string };
+  const workspaces = useWorkspaceStore((s) => s.workspaces);
+  const projects = useProjectStore((s) => s.projects);
+  const workspaceId = params.workspaceId || workspaces[0]?.id;
+  const projectId = params.projectId;
+  const workspaceName = workspaces.find((w) => w.id === workspaceId)?.name;
+  const projectName = projects.find((p) => p.id === projectId)?.name;
+
+  const routeContext = {
+    workspaceId,
+    projectId,
+    workspaceName,
+    projectName,
+    currentScreen: 'Morph Agent studio',
+    path: typeof window !== 'undefined' ? window.location.pathname : '',
+  };
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isThinking, setIsThinking] = useState(false);
@@ -145,6 +98,10 @@ export default function AgentStudio({ cliConnected = false, cliLastActive = null
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const hasMessages = messages.length > 0 || isThinking;
+
+  const go = (path: string) => {
+    navigate({ to: path as '/' });
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -184,8 +141,6 @@ export default function AgentStudio({ cliConnected = false, cliLastActive = null
     setIsThinking(true);
     setError('');
 
-    const systemPrompt = STELLAR_SYSTEM_PROMPT;
-
     try {
       const response = await fetch(AGENT_CHAT_URL, {
         method: 'POST',
@@ -193,15 +148,13 @@ export default function AgentStudio({ cliConnected = false, cliLastActive = null
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(buildAgentChatPayload(
-          'Agentic Operations',
-          [
-            { role: 'system', content: systemPrompt },
-            ...nextMessages.map((m) => ({
-              role: (m.sender === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
-              content: m.text,
-            }))
-          ],
+          workspaceName || 'Agentic Operations',
+          nextMessages.map((m) => ({
+            role: (m.sender === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
+            content: m.text,
+          })),
           agentSettings,
+          routeContext,
         )),
       });
 
@@ -210,13 +163,16 @@ export default function AgentStudio({ cliConnected = false, cliLastActive = null
         throw new Error(data.error?.message || data.error || `Agent request failed with ${response.status}`);
       }
 
-      const reply = data.choices?.[0]?.message?.content || data.text || 'No response returned.';
+      const raw = data.choices?.[0]?.message?.content || data.text || 'No response returned.';
+      const { cleanText, actions: modelActions } = extractMorphActions(String(raw), routeContext);
+      const actions = mergeSuggestedActions(prompt, modelActions, routeContext, 2);
 
       setMessages((prev) => [...prev, {
         id: `agt-${Date.now()}`,
         sender: 'agent',
-        text: reply,
+        text: cleanText || String(raw),
         timestamp: Date.now(),
+        actions,
       }]);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Agent request failed.';
@@ -328,7 +284,15 @@ export default function AgentStudio({ cliConnected = false, cliLastActive = null
                         ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
                         : 'text-zinc-800 dark:text-zinc-200'
                     }`}>
-                      {msg.sender === 'agent' ? renderMessageContent(msg.text) : <p>{msg.text}</p>}
+                      {msg.sender === 'agent' ? (
+                        <MorphReply
+                          text={msg.text}
+                          actions={msg.actions || []}
+                          onNavigate={go}
+                        />
+                      ) : (
+                        <p>{msg.text}</p>
+                      )}
                     </div>
                     <p className="mt-1 px-1 text-[10px] text-zinc-400">{relativeTime(msg.timestamp)}</p>
                   </div>
