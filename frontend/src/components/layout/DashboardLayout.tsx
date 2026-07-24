@@ -21,8 +21,7 @@ import {
 import { buildAgentChatPayload, loadAgentSettingsFromAWS } from '../../agent/settings';
 import { MorphReply } from '../../agent/MorphReply';
 import {
-  extractMorphActions,
-  mergeSuggestedActions,
+  finalizeMorphReply,
   quickStartActions,
   type MorphAction,
 } from '../../agent/morphActions';
@@ -677,8 +676,7 @@ export default function DashboardLayout() {
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error?.message || data.error || `Agent request failed with ${response.status}`);
       const raw = data.choices?.[0]?.message?.content || data.text || 'No response returned.';
-      const { cleanText, actions: modelActions } = extractMorphActions(String(raw), morphRouteContext);
-      const actions = mergeSuggestedActions(prompt, modelActions, morphRouteContext, 2);
+      const { cleanText, actions } = finalizeMorphReply(String(raw), prompt, morphRouteContext);
       setWidgetMessages(prev => [...prev, {
         id: Date.now() + 1, sender: 'agent',
         text: cleanText || String(raw),

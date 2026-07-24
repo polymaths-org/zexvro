@@ -1,5 +1,5 @@
-import React from 'react'
-import { ArrowUpRight, Sparkles } from 'lucide-react'
+import React, { useState } from 'react'
+import { ArrowUpRight, Check, Copy, Sparkles } from 'lucide-react'
 import type { MorphAction } from './morphActions'
 
 /** Inline: **bold**, *italic*, `code`, [links](url) — order matters */
@@ -272,29 +272,62 @@ export function MorphActionButtons({
   dark?: boolean
   compact?: boolean
 }) {
+  const [copiedId, setCopiedId] = useState<string | null>(null)
   if (!actions.length) return null
+
+  const run = async (a: MorphAction) => {
+    if (a.kind === 'copy' && a.copyText) {
+      try {
+        await navigator.clipboard.writeText(a.copyText)
+        setCopiedId(a.id)
+        window.setTimeout(() => setCopiedId(null), 1600)
+      } catch {
+        /* ignore */
+      }
+      return
+    }
+    if (a.path) onNavigate(a.path)
+  }
+
   return (
-    <div className={`flex flex-wrap gap-2 ${compact ? 'mt-2' : 'mt-3'}`}>
-      {actions.map((a, i) => {
-        const primary = i === 0
-        return (
-          <button
-            key={`${a.id}-${a.path}`}
-            type="button"
-            onClick={() => onNavigate(a.path)}
-            className={
-              primary
-                ? 'inline-flex items-center gap-1.5 rounded-full bg-violet-500 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-violet-400'
-                : dark
-                  ? 'inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.06] px-3 py-1.5 text-xs font-medium text-zinc-100 transition hover:bg-white/10'
-                  : 'inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-800 transition hover:bg-zinc-50'
-            }
-          >
-            {primary ? <Sparkles className="h-3 w-3" /> : <ArrowUpRight className="h-3 w-3" />}
-            {a.label}
-          </button>
-        )
-      })}
+    <div className={compact ? 'mt-2' : 'mt-3'}>
+      <p
+        className={`mb-1.5 text-[10px] font-semibold uppercase tracking-wide ${
+          dark ? 'text-zinc-500' : 'text-zinc-400'
+        }`}
+      >
+        Do this next
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {actions.map((a, i) => {
+          const primary = i === 0 && a.kind !== 'copy'
+          const isCopy = a.kind === 'copy' || Boolean(a.copyText)
+          const done = copiedId === a.id
+          return (
+            <button
+              key={`${a.id}-${a.path || a.copyText || i}`}
+              type="button"
+              onClick={() => void run(a)}
+              className={
+                primary
+                  ? 'inline-flex items-center gap-1.5 rounded-full bg-violet-500 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-violet-400'
+                  : dark
+                    ? 'inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.06] px-3 py-1.5 text-xs font-medium text-zinc-100 transition hover:bg-white/10'
+                    : 'inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-800 transition hover:bg-zinc-50'
+              }
+            >
+              {isCopy ? (
+                done ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />
+              ) : primary ? (
+                <Sparkles className="h-3 w-3" />
+              ) : (
+                <ArrowUpRight className="h-3 w-3" />
+              )}
+              {done ? 'Copied' : a.label}
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }

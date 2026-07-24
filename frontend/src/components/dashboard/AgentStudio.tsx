@@ -25,8 +25,7 @@ import {
 } from '../../agent/settings';
 import { MorphReply } from '../../agent/MorphReply';
 import {
-  extractMorphActions,
-  mergeSuggestedActions,
+  finalizeMorphReply,
   quickStartActions,
   type MorphAction,
 } from '../../agent/morphActions';
@@ -241,8 +240,7 @@ export default function AgentStudio({ cliConnected = false, cliLastActive = null
       }
 
       const raw = data.choices?.[0]?.message?.content || data.text || 'No response returned.';
-      const { cleanText, actions: modelActions } = extractMorphActions(String(raw), routeContext);
-      const actions = mergeSuggestedActions(prompt, modelActions, routeContext, 2);
+      const { cleanText, actions } = finalizeMorphReply(String(raw), prompt, routeContext);
 
       setMessages((prev) => [
         ...prev,
