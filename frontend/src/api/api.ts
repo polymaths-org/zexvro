@@ -83,6 +83,45 @@ export type WorkspaceAuditEvent = {
   createdAt: number;
 };
 
+export type CreditBalance = {
+  workspaceId: string;
+  balance: number;
+  currency: string;
+  updatedAt?: number;
+};
+
+export type CreditLedgerEvent = {
+  id: string;
+  sk?: string;
+  type: string;
+  amount: number;
+  balanceAfter: number;
+  reason?: string;
+  service?: string;
+  action?: string;
+  environment?: string;
+  actorId?: string;
+  actorEmail?: string;
+  ref?: string;
+  meta?: Record<string, unknown>;
+  createdAt: number;
+};
+
+export type PromoCode = {
+  code: string;
+  creditAmount: number;
+  maxRedemptions?: number | null;
+  maxPerWorkspace?: number;
+  startsAt?: number | null;
+  expiresAt?: number | null;
+  status: string;
+  redeemedCount?: number;
+  createdBy?: string;
+  note?: string;
+  eligibleEnvironments?: string[];
+  createdAt?: number;
+};
+
 export const workspaceApi = {
   list: () => api.get<{ workspaces: any[] }>('/api/workspaces'),
   get: (id: string) => api.get<{ workspace: any }>(`/api/workspaces/${encodeURIComponent(id)}`),
@@ -101,6 +140,64 @@ export const workspaceApi = {
       `/api/workspaces/${encodeURIComponent(id)}/audit${q ? `?${q}` : ''}`,
     );
   },
+  getCredits: (id: string) =>
+    api.get<{
+      credits: CreditBalance;
+      environment: 'testnet' | 'mainnet';
+      burnsOnUse: boolean;
+      recent: CreditLedgerEvent[];
+    }>(`/api/workspaces/${encodeURIComponent(id)}/credits`),
+  listCreditLedger: (id: string, opts?: { limit?: number; cursor?: string }) => {
+    const params = new URLSearchParams();
+    if (opts?.limit) params.set('limit', String(opts.limit));
+    if (opts?.cursor) params.set('cursor', opts.cursor);
+    const q = params.toString();
+    return api.get<{ events: CreditLedgerEvent[]; nextCursor?: string | null }>(
+      `/api/workspaces/${encodeURIComponent(id)}/credits/ledger${q ? `?${q}` : ''}`,
+    );
+  },
+  consumeCredits: (
+    id: string,
+    body: { service: string; action: string; amount?: number; ref?: string; meta?: Record<string, unknown> },
+  ) => api.post<{ status: string; charged: boolean; skipped?: boolean; balance: CreditBalance; cost: number }>(
+    `/api/workspaces/${encodeURIComponent(id)}/credits/consume`,
+    body,
+  ),
+  redeemPromo: (id: string, code: string) =>
+    api.post<{ status: string; balance: CreditBalance; tx: CreditLedgerEvent }>(
+      `/api/workspaces/${encodeURIComponent(id)}/credits/redeem`,
+      { code },
+    ),
+};
+
+export const platformApi = {
+  me: () => api.get<{ username: string; email?: string; platformAdmin: boolean }>('/api/platform/me'),
+  analytics: () =>
+    api.get<{
+      workspaceCount: number;
+      environmentCounts: Record<string, number>;
+      totalZcrInCirculation: number;
+      creditAccountCount: number;
+      activePromoCount: number;
+      promoCount: number;
+      note?: string;
+    }>('/api/platform/analytics'),
+  grantCredits: (body: { workspaceId: string; amount: number; reason?: string; ref?: string }) =>
+    api.post<{ status: string; balance: CreditBalance }>('/api/platform/credits/grant', body),
+  listPromos: () => api.get<{ promos: PromoCode[] }>('/api/platform/promo-codes'),
+  createPromo: (body: {
+    code: string;
+    creditAmount: number;
+    maxRedemptions?: number | null;
+    maxPerWorkspace?: number;
+    expiresAt?: number | null;
+    note?: string;
+  }) => api.post<{ status: string; promo: PromoCode }>('/api/platform/promo-codes', body),
+  disablePromo: (code: string) =>
+    api.post<{ status: string; promo: PromoCode }>(
+      `/api/platform/promo-codes/${encodeURIComponent(code)}/disable`,
+      {},
+    ),
 };
 
 export const projectApi = {

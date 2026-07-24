@@ -1056,3 +1056,14 @@ Use `None` for empty fields. Do not delete fields.
 - Tests: `scripts/test_audit_helpers.py` 5/5; rbac 36/36; tsc clean; Lambda + Pages deploy.
 - Phase 0: console + invite/accept 200; invite token fix already live.
 - Next: Phase 2 ZCR credits (after invite smoke with real users); re-invite to populate ledger.
+
+## 2026-07-24 - OpenCode with Nabil - ZCR credits + promos + env + platform admin
+
+- Scope: AWS-style platform credits; NFT payment rail hooks; founder control plane; testnet/mainnet burn gate; promo codes.
+- Infra Dynamo: `zexvro-credits`, `zexvro-credit-ledger`, `zexvro-promo-codes`, `zexvro-promo-redemptions`.
+- Lambda: `credits.py` service; workspace credit APIs (balance/ledger/consume/redeem); internal NFT topup; platform me/analytics/grant/promo CRUD.
+- Burn rule: **mainnet only**; testnet writes `consume_skipped`. New workspaces default **testnet** + starter **100 ZCR**.
+- FE: `/dashboard/w/:id/credits`, env badge + ZCR chip, Platform link `/dashboard/platform` (founders allowlist).
+- PLATFORM_ADMINS env: nabil,paris,rushi,talib,n4bi10p (+ emails if set).
+- Tests: credits helpers 5/5; audit 5/5; rbac 36/36; tsc clean. Lambda + Pages deployed.
+- Follow-ups: wire service consume hooks (NFT/Morph/De-pin); Credit Pack NFT collection → internal topup; expand founder analytics beyond partial scans.

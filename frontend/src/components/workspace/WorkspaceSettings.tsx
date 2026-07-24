@@ -44,6 +44,7 @@ export default function WorkspaceSettings() {
   const handleSave = (event: React.FormEvent) => {
     event.preventDefault();
     if (!canWrite) return;
+    const environment = form.defaultNetwork.toLowerCase().includes('main') ? 'mainnet' as const : 'testnet' as const;
     updateWorkspace(workspace.id, {
       name: form.name,
       plan: form.plan,
@@ -51,6 +52,7 @@ export default function WorkspaceSettings() {
         billingEmail: form.billingEmail,
         // Keep existing region if present (platform-managed); clients do not edit cloud regions.
         region: workspace.settings?.region || 'us-east-1',
+        environment,
         defaultNetwork: form.defaultNetwork,
         defaultBranch: form.defaultBranch,
         requireInviteApproval: form.requireInviteApproval,
@@ -101,12 +103,19 @@ export default function WorkspaceSettings() {
                 <option value="XLM">XLM</option>
               </select>
             </Field>
-            <Field label="Default chain network">
-              <select value={form.defaultNetwork} onChange={event => setForm(current => ({ ...current, defaultNetwork: event.target.value }))} className="h-10 w-full rounded-lg border border-zinc-200 bg-white px-2.5 text-sm text-zinc-900 outline-none dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
-                <option>Stellar Testnet</option>
-                <option>Stellar Mainnet</option>
+            <Field label="Platform environment (ZCR burn gate)">
+              <select
+                value={form.defaultNetwork.includes('Main') ? 'Stellar Mainnet' : 'Stellar Testnet'}
+                onChange={event => setForm(current => ({ ...current, defaultNetwork: event.target.value }))}
+                className="h-10 w-full rounded-lg border border-zinc-200 bg-white px-2.5 text-sm text-zinc-900 outline-none dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
+              >
+                <option value="Stellar Testnet">Testnet — no ZCR burn</option>
+                <option value="Stellar Mainnet">Mainnet — ZCR burns on service use</option>
               </select>
             </Field>
+            <p className="text-[11px] text-zinc-400">
+              Prefer the Credits page for switching. Mainnet starts metering platform credits.
+            </p>
             <Field label="Default Project Branch">
               <div className="relative">
                 <GitBranch className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />

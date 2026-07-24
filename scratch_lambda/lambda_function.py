@@ -22,7 +22,18 @@ PAYROLL_TABLE_NAME = os.environ.get("PAYROLL_TABLE", "zexvro-payroll-runs")
 PAYROLL_TAXONOMY_TABLE_NAME = os.environ.get("PAYROLL_TAXONOMY_TABLE", "zexvro-payroll-taxonomy")
 WAITLIST_TABLE_NAME = os.environ.get("WAITLIST_TABLE", "zexvro-waitlist")
 AUDIT_TABLE_NAME = os.environ.get("AUDIT_TABLE", "zexvro-workspace-audit")
+CREDITS_TABLE_NAME = os.environ.get("CREDITS_TABLE", "zexvro-credits")
+CREDIT_LEDGER_TABLE_NAME = os.environ.get("CREDIT_LEDGER_TABLE", "zexvro-credit-ledger")
+PROMO_CODES_TABLE_NAME = os.environ.get("PROMO_CODES_TABLE", "zexvro-promo-codes")
+PROMO_REDEMPTIONS_TABLE_NAME = os.environ.get("PROMO_REDEMPTIONS_TABLE", "zexvro-promo-redemptions")
 WAITLIST_ADMIN_SECRET = (os.environ.get("WAITLIST_ADMIN_SECRET") or "").strip()
+INTERNAL_CREDITS_SECRET = (os.environ.get("INTERNAL_CREDITS_SECRET") or "").strip()
+# Founder / platform super-admins (comma-separated usernames or emails)
+PLATFORM_ADMINS = {
+    x.strip().lower()
+    for x in (os.environ.get("PLATFORM_ADMINS") or "nabil,paris,rushi,talib,n4bi10p").split(",")
+    if x.strip()
+}
 
 devices_table = dynamodb.Table(DEVICES_TABLE_NAME)
 memory_table = dynamodb.Table(MEMORY_TABLE_NAME)
@@ -33,6 +44,20 @@ payroll_runs_table = dynamodb.Table(PAYROLL_TABLE_NAME)
 payroll_taxonomy_table = dynamodb.Table(PAYROLL_TAXONOMY_TABLE_NAME)
 waitlist_table = dynamodb.Table(WAITLIST_TABLE_NAME)
 audit_table = dynamodb.Table(AUDIT_TABLE_NAME)
+credits_table = dynamodb.Table(CREDITS_TABLE_NAME)
+credit_ledger_table = dynamodb.Table(CREDIT_LEDGER_TABLE_NAME)
+promo_codes_table = dynamodb.Table(PROMO_CODES_TABLE_NAME)
+promo_redemptions_table = dynamodb.Table(PROMO_REDEMPTIONS_TABLE_NAME)
+
+try:
+    from credits import CreditsService, InsufficientCredits, PromoError
+except ImportError:
+    try:
+        from scratch_lambda.credits import CreditsService, InsufficientCredits, PromoError  # type: ignore
+    except ImportError:
+        CreditsService = None  # type: ignore
+        InsufficientCredits = Exception  # type: ignore
+        PromoError = Exception  # type: ignore
 
 EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 ec2 = boto3.client("ec2", region_name=os.environ.get("AWS_REGION", "us-east-1"))
@@ -540,7 +565,61 @@ def normalize_workspace_item(item):
         return item
     item.setdefault("id", item.get("workspaceId"))
     item.setdefault("workspaceId", item.get("id"))
+    settings = item.get("settings") or {}
+    if not isinstance(settings, dict):
+        settings = {}
+    # Canonical environment: testnet | mainnet
+    env = (settings.get("environment") or "").strip().lower()
+    if env not in ("testnet", "mainnet"):
+        net = str(settings.get("defaultNetwork") or "").lower()
+        env = "mainnet" if "main" in net and "test" not in net else "testnet"
+        settings = {**settings, "environment": env}
+        item["settings"] = settings
+    else:
+        item["settings"] = {**settings, "environment": env}
+    item["environment"] = env
     return item
+
+
+def get_workspace_environment(workspace_id: str) -> str:
+    ws = find_workspace_by_id(workspace_id)
+    if not ws:
+        return "testnet"
+    norm = normalize_workspace_item(dict(ws))
+    return norm.get("environment") or "testnet"
+
+
+def is_platform_admin(username, email=None) -> bool:
+    candidates = {
+        _norm_identity(username),
+        _norm_identity(email),
+        _norm_identity((username or "").split("@")[0] if username else ""),
+        _norm_identity((email or "").split("@")[0] if email else ""),
+    }
+    return bool(candidates & PLATFORM_ADMINS)
+
+
+def require_platform_admin(event, username):
+    email = _caller_email(event, username)
+    if not is_platform_admin(username, email):
+        return respond(403, {
+            "error": "forbidden",
+            "error_description": "Platform founder access required",
+        })
+    return None
+
+
+def get_credits_service():
+    if CreditsService is None:
+        raise RuntimeError("credits module missing from deployment package")
+    return CreditsService(
+        credits_table,
+        credit_ledger_table,
+        promo_codes_table,
+        promo_redemptions_table,
+        get_workspace_env=get_workspace_environment,
+        append_audit=append_audit_event,
+    )
 
 
 def _caller_email(event, username):
@@ -1195,7 +1274,19 @@ def lambda_handler(event, context):
             "createdAt": body.get("createdAt", now),
             "members": members,
         }
+        # Default new workspaces to testnet (no ZCR burn until mainnet switch).
+        settings = item.get("settings") if isinstance(item.get("settings"), dict) else {}
+        settings = {
+            **settings,
+            "environment": (settings.get("environment") or "testnet"),
+            "defaultNetwork": settings.get("defaultNetwork") or "Stellar Testnet",
+        }
+        item["settings"] = settings
         workspaces_table.put_item(Item=to_dynamodb_value(item))
+        try:
+            get_credits_service().ensure_balance_row(workspace_id, actor_id=username)
+        except Exception as exc:
+            print(f"[create workspace] starter credits failed: {exc}")
         return respond(200, {"status": "success", "workspace": normalize_workspace_item(item)})
 
     # Route: POST /api/workspaces/{id}/invite
@@ -1326,10 +1417,10 @@ def lambda_handler(event, context):
         if auth_error:
             return auth_error
         parts = path.strip("/").split("/")
-        # workspaces / {id} / audit
-        if len(parts) < 3:
+        # api / workspaces / {id} / audit
+        if len(parts) < 4:
             return respond(400, {"error": "invalid_request", "error_description": "workspaceId required"})
-        workspace_id = parts[1]
+        workspace_id = parts[2]
         caller_email = _caller_email(event, username)
         workspace, access_err = require_workspace_access(workspace_id, username, email=caller_email)
         if access_err:
@@ -1360,6 +1451,303 @@ def lambda_handler(event, context):
             "nextCursor": next_cursor,
             "workspaceId": workspace_id,
         })
+
+    # --- Credits: GET balance ---
+    elif (
+        path.startswith("/api/workspaces/")
+        and path.endswith("/credits")
+        and http_method == "GET"
+        and path.count("/") == 4
+    ):
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        parts = path.strip("/").split("/")
+        workspace_id = parts[2] if len(parts) >= 4 else ""
+        caller_email = _caller_email(event, username)
+        workspace, access_err = require_workspace_access(workspace_id, username, email=caller_email)
+        if access_err:
+            return access_err
+        if not workspace:
+            workspace = find_workspace_by_id(workspace_id)
+        if not workspace or not resolve_workspace_member_role(workspace, username, email=caller_email):
+            return respond(403, {"error": "forbidden", "error_description": "Not a workspace member"})
+        try:
+            svc = get_credits_service()
+            bal = svc.get_balance(workspace_id)
+            env = get_workspace_environment(workspace_id)
+            ledger, _ = svc.list_ledger(workspace_id, limit=10)
+            return respond(200, {
+                "credits": bal,
+                "environment": env,
+                "burnsOnUse": env == "mainnet",
+                "recent": ledger,
+            })
+        except Exception as exc:
+            return respond(502, {"error": "credits_error", "error_description": str(exc)})
+
+    # --- Credits: GET ledger ---
+    elif (
+        path.startswith("/api/workspaces/")
+        and "/credits/ledger" in path
+        and http_method == "GET"
+    ):
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        parts = path.strip("/").split("/")
+        workspace_id = parts[2] if len(parts) >= 4 else ""
+        caller_email = _caller_email(event, username)
+        workspace, access_err = require_workspace_access(workspace_id, username, email=caller_email)
+        if access_err:
+            return access_err
+        if not workspace:
+            workspace = find_workspace_by_id(workspace_id)
+        if not workspace or not resolve_workspace_member_role(workspace, username, email=caller_email):
+            return respond(403, {"error": "forbidden", "error_description": "Not a workspace member"})
+        query = get_query_params(event)
+        try:
+            limit = int(query.get("limit") or 50)
+        except (TypeError, ValueError):
+            limit = 50
+        try:
+            events, next_cursor = get_credits_service().list_ledger(
+                workspace_id, limit=limit, cursor=query.get("cursor"),
+            )
+            return respond(200, {"events": events, "nextCursor": next_cursor, "workspaceId": workspace_id})
+        except Exception as exc:
+            return respond(502, {"error": "credits_error", "error_description": str(exc)})
+
+    # --- Credits: POST consume ---
+    elif (
+        path.startswith("/api/workspaces/")
+        and path.endswith("/credits/consume")
+        and http_method == "POST"
+    ):
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        parts = path.strip("/").split("/")
+        workspace_id = parts[2] if len(parts) >= 4 else ""
+        caller_email = _caller_email(event, username)
+        workspace, access_err = require_workspace_access(workspace_id, username, email=caller_email)
+        if access_err:
+            return access_err
+        if not workspace:
+            workspace = find_workspace_by_id(workspace_id)
+        if not workspace or not resolve_workspace_member_role(workspace, username, email=caller_email):
+            return respond(403, {"error": "forbidden", "error_description": "Not a workspace member"})
+        service = (body.get("service") or "platform").strip()
+        action = (body.get("action") or "use").strip()
+        amount = body.get("amount")
+        try:
+            result = get_credits_service().consume(
+                workspace_id,
+                service=service,
+                action=action,
+                amount=int(amount) if amount is not None else None,
+                ref=(body.get("ref") or "").strip(),
+                actor_id=username,
+                actor_email=caller_email,
+                meta=body.get("meta") if isinstance(body.get("meta"), dict) else None,
+            )
+            return respond(200, {"status": "success", **result})
+        except InsufficientCredits as exc:
+            return respond(402, {
+                "error": "insufficient_credits",
+                "error_description": str(exc),
+                "balance": getattr(exc, "balance", 0),
+                "cost": getattr(exc, "cost", 0),
+            })
+        except Exception as exc:
+            return respond(502, {"error": "credits_error", "error_description": str(exc)})
+
+    # --- Credits: POST redeem promo ---
+    elif (
+        path.startswith("/api/workspaces/")
+        and path.endswith("/credits/redeem")
+        and http_method == "POST"
+    ):
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        parts = path.strip("/").split("/")
+        workspace_id = parts[2] if len(parts) >= 4 else ""
+        caller_email = _caller_email(event, username)
+        workspace = find_workspace_by_id(workspace_id)
+        if not workspace:
+            return respond(404, {"error": "not_found", "error_description": "Workspace not found"})
+        _, role_err = require_workspace_role(workspace, username, _SETTINGS_WRITE_ROLES, email=caller_email)
+        if role_err:
+            return role_err
+        code = (body.get("code") or "").strip()
+        try:
+            result = get_credits_service().redeem_promo(
+                workspace_id, code, actor_id=username, actor_email=caller_email,
+            )
+            return respond(200, {"status": "success", **result})
+        except PromoError as exc:
+            return respond(400, {
+                "error": getattr(exc, "code", "promo_error"),
+                "error_description": getattr(exc, "message", str(exc)),
+            })
+        except Exception as exc:
+            return respond(502, {"error": "credits_error", "error_description": str(exc)})
+
+    # --- Internal top-up (NFT service payment gateway) ---
+    elif path == "/api/internal/credits/topup" and http_method == "POST":
+        secret = (
+            headers.get("x-internal-secret")
+            or headers.get("X-Internal-Secret")
+            or ""
+        ).strip()
+        if not INTERNAL_CREDITS_SECRET or secret != INTERNAL_CREDITS_SECRET:
+            return respond(401, {"error": "unauthorized", "error_description": "Invalid internal secret"})
+        workspace_id = (body.get("workspaceId") or "").strip()
+        amount = body.get("amount")
+        checkout_id = (body.get("nftCheckoutId") or body.get("checkoutId") or "").strip()
+        if not workspace_id or amount is None:
+            return respond(400, {"error": "invalid_request", "error_description": "workspaceId and amount required"})
+        try:
+            result = get_credits_service().grant(
+                workspace_id,
+                int(amount),
+                reason="nft_credit_pack",
+                actor_id="nft-service",
+                ref=f"nft_topup:{checkout_id}" if checkout_id else f"nft_topup:{uuid.uuid4()}",
+                meta={
+                    "nftCheckoutId": checkout_id,
+                    "collectionId": body.get("collectionId"),
+                    "tokenId": body.get("tokenId"),
+                    "txHash": body.get("txHash"),
+                    "usdcAmount": body.get("usdcAmount"),
+                },
+                tx_type="topup",
+            )
+            return respond(200, {"status": "success", **result})
+        except Exception as exc:
+            return respond(502, {"error": "credits_error", "error_description": str(exc)})
+
+    # --- Platform founder APIs ---
+    elif path == "/api/platform/me" and http_method == "GET":
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        email = _caller_email(event, username)
+        return respond(200, {
+            "username": username,
+            "email": email,
+            "platformAdmin": is_platform_admin(username, email),
+        })
+
+    elif path == "/api/platform/analytics" and http_method == "GET":
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        denied = require_platform_admin(event, username)
+        if denied:
+            return denied
+        try:
+            # Lightweight aggregates
+            ws_scan = workspaces_table.scan(Limit=200)
+            workspaces = ws_scan.get("Items") or []
+            env_counts = {"testnet": 0, "mainnet": 0}
+            for w in workspaces:
+                n = normalize_workspace_item(dict(w))
+                env_counts[n.get("environment") or "testnet"] = env_counts.get(n.get("environment") or "testnet", 0) + 1
+            cred_scan = credits_table.scan(Limit=200)
+            total_zcr = 0
+            for c in (cred_scan.get("Items") or []):
+                total_zcr += int(c.get("balance") or 0)
+            promo_scan = promo_codes_table.scan(Limit=50)
+            promos = promo_scan.get("Items") or []
+            return respond(200, {
+                "workspaceCount": len(workspaces),
+                "environmentCounts": env_counts,
+                "totalZcrInCirculation": total_zcr,
+                "creditAccountCount": len(cred_scan.get("Items") or []),
+                "activePromoCount": sum(1 for p in promos if (p.get("status") or "") == "active"),
+                "promoCount": len(promos),
+                "note": "Partial scan aggregates (first pages); full metrics ship with dedicated GSI later.",
+            })
+        except Exception as exc:
+            return respond(502, {"error": "analytics_error", "error_description": str(exc)})
+
+    elif path == "/api/platform/credits/grant" and http_method == "POST":
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        denied = require_platform_admin(event, username)
+        if denied:
+            return denied
+        workspace_id = (body.get("workspaceId") or "").strip()
+        amount = body.get("amount")
+        if not workspace_id or amount is None:
+            return respond(400, {"error": "invalid_request", "error_description": "workspaceId and amount required"})
+        try:
+            result = get_credits_service().grant(
+                workspace_id,
+                int(amount),
+                reason=(body.get("reason") or "platform_admin_grant"),
+                actor_id=username,
+                actor_email=_caller_email(event, username),
+                ref=(body.get("ref") or "").strip() or f"admin_grant:{uuid.uuid4()}",
+            )
+            return respond(200, {"status": "success", **result})
+        except Exception as exc:
+            return respond(502, {"error": "credits_error", "error_description": str(exc)})
+
+    elif path == "/api/platform/promo-codes" and http_method == "GET":
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        denied = require_platform_admin(event, username)
+        if denied:
+            return denied
+        try:
+            return respond(200, {"promos": get_credits_service().list_promos()})
+        except Exception as exc:
+            return respond(502, {"error": "promo_error", "error_description": str(exc)})
+
+    elif path == "/api/platform/promo-codes" and http_method == "POST":
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        denied = require_platform_admin(event, username)
+        if denied:
+            return denied
+        try:
+            promo = get_credits_service().create_promo(
+                body.get("code") or "",
+                int(body.get("creditAmount") or 0),
+                max_redemptions=body.get("maxRedemptions"),
+                max_per_workspace=int(body.get("maxPerWorkspace") or 1),
+                starts_at=body.get("startsAt"),
+                expires_at=body.get("expiresAt"),
+                created_by=username,
+                note=body.get("note") or "",
+                eligible_environments=body.get("eligibleEnvironments"),
+            )
+            return respond(200, {"status": "success", "promo": promo})
+        except Exception as exc:
+            return respond(400, {"error": "promo_error", "error_description": str(exc)})
+
+    elif path.startswith("/api/platform/promo-codes/") and http_method == "POST" and path.endswith("/disable"):
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        denied = require_platform_admin(event, username)
+        if denied:
+            return denied
+        code = path.strip("/").split("/")[-2] if path.endswith("/disable") else ""
+        # path: api/platform/promo-codes/{code}/disable
+        parts = path.strip("/").split("/")
+        code = parts[3] if len(parts) >= 5 else ""
+        try:
+            promo = get_credits_service().disable_promo(code)
+            return respond(200, {"status": "success", "promo": promo})
+        except Exception as exc:
+            return respond(400, {"error": "promo_error", "error_description": str(exc)})
 
     elif path.startswith("/api/workspaces/") and http_method == "DELETE":
         username, auth_error = require_username(event, headers)

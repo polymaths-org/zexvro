@@ -197,6 +197,7 @@ export const SECTION_PERMISSION: Record<string, Permission> = {
   overview: 'workspace.view',
   projects: 'workspace.view',
   team: 'team.view',
+  credits: 'workspace.view',
   audit: 'audit.view',
   settings: 'workspace.settings.read',
   services: 'workspace.view',

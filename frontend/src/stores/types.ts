@@ -71,14 +71,19 @@ export interface Workspace {
   members: WorkspaceMember[];
   /** Pending / historical invitations (IAM invite queue) */
   invitations?: TeamInvite[];
+  /** Platform billing/web3 environment — ZCR burns only on mainnet. */
+  environment?: 'testnet' | 'mainnet';
   settings?: {
     billingEmail?: string;
     region?: string;
+    /** Canonical: testnet | mainnet */
+    environment?: 'testnet' | 'mainnet';
     defaultNetwork?: string;
     defaultBranch?: string;
     requireInviteApproval?: boolean;
     allowMemberProjectCreation?: boolean;
     auditRetentionDays?: number;
+    preferredCurrency?: string;
   };
 }
 

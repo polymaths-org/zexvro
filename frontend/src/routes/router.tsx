@@ -41,6 +41,8 @@ import WorkspaceSecurity from '../components/workspace/WorkspaceSecurity';
 import WorkspaceAnalytics from '../components/workspace/WorkspaceAnalytics';
 import WorkspaceSettings from '../components/workspace/WorkspaceSettings';
 import WorkspaceActivity from '../components/workspace/WorkspaceActivity';
+import WorkspaceCredits from '../components/workspace/WorkspaceCredits';
+import PlatformAdmin from '../components/platform/PlatformAdmin';
 import { memoryApi } from '../api/api';
 import type { MemoryEntry } from '../types';
 
@@ -380,6 +382,18 @@ const wsSettingsRoute = createRoute({
   component: WorkspaceSettings,
 });
 
+const wsCreditsRoute = createRoute({
+  getParentRoute: () => dashboardLayoutRoute,
+  path: '/dashboard/w/$workspaceId/credits',
+  component: WorkspaceCredits,
+});
+
+const platformAdminRoute = createRoute({
+  getParentRoute: () => dashboardLayoutRoute,
+  path: '/dashboard/platform',
+  component: PlatformAdmin,
+});
+
 // --- Project screens ---
 const projectRootRoute = createRoute({
   getParentRoute: () => dashboardLayoutRoute,
@@ -665,6 +679,8 @@ const routeTree = rootRoute.addChildren([
     wsSecurityRoute,
     wsAnalyticsRoute,
     wsSettingsRoute,
+    wsCreditsRoute,
+    platformAdminRoute,
     projectRootRoute,
     projectOverviewRoute,
     projectExecutionsRoute,

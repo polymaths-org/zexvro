@@ -253,6 +253,7 @@ const SIDEBAR_CATEGORIES: Array<{
       { to: 'overview', label: 'Overview', icon: 'overview' },
       { to: 'projects', label: 'Projects / Environments', icon: 'projects' },
       { to: 'team', label: 'Team', icon: 'team' },
+      { to: 'credits', label: 'Credits (ZCR)', icon: 'payroll' },
       { to: 'audit', label: 'Audit Log', icon: 'security' },
       { to: 'settings', label: 'Settings', icon: 'settings' },
     ],
@@ -452,6 +453,7 @@ export default function DashboardLayout() {
     overview: 'Overview',
     services: 'Services',
     settings: 'Settings',
+    credits: 'Credits',
     executions: 'Executions',
     members: 'Members',
     audit: 'Audit',
@@ -461,6 +463,7 @@ export default function DashboardLayout() {
     analytics: 'Analytics',
     transformation: 'Transformation',
     trade: 'Trade',
+    platform: 'Platform',
   };
   const currentSectionLabel =
     SECTION_LABELS[activeSection]
@@ -1288,10 +1291,39 @@ export default function DashboardLayout() {
             </div>
             <div className="flex items-center gap-2.5 relative">
               {currentWorkspace && (
-                <Link to="/dashboard/w/$workspaceId/settings" params={{ workspaceId: currentWorkspace.id }} className="hidden sm:inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-900 dark:hover:text-white">
-                  <HelpCircle className="h-3.5 w-3.5 text-zinc-400" />
-                  Support
-                </Link>
+                <>
+                  <span
+                    className={`hidden sm:inline-flex items-center rounded-md border px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${
+                      (currentWorkspace.settings?.environment || currentWorkspace.environment || 'testnet') === 'mainnet'
+                        ? 'border-orange-500/40 bg-orange-500/10 text-orange-600 dark:text-orange-400'
+                        : 'border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-400'
+                    }`}
+                    title="Workspace environment — ZCR burns only on mainnet"
+                  >
+                    {(currentWorkspace.settings?.environment || currentWorkspace.environment || 'testnet') === 'mainnet'
+                      ? 'Mainnet'
+                      : 'Testnet'}
+                  </span>
+                  <Link
+                    to="/dashboard/w/$workspaceId/credits"
+                    params={{ workspaceId: currentWorkspace.id }}
+                    className="hidden sm:inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1 text-[11px] font-semibold text-zinc-700 transition hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
+                    title="Workspace credits"
+                  >
+                    ZCR
+                  </Link>
+                  <Link
+                    to="/dashboard/platform"
+                    className="hidden lg:inline-flex items-center rounded-md px-2 py-1 text-[10px] font-medium text-zinc-400 transition hover:text-zinc-700 dark:hover:text-zinc-200"
+                    title="Platform control plane (founders)"
+                  >
+                    Platform
+                  </Link>
+                  <Link to="/dashboard/w/$workspaceId/settings" params={{ workspaceId: currentWorkspace.id }} className="hidden sm:inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-900 dark:hover:text-white">
+                    <HelpCircle className="h-3.5 w-3.5 text-zinc-400" />
+                    Support
+                  </Link>
+                </>
               )}
               <button onClick={() => setSearchOpen(true)} className="md:hidden p-1.5 rounded text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-900 cursor-pointer">
                 <Search className="h-4.5 w-4.5" />

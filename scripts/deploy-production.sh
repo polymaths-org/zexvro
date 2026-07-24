@@ -20,13 +20,14 @@ WORKDIR="$(mktemp -d)"
 cp "$ROOT/scratch_lambda/lambda_function.py" "$WORKDIR/"
 cp "$ROOT/scratch_lambda/brevo_mail.py" "$WORKDIR/"
 cp "$ROOT/scratch_lambda/email_templates.py" "$WORKDIR/"
-python3 -m py_compile "$WORKDIR"/lambda_function.py "$WORKDIR"/brevo_mail.py "$WORKDIR"/email_templates.py
+cp "$ROOT/scratch_lambda/credits.py" "$WORKDIR/"
+python3 -m py_compile "$WORKDIR"/lambda_function.py "$WORKDIR"/brevo_mail.py "$WORKDIR"/email_templates.py "$WORKDIR"/credits.py
 python3 - <<PY
 import zipfile, os
 wd=${WORKDIR@Q}
 out="/tmp/zexvro-agent-backend.zip"
 with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
-    for f in ("lambda_function.py", "brevo_mail.py", "email_templates.py"):
+    for f in ("lambda_function.py", "brevo_mail.py", "email_templates.py", "credits.py"):
         z.write(os.path.join(wd, f), f)
 print("zip", os.path.getsize(out))
 PY
