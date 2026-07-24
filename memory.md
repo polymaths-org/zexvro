@@ -1218,7 +1218,42 @@ Use `None` for empty fields. Do not delete fields.
 
 - Service or area: git merge `origin/feature/workspace-iam-shared-roster` into local `main`.
 - Summary: Merged RBAC, invites/Brevo mail, durable audit, ZCR credits/promos, platform admin, testnet/mainnet burn gate. Resolved `.env.example` (kept Gate + Mail) and `memory.md` (kept Gate + Nabil histories).
-- Decisions: Accepted - local main now includes Nabil branch tip `2d552ff` + main Gate/Morph. Rename/SEO WIP still in stash for reapply next.
-- Follow-ups: reapply rename stash; UI + mainnet work.
+- Decisions: Accepted - local main includes Nabil branch + main Gate/Morph.
+- Follow-ups: UI cleanup + mainnet prefs; pull further Nabil commits as they land.
 - Blockers: None for merge.
-- Verification: no conflict markers; merge ready to commit when user asks.
+- Verification: merge commit on local main.
+
+## 2026-07-24 - OpenCode with Nabil - Production deploy credits/platform
+
+- Ran full `scripts/deploy-production.sh` (prod-ready):
+  - Dynamo tables verified (audit, credits, ledger, promo, redemptions)
+  - Lambda package: lambda_function + credits + brevo + email_templates
+  - Env: FRONTEND_URL, credits tables, PLATFORM_ADMINS, starter 100 ZCR, INTERNAL_CREDITS_SECRET, Brevo
+  - Lambda sized **timeout 60s / 256MB** for platform directory scans
+  - Cloudflare Pages project `zexvro` → console.zexvro.in
+- Smoke: console 200, auth-gated API 401 (expected), invite route 200, NFT health 200
+- Tests: credits 7/7, audit helpers pass
+
+## 2026-07-24 - OpenCode with Nabil - Fix env switch + credit pack purchase
+
+- Fix: testnet↔mainnet switch via `POST /api/workspaces/:id/environment` (owner scan fallback; settings merge).
+- Credits UI: both env buttons always clickable; shell badge reads environment correctly.
+- Purchase: `GET /api/credits/packs` + `POST .../credits/purchase` (Starter/Builder/Scale packs, instant ZCR grant).
+- NFT gateway hook: checkout can carry `creditWorkspaceId`/`creditZcrAmount`; on confirm NFT service posts internal topup (needs App Runner env: PLATFORM_CREDITS_URL, PLATFORM_INTERNAL_SECRET, ZCR_CREDIT_COLLECTION_IDS).
+- Deployed Lambda + Cloudflare Pages. NFT App Runner redeploy still required for live USDC pack→ZCR path.
+
+## 2026-07-24 - OpenCode with Nabil - Buy pack opens NFT wallet popup (no instant ZCR)
+
+- Bug: Buy pack granted ZCR immediately (sandbox default).
+- Fix: purchase API never grants by default; returns `/nft/embed/checkout?...` Freighter popup URL.
+- Credits UI: "Pay with wallet" opens NFT gateway popup; listens for postMessage success then refreshes balance.
+- Embed checkout passes creditWorkspaceId/zcrAmount/packId into createPublicCheckoutIntent for post-pay topup.
+- ZCR_ALLOW_SANDBOX_PURCHASE=0 in prod Lambda.
+- Still required for full flow: set ZCR_NFT_COLLECTION_ID to a live Credit Pack collection with primary sale; redeploy NFT App Runner with PLATFORM_CREDITS_URL + PLATFORM_INTERNAL_SECRET + ZCR_CREDIT_COLLECTION_IDS.
+
+## 2026-07-24 - Codex with Paris - Pull Nabil tip 4fa9924 into local main
+
+- Service or area: merge latest `feature/workspace-iam-shared-roster`.
+- Summary: Merged 5 new Nabil commits (platform directory, auto promo codes, prod deploy, env switch both ways, credit pack NFT wallet checkout). Only conflict: `memory.md` (kept both histories).
+- Follow-ups: reapply UI cleanup stash.
+- Verification: no conflict markers after resolve.

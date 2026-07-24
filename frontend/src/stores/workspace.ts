@@ -43,7 +43,7 @@ interface WorkspaceState {
   setWorkspaces: (workspaces: Workspace[]) => void;
   createWorkspace: (name: string, ownerId: string, ownerEmail?: string) => Workspace;
   selectWorkspace: (id: string) => void;
-  updateWorkspace: (id: string, updates: Partial<Pick<Workspace, 'name' | 'plan' | 'settings' | 'invitations' | 'members'>>) => void;
+  updateWorkspace: (id: string, updates: Partial<Pick<Workspace, 'name' | 'plan' | 'settings' | 'invitations' | 'members' | 'environment'>>) => void;
   deleteWorkspace: (id: string) => void;
   /** @deprecated prefer createInvitation for IAM invite flow */
   addMember: (workspaceId: string, member: Omit<WorkspaceMember, 'id' | 'joinedAt'>) => void;
@@ -158,12 +158,25 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         return;
       }
       const safeUpdates = trimmedName ? { ...updates, name: trimmedName } : updates;
+      // Keep root environment in sync with settings.environment for shell badge
+      const envFromSettings = safeUpdates.settings?.environment;
+      const merged =
+        envFromSettings && !safeUpdates.environment
+          ? { ...safeUpdates, environment: envFromSettings }
+          : safeUpdates;
       set(state => ({
         workspaces: state.workspaces.map(w =>
-          w.id === id ? { ...w, ...safeUpdates, slug: safeUpdates.name ? slugify(safeUpdates.name) : w.slug } : w
+          w.id === id
+            ? {
+                ...w,
+                ...merged,
+                slug: merged.name ? slugify(merged.name) : w.slug,
+                settings: merged.settings ? { ...w.settings, ...merged.settings } : w.settings,
+              }
+            : w
         ),
       }));
-      workspaceApi.update(id, safeUpdates).catch(err => console.error('Failed to update workspace in AWS:', err));
+      workspaceApi.update(id, merged).catch(err => console.error('Failed to update workspace in AWS:', err));
     },
 
     deleteWorkspace: (id) => {

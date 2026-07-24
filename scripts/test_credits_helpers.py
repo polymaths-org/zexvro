@@ -124,6 +124,37 @@ class CreditsTest(unittest.TestCase):
         with self.assertRaises(PromoError):
             self.svc.redeem_promo("ws1", "HELLO", actor_id="u1")
 
+    def test_auto_generate_and_validate(self):
+        self.svc.ensure_balance_row("ws1")
+        promo = self.svc.create_promo("", 25, created_by="nabil", auto_generate=True, expires_at=int(__import__("time").time() * 1000) + 86400000)
+        self.assertTrue(promo["code"].startswith("ZXR-"))
+        check = self.svc.validate_promo("ws1", promo["code"])
+        self.assertTrue(check["valid"])
+        self.assertEqual(check["status"], "valid")
+        # one-time after redeem
+        self.svc.redeem_promo("ws1", promo["code"], actor_id="u1")
+        again = self.svc.validate_promo("ws1", promo["code"])
+        self.assertFalse(again["valid"])
+        self.assertEqual(again["status"], "already_redeemed")
+
+    def test_expired_promo(self):
+        self.svc.ensure_balance_row("ws1")
+        past = int(__import__("time").time() * 1000) - 1000
+        # create_promo rejects past expiry — plant row directly
+        self.promo.put_item(Item={
+            "code": "OLDCODE",
+            "creditAmount": 10,
+            "maxRedemptions": 1,
+            "maxPerWorkspace": 1,
+            "status": "active",
+            "redeemedCount": 0,
+            "expiresAt": past,
+            "eligibleEnvironments": ["testnet", "mainnet"],
+        })
+        check = self.svc.validate_promo("ws1", "OLDCODE")
+        self.assertFalse(check["valid"])
+        self.assertEqual(check["status"], "expired")
+
 
 if __name__ == "__main__":
     unittest.main()

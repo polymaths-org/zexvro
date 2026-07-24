@@ -87,6 +87,8 @@ export interface Workspace {
   };
 }
 
+// environment is also mirrored on Workspace root for shell badge
+
 export type ProjectLifecycle = 'draft' | 'active' | 'paused' | 'archived';
 export type ProjectHealth = 'setup_required' | 'healthy' | 'attention' | 'error';
 

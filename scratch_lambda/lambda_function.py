@@ -622,6 +622,158 @@ def get_credits_service():
     )
 
 
+def _credit_pack_catalog():
+    """Platform credit packs (ZCR). NFT collection can map packId → sale SKU later."""
+    return [
+        {
+            "id": "zcr_100",
+            "name": "Starter",
+            "zcrAmount": 100,
+            "usdcPrice": "5.00",
+            "description": "100 ZCR for light platform usage",
+        },
+        {
+            "id": "zcr_500",
+            "name": "Builder",
+            "zcrAmount": 500,
+            "usdcPrice": "20.00",
+            "description": "500 ZCR for teams shipping on Zexvro",
+        },
+        {
+            "id": "zcr_2000",
+            "name": "Scale",
+            "zcrAmount": 2000,
+            "usdcPrice": "70.00",
+            "description": "2000 ZCR for production workloads",
+        },
+    ]
+
+
+def scan_all_workspaces():
+    """Paginated full table scan of workspaces."""
+    items = []
+    scan_kwargs = {}
+    while True:
+        res = workspaces_table.scan(**scan_kwargs)
+        items.extend(res.get("Items") or [])
+        lek = res.get("LastEvaluatedKey")
+        if not lek:
+            break
+        scan_kwargs["ExclusiveStartKey"] = lek
+    return items
+
+
+def canonical_unique_workspaces(raw_items=None):
+    """
+    Collapse auto-create spam: keep newest row per (ownerId, normalized name).
+    Drops smoke/e2e ids.
+    """
+    workspaces = raw_items if raw_items is not None else scan_all_workspaces()
+    canonical = {}
+    for raw in workspaces:
+        w = normalize_workspace_item(dict(raw))
+        wid = (w.get("workspaceId") or w.get("id") or "").strip()
+        if not wid or wid.startswith("ws_smoke") or wid.startswith("ws_e2e"):
+            continue
+        owner = _norm_identity(w.get("ownerId"))
+        name = (w.get("name") or "").strip().lower()
+        if not owner:
+            continue
+        key = (owner, name or wid)
+        prev = canonical.get(key)
+        created = int(w.get("createdAt") or w.get("updatedAt") or 0)
+        if not prev or created >= int(prev.get("createdAt") or prev.get("updatedAt") or 0):
+            canonical[key] = w
+    return list(canonical.values()), len(workspaces)
+
+
+def summarize_workspace_for_platform(w):
+    """Founder directory row: members by role, projects, credits, services."""
+    wid = (w.get("workspaceId") or w.get("id") or "").strip()
+    members = list(w.get("members") or [])
+    active = []
+    for m in members:
+        status = str(m.get("status") or "active").lower()
+        if status in ("inactive", "revoked", "expired"):
+            continue
+        active.append({
+            "id": m.get("id") or m.get("principalId") or "",
+            "email": m.get("email") or "",
+            "name": m.get("name") or "",
+            "role": m.get("role") or "Viewer",
+            "status": status or "active",
+        })
+    by_role = {"Owner": [], "Admin": [], "Developer": [], "Finance": [], "Viewer": [], "Agent": []}
+    for m in active:
+        role = m.get("role") or "Viewer"
+        by_role.setdefault(role, []).append(m)
+
+    project_count = 0
+    enabled_services = set()
+    try:
+        if wid:
+            pres = projects_table.query(KeyConditionExpression=Key("workspaceId").eq(wid))
+            projects = pres.get("Items") or []
+            project_count = len(projects)
+            for p in projects:
+                for s in (p.get("enabledServices") or []):
+                    if s:
+                        enabled_services.add(str(s))
+                # Infer common services from project fields
+                if p.get("framework"):
+                    enabled_services.add("app")
+    except Exception as exc:
+        print(f"[platform.workspace projects] {wid}: {exc}")
+
+    zcr_balance = None
+    try:
+        if wid:
+            crow = credits_table.get_item(Key={"workspaceId": wid}).get("Item")
+            if crow:
+                zcr_balance = int(crow.get("balance") or 0)
+    except Exception:
+        pass
+
+    owner_id = w.get("ownerId") or ""
+    owner_email = ""
+    for m in active:
+        if (m.get("role") or "") == "Owner" and m.get("email"):
+            owner_email = m["email"]
+            break
+    if not owner_email and "@" in str(owner_id):
+        owner_email = owner_id
+
+    pending_invites = 0
+    for inv in (w.get("invitations") or []):
+        if str(inv.get("status") or "pending").lower() == "pending":
+            pending_invites += 1
+
+    return {
+        "workspaceId": wid,
+        "name": w.get("name") or wid,
+        "plan": w.get("plan") or "",
+        "ownerId": owner_id,
+        "ownerEmail": owner_email,
+        "environment": w.get("environment") or "testnet",
+        "createdAt": int(w.get("createdAt") or 0),
+        "updatedAt": int(w.get("updatedAt") or 0),
+        "memberCount": len(active),
+        "pendingInvites": pending_invites,
+        "members": active,
+        "roles": {
+            "owners": [m for m in by_role.get("Owner", [])],
+            "admins": [m for m in by_role.get("Admin", [])],
+            "developers": [m for m in by_role.get("Developer", [])],
+            "finance": [m for m in by_role.get("Finance", [])],
+            "viewers": [m for m in by_role.get("Viewer", [])],
+            "agents": [m for m in by_role.get("Agent", [])],
+        },
+        "projectCount": project_count,
+        "services": sorted(enabled_services),
+        "zcrBalance": zcr_balance,
+    }
+
+
 def _caller_email(event, username):
     email = ""
     try:
@@ -1377,24 +1529,47 @@ def lambda_handler(event, context):
             return auth_error
 
         workspace_id = path.split("/")[-1]
+        caller_email = _caller_email(event, username)
+        # Prefer owner key, but fall back to scan so env/settings updates work when
+        # Cognito username != Dynamo ownerId (email vs username mismatch).
         res = workspaces_table.get_item(Key={"ownerId": username, "workspaceId": workspace_id})
         workspace = res.get("Item")
+        if not workspace and caller_email:
+            res = workspaces_table.get_item(Key={"ownerId": caller_email, "workspaceId": workspace_id})
+            workspace = res.get("Item")
+        if not workspace:
+            workspace = find_workspace_by_id(workspace_id)
         if not workspace:
             return respond(404, {"error": "not_found", "error_description": "Workspace not found"})
 
-        _, role_err = require_workspace_role(workspace, username, _SETTINGS_WRITE_ROLES)
+        _, role_err = require_workspace_role(workspace, username, _SETTINGS_WRITE_ROLES, email=caller_email)
         if role_err:
             return role_err
 
-        # Allow Owner/Admin to update members + invitations (IAM invite flow).
+        owner_key = workspace.get("ownerId") or username
+        # Merge settings so environment/defaultNetwork updates stick
+        updates = {k: v for k, v in body.items() if k not in ("ownerId", "workspaceId", "id", "createdAt")}
+        if "settings" in updates and isinstance(updates.get("settings"), dict):
+            prev = workspace.get("settings") if isinstance(workspace.get("settings"), dict) else {}
+            merged = {**prev, **updates["settings"]}
+            env = (merged.get("environment") or "").strip().lower()
+            if env not in ("testnet", "mainnet"):
+                net = str(merged.get("defaultNetwork") or "").lower()
+                env = "mainnet" if "main" in net and "test" not in net else "testnet"
+            merged["environment"] = env
+            if env == "mainnet":
+                merged["defaultNetwork"] = merged.get("defaultNetwork") or "Stellar Mainnet"
+            else:
+                merged["defaultNetwork"] = merged.get("defaultNetwork") or "Stellar Testnet"
+            updates["settings"] = merged
+
         now_ms = int(time.time() * 1000)
         updated = update_item(
             workspaces_table,
-            {"ownerId": username, "workspaceId": workspace_id},
-            {**body, "updatedAt": now_ms},
+            {"ownerId": owner_key, "workspaceId": workspace_id},
+            {**updates, "updatedAt": now_ms},
             {"ownerId", "workspaceId", "id", "createdAt"},
         )
-        caller_email = _caller_email(event, username)
         changed = [k for k in ("name", "plan", "settings", "members", "invitations") if k in body]
         if changed:
             append_audit_event(
@@ -1406,6 +1581,58 @@ def lambda_handler(event, context):
                 meta={"fields": changed},
             )
         return respond(200, {"status": "success", "workspace": normalize_workspace_item(updated)})
+
+    # Dedicated environment switch (testnet ↔ mainnet)
+    elif (
+        path.startswith("/api/workspaces/")
+        and path.endswith("/environment")
+        and http_method == "POST"
+    ):
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        parts = path.strip("/").split("/")
+        workspace_id = parts[2] if len(parts) >= 4 else ""
+        caller_email = _caller_email(event, username)
+        workspace = find_workspace_by_id(workspace_id)
+        if not workspace:
+            return respond(404, {"error": "not_found", "error_description": "Workspace not found"})
+        _, role_err = require_workspace_role(workspace, username, _SETTINGS_WRITE_ROLES, email=caller_email)
+        if role_err:
+            return role_err
+        env = (body.get("environment") or "").strip().lower()
+        if env not in ("testnet", "mainnet"):
+            return respond(400, {
+                "error": "invalid_request",
+                "error_description": "environment must be testnet or mainnet",
+            })
+        prev = workspace.get("settings") if isinstance(workspace.get("settings"), dict) else {}
+        settings = {
+            **prev,
+            "environment": env,
+            "defaultNetwork": "Stellar Mainnet" if env == "mainnet" else "Stellar Testnet",
+        }
+        owner_key = workspace.get("ownerId") or username
+        now_ms = int(time.time() * 1000)
+        updated = update_item(
+            workspaces_table,
+            {"ownerId": owner_key, "workspaceId": workspace_id},
+            {"settings": settings, "updatedAt": now_ms},
+            {"ownerId", "workspaceId", "id", "createdAt"},
+        )
+        append_audit_event(
+            workspace_id,
+            action="workspace.environment_changed",
+            actor_id=username,
+            actor_email=caller_email,
+            target=env,
+            meta={"environment": env},
+        )
+        return respond(200, {
+            "status": "success",
+            "environment": env,
+            "workspace": normalize_workspace_item(updated),
+        })
 
     # Route: GET /api/workspaces/{id}/audit — durable workspace audit ledger
     elif (
@@ -1590,9 +1817,134 @@ def lambda_handler(event, context):
             return respond(400, {
                 "error": getattr(exc, "code", "promo_error"),
                 "error_description": getattr(exc, "message", str(exc)),
+                "status": getattr(exc, "code", "promo_error"),
             })
         except Exception as exc:
             return respond(502, {"error": "credits_error", "error_description": str(exc)})
+
+    # Credit pack catalog (platform currency purchase SKUs)
+    elif path == "/api/credits/packs" and http_method == "GET":
+        packs = _credit_pack_catalog()
+        return respond(200, {
+            "packs": packs,
+            "nftCollectionId": (os.environ.get("ZCR_NFT_COLLECTION_ID") or "").strip() or None,
+            "purchaseMode": "nft" if (os.environ.get("ZCR_NFT_COLLECTION_ID") or "").strip() else "sandbox",
+            "currency": "ZCR",
+            "paymentAsset": "USDC",
+        })
+
+    # Purchase credit pack — ALWAYS opens NFT wallet checkout (no instant grant).
+    # ZCR is granted only after successful NFT payment via /api/internal/credits/topup.
+    elif (
+        path.startswith("/api/workspaces/")
+        and path.endswith("/credits/purchase")
+        and http_method == "POST"
+    ):
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        parts = path.strip("/").split("/")
+        workspace_id = parts[2] if len(parts) >= 4 else ""
+        caller_email = _caller_email(event, username)
+        workspace = find_workspace_by_id(workspace_id)
+        if not workspace:
+            return respond(404, {"error": "not_found", "error_description": "Workspace not found"})
+        _, role_err = require_workspace_role(workspace, username, _SETTINGS_WRITE_ROLES, email=caller_email)
+        if role_err:
+            return role_err
+        pack_id = (body.get("packId") or "").strip()
+        packs = {p["id"]: p for p in _credit_pack_catalog()}
+        pack = packs.get(pack_id)
+        if not pack:
+            return respond(400, {"error": "invalid_pack", "error_description": "Unknown packId"})
+        collection_id = (os.environ.get("ZCR_NFT_COLLECTION_ID") or "").strip()
+        # Optional per-pack override: ZCR_NFT_COLLECTION_ID_ZCR_100 etc.
+        pack_env_key = f"ZCR_NFT_COLLECTION_ID_{pack_id.upper()}"
+        collection_id = (os.environ.get(pack_env_key) or collection_id or "").strip()
+        frontend = (os.environ.get("FRONTEND_URL") or "https://console.zexvro.in").rstrip("/")
+
+        if not collection_id:
+            return respond(503, {
+                "error": "nft_gateway_not_configured",
+                "error_description": (
+                    "Credit pack NFT collection is not configured. "
+                    "Create a live Credit Pack collection with primary sale, then set "
+                    "Lambda env ZCR_NFT_COLLECTION_ID to that collection UUID."
+                ),
+                "pack": pack,
+            })
+
+        from urllib.parse import urlencode
+        q = urlencode({
+            "collectionId": collection_id,
+            "workspaceId": workspace_id,
+            "zcrAmount": str(pack["zcrAmount"]),
+            "packId": pack_id,
+        })
+        # Hosted wallet checkout popup (Freighter sign → Stellar pay → ZCR grant)
+        nft_checkout_url = f"{frontend}/nft/embed/checkout?{q}"
+
+        # Explicit opt-in only (never default): founders/dev testing without chain.
+        allow_sandbox = (os.environ.get("ZCR_ALLOW_SANDBOX_PURCHASE") or "0").strip().lower() in (
+            "1", "true", "yes", "on",
+        )
+        grant_result = None
+        if allow_sandbox and body.get("sandbox") is True:
+            ref = (body.get("ref") or "").strip() or f"sandbox_pack:{pack_id}:{workspace_id}:{int(time.time())}"
+            try:
+                grant_result = get_credits_service().grant(
+                    workspace_id,
+                    int(pack["zcrAmount"]),
+                    reason=f"sandbox_pack:{pack_id}",
+                    actor_id=username,
+                    actor_email=caller_email,
+                    ref=ref,
+                    meta={"packId": pack_id, "mode": "sandbox_explicit"},
+                    tx_type="topup",
+                )
+            except Exception as exc:
+                return respond(502, {"error": "credits_error", "error_description": str(exc)})
+
+        return respond(200, {
+            "status": "success",
+            "pack": pack,
+            "nftCheckoutUrl": nft_checkout_url,
+            "nftCollectionId": collection_id,
+            "granted": grant_result is not None,
+            "balance": (grant_result or {}).get("balance"),
+            "tx": (grant_result or {}).get("tx"),
+            "message": (
+                f"Sandbox grant +{pack['zcrAmount']} ZCR"
+                if grant_result
+                else "Open NFT wallet checkout to pay with crypto and receive ZCR"
+            ),
+        })
+
+    # --- Credits: POST validate promo (no redeem) ---
+    elif (
+        path.startswith("/api/workspaces/")
+        and path.endswith("/credits/validate-promo")
+        and http_method == "POST"
+    ):
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        parts = path.strip("/").split("/")
+        workspace_id = parts[2] if len(parts) >= 4 else ""
+        caller_email = _caller_email(event, username)
+        workspace, access_err = require_workspace_access(workspace_id, username, email=caller_email)
+        if access_err:
+            return access_err
+        if not workspace:
+            workspace = find_workspace_by_id(workspace_id)
+        if not workspace or not resolve_workspace_member_role(workspace, username, email=caller_email):
+            return respond(403, {"error": "forbidden", "error_description": "Not a workspace member"})
+        code = (body.get("code") or "").strip()
+        try:
+            result = get_credits_service().validate_promo(workspace_id, code)
+            return respond(200, result)
+        except Exception as exc:
+            return respond(502, {"error": "promo_error", "error_description": str(exc)})
 
     # --- Internal top-up (NFT service payment gateway) ---
     elif path == "/api/internal/credits/topup" and http_method == "POST":
@@ -1648,37 +2000,7 @@ def lambda_handler(event, context):
         if denied:
             return denied
         try:
-            # Full table scan (paginated). Collapse spam duplicates: many auto-create
-            # races left N× "X's Workspace" rows per owner — count unique owner+name.
-            workspaces = []
-            scan_kwargs = {}
-            while True:
-                res = workspaces_table.scan(**scan_kwargs)
-                workspaces.extend(res.get("Items") or [])
-                lek = res.get("LastEvaluatedKey")
-                if not lek:
-                    break
-                scan_kwargs["ExclusiveStartKey"] = lek
-
-            raw_row_count = len(workspaces)
-            # Prefer newest row per (ownerId, normalized name)
-            canonical = {}
-            for raw in workspaces:
-                w = normalize_workspace_item(dict(raw))
-                wid = (w.get("workspaceId") or w.get("id") or "").strip()
-                if not wid or wid.startswith("ws_smoke") or wid.startswith("ws_e2e"):
-                    continue
-                owner = _norm_identity(w.get("ownerId"))
-                name = (w.get("name") or "").strip().lower()
-                if not owner:
-                    continue
-                key = (owner, name or wid)
-                prev = canonical.get(key)
-                created = int(w.get("createdAt") or w.get("updatedAt") or 0)
-                if not prev or created >= int(prev.get("createdAt") or prev.get("updatedAt") or 0):
-                    canonical[key] = w
-
-            unique_workspaces = list(canonical.values())
+            unique_workspaces, raw_row_count = canonical_unique_workspaces()
             env_counts = {"testnet": 0, "mainnet": 0}
             for w in unique_workspaces:
                 env = w.get("environment") or "testnet"
@@ -1687,7 +2009,6 @@ def lambda_handler(event, context):
                 env_counts[env] += 1
 
             owners = {_norm_identity(w.get("ownerId")) for w in unique_workspaces if w.get("ownerId")}
-            # Drop known non-human/dev owners from "users" if desired — keep count honest
             user_owners = {o for o in owners if o and o not in ("stellar_dev",)}
 
             total_zcr = 0
@@ -1726,6 +2047,27 @@ def lambda_handler(event, context):
             })
         except Exception as exc:
             return respond(502, {"error": "analytics_error", "error_description": str(exc)})
+
+    # Platform directory: all unique workspaces + members/roles/projects/credits
+    elif path == "/api/platform/workspaces" and http_method == "GET":
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        denied = require_platform_admin(event, username)
+        if denied:
+            return denied
+        try:
+            unique_workspaces, raw_row_count = canonical_unique_workspaces()
+            rows = [summarize_workspace_for_platform(w) for w in unique_workspaces]
+            rows.sort(key=lambda r: (r.get("name") or "").lower())
+            return respond(200, {
+                "workspaces": rows,
+                "count": len(rows),
+                "rawWorkspaceRows": raw_row_count,
+                "duplicateWorkspaceRows": max(0, raw_row_count - len(rows)),
+            })
+        except Exception as exc:
+            return respond(502, {"error": "platform_workspaces_error", "error_description": str(exc)})
 
     elif path == "/api/platform/credits/grant" and http_method == "POST":
         username, auth_error = require_username(event, headers)
@@ -1771,16 +2113,33 @@ def lambda_handler(event, context):
         if denied:
             return denied
         try:
+            auto_gen = bool(body.get("autoGenerate") or body.get("generate") or not (body.get("code") or "").strip())
+            expires_at = body.get("expiresAt")
+            expires_in_days = body.get("expiresInDays")
+            if expires_at is None and expires_in_days is not None:
+                try:
+                    days = int(expires_in_days)
+                    if days > 0:
+                        expires_at = int(time.time() * 1000) + days * 24 * 60 * 60 * 1000
+                except (TypeError, ValueError):
+                    expires_at = None
+            # Default max redemptions = 1 (one-time code) unless explicitly set
+            max_red = body.get("maxRedemptions")
+            if max_red is None or max_red == "":
+                max_red = 1
+            else:
+                max_red = int(max_red)
             promo = get_credits_service().create_promo(
                 body.get("code") or "",
                 int(body.get("creditAmount") or 0),
-                max_redemptions=body.get("maxRedemptions"),
-                max_per_workspace=int(body.get("maxPerWorkspace") or 1),
+                max_redemptions=max_red,
+                max_per_workspace=1,
                 starts_at=body.get("startsAt"),
-                expires_at=body.get("expiresAt"),
+                expires_at=expires_at,
                 created_by=username,
                 note=body.get("note") or "",
                 eligible_environments=body.get("eligibleEnvironments"),
+                auto_generate=auto_gen,
             )
             return respond(200, {"status": "success", "promo": promo})
         except Exception as exc:

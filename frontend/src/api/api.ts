@@ -120,6 +120,10 @@ export type PromoCode = {
   note?: string;
   eligibleEnvironments?: string[];
   createdAt?: number;
+  oneTime?: boolean;
+  isExpired?: boolean;
+  isExhausted?: boolean;
+  remainingRedemptions?: number | null;
 };
 
 export const workspaceApi = {
@@ -140,6 +144,11 @@ export const workspaceApi = {
       `/api/workspaces/${encodeURIComponent(id)}/audit${q ? `?${q}` : ''}`,
     );
   },
+  setEnvironment: (id: string, environment: 'testnet' | 'mainnet') =>
+    api.post<{ status: string; environment: string; workspace: any }>(
+      `/api/workspaces/${encodeURIComponent(id)}/environment`,
+      { environment },
+    ),
   getCredits: (id: string) =>
     api.get<{
       credits: CreditBalance;
@@ -147,6 +156,32 @@ export const workspaceApi = {
       burnsOnUse: boolean;
       recent: CreditLedgerEvent[];
     }>(`/api/workspaces/${encodeURIComponent(id)}/credits`),
+  listCreditPacks: () =>
+    api.get<{
+      packs: Array<{
+        id: string;
+        name: string;
+        zcrAmount: number;
+        usdcPrice: string;
+        description?: string;
+      }>;
+      nftCollectionId?: string | null;
+      purchaseMode: string;
+      currency: string;
+      paymentAsset: string;
+    }>('/api/credits/packs'),
+  purchaseCreditPack: (
+    id: string,
+    body: { packId: string; nftOnly?: boolean; ref?: string },
+  ) =>
+    api.post<{
+      status: string;
+      pack: { id: string; name: string; zcrAmount: number; usdcPrice: string };
+      nftCheckoutUrl?: string | null;
+      granted: boolean;
+      balance?: CreditBalance;
+      message?: string;
+    }>(`/api/workspaces/${encodeURIComponent(id)}/credits/purchase`, body),
   listCreditLedger: (id: string, opts?: { limit?: number; cursor?: string }) => {
     const params = new URLSearchParams();
     if (opts?.limit) params.set('limit', String(opts.limit));
@@ -168,6 +203,51 @@ export const workspaceApi = {
       `/api/workspaces/${encodeURIComponent(id)}/credits/redeem`,
       { code },
     ),
+  validatePromo: (id: string, code: string) =>
+    api.post<{
+      valid: boolean;
+      status: string;
+      message: string;
+      code?: string;
+      creditAmount?: number;
+      promo?: PromoCode;
+      fresh?: boolean;
+      expiresAt?: number;
+      redeemedAt?: number;
+    }>(`/api/workspaces/${encodeURIComponent(id)}/credits/validate-promo`, { code }),
+};
+
+export type PlatformMember = {
+  id?: string;
+  email?: string;
+  name?: string;
+  role?: string;
+  status?: string;
+};
+
+export type PlatformWorkspaceRow = {
+  workspaceId: string;
+  name: string;
+  plan?: string;
+  ownerId: string;
+  ownerEmail?: string;
+  environment?: string;
+  createdAt?: number;
+  updatedAt?: number;
+  memberCount: number;
+  pendingInvites?: number;
+  members: PlatformMember[];
+  roles: {
+    owners: PlatformMember[];
+    admins: PlatformMember[];
+    developers: PlatformMember[];
+    finance: PlatformMember[];
+    viewers: PlatformMember[];
+    agents: PlatformMember[];
+  };
+  projectCount: number;
+  services: string[];
+  zcrBalance: number | null;
 };
 
 export const platformApi = {
@@ -185,15 +265,24 @@ export const platformApi = {
       promoCount: number;
       note?: string;
     }>('/api/platform/analytics'),
+  listWorkspaces: () =>
+    api.get<{
+      workspaces: PlatformWorkspaceRow[];
+      count: number;
+      rawWorkspaceRows?: number;
+      duplicateWorkspaceRows?: number;
+    }>('/api/platform/workspaces'),
   grantCredits: (body: { workspaceId: string; amount: number; reason?: string; ref?: string }) =>
     api.post<{ status: string; balance: CreditBalance }>('/api/platform/credits/grant', body),
   listPromos: () => api.get<{ promos: PromoCode[] }>('/api/platform/promo-codes'),
   createPromo: (body: {
-    code: string;
+    code?: string;
     creditAmount: number;
     maxRedemptions?: number | null;
     maxPerWorkspace?: number;
     expiresAt?: number | null;
+    expiresInDays?: number | null;
+    autoGenerate?: boolean;
     note?: string;
   }) => api.post<{ status: string; promo: PromoCode }>('/api/platform/promo-codes', body),
   disablePromo: (code: string) =>
