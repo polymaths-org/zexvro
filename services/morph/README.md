@@ -60,7 +60,7 @@ Prompt chip: **`[project-name]`** (click = `/use`). Sidebar shows project + work
 
 New folder: one workspace → projects; multiple → pick workspace first.
 
-Project list: current `●` · **＋ New project** · **Change workspace…**
+Project list: plain names · **New project** · **Folder only** · **Change workspace**
 
 ### Outside TUI (still works)
 
