@@ -36,10 +36,13 @@ import ProjectAudit from '../components/project/ProjectAudit';
 import ProjectSettings from '../components/project/ProjectSettings';
 
 import WorkspaceTeam from '../components/workspace/WorkspaceTeam';
+import AcceptInvite from '../components/workspace/AcceptInvite';
 import WorkspaceSecurity from '../components/workspace/WorkspaceSecurity';
 import WorkspaceAnalytics from '../components/workspace/WorkspaceAnalytics';
 import WorkspaceSettings from '../components/workspace/WorkspaceSettings';
 import WorkspaceActivity from '../components/workspace/WorkspaceActivity';
+import WorkspaceCredits from '../components/workspace/WorkspaceCredits';
+import PlatformAdmin from '../components/platform/PlatformAdmin';
 import { memoryApi } from '../api/api';
 import type { MemoryEntry } from '../types';
 
@@ -260,6 +263,13 @@ const withdrawRoute = createRoute({
   component: WithdrawRoute,
 });
 
+/** IAM invite accept — auth required to bind role, page itself is outside dashboard shell */
+const acceptInviteRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/invite/accept',
+  component: AcceptInvite,
+});
+
 const agentShortcutRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/agent',
@@ -422,6 +432,18 @@ const wsSettingsRoute = createRoute({
   getParentRoute: () => dashboardLayoutRoute,
   path: '/dashboard/w/$workspaceId/settings',
   component: WorkspaceSettings,
+});
+
+const wsCreditsRoute = createRoute({
+  getParentRoute: () => dashboardLayoutRoute,
+  path: '/dashboard/w/$workspaceId/credits',
+  component: WorkspaceCredits,
+});
+
+const platformAdminRoute = createRoute({
+  getParentRoute: () => dashboardLayoutRoute,
+  path: '/dashboard/platform',
+  component: PlatformAdmin,
 });
 
 // --- Project screens ---
@@ -676,6 +698,7 @@ const embedNftCheckoutRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   indexRoute,
   withdrawRoute,
+  acceptInviteRoute,
   agentShortcutRoute,
   servicesShortcutRoute,
   misspelledServicesShortcutRoute,
@@ -708,6 +731,8 @@ const routeTree = rootRoute.addChildren([
     wsSecurityRoute,
     wsAnalyticsRoute,
     wsSettingsRoute,
+    wsCreditsRoute,
+    platformAdminRoute,
     projectRootRoute,
     projectOverviewRoute,
     projectExecutionsRoute,

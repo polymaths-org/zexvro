@@ -290,6 +290,7 @@ Content-Type: application/json
                 { role: 'Finance', perms: [true, true, true, false, false] },
                 { role: 'Developer', perms: [true, false, false, false, false] },
                 { role: 'Viewer', perms: [true, false, false, false, false] },
+                { role: 'Agent', perms: [true, false, false, false, false] },
               ].map(r => (
                 <tr key={r.role}>
                   <td className="py-2 px-3 font-semibold text-zinc-800 dark:text-zinc-200">{r.role}</td>

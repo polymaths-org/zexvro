@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Search, Menu, X, ChevronRight, User,
   HelpCircle, Sun, Moon, Settings, Send, ArrowUpRight, Sparkles, LogOut,
@@ -21,25 +21,29 @@ import {
 import { buildAgentChatPayload, loadAgentSettingsFromAWS } from '../../agent/settings';
 import CliActivation from '../auth/CliActivation';
 import PlatformBootup from '../PlatformBootup';
-import { initializeAWSSync, pullFromAWS } from '../../stores/awsSync';
+import {
+  initializeAWSSync,
+  loadProjectsForWorkspace,
+  loadWorkspaceDetail,
+  pullFromAWS,
+} from '../../stores/awsSync';
+import { useWorkspaceRbac } from '../../rbac/useWorkspaceRbac';
+import { INVITABLE_ROLES } from '../../rbac/permissions';
+import type { WorkspaceRole } from '../../stores/types';
+
 const IS_LOCAL_HOST = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 const API_BASE_URL = import.meta.env.VITE_API_URL ||
-  (IS_LOCAL_HOST
-    ? 'http://localhost:8080'
-    : 'https://qkuostruh3.execute-api.us-east-1.amazonaws.com');
+  'https://qkuostruh3.execute-api.us-east-1.amazonaws.com';
 const AGENT_CHAT_URL = IS_LOCAL_HOST ? '/api/agent/chat' : `${API_BASE_URL}/api/chat`;
 const SHOULD_CHECK_CLI_STATUS =
   !IS_LOCAL_HOST ||
-  API_BASE_URL.startsWith('http://localhost') ||
-  API_BASE_URL.startsWith('http://127.0.0.1');
+  API_BASE_URL.includes('localhost') ||
+  API_BASE_URL.includes('127.0.0.1');
 
 const BRAND_MARK = '/brand/logo-transparent.png';
 const BRAND_WORDMARK = '/brand/wordmark-transparent.png';
 const MORPH_LOGO = '/morph/morph-logo.svg';
 const MORPH_ILLUSTRATION = '/morph/morph-illustration-transparent.png';
-
-const WORKSPACE_ROLES = ['Admin', 'Developer', 'Viewer'] as const;
-type WorkspaceRole = typeof WORKSPACE_ROLES[number];
 
 function titleCaseName(value: string) {
   return value
@@ -249,6 +253,7 @@ const SIDEBAR_CATEGORIES: Array<{
       { to: 'overview', label: 'Overview', icon: 'overview' },
       { to: 'projects', label: 'Projects / Environments', icon: 'projects' },
       { to: 'team', label: 'Team', icon: 'team' },
+      { to: 'credits', label: 'Credits (ZCR)', icon: 'payroll' },
       { to: 'audit', label: 'Audit Log', icon: 'security' },
       { to: 'settings', label: 'Settings', icon: 'settings' },
     ],
@@ -304,6 +309,7 @@ export default function DashboardLayout() {
   const selectWorkspace = useWorkspaceStore(s => s.selectWorkspace);
   const deleteWorkspace = useWorkspaceStore(s => s.deleteWorkspace);
   const addMember = useWorkspaceStore(s => s.addMember);
+  const { can, canSection, role: currentRole } = useWorkspaceRbac(workspaceId);
 
   const [userSession, setUserSession] = useState<UserSession | null>(() => readStoredSession());
 
@@ -447,6 +453,7 @@ export default function DashboardLayout() {
     overview: 'Overview',
     services: 'Services',
     settings: 'Settings',
+    credits: 'Credits',
     executions: 'Executions',
     members: 'Members',
     audit: 'Audit',
@@ -456,6 +463,7 @@ export default function DashboardLayout() {
     analytics: 'Analytics',
     transformation: 'Transformation',
     trade: 'Trade',
+    platform: 'Platform',
   };
   const currentSectionLabel =
     SECTION_LABELS[activeSection]
@@ -542,15 +550,23 @@ export default function DashboardLayout() {
     initializeAWSSync();
   }, []);
 
-  // Load remote ZEXVRO state from AWS DynamoDB on login, with 10s periodic polling
+  // Live sync: workspaces + projects (poll). Roster merge never shrinks on pull.
   useEffect(() => {
     if (!userSession) return;
     pullFromAWS();
     const interval = setInterval(() => {
       pullFromAWS();
-    }, 10000);
+    }, 15000);
     return () => clearInterval(interval);
   }, [userSession]);
+
+  // On workspace switch: load projects + roster once (Team page does its own slower poll)
+  useEffect(() => {
+    if (!userSession || !workspaceId) return;
+    selectWorkspace(workspaceId);
+    void loadProjectsForWorkspace(workspaceId);
+    void loadWorkspaceDetail(workspaceId);
+  }, [userSession, workspaceId, selectWorkspace]);
 
   // Keyboard shortcut
   useEffect(() => {
@@ -571,13 +587,22 @@ export default function DashboardLayout() {
     return () => window.clearTimeout(timer);
   }, [currentPath, reducedMotion]);
 
-  // Create default workspace if none exists
+  // Create default workspace once after a successful empty pull (never on failed pull)
+  const defaultCreateAttempted = useRef(false);
   useEffect(() => {
-    if (isHydrated && workspaces.length === 0 && userSession) {
-      const name = `${getWorkspaceOwnerName(userSession)}'s Workspace`;
-      createWorkspace(name, userSession.username || userSession.email || 'user');
+    if (!userSession) {
+      defaultCreateAttempted.current = false;
+      return;
     }
-  }, [isHydrated, workspaces.length, userSession]);
+    if (!isHydrated || workspaces.length > 0 || defaultCreateAttempted.current) return;
+    defaultCreateAttempted.current = true;
+    const name = `${getWorkspaceOwnerName(userSession)}'s Workspace`;
+    createWorkspace(
+      name,
+      userSession.username || userSession.email || 'user',
+      userSession.email || '',
+    );
+  }, [isHydrated, workspaces.length, userSession, createWorkspace]);
 
   const handleSendWidgetMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -623,7 +648,11 @@ export default function DashboardLayout() {
       setWorkspaceNotice('A workspace with this name already exists.');
       return;
     }
-    const ws = createWorkspace(name, userSession?.username || 'user');
+    const ws = createWorkspace(
+      name,
+      userSession?.username || userSession?.email || 'user',
+      userSession?.email || '',
+    );
     setNewWorkspaceName('');
     setWorkspaceNotice(`Created ${ws.name}.`);
     navigate({ to: '/dashboard/w/$workspaceId/overview', params: { workspaceId: ws.id } });
@@ -651,16 +680,80 @@ export default function DashboardLayout() {
     }
   };
 
+  /** One-shot cleanup for spam rows from the old auto-create race (same name, many ids). */
+  const handleCleanDuplicateWorkspaces = () => {
+    const byName = new Map<string, typeof workspaces>();
+    for (const ws of workspaces) {
+      const key = ws.name.trim().toLowerCase();
+      const list = byName.get(key) || [];
+      list.push(ws);
+      byName.set(key, list);
+    }
+    const toDelete: string[] = [];
+    let keepId: string | null = useWorkspaceStore.getState().currentWorkspaceId;
+    for (const group of byName.values()) {
+      if (group.length <= 1) continue;
+      const ranked = [...group].sort((a, b) => {
+        const sa = (a.members?.length || 0) * 1000 + (a.invitations?.length || 0);
+        const sb = (b.members?.length || 0) * 1000 + (b.invitations?.length || 0);
+        if (sb !== sa) return sb - sa;
+        return (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0);
+      });
+      const keeper = ranked[0];
+      if (!keepId || group.some(g => g.id === keepId) === false) {
+        /* leave keepId if outside this group */
+      } else if (keepId && group.some(g => g.id === keepId)) {
+        // current selection is in this dup group — prefer keeping the current if it's the best, else switch
+        if (keeper.id !== keepId) keepId = keeper.id;
+      }
+      for (const dup of ranked.slice(1)) toDelete.push(dup.id);
+    }
+    if (!toDelete.length) {
+      setWorkspaceNotice('No duplicate workspace names found.');
+      return;
+    }
+    const confirmed = window.confirm(
+      `Delete ${toDelete.length} duplicate workspace(s)? Keeps one of each name (richest members/invites).`,
+    );
+    if (!confirmed) return;
+    for (const id of toDelete) deleteWorkspace(id);
+    const remaining = useWorkspaceStore.getState().workspaces;
+    const next = remaining.find(w => w.id === keepId) || remaining[0];
+    if (next) {
+      selectWorkspace(next.id);
+      navigate({ to: '/dashboard/w/$workspaceId/overview', params: { workspaceId: next.id } });
+    }
+    setWorkspaceNotice(`Removed ${toDelete.length} duplicate workspace(s).`);
+    setWorkspaceMenuOpen(false);
+  };
+
+  const createInvitation = useWorkspaceStore(s => s.createInvitation);
+
   const handleInviteToWorkspace = (e: React.FormEvent) => {
     e.preventDefault();
     const email = inviteEmail.trim().toLowerCase();
+    if (!can('team.invite')) {
+      setWorkspaceNotice('Your role cannot invite members.');
+      return;
+    }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setWorkspaceNotice('Enter a valid email invite.'); return; }
     if (!currentWorkspace) return;
-    addMember(currentWorkspace.id, {
-      email, name: email.split('@')[0], role: inviteRole, status: 'invited',
-    });
-    setInviteEmail('');
-    setWorkspaceNotice(`Invite added for ${email}.`);
+    void createInvitation({
+      workspaceId: currentWorkspace.id,
+      email,
+      role: inviteRole,
+      invitedBy: userSession?.username || 'admin',
+      invitedByEmail: userSession?.email,
+    })
+      .then(invite => {
+        setInviteEmail('');
+        setWorkspaceNotice(
+          `IAM invite created for ${email} as roles/${invite.role}. Share /invite/accept link from Team → Invitations.`,
+        );
+      })
+      .catch(err => {
+        setWorkspaceNotice(err instanceof Error ? err.message : 'Invite failed');
+      });
   };
 
   const toggleCat = (catId: string) => {
@@ -798,9 +891,24 @@ export default function DashboardLayout() {
                       >
                         <div className="max-h-[72vh] overflow-y-auto">
                           <div className="border-b border-zinc-100 p-2 dark:border-zinc-900">
-                            <div className="mb-1 flex items-center justify-between px-1">
+                            <div className="mb-1 flex items-center justify-between gap-2 px-1">
                               <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Workspaces</span>
-                              <span className="text-[10px] text-zinc-400">{workspaces.length}</span>
+                              <span className="flex items-center gap-1.5">
+                                {workspaces.length > 5 && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleCleanDuplicateWorkspaces();
+                                    }}
+                                    className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-600 hover:bg-amber-500/10 dark:text-amber-400"
+                                    title="Delete same-name duplicate workspaces"
+                                  >
+                                    Clean dups
+                                  </button>
+                                )}
+                                <span className="text-[10px] text-zinc-400">{workspaces.length}</span>
+                              </span>
                             </div>
                             {workspaces.map(ws => {
                               const isCurrent = ws.id === workspaceId;
@@ -813,10 +921,11 @@ export default function DashboardLayout() {
                                       : 'text-zinc-600 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-900'
                                   }`}
                                 >
-                                  <button
+                                      <button
                                     type="button"
                                     onClick={() => {
                                       selectWorkspace(ws.id);
+                                      void loadProjectsForWorkspace(ws.id);
                                       setWorkspaceMenuOpen(false);
                                       navigate({ to: '/dashboard/w/$workspaceId/overview', params: { workspaceId: ws.id } });
                                     }}
@@ -864,12 +973,18 @@ export default function DashboardLayout() {
                             </div>
                           </form>
 
+                          {can('team.invite') ? (
                           <form onSubmit={handleInviteToWorkspace} className="space-y-2 p-3">
                             <div className="flex items-center justify-between gap-2">
                               <div className="flex min-w-0 items-center gap-2 text-xs font-semibold text-zinc-800 dark:text-zinc-100">
                                 <Mail className="h-3.5 w-3.5 text-blue-500" />
                                 <span className="truncate">Invite to {currentWorkspace.name}</span>
                               </div>
+                              {currentRole && (
+                                <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[9px] font-medium text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
+                                  You: {currentRole}
+                                </span>
+                              )}
                             </div>
                             <div className="space-y-2">
                               <input
@@ -883,7 +998,7 @@ export default function DashboardLayout() {
                                 onChange={(event) => setInviteRole(event.target.value as WorkspaceRole)}
                                 className="h-9 w-full rounded-md border border-zinc-200 bg-white px-2 text-xs text-zinc-800 outline-none transition focus:border-blue-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
                               >
-                                {WORKSPACE_ROLES.map(role => (
+                                {INVITABLE_ROLES.map(role => (
                                   <option key={role} value={role}>{role}</option>
                                 ))}
                               </select>
@@ -896,6 +1011,12 @@ export default function DashboardLayout() {
                               <p className="rounded-md bg-zinc-50 px-2.5 py-2 text-[10px] text-zinc-500 dark:bg-zinc-950 dark:text-zinc-400">{workspaceNotice}</p>
                             )}
                           </form>
+                          ) : (
+                            <div className="space-y-1 p-3 text-[10px] text-zinc-500 dark:text-zinc-400">
+                              <p>Your role{currentRole ? ` (${currentRole})` : ''} cannot invite members.</p>
+                              {workspaceNotice && <p>{workspaceNotice}</p>}
+                            </div>
+                          )}
                         </div>
                       </motion.div>
                     )}
@@ -955,7 +1076,9 @@ export default function DashboardLayout() {
                       </Link>
                       <div className="w-8 h-px bg-zinc-100 dark:bg-zinc-800 my-1" />
                       {SIDEBAR_CATEGORIES.map(cat =>
-                        cat.items.map(item => (
+                        cat.items
+                          .filter(item => canSection(item.to))
+                          .map(item => (
                           <Link
                             key={item.label}
                             to={makeNavTo(item.to) as any}
@@ -1030,8 +1153,10 @@ export default function DashboardLayout() {
                       </div>
 
                       {SIDEBAR_CATEGORIES.map(cat => {
+                        const visibleItems = cat.items.filter(item => canSection(item.to));
                         const isExpanded = expandedCats[cat.id];
-                        const hasItems = cat.items.length > 0;
+                        const hasItems = visibleItems.length > 0;
+                        if (!hasItems && cat.items.length > 0) return null;
                         return (
                           <div key={cat.id} className="space-y-1">
                             {hasItems ? (
@@ -1054,7 +1179,7 @@ export default function DashboardLayout() {
                                   transition={{ duration: 0.15 }}
                                   className="overflow-hidden space-y-0.5 pl-3 border-l border-zinc-100 dark:border-zinc-800 ml-3.5"
                                 >
-                                  {cat.items.map(sub => {
+                                  {visibleItems.map(sub => {
                                     const isSelected = isSectionSelected(sub.to);
                                     const to = makeNavTo(sub.to);
                                     return (
@@ -1166,10 +1291,39 @@ export default function DashboardLayout() {
             </div>
             <div className="flex items-center gap-2.5 relative">
               {currentWorkspace && (
-                <Link to="/dashboard/w/$workspaceId/settings" params={{ workspaceId: currentWorkspace.id }} className="hidden sm:inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-900 dark:hover:text-white">
-                  <HelpCircle className="h-3.5 w-3.5 text-zinc-400" />
-                  Support
-                </Link>
+                <>
+                  <span
+                    className={`hidden sm:inline-flex items-center rounded-md border px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${
+                      (currentWorkspace.settings?.environment || currentWorkspace.environment || 'testnet') === 'mainnet'
+                        ? 'border-orange-500/40 bg-orange-500/10 text-orange-600 dark:text-orange-400'
+                        : 'border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-400'
+                    }`}
+                    title="Workspace environment — ZCR burns only on mainnet"
+                  >
+                    {(currentWorkspace.settings?.environment || currentWorkspace.environment || 'testnet') === 'mainnet'
+                      ? 'Mainnet'
+                      : 'Testnet'}
+                  </span>
+                  <Link
+                    to="/dashboard/w/$workspaceId/credits"
+                    params={{ workspaceId: currentWorkspace.id }}
+                    className="hidden sm:inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1 text-[11px] font-semibold text-zinc-800 transition hover:bg-zinc-200 hover:text-zinc-950 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800 dark:hover:text-white"
+                    title="Workspace credits"
+                  >
+                    ZCR
+                  </Link>
+                  <Link
+                    to="/dashboard/platform"
+                    className="hidden lg:inline-flex items-center rounded-md px-2 py-1 text-[10px] font-medium text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-white"
+                    title="Platform control plane (founders)"
+                  >
+                    Platform
+                  </Link>
+                  <Link to="/dashboard/w/$workspaceId/settings" params={{ workspaceId: currentWorkspace.id }} className="hidden sm:inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-900 dark:hover:text-white">
+                    <HelpCircle className="h-3.5 w-3.5 text-zinc-400" />
+                    Support
+                  </Link>
+                </>
               )}
               <button onClick={() => setSearchOpen(true)} className="md:hidden p-1.5 rounded text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-900 cursor-pointer">
                 <Search className="h-4.5 w-4.5" />

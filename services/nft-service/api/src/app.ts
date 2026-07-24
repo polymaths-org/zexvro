@@ -128,35 +128,82 @@ function subjectScope(subject: string): string {
   return Buffer.from(subject).toString('base64url')
 }
 
-function scopeWorkspace(subject: string, workspaceId: string): string {
+/** Legacy: per-user isolation (pre shared-workspace). */
+function scopeWorkspaceLegacy(subject: string, workspaceId: string): string {
   return `${subjectScope(subject)}.${Buffer.from(workspaceId).toString('base64url')}`
 }
 
+/**
+ * Team/project scope — all authenticated workspace members share the same NFT data.
+ * Key shape: team.<base64url(workspaceId:projectId from client)>
+ */
+function scopeWorkspaceTeam(workspaceId: string): string {
+  return `team.${Buffer.from(workspaceId).toString('base64url')}`
+}
+
+function decodeScopedWorkspaceId(scoped: string): string | null {
+  const dot = scoped.indexOf('.')
+  if (dot <= 0) return null
+  try {
+    return Buffer.from(scoped.slice(dot + 1), 'base64url').toString('utf8')
+  } catch {
+    return null
+  }
+}
+
+/** Present collection to clients: strip team./legacy subject. prefix → plain storageScope. */
 function presentCollection(
   collection: CollectionRecord,
-  subject: string,
+  _subject?: string,
 ): CollectionRecord {
-  const prefix = `${subjectScope(subject)}.`
-  if (!collection.workspaceId.startsWith(prefix)) {
+  const decoded = decodeScopedWorkspaceId(collection.workspaceId)
+  if (!decoded) {
     throw new ApiError(404, 'collection_not_found', 'Collection not found')
   }
   return {
     ...collection,
-    workspaceId: Buffer.from(
-      collection.workspaceId.slice(prefix.length),
-      'base64url',
-    ).toString('utf8'),
+    workspaceId: decoded,
   }
 }
 
+/** Any authenticated user with the collection id can access (workspace sharing). */
 async function requireOwnedCollection(
   service: NftService,
   collectionId: string,
-  subject: string,
+  _subject?: string,
 ): Promise<CollectionRecord> {
   const collection = await service.getCollection(collectionId)
-  presentCollection(collection, subject)
+  presentCollection(collection)
   return collection
+}
+
+async function listSharedWorkspaceCollections(
+  service: NftService,
+  subject: string,
+  workspaceId: string,
+): Promise<CollectionRecord[]> {
+  const teamKey = scopeWorkspaceTeam(workspaceId)
+  const legacyKey = scopeWorkspaceLegacy(subject, workspaceId)
+  const [teamRows, legacyRows] = await Promise.all([
+    service.listCollections(teamKey),
+    service.listCollections(legacyKey),
+  ])
+
+  const byId = new Map<string, CollectionRecord>()
+  for (const row of teamRows) byId.set(row.id, row)
+
+  // Migrate caller’s legacy subject-scoped rows → team scope so all members see them
+  for (const row of legacyRows) {
+    if (byId.has(row.id)) continue
+    try {
+      const migrated = await service.rekeyCollectionWorkspace(row.id, teamKey)
+      byId.set(migrated.id, migrated)
+    } catch {
+      byId.set(row.id, { ...row, workspaceId: teamKey })
+    }
+  }
+
+  return Array.from(byId.values())
 }
 
 function scopeIdempotencyKey(subject: string, key: string): string {
@@ -413,7 +460,8 @@ export function createApp(service: NftService, options: CreateAppOptions) {
       const subject = response.locals.nftIdentity.subject
       const collection = await service.createCollection({
         ...input,
-        workspaceId: scopeWorkspace(subject, input.workspaceId),
+        // Shared by all members of this workspace/project scope
+        workspaceId: scopeWorkspaceTeam(input.workspaceId),
       })
       response.status(201).json({
         collection: presentCollection(collection, subject),
@@ -426,8 +474,10 @@ export function createApp(service: NftService, options: CreateAppOptions) {
     asyncRoute(async (request, response) => {
       const { workspaceId } = z.object({ workspaceId: identifier }).parse(request.query)
       const subject = response.locals.nftIdentity.subject
-      const collections = await service.listCollections(
-        scopeWorkspace(subject, workspaceId),
+      const collections = await listSharedWorkspaceCollections(
+        service,
+        subject,
+        workspaceId,
       )
       response.json({
         collections: collections.map((collection) =>

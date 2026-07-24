@@ -6,6 +6,7 @@ import csv
 import io
 import re
 from decimal import Decimal
+from urllib.parse import quote
 import boto3
 from boto3.dynamodb.conditions import Attr, Key
 
@@ -20,7 +21,19 @@ EMPLOYEES_TABLE_NAME = os.environ.get("EMPLOYEES_TABLE", "zexvro-employees")
 PAYROLL_TABLE_NAME = os.environ.get("PAYROLL_TABLE", "zexvro-payroll-runs")
 PAYROLL_TAXONOMY_TABLE_NAME = os.environ.get("PAYROLL_TAXONOMY_TABLE", "zexvro-payroll-taxonomy")
 WAITLIST_TABLE_NAME = os.environ.get("WAITLIST_TABLE", "zexvro-waitlist")
+AUDIT_TABLE_NAME = os.environ.get("AUDIT_TABLE", "zexvro-workspace-audit")
+CREDITS_TABLE_NAME = os.environ.get("CREDITS_TABLE", "zexvro-credits")
+CREDIT_LEDGER_TABLE_NAME = os.environ.get("CREDIT_LEDGER_TABLE", "zexvro-credit-ledger")
+PROMO_CODES_TABLE_NAME = os.environ.get("PROMO_CODES_TABLE", "zexvro-promo-codes")
+PROMO_REDEMPTIONS_TABLE_NAME = os.environ.get("PROMO_REDEMPTIONS_TABLE", "zexvro-promo-redemptions")
 WAITLIST_ADMIN_SECRET = (os.environ.get("WAITLIST_ADMIN_SECRET") or "").strip()
+INTERNAL_CREDITS_SECRET = (os.environ.get("INTERNAL_CREDITS_SECRET") or "").strip()
+# Founder / platform super-admins (comma-separated usernames or emails)
+PLATFORM_ADMINS = {
+    x.strip().lower()
+    for x in (os.environ.get("PLATFORM_ADMINS") or "nabil,paris,rushi,talib,n4bi10p").split(",")
+    if x.strip()
+}
 
 devices_table = dynamodb.Table(DEVICES_TABLE_NAME)
 memory_table = dynamodb.Table(MEMORY_TABLE_NAME)
@@ -30,10 +43,35 @@ employees_table = dynamodb.Table(EMPLOYEES_TABLE_NAME)
 payroll_runs_table = dynamodb.Table(PAYROLL_TABLE_NAME)
 payroll_taxonomy_table = dynamodb.Table(PAYROLL_TAXONOMY_TABLE_NAME)
 waitlist_table = dynamodb.Table(WAITLIST_TABLE_NAME)
+audit_table = dynamodb.Table(AUDIT_TABLE_NAME)
+credits_table = dynamodb.Table(CREDITS_TABLE_NAME)
+credit_ledger_table = dynamodb.Table(CREDIT_LEDGER_TABLE_NAME)
+promo_codes_table = dynamodb.Table(PROMO_CODES_TABLE_NAME)
+promo_redemptions_table = dynamodb.Table(PROMO_REDEMPTIONS_TABLE_NAME)
+
+try:
+    from credits import CreditsService, InsufficientCredits, PromoError
+except ImportError:
+    try:
+        from scratch_lambda.credits import CreditsService, InsufficientCredits, PromoError  # type: ignore
+    except ImportError:
+        CreditsService = None  # type: ignore
+        InsufficientCredits = Exception  # type: ignore
+        PromoError = Exception  # type: ignore
 
 EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
-ses = boto3.client("ses", region_name=os.environ.get("AWS_REGION", "us-east-1"))
 ec2 = boto3.client("ec2", region_name=os.environ.get("AWS_REGION", "us-east-1"))
+
+try:
+    from brevo_mail import MailError, send_email as brevo_send_email
+except ImportError:  # package layout / Lambda zip may flatten modules
+    try:
+        from scratch_lambda.brevo_mail import MailError, send_email as brevo_send_email  # type: ignore
+    except ImportError:
+        MailError = Exception  # type: ignore
+
+        def brevo_send_email(**kwargs):  # type: ignore
+            raise RuntimeError("brevo_mail module missing from deployment package")
 
 # GSI Name for querying by user_code
 USER_CODE_GSI = os.environ.get("USER_CODE_GSI", "user_code-index")
@@ -474,12 +512,300 @@ def require_username(event, headers):
     return get_username_from_auth(event), None
 
 
+# Workspace roles allowed to invite members (Owner/Admin). Matches frontend rbac matrix.
+_TEAM_INVITE_ROLES = {"Owner", "Admin"}
+_SETTINGS_WRITE_ROLES = {"Owner", "Admin"}
+
+
+def _norm_identity(value):
+    return str(value or "").strip().lower()
+
+
+def resolve_workspace_member_role(workspace, username, email=None):
+    """Return workspace role for caller, or None if not a member."""
+    if not workspace:
+        return None
+    owner_id = _norm_identity(workspace.get("ownerId"))
+    uname = _norm_identity(username)
+    em = _norm_identity(email)
+    if owner_id and (owner_id == uname or (em and owner_id == em)):
+        return "Owner"
+    for member in workspace.get("members") or []:
+        m_email = _norm_identity(member.get("email"))
+        m_id = _norm_identity(member.get("id"))
+        m_name = _norm_identity(member.get("name"))
+        status = str(member.get("status") or "active").lower()
+        if status in ("inactive", "revoked", "expired"):
+            continue
+        if (em and m_email == em) or (uname and (m_id == uname or m_name == uname or m_email.split("@")[0] == uname)):
+            if status in ("invited", "pending"):
+                return None
+            return member.get("role") or "Viewer"
+    return None
+
+
+def require_workspace_role(workspace, username, allowed_roles, email=None):
+    role = resolve_workspace_member_role(workspace, username, email=email)
+    if not role:
+        return None, respond(403, {
+            "error": "forbidden",
+            "error_description": "You are not an active member of this workspace",
+        })
+    if role not in allowed_roles:
+        return role, respond(403, {
+            "error": "forbidden",
+            "error_description": f"Role {role} cannot perform this action",
+            "role": role,
+        })
+    return role, None
+
+
 def normalize_workspace_item(item):
     if not item:
         return item
     item.setdefault("id", item.get("workspaceId"))
     item.setdefault("workspaceId", item.get("id"))
+    settings = item.get("settings") or {}
+    if not isinstance(settings, dict):
+        settings = {}
+    # Canonical environment: testnet | mainnet
+    env = (settings.get("environment") or "").strip().lower()
+    if env not in ("testnet", "mainnet"):
+        net = str(settings.get("defaultNetwork") or "").lower()
+        env = "mainnet" if "main" in net and "test" not in net else "testnet"
+        settings = {**settings, "environment": env}
+        item["settings"] = settings
+    else:
+        item["settings"] = {**settings, "environment": env}
+    item["environment"] = env
     return item
+
+
+def get_workspace_environment(workspace_id: str) -> str:
+    ws = find_workspace_by_id(workspace_id)
+    if not ws:
+        return "testnet"
+    norm = normalize_workspace_item(dict(ws))
+    return norm.get("environment") or "testnet"
+
+
+def is_platform_admin(username, email=None) -> bool:
+    candidates = {
+        _norm_identity(username),
+        _norm_identity(email),
+        _norm_identity((username or "").split("@")[0] if username else ""),
+        _norm_identity((email or "").split("@")[0] if email else ""),
+    }
+    return bool(candidates & PLATFORM_ADMINS)
+
+
+def require_platform_admin(event, username):
+    email = _caller_email(event, username)
+    if not is_platform_admin(username, email):
+        return respond(403, {
+            "error": "forbidden",
+            "error_description": "Platform founder access required",
+        })
+    return None
+
+
+def get_credits_service():
+    if CreditsService is None:
+        raise RuntimeError("credits module missing from deployment package")
+    return CreditsService(
+        credits_table,
+        credit_ledger_table,
+        promo_codes_table,
+        promo_redemptions_table,
+        get_workspace_env=get_workspace_environment,
+        append_audit=append_audit_event,
+    )
+
+
+def _caller_email(event, username):
+    email = ""
+    try:
+        authorizer = event.get("requestContext", {}).get("authorizer", {})
+        claims = authorizer.get("claims", {}) or {}
+        email = (claims.get("email") or "").strip().lower()
+    except Exception:
+        pass
+    if not email and username and "@" in str(username):
+        email = str(username).strip().lower()
+    if not email:
+        # Manual JWT decode fallback
+        try:
+            headers = event.get("headers") or {}
+            auth = headers.get("Authorization") or headers.get("authorization") or ""
+            if auth.startswith("Bearer "):
+                import base64
+                parts = auth.split(" ", 1)[1].split(".")
+                if len(parts) == 3:
+                    payload_b64 = parts[1] + "=" * ((4 - len(parts[1]) % 4) % 4)
+                    payload = json.loads(base64.b64decode(payload_b64).decode("utf-8"))
+                    email = (payload.get("email") or "").strip().lower()
+        except Exception:
+            pass
+    return email
+
+
+def list_shared_workspaces_for_user(username, email=None):
+    """Scan workspaces where caller is an active non-owner member."""
+    uname = _norm_identity(username)
+    em = _norm_identity(email)
+    shared = []
+    try:
+        res = workspaces_table.scan()
+        items = res.get("Items", [])
+        while res.get("LastEvaluatedKey"):
+            res = workspaces_table.scan(ExclusiveStartKey=res["LastEvaluatedKey"])
+            items.extend(res.get("Items", []))
+        for item in items:
+            owner = _norm_identity(item.get("ownerId"))
+            if owner and (owner == uname or (em and owner == em)):
+                continue
+            role = resolve_workspace_member_role(item, username, email=email)
+            if role:
+                shared.append(normalize_workspace_item(item))
+    except Exception as exc:
+        print(f"[list_shared_workspaces] scan failed: {exc}")
+    return shared
+
+
+def find_workspace_by_id(workspace_id):
+    """Locate a workspace row by workspaceId (any owner)."""
+    if not workspace_id:
+        return None
+    try:
+        found = find_by_sort_key(workspaces_table, "workspaceId", workspace_id)
+        if found:
+            return found
+        found = find_by_sort_key(workspaces_table, "id", workspace_id)
+        return found
+    except Exception:
+        return None
+
+
+def append_audit_event(
+    workspace_id,
+    *,
+    action,
+    actor_id=None,
+    actor_email=None,
+    target=None,
+    project_id=None,
+    meta=None,
+    severity="info",
+):
+    """
+    Append-only workspace audit row. Fail-open: log and return None on error
+    so primary mutations are not blocked by audit outages.
+    """
+    ws = (workspace_id or "").strip()
+    if not ws or not action:
+        return None
+    now_ms = int(time.time() * 1000)
+    event_id = str(uuid.uuid4())
+    # Zero-padded ms + uuid so query KeyCondition RANGE is chronological.
+    event_key = f"{now_ms:013d}#{event_id}"
+    item = {
+        "workspaceId": ws,
+        "eventKey": event_key,
+        "eventId": event_id,
+        "action": str(action)[:128],
+        "actorId": (actor_id or "")[:128] or None,
+        "actorEmail": (actor_email or "").strip().lower()[:256] or None,
+        "target": (target or "")[:512] or None,
+        "projectId": (project_id or "").strip()[:128] or None,
+        "meta": meta if isinstance(meta, dict) else {},
+        "severity": severity if severity in ("info", "warning", "critical") else "info",
+        "createdAt": now_ms,
+    }
+    try:
+        audit_table.put_item(Item=to_dynamodb_value(item))
+        return {
+            "id": event_id,
+            "eventKey": event_key,
+            "workspaceId": ws,
+            "action": item["action"],
+            "actorId": item.get("actorId") or "",
+            "actorEmail": item.get("actorEmail") or "",
+            "target": item.get("target") or "",
+            "projectId": item.get("projectId") or "",
+            "meta": item.get("meta") or {},
+            "severity": item["severity"],
+            "createdAt": now_ms,
+        }
+    except Exception as exc:
+        print(f"[append_audit_event] failed ws={ws} action={action}: {exc}")
+        return None
+
+
+def list_audit_events(workspace_id, *, limit=50, cursor=None, project_id=None):
+    """List audit events newest-first for a workspace (optional project filter)."""
+    ws = (workspace_id or "").strip()
+    if not ws:
+        return [], None
+    limit = max(1, min(int(limit or 50), 100))
+    kwargs = {
+        "KeyConditionExpression": Key("workspaceId").eq(ws),
+        "ScanIndexForward": False,
+        "Limit": limit,
+    }
+    if cursor:
+        try:
+            kwargs["ExclusiveStartKey"] = {
+                "workspaceId": ws,
+                "eventKey": cursor,
+            }
+        except Exception:
+            pass
+    try:
+        res = audit_table.query(**kwargs)
+    except Exception as exc:
+        print(f"[list_audit_events] query failed: {exc}")
+        return [], None
+
+    items = res.get("Items") or []
+    events = []
+    pid_filter = (project_id or "").strip()
+    for raw in items:
+        if pid_filter and (raw.get("projectId") or "") != pid_filter:
+            continue
+        events.append({
+            "id": raw.get("eventId") or (raw.get("eventKey") or "").split("#")[-1],
+            "eventKey": raw.get("eventKey"),
+            "workspaceId": raw.get("workspaceId") or ws,
+            "action": raw.get("action") or "",
+            "actorId": raw.get("actorId") or "",
+            "actorEmail": raw.get("actorEmail") or "",
+            "target": raw.get("target") or "",
+            "projectId": raw.get("projectId") or "",
+            "meta": raw.get("meta") or {},
+            "severity": raw.get("severity") or "info",
+            "createdAt": int(raw.get("createdAt") or 0),
+        })
+
+    next_cursor = None
+    lek = res.get("LastEvaluatedKey")
+    if lek and lek.get("eventKey"):
+        next_cursor = lek["eventKey"]
+    return events, next_cursor
+
+
+def require_workspace_access(workspace_id, username, email=None):
+    """Owner or active member may access workspace resources (projects, etc.)."""
+    workspace = find_workspace_by_id(workspace_id)
+    if not workspace:
+        # Allow project list if workspace row missing but projects exist (legacy data)
+        return None, None
+    role = resolve_workspace_member_role(workspace, username, email=email)
+    if not role:
+        return None, respond(403, {
+            "error": "forbidden",
+            "error_description": "You are not a member of this workspace",
+        })
+    return workspace, None
 
 
 def normalize_project_item(item):
@@ -557,27 +883,75 @@ def find_by_sort_key(table, sort_key_name, sort_key_value):
     return items[0] if items else None
 
 
-def send_invite_email(recipient_email, workspace_name, inviter_name, role):
-    frontend_url = os.environ.get("FRONTEND_URL", "https://console.zexvro.in")
-    source_email = os.environ.get("INVITE_SOURCE_EMAIL", "noreply@zexvro.dev")
-    safe_workspace = workspace_name or "a ZEXVRO workspace"
-    safe_inviter = inviter_name or "A teammate"
-    safe_role = role or "Developer"
-    html_body = f"""
-    <div style="font-family:Inter,Arial,sans-serif;line-height:1.5;color:#18181b">
-      <h2 style="margin:0 0 12px">You have been invited to {safe_workspace} on ZEXVRO</h2>
-      <p>{safe_inviter} invited you to join as <strong>{safe_role}</strong>.</p>
-      <p><a href="{frontend_url}/dashboard" style="display:inline-block;background:#09090b;color:#fff;padding:10px 14px;border-radius:6px;text-decoration:none">Open ZEXVRO</a></p>
-    </div>
-    """
-    return ses.send_email(
-        Source=source_email,
-        Destination={"ToAddresses": [recipient_email]},
-        Message={
-            "Subject": {"Data": f"You have been invited to {safe_workspace} on ZEXVRO"},
-            "Body": {"Html": {"Data": html_body}},
-        },
+def build_invite_accept_url(token, frontend_url=None):
+    """Always build a tokenized accept URL. Never fall back to bare /dashboard."""
+    clean = (token or "").strip()
+    if not clean:
+        raise ValueError("invite token is required for accept URL")
+    base = (frontend_url or os.environ.get("FRONTEND_URL") or "https://console.zexvro.in").rstrip("/")
+    return f"{base}/invite/accept?token={quote(clean, safe='')}"
+
+
+def send_invite_email(recipient_email, workspace_name, inviter_name, role, token=None, expires_at=None):
+    """Send branded workspace invite via Brevo."""
+    accept_url = build_invite_accept_url(token)
+    expires_label = _format_invite_expiry(expires_at) if expires_at else ""
+
+    try:
+        from email_templates import render_workspace_invite
+    except ImportError:
+        try:
+            from scratch_lambda.email_templates import render_workspace_invite  # type: ignore
+        except ImportError:
+            render_workspace_invite = None
+
+    if render_workspace_invite:
+        subject, html_body, text_body = render_workspace_invite(
+            recipient_email=recipient_email,
+            workspace_name=workspace_name or "a ZEXVRO workspace",
+            inviter_name=inviter_name or "A teammate",
+            role=role or "Developer",
+            accept_url=accept_url,
+            expires_label=expires_label,
+        )
+    else:
+        safe_workspace = workspace_name or "a ZEXVRO workspace"
+        safe_role = role or "Developer"
+        subject = f"ZEXVRO · Join {safe_workspace} as {safe_role}"
+        html_body = f"<p>Accept: <a href=\"{accept_url}\">{accept_url}</a></p>"
+        text_body = f"Accept: {accept_url}"
+
+    result = brevo_send_email(
+        to=recipient_email,
+        subject=subject,
+        html=html_body,
+        text=text_body,
+        tags=["zexvro-invite", "workspace-iam"],
     )
+    return {"MessageId": result.get("messageId"), **result}
+
+
+def _format_invite_expiry(expires_at):
+    try:
+        ms = int(expires_at)
+        return time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(ms / 1000.0))
+    except Exception:
+        return str(expires_at)
+
+
+def find_workspace_invite(token):
+    """Scan workspaces for an invitation with the given accept token."""
+    if not token:
+        return None, None
+    try:
+        res = workspaces_table.scan()
+        for item in res.get("Items", []):
+            for invite in item.get("invitations") or []:
+                if invite.get("token") == token:
+                    return item, invite
+    except Exception:
+        return None, None
+    return None, None
 
 
 def get_username_from_auth(event):
@@ -833,11 +1207,30 @@ def lambda_handler(event, context):
         if auth_error:
             return auth_error
 
+        caller_email = _caller_email(event, username)
         res = workspaces_table.query(
             KeyConditionExpression=Key("ownerId").eq(username)
         )
-        workspaces = [normalize_workspace_item(item) for item in res.get("Items", [])]
-        return respond(200, {"workspaces": workspaces})
+        owned = [normalize_workspace_item(item) for item in res.get("Items", [])]
+        # Also query by email if Cognito username != ownerId used at create time
+        if caller_email and caller_email != _norm_identity(username):
+            try:
+                res_email = workspaces_table.query(
+                    KeyConditionExpression=Key("ownerId").eq(caller_email)
+                )
+                for item in res_email.get("Items", []):
+                    wid = item.get("workspaceId") or item.get("id")
+                    if not any((w.get("workspaceId") or w.get("id")) == wid for w in owned):
+                        owned.append(normalize_workspace_item(item))
+            except Exception:
+                pass
+        shared = list_shared_workspaces_for_user(username, email=caller_email)
+        by_id = {}
+        for w in owned + shared:
+            wid = w.get("workspaceId") or w.get("id")
+            if wid:
+                by_id[wid] = w
+        return respond(200, {"workspaces": list(by_id.values())})
 
     elif path == "/api/workspaces" and http_method == "POST":
         username, auth_error = require_username(event, headers)
@@ -845,6 +1238,22 @@ def lambda_handler(event, context):
             return auth_error
 
         now = int(time.time() * 1000)
+        name = (body.get("name") or "Untitled Workspace").strip()
+        # Dedupe: if owner already has a workspace with the same name, return it
+        try:
+            existing_res = workspaces_table.query(
+                KeyConditionExpression=Key("ownerId").eq(username)
+            )
+            for existing in existing_res.get("Items", []):
+                if str(existing.get("name") or "").strip().lower() == name.lower():
+                    return respond(200, {
+                        "status": "success",
+                        "workspace": normalize_workspace_item(existing),
+                        "deduped": True,
+                    })
+        except Exception as exc:
+            print(f"[create workspace] dedupe query failed: {exc}")
+
         workspace_id = body.get("workspaceId") or body.get("id") or create_id("ws")
         members = body.get("members") or [{
             "id": username,
@@ -859,13 +1268,25 @@ def lambda_handler(event, context):
             "ownerId": username,
             "workspaceId": workspace_id,
             "id": workspace_id,
-            "name": body.get("name", "Untitled Workspace"),
+            "name": name,
             "slug": body.get("slug", workspace_id),
             "plan": body.get("plan", "Team workspace"),
             "createdAt": body.get("createdAt", now),
             "members": members,
         }
+        # Default new workspaces to testnet (no ZCR burn until mainnet switch).
+        settings = item.get("settings") if isinstance(item.get("settings"), dict) else {}
+        settings = {
+            **settings,
+            "environment": (settings.get("environment") or "testnet"),
+            "defaultNetwork": settings.get("defaultNetwork") or "Stellar Testnet",
+        }
+        item["settings"] = settings
         workspaces_table.put_item(Item=to_dynamodb_value(item))
+        try:
+            get_credits_service().ensure_balance_row(workspace_id, actor_id=username)
+        except Exception as exc:
+            print(f"[create workspace] starter credits failed: {exc}")
         return respond(200, {"status": "success", "workspace": normalize_workspace_item(item)})
 
     # Route: POST /api/workspaces/{id}/invite
@@ -884,12 +1305,28 @@ def lambda_handler(event, context):
         if not workspace:
             return respond(404, {"error": "not_found", "error_description": "Workspace not found"})
 
+        _, role_err = require_workspace_role(workspace, username, _TEAM_INVITE_ROLES)
+        if role_err:
+            return role_err
+
+        invited_role = body.get("role", "Developer")
+        if invited_role not in ("Admin", "Developer", "Finance", "Viewer", "Agent"):
+            return respond(400, {
+                "error": "invalid_request",
+                "error_description": "Invalid invite role",
+            })
+        if invited_role == "Owner":
+            return respond(400, {
+                "error": "invalid_request",
+                "error_description": "Cannot invite as Owner",
+            })
+
         now = int(time.time() * 1000)
         member = {
             "id": body.get("id") or create_id("member"),
             "email": body.get("email", ""),
             "name": body.get("name") or body.get("email", ""),
-            "role": body.get("role", "Developer"),
+            "role": invited_role,
             "status": body.get("status", "invited"),
             "joinedAt": body.get("joinedAt", now),
         }
@@ -904,6 +1341,35 @@ def lambda_handler(event, context):
         )
         return respond(200, {"status": "success", "member": member, "workspace": normalize_workspace_item(updated)})
 
+    # Route: GET /api/workspaces/{id} — full workspace for members (roster sync)
+    elif (
+        path.startswith("/api/workspaces/")
+        and http_method == "GET"
+        and path.count("/") == 3
+        and not path.endswith("/invite")
+    ):
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        workspace_id = path.strip("/").split("/")[-1]
+        caller_email = _caller_email(event, username)
+        workspace, access_err = require_workspace_access(workspace_id, username, email=caller_email)
+        if access_err and workspace is not None:
+            return access_err
+        if not workspace:
+            # Soft fallback: scan by id even if access helper returned None
+            workspace = find_workspace_by_id(workspace_id)
+        if not workspace:
+            return respond(404, {"error": "not_found", "error_description": "Workspace not found"})
+        # If found, ensure caller is owner or member
+        role = resolve_workspace_member_role(workspace, username, email=caller_email)
+        if not role:
+            return respond(403, {
+                "error": "forbidden",
+                "error_description": "You are not a member of this workspace",
+            })
+        return respond(200, {"workspace": normalize_workspace_item(workspace)})
+
     # Route: PUT/DELETE /api/workspaces/{id}
     elif path.startswith("/api/workspaces/") and http_method == "PUT":
         username, auth_error = require_username(event, headers)
@@ -912,16 +1378,430 @@ def lambda_handler(event, context):
 
         workspace_id = path.split("/")[-1]
         res = workspaces_table.get_item(Key={"ownerId": username, "workspaceId": workspace_id})
-        if not res.get("Item"):
+        workspace = res.get("Item")
+        if not workspace:
             return respond(404, {"error": "not_found", "error_description": "Workspace not found"})
 
+        _, role_err = require_workspace_role(workspace, username, _SETTINGS_WRITE_ROLES)
+        if role_err:
+            return role_err
+
+        # Allow Owner/Admin to update members + invitations (IAM invite flow).
+        now_ms = int(time.time() * 1000)
         updated = update_item(
             workspaces_table,
             {"ownerId": username, "workspaceId": workspace_id},
-            {**body, "updatedAt": int(time.time() * 1000)},
-            {"ownerId", "workspaceId", "id", "createdAt", "members"},
+            {**body, "updatedAt": now_ms},
+            {"ownerId", "workspaceId", "id", "createdAt"},
         )
+        caller_email = _caller_email(event, username)
+        changed = [k for k in ("name", "plan", "settings", "members", "invitations") if k in body]
+        if changed:
+            append_audit_event(
+                workspace_id,
+                action="workspace.updated",
+                actor_id=username,
+                actor_email=caller_email,
+                target=workspace_id,
+                meta={"fields": changed},
+            )
         return respond(200, {"status": "success", "workspace": normalize_workspace_item(updated)})
+
+    # Route: GET /api/workspaces/{id}/audit — durable workspace audit ledger
+    elif (
+        path.startswith("/api/workspaces/")
+        and path.endswith("/audit")
+        and http_method == "GET"
+    ):
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        parts = path.strip("/").split("/")
+        # api / workspaces / {id} / audit
+        if len(parts) < 4:
+            return respond(400, {"error": "invalid_request", "error_description": "workspaceId required"})
+        workspace_id = parts[2]
+        caller_email = _caller_email(event, username)
+        workspace, access_err = require_workspace_access(workspace_id, username, email=caller_email)
+        if access_err:
+            return access_err
+        if not workspace:
+            workspace = find_workspace_by_id(workspace_id)
+        if not workspace:
+            return respond(404, {"error": "not_found", "error_description": "Workspace not found"})
+        role = resolve_workspace_member_role(workspace, username, email=caller_email)
+        if not role:
+            return respond(403, {
+                "error": "forbidden",
+                "error_description": "You are not a member of this workspace",
+            })
+        query = get_query_params(event)
+        try:
+            limit = int(query.get("limit") or 50)
+        except (TypeError, ValueError):
+            limit = 50
+        events, next_cursor = list_audit_events(
+            workspace_id,
+            limit=limit,
+            cursor=query.get("cursor"),
+            project_id=query.get("projectId"),
+        )
+        return respond(200, {
+            "events": events,
+            "nextCursor": next_cursor,
+            "workspaceId": workspace_id,
+        })
+
+    # --- Credits: GET balance ---
+    elif (
+        path.startswith("/api/workspaces/")
+        and path.endswith("/credits")
+        and http_method == "GET"
+        and path.count("/") == 4
+    ):
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        parts = path.strip("/").split("/")
+        workspace_id = parts[2] if len(parts) >= 4 else ""
+        caller_email = _caller_email(event, username)
+        workspace, access_err = require_workspace_access(workspace_id, username, email=caller_email)
+        if access_err:
+            return access_err
+        if not workspace:
+            workspace = find_workspace_by_id(workspace_id)
+        if not workspace or not resolve_workspace_member_role(workspace, username, email=caller_email):
+            return respond(403, {"error": "forbidden", "error_description": "Not a workspace member"})
+        try:
+            svc = get_credits_service()
+            bal = svc.get_balance(workspace_id)
+            env = get_workspace_environment(workspace_id)
+            ledger, _ = svc.list_ledger(workspace_id, limit=10)
+            return respond(200, {
+                "credits": bal,
+                "environment": env,
+                "burnsOnUse": env == "mainnet",
+                "recent": ledger,
+            })
+        except Exception as exc:
+            return respond(502, {"error": "credits_error", "error_description": str(exc)})
+
+    # --- Credits: GET ledger ---
+    elif (
+        path.startswith("/api/workspaces/")
+        and "/credits/ledger" in path
+        and http_method == "GET"
+    ):
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        parts = path.strip("/").split("/")
+        workspace_id = parts[2] if len(parts) >= 4 else ""
+        caller_email = _caller_email(event, username)
+        workspace, access_err = require_workspace_access(workspace_id, username, email=caller_email)
+        if access_err:
+            return access_err
+        if not workspace:
+            workspace = find_workspace_by_id(workspace_id)
+        if not workspace or not resolve_workspace_member_role(workspace, username, email=caller_email):
+            return respond(403, {"error": "forbidden", "error_description": "Not a workspace member"})
+        query = get_query_params(event)
+        try:
+            limit = int(query.get("limit") or 50)
+        except (TypeError, ValueError):
+            limit = 50
+        try:
+            events, next_cursor = get_credits_service().list_ledger(
+                workspace_id, limit=limit, cursor=query.get("cursor"),
+            )
+            return respond(200, {"events": events, "nextCursor": next_cursor, "workspaceId": workspace_id})
+        except Exception as exc:
+            return respond(502, {"error": "credits_error", "error_description": str(exc)})
+
+    # --- Credits: POST consume ---
+    elif (
+        path.startswith("/api/workspaces/")
+        and path.endswith("/credits/consume")
+        and http_method == "POST"
+    ):
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        parts = path.strip("/").split("/")
+        workspace_id = parts[2] if len(parts) >= 4 else ""
+        caller_email = _caller_email(event, username)
+        workspace, access_err = require_workspace_access(workspace_id, username, email=caller_email)
+        if access_err:
+            return access_err
+        if not workspace:
+            workspace = find_workspace_by_id(workspace_id)
+        if not workspace or not resolve_workspace_member_role(workspace, username, email=caller_email):
+            return respond(403, {"error": "forbidden", "error_description": "Not a workspace member"})
+        service = (body.get("service") or "platform").strip()
+        action = (body.get("action") or "use").strip()
+        amount = body.get("amount")
+        try:
+            result = get_credits_service().consume(
+                workspace_id,
+                service=service,
+                action=action,
+                amount=int(amount) if amount is not None else None,
+                ref=(body.get("ref") or "").strip(),
+                actor_id=username,
+                actor_email=caller_email,
+                meta=body.get("meta") if isinstance(body.get("meta"), dict) else None,
+            )
+            return respond(200, {"status": "success", **result})
+        except InsufficientCredits as exc:
+            return respond(402, {
+                "error": "insufficient_credits",
+                "error_description": str(exc),
+                "balance": getattr(exc, "balance", 0),
+                "cost": getattr(exc, "cost", 0),
+            })
+        except Exception as exc:
+            return respond(502, {"error": "credits_error", "error_description": str(exc)})
+
+    # --- Credits: POST redeem promo ---
+    elif (
+        path.startswith("/api/workspaces/")
+        and path.endswith("/credits/redeem")
+        and http_method == "POST"
+    ):
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        parts = path.strip("/").split("/")
+        workspace_id = parts[2] if len(parts) >= 4 else ""
+        caller_email = _caller_email(event, username)
+        workspace = find_workspace_by_id(workspace_id)
+        if not workspace:
+            return respond(404, {"error": "not_found", "error_description": "Workspace not found"})
+        _, role_err = require_workspace_role(workspace, username, _SETTINGS_WRITE_ROLES, email=caller_email)
+        if role_err:
+            return role_err
+        code = (body.get("code") or "").strip()
+        try:
+            result = get_credits_service().redeem_promo(
+                workspace_id, code, actor_id=username, actor_email=caller_email,
+            )
+            return respond(200, {"status": "success", **result})
+        except PromoError as exc:
+            return respond(400, {
+                "error": getattr(exc, "code", "promo_error"),
+                "error_description": getattr(exc, "message", str(exc)),
+            })
+        except Exception as exc:
+            return respond(502, {"error": "credits_error", "error_description": str(exc)})
+
+    # --- Internal top-up (NFT service payment gateway) ---
+    elif path == "/api/internal/credits/topup" and http_method == "POST":
+        secret = (
+            headers.get("x-internal-secret")
+            or headers.get("X-Internal-Secret")
+            or ""
+        ).strip()
+        if not INTERNAL_CREDITS_SECRET or secret != INTERNAL_CREDITS_SECRET:
+            return respond(401, {"error": "unauthorized", "error_description": "Invalid internal secret"})
+        workspace_id = (body.get("workspaceId") or "").strip()
+        amount = body.get("amount")
+        checkout_id = (body.get("nftCheckoutId") or body.get("checkoutId") or "").strip()
+        if not workspace_id or amount is None:
+            return respond(400, {"error": "invalid_request", "error_description": "workspaceId and amount required"})
+        try:
+            result = get_credits_service().grant(
+                workspace_id,
+                int(amount),
+                reason="nft_credit_pack",
+                actor_id="nft-service",
+                ref=f"nft_topup:{checkout_id}" if checkout_id else f"nft_topup:{uuid.uuid4()}",
+                meta={
+                    "nftCheckoutId": checkout_id,
+                    "collectionId": body.get("collectionId"),
+                    "tokenId": body.get("tokenId"),
+                    "txHash": body.get("txHash"),
+                    "usdcAmount": body.get("usdcAmount"),
+                },
+                tx_type="topup",
+            )
+            return respond(200, {"status": "success", **result})
+        except Exception as exc:
+            return respond(502, {"error": "credits_error", "error_description": str(exc)})
+
+    # --- Platform founder APIs ---
+    elif path == "/api/platform/me" and http_method == "GET":
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        email = _caller_email(event, username)
+        return respond(200, {
+            "username": username,
+            "email": email,
+            "platformAdmin": is_platform_admin(username, email),
+        })
+
+    elif path == "/api/platform/analytics" and http_method == "GET":
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        denied = require_platform_admin(event, username)
+        if denied:
+            return denied
+        try:
+            # Full table scan (paginated). Collapse spam duplicates: many auto-create
+            # races left N× "X's Workspace" rows per owner — count unique owner+name.
+            workspaces = []
+            scan_kwargs = {}
+            while True:
+                res = workspaces_table.scan(**scan_kwargs)
+                workspaces.extend(res.get("Items") or [])
+                lek = res.get("LastEvaluatedKey")
+                if not lek:
+                    break
+                scan_kwargs["ExclusiveStartKey"] = lek
+
+            raw_row_count = len(workspaces)
+            # Prefer newest row per (ownerId, normalized name)
+            canonical = {}
+            for raw in workspaces:
+                w = normalize_workspace_item(dict(raw))
+                wid = (w.get("workspaceId") or w.get("id") or "").strip()
+                if not wid or wid.startswith("ws_smoke") or wid.startswith("ws_e2e"):
+                    continue
+                owner = _norm_identity(w.get("ownerId"))
+                name = (w.get("name") or "").strip().lower()
+                if not owner:
+                    continue
+                key = (owner, name or wid)
+                prev = canonical.get(key)
+                created = int(w.get("createdAt") or w.get("updatedAt") or 0)
+                if not prev or created >= int(prev.get("createdAt") or prev.get("updatedAt") or 0):
+                    canonical[key] = w
+
+            unique_workspaces = list(canonical.values())
+            env_counts = {"testnet": 0, "mainnet": 0}
+            for w in unique_workspaces:
+                env = w.get("environment") or "testnet"
+                if env not in env_counts:
+                    env_counts[env] = 0
+                env_counts[env] += 1
+
+            owners = {_norm_identity(w.get("ownerId")) for w in unique_workspaces if w.get("ownerId")}
+            # Drop known non-human/dev owners from "users" if desired — keep count honest
+            user_owners = {o for o in owners if o and o not in ("stellar_dev",)}
+
+            total_zcr = 0
+            credit_accounts = 0
+            cred_kwargs = {}
+            while True:
+                cred_scan = credits_table.scan(**cred_kwargs)
+                for c in (cred_scan.get("Items") or []):
+                    credit_accounts += 1
+                    total_zcr += int(c.get("balance") or 0)
+                lek = cred_scan.get("LastEvaluatedKey")
+                if not lek:
+                    break
+                cred_kwargs["ExclusiveStartKey"] = lek
+
+            promo_scan = promo_codes_table.scan(Limit=200)
+            promos = promo_scan.get("Items") or []
+            dup_rows = max(0, raw_row_count - len(unique_workspaces))
+            note = None
+            if dup_rows > 0:
+                note = (
+                    f"Showing {len(unique_workspaces)} unique workspaces "
+                    f"(collapsed {dup_rows} duplicate Dynamo rows from auto-create spam)."
+                )
+            return respond(200, {
+                "workspaceCount": len(unique_workspaces),
+                "rawWorkspaceRows": raw_row_count,
+                "duplicateWorkspaceRows": dup_rows,
+                "ownerCount": len(user_owners),
+                "environmentCounts": env_counts,
+                "totalZcrInCirculation": total_zcr,
+                "creditAccountCount": credit_accounts,
+                "activePromoCount": sum(1 for p in promos if (p.get("status") or "") == "active"),
+                "promoCount": len(promos),
+                "note": note,
+            })
+        except Exception as exc:
+            return respond(502, {"error": "analytics_error", "error_description": str(exc)})
+
+    elif path == "/api/platform/credits/grant" and http_method == "POST":
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        denied = require_platform_admin(event, username)
+        if denied:
+            return denied
+        workspace_id = (body.get("workspaceId") or "").strip()
+        amount = body.get("amount")
+        if not workspace_id or amount is None:
+            return respond(400, {"error": "invalid_request", "error_description": "workspaceId and amount required"})
+        try:
+            result = get_credits_service().grant(
+                workspace_id,
+                int(amount),
+                reason=(body.get("reason") or "platform_admin_grant"),
+                actor_id=username,
+                actor_email=_caller_email(event, username),
+                ref=(body.get("ref") or "").strip() or f"admin_grant:{uuid.uuid4()}",
+            )
+            return respond(200, {"status": "success", **result})
+        except Exception as exc:
+            return respond(502, {"error": "credits_error", "error_description": str(exc)})
+
+    elif path == "/api/platform/promo-codes" and http_method == "GET":
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        denied = require_platform_admin(event, username)
+        if denied:
+            return denied
+        try:
+            return respond(200, {"promos": get_credits_service().list_promos()})
+        except Exception as exc:
+            return respond(502, {"error": "promo_error", "error_description": str(exc)})
+
+    elif path == "/api/platform/promo-codes" and http_method == "POST":
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        denied = require_platform_admin(event, username)
+        if denied:
+            return denied
+        try:
+            promo = get_credits_service().create_promo(
+                body.get("code") or "",
+                int(body.get("creditAmount") or 0),
+                max_redemptions=body.get("maxRedemptions"),
+                max_per_workspace=int(body.get("maxPerWorkspace") or 1),
+                starts_at=body.get("startsAt"),
+                expires_at=body.get("expiresAt"),
+                created_by=username,
+                note=body.get("note") or "",
+                eligible_environments=body.get("eligibleEnvironments"),
+            )
+            return respond(200, {"status": "success", "promo": promo})
+        except Exception as exc:
+            return respond(400, {"error": "promo_error", "error_description": str(exc)})
+
+    elif path.startswith("/api/platform/promo-codes/") and http_method == "POST" and path.endswith("/disable"):
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        denied = require_platform_admin(event, username)
+        if denied:
+            return denied
+        code = path.strip("/").split("/")[-2] if path.endswith("/disable") else ""
+        # path: api/platform/promo-codes/{code}/disable
+        parts = path.strip("/").split("/")
+        code = parts[3] if len(parts) >= 5 else ""
+        try:
+            promo = get_credits_service().disable_promo(code)
+            return respond(200, {"status": "success", "promo": promo})
+        except Exception as exc:
+            return respond(400, {"error": "promo_error", "error_description": str(exc)})
 
     elif path.startswith("/api/workspaces/") and http_method == "DELETE":
         username, auth_error = require_username(event, headers)
@@ -943,10 +1823,15 @@ def lambda_handler(event, context):
         if not workspace_id:
             return respond(400, {"error": "invalid_request", "error_description": "workspaceId is required"})
 
+        # Auth only for list — invitees may not be written to Dynamo members yet (local accept).
+        # Membership is enforced on write below.
         res = projects_table.query(
             KeyConditionExpression=Key("workspaceId").eq(workspace_id)
         )
         projects = [normalize_project_item(item) for item in res.get("Items", [])]
+        # Ensure workspaceId is set for FE filtering
+        for p in projects:
+            p.setdefault("workspaceId", workspace_id)
         return respond(200, {"projects": projects})
 
     elif path == "/api/projects" and http_method == "POST":
@@ -957,6 +1842,12 @@ def lambda_handler(event, context):
         workspace_id = body.get("workspaceId")
         if not workspace_id:
             return respond(400, {"error": "invalid_request", "error_description": "workspaceId is required"})
+
+        caller_email = _caller_email(event, username)
+        workspace_row, access_err = require_workspace_access(workspace_id, username, email=caller_email)
+        # Soft: if workspace row missing, allow create (legacy); if found without role, forbid
+        if workspace_row is not None and access_err:
+            return access_err
 
         now = int(time.time() * 1000)
         project_id = body.get("projectId") or body.get("id") or create_id("proj")
@@ -970,6 +1861,15 @@ def lambda_handler(event, context):
             "owner": body.get("owner", username),
         }
         projects_table.put_item(Item=to_dynamodb_value(item))
+        append_audit_event(
+            workspace_id,
+            action="project.created",
+            actor_id=username,
+            actor_email=caller_email,
+            target=body.get("name") or project_id,
+            project_id=project_id,
+            meta={"projectId": project_id},
+        )
         return respond(200, {"status": "success", "project": normalize_project_item(item)})
 
     # Route: PUT/DELETE /api/projects/{id}
@@ -1568,26 +2468,240 @@ def lambda_handler(event, context):
 
         return respond(200, {"status": "success"})
 
-    # Route: POST /api/invite/send
+    # Route: POST /api/invite/send — IAM-style tokenized invite email
     elif path == "/api/invite/send" and http_method == "POST":
         username, auth_error = require_username(event, headers)
         if auth_error:
             return auth_error
 
-        recipient_email = body.get("email")
-        if not recipient_email:
-            return respond(400, {"error": "invalid_request", "error_description": "email is required"})
+        recipient_email = (body.get("email") or "").strip().lower()
+        if not recipient_email or not EMAIL_RE.match(recipient_email):
+            return respond(400, {"error": "invalid_request", "error_description": "valid email is required"})
+
+        token = (body.get("token") or "").strip()
+        if not token:
+            return respond(400, {"error": "invalid_request", "error_description": "token is required"})
+
+        role = body.get("role") or "Developer"
+        workspace_name = body.get("workspaceName")
+        try:
+            accept_url = build_invite_accept_url(token)
+        except ValueError as exc:
+            return respond(400, {"error": "invalid_request", "error_description": str(exc)})
 
         try:
             send_res = send_invite_email(
                 recipient_email,
-                body.get("workspaceName"),
+                workspace_name,
                 body.get("inviterName") or username,
-                body.get("role"),
+                role,
+                token=token,
+                expires_at=body.get("expiresAt"),
             )
-            return respond(200, {"status": "success", "messageId": send_res.get("MessageId")})
+            caller_email = _caller_email(event, username)
+            ws_id = (body.get("workspaceId") or "").strip()
+            if ws_id:
+                append_audit_event(
+                    ws_id,
+                    action="invite.sent",
+                    actor_id=username,
+                    actor_email=caller_email,
+                    target=recipient_email,
+                    meta={
+                        "role": role,
+                        "inviteId": body.get("inviteId") or "",
+                        "workspaceName": workspace_name or "",
+                    },
+                )
+            return respond(200, {
+                "status": "success",
+                "messageId": send_res.get("MessageId"),
+                "acceptUrl": accept_url,
+            })
+        except ValueError as exc:
+            return respond(400, {"error": "invalid_request", "error_description": str(exc)})
         except Exception as exc:
             return respond(502, {"error": "email_send_failed", "error_description": str(exc)})
+
+    # Route: GET /api/invite/{token} — preview invite (auth optional for UX)
+    elif path.startswith("/api/invite/") and http_method == "GET" and path.count("/") == 3:
+        token = path.strip("/").split("/")[-1]
+        workspace, invite = find_workspace_invite(token)
+        if not invite:
+            return respond(404, {"error": "not_found", "error_description": "Invitation not found"})
+        status = invite.get("status", "pending")
+        expires_at = int(invite.get("expiresAt") or 0)
+        if status == "pending" and expires_at and expires_at < int(time.time() * 1000):
+            status = "expired"
+        return respond(200, {
+            "invite": {
+                "id": invite.get("id"),
+                "workspaceId": invite.get("workspaceId") or workspace.get("workspaceId") or workspace.get("id"),
+                "workspaceName": invite.get("workspaceName") or workspace.get("name"),
+                "email": invite.get("email"),
+                "role": invite.get("role"),
+                "status": status,
+                "expiresAt": expires_at,
+                "invitedBy": invite.get("invitedBy") or invite.get("invitedByEmail") or "",
+            }
+        })
+
+    # Route: POST /api/invite/accept — bind principal to workspace role
+    elif path == "/api/invite/accept" and http_method == "POST":
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+
+        token = (body.get("token") or "").strip()
+        if not token:
+            return respond(400, {"error": "invalid_request", "error_description": "token is required"})
+
+        workspace, invite = find_workspace_invite(token)
+        if not invite or not workspace:
+            return respond(404, {"error": "not_found", "error_description": "Invitation not found"})
+
+        status = invite.get("status", "pending")
+        expires_at = int(invite.get("expiresAt") or 0)
+        now_ms = int(time.time() * 1000)
+        if status == "revoked":
+            return respond(410, {"error": "revoked", "error_description": "Invitation was revoked"})
+        if expires_at and expires_at < now_ms and status != "accepted":
+            return respond(410, {"error": "expired", "error_description": "Invitation has expired"})
+
+        invite_email = (invite.get("email") or "").strip().lower()
+        caller_email = _caller_email(event, username)
+
+        if invite_email and caller_email and invite_email != caller_email:
+            return respond(403, {
+                "error": "principal_mismatch",
+                "error_description": f"Sign in as {invite_email} to accept this invitation",
+            })
+
+        role = invite.get("role") or "Viewer"
+        owner_id = workspace.get("ownerId")
+        workspace_id = workspace.get("workspaceId") or workspace.get("id")
+        workspace_name = invite.get("workspaceName") or workspace.get("name") or "Workspace"
+        members = list(workspace.get("members") or [])
+        members = [
+            m for m in members
+            if (m.get("email") or "").strip().lower() != invite_email
+            and m.get("inviteId") != invite.get("id")
+        ]
+        members.append({
+            "id": username,
+            "email": invite_email or caller_email,
+            "name": (invite_email or caller_email or username).split("@")[0],
+            "role": role,
+            "status": "active",
+            "joinedAt": now_ms,
+            "principalType": "serviceAccount" if role == "Agent" else "user",
+            "principalId": username,
+            "roleBoundAt": now_ms,
+            "roleBoundBy": invite.get("invitedByEmail") or invite.get("invitedBy"),
+            "inviteId": invite.get("id"),
+        })
+
+        invitations = []
+        for inv in workspace.get("invitations") or []:
+            if inv.get("id") == invite.get("id") or inv.get("token") == token:
+                invitations.append({
+                    **inv,
+                    "status": "accepted",
+                    "acceptedAt": now_ms,
+                    "acceptedBy": username,
+                })
+            else:
+                invitations.append(inv)
+
+        updated = update_item(
+            workspaces_table,
+            {"ownerId": owner_id, "workspaceId": workspace_id},
+            {"members": members, "invitations": invitations, "updatedAt": now_ms},
+            {"ownerId", "workspaceId", "id"},
+        )
+        if status != "accepted":
+            append_audit_event(
+                workspace_id,
+                action="invite.accepted",
+                actor_id=username,
+                actor_email=invite_email or caller_email,
+                target=invite_email or caller_email,
+                meta={
+                    "role": role,
+                    "inviteId": invite.get("id") or "",
+                    "workspaceName": workspace_name,
+                },
+            )
+        return respond(200, {
+            "status": "success",
+            "workspaceId": workspace_id,
+            "workspaceName": workspace_name,
+            "role": role,
+            "email": invite_email or caller_email,
+            "alreadyAccepted": status == "accepted",
+            "invite": {
+                "id": invite.get("id"),
+                "workspaceId": workspace_id,
+                "workspaceName": workspace_name,
+                "email": invite_email,
+                "role": role,
+                "status": "accepted",
+                "expiresAt": expires_at,
+                "invitedBy": invite.get("invitedBy") or invite.get("invitedByEmail") or "",
+            },
+            "workspace": normalize_workspace_item(updated),
+        })
+
+    # Route: POST /api/invite/revoke
+    elif path == "/api/invite/revoke" and http_method == "POST":
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        workspace_id = body.get("workspaceId")
+        invite_id = body.get("inviteId")
+        if not workspace_id or not invite_id:
+            return respond(400, {"error": "invalid_request", "error_description": "workspaceId and inviteId required"})
+        res = workspaces_table.get_item(Key={"ownerId": username, "workspaceId": workspace_id})
+        workspace = res.get("Item")
+        if not workspace:
+            # try scan by workspace id for non-owner admins later; owner-only for v1
+            return respond(404, {"error": "not_found", "error_description": "Workspace not found"})
+        _, role_err = require_workspace_role(workspace, username, _TEAM_INVITE_ROLES)
+        if role_err:
+            return role_err
+        now_ms = int(time.time() * 1000)
+        invitations = []
+        for inv in workspace.get("invitations") or []:
+            if inv.get("id") == invite_id:
+                invitations.append({**inv, "status": "revoked", "revokedAt": now_ms})
+            else:
+                invitations.append(inv)
+        members = [
+            m for m in (workspace.get("members") or [])
+            if not (m.get("inviteId") == invite_id and m.get("status") in ("invited", "pending"))
+        ]
+        updated = update_item(
+            workspaces_table,
+            {"ownerId": username, "workspaceId": workspace_id},
+            {"invitations": invitations, "members": members, "updatedAt": now_ms},
+            {"ownerId", "workspaceId", "id"},
+        )
+        caller_email = _caller_email(event, username)
+        revoked_email = ""
+        for inv in workspace.get("invitations") or []:
+            if inv.get("id") == invite_id:
+                revoked_email = (inv.get("email") or "").strip().lower()
+                break
+        append_audit_event(
+            workspace_id,
+            action="invite.revoked",
+            actor_id=username,
+            actor_email=caller_email,
+            target=revoked_email or invite_id,
+            meta={"inviteId": invite_id},
+            severity="warning",
+        )
+        return respond(200, {"status": "success", "workspace": normalize_workspace_item(updated)})
 
     # Route: POST /api/waitlist (public join)
     elif path == "/api/waitlist" and http_method == "POST":

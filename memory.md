@@ -1064,3 +1064,161 @@ Use `None` for empty fields. Do not delete fields.
 - Docs: `docs/gate_integrator.md`.
 - Follow-ups: Deploy console Pages with `VITE_AGENT_AUTH_API_URL=https://api.zexvro.in/gate`; optional purge CF cache; photo bank for image captchas.
 - Verification: unit tests 63/63; live health + admin sites + challenge.
+
+## 2026-07-21 - Codex with Nabil - RBAC system v1
+
+- Service or area: Platform RBAC (Nabil ticket #1).
+- Files changed: `frontend/src/rbac/permissions.ts`, `useWorkspaceRbac.ts`, `RequirePermission.tsx`, `permissions.test.ts`, `stores/workspace.ts`, `components/layout/DashboardLayout.tsx`, `components/workspace/WorkspaceTeam.tsx`, `WorkspaceSettings.tsx`, `docs/DocsLibrary.tsx`, `scratch_lambda/lambda_function.py`, `memory.md`.
+- Summary: Implemented workspace RBAC matrix (Owner/Admin/Developer/Finance/Viewer/Agent), permission helpers, sidebar section filtering, Team/Settings gates, role change for Admins, owner email on workspace create, and Lambda invite/settings write role checks.
+- Decisions: Accepted - FE enforces via `memberCan` + section map; invited users limited to view until active. Accepted - Invite roles exclude Owner. Accepted - Lambda invite requires Owner/Admin; workspace PUT requires Owner/Admin.
+- Follow-ups: Credits system; team invite SES reliability; backfill empty owner emails on legacy workspaces; optional route-level beforeLoad guards for deep links.
+- Blockers: None for v1 FE + Lambda policy.
+- Verification: `vitest` rbac 9/9; `tsc --noEmit` clean.
+
+## 2026-07-21 - Codex with Nabil - IAM invite/accept flow
+
+- Service or area: Platform team IAM (Nabil — invite fix + RBAC depth).
+- Files changed: `stores/types.ts`, `stores/workspace.ts`, `api/api.ts`, `WorkspaceTeam.tsx`, `AcceptInvite.tsx`, `router.tsx`, `DashboardLayout.tsx`, `rbac/permissions.ts`, `rbac/invite-flow.test.ts`, `scratch_lambda/lambda_function.py`, `memory.md`.
+- Summary: Tokenized workspace invitations (7-day TTL), accept page at `/invite/accept?token=…`, IAM-style Team UI (Members / Invitations / Roles), principal labels (`user:` / `serviceAccount:`), role bindings with boundAt/boundBy, Lambda email accept URL + get/accept/revoke invite APIs.
+- Decisions: Accepted - Invite is not membership until accept. Accepted - Accept requires matching signed-in email. Accepted - Local store works offline; Lambda is source of truth when reachable.
+- Follow-ups: Deploy Lambda + API Gateway routes for `/api/invite/*`; SES production domain; audit log entries on grant/accept/revoke.
+- Blockers: Hosted Lambda redeploy needed for email accept links in prod.
+- Verification: vitest rbac 12/12; tsc clean.
+
+## 2026-07-21 - Codex with Nabil - Brevo mail for invites
+
+- Service or area: platform mail (invites + future transactional).
+- Files changed: `scratch_lambda/brevo_mail.py` (new), `scratch_lambda/lambda_function.py` (SES → Brevo), `.env.example`, `scripts/test_brevo_mail.py`, local `.env` (gitignored key).
+- Summary: Replaced AWS SES invite sender with Brevo Transactional API. Shared `send_email()` helper for all backend mail. Smoke send succeeded (messageId returned).
+- Decisions: Accepted - MAIL_PROVIDER=brevo; server-only BREVO_API_KEY; sender defaults to verified Brevo account email until custom domain verified.
+- Follow-ups: Set BREVO_* on Lambda env + package `brevo_mail.py` in deploy zip; verify custom domain sender in Brevo for noreply@zexvro.in; rotate key if it was exposed in chat.
+- Blockers: None for local/API mail path once Lambda env is set.
+- Verification: Brevo account API ok; smoke send to zexvro@gmail.com returned 201 + messageId.
+
+## 2026-07-22 - Codex with Nabil - Branded email templates
+
+- Service or area: transactional mail design (Brevo).
+- Files changed: `scratch_lambda/email_templates.py`, `scratch_lambda/lambda_function.py` (invite uses templates), `scripts/preview_email_template.py`, `docs/email-previews/*`.
+- Summary: Dark brand email shell matching logo mark + UNIFIED WEB3 PAAS + BUILD·DEPLOY·SCALE·OWN. Workspace invite template with role details card + CTA. Generic shell for future mails.
+- Decisions: Accepted - table-based HTML; logo from MAIL_ASSET_BASE_URL/console brand path; CSS wordmark (not image) for reliability.
+- Follow-ups: Host logo on always-public CDN if console auth blocks /brand/*; add credits/audit templates when those features ship.
+- Verification: preview HTML written; Brevo send to snabilshaikh186@gmail.com 201.
+
+## 2026-07-22 - Codex with Nabil - Fix invite email not sending (local)
+
+- Service or area: Team invites / Brevo.
+- Root cause: FE called `http://localhost:8080/api/invite/send` but no local Lambda on 8080; errors were swallowed (`console.warn` only) while UI still showed invitation created.
+- Files changed: `frontend/scripts/invite-mail-middleware.mjs` (POST /api/invite/send → Brevo), `frontend/vite.config.ts` (plugin), `frontend/src/api/api.ts` (same-origin invite API), `frontend/src/stores/workspace.ts` (surface mail failures; resend pending), `WorkspaceTeam.tsx` (error copy + link).
+- Verification: middleware smoke → Brevo 200 + messageId to snabilshaikh186@gmail.com.
+- Follow-ups: **Restart Vite** so middleware loads; set BREVO_* on hosted Lambda for production invites.
+
+## 2026-07-22 - Codex with Nabil - All mail routes → Brevo (no localhost:8080)
+
+- Service or area: transactional mail routing.
+- Files: `frontend/src/services/mail/mailApi.ts` (single mail client), `api/api.ts`, removed `localhost:8080` defaults from DashboardLayout/AuthSessionProvider/DashboardApp/Settings/AgentStudio, invite tests mock Brevo path.
+- Decision: Accepted - Browser never holds BREVO_API_KEY; local mail = Vite `/api/invite/send` → api.brevo.com; prod = API Gateway/Lambda → Brevo.
+- Verification: tsc clean; rbac tests pass with mocked inviteApi.
+- Ops: Restart Vite after pull; ensure root `.env` has BREVO_*.
+
+## 2026-07-22 - Codex with Nabil - Cognito branded verification email + SES from domain
+
+- Service or area: AWS Cognito auth emails.
+- Problem: Cognito used COGNITO_DEFAULT → no-reply@verificationemail.com with plain AWS template.
+- Changes:
+  - Custom Message Lambda `zexvro-cognito-custom-message` attached (HTML brand: wordmark + code + logo).
+  - Email subject/message defaults set to ZEXVRO wording.
+  - SES domain identity `zexvro.in` created (DKIM PENDING) for From `no-reply@zexvro.in`.
+- Blocker: SES not verified yet — From still COGNITO_DEFAULT until DKIM CNAMEs are live.
+- DNS (CNAME):
+  - nl7yc3c5xhwadajsw3rj5yknhym7oka5._domainkey.zexvro.in → nl7yc3c5xhwadajsw3rj5yknhym7oka5.dkim.amazonses.com
+  - pdryyekdfqgyvzsdh7udjcqdp6tcgsq4._domainkey.zexvro.in → pdryyekdfqgyvzsdh7udjcqdp6tcgsq4.dkim.amazonses.com
+  - 2z6cczh6psbixbmd6jecbjmgojuubjh5._domainkey.zexvro.in → 2z6cczh6psbixbmd6jecbjmgojuubjh5.dkim.amazonses.com
+- After DNS: run `./scripts/cognito/configure-cognito-email.sh`
+- Scripts: `scripts/cognito/*`
+
+## 2026-07-22 - Codex with Nabil - Shared workspace after invite accept
+
+- Service or area: workspace IAM / invites (Nabil).
+- Problem: Invitee accepted invite but switcher only showed personal workspace — owner-keyed Dynamo list + `pullFromAWS` wiped local bind; accept on already-accepted failed.
+- Changes:
+  - Vite store: `memberships[email]` + `GET /api/me/workspaces`; accept upserts membership and returns `workspace` payload (idempotent re-accept).
+  - Lambda: `GET /api/workspaces` merges owned + shared (member scan); accept re-binds accepted invites and returns full workspace; PUT workspaces may update `members`/`invitations`.
+  - FE: `awsSync` merges remote + `/api/me/workspaces` + preserves local shared; AcceptInvite re-bind for already-accepted; `acceptInvitationLocal` no longer rejects accepted status.
+- Verification: vitest invite-flow + permissions 13/13; node smoke accept → me/workspaces lists shared ws.
+- Next: redeploy Lambda for prod list/accept; invitee hard-refresh and re-open accept link if needed.
+
+## 2026-07-22 - Codex with Nabil - Shared workspace projects visible
+
+- Problem: Invitee saw shared workspace but zero projects.
+- Cause: `pullFromAWS` only listed projects for `currentWorkspaceId` (usually personal), never shared ids; UI filters `p.workspaceId === route workspaceId`.
+- Fix: `loadProjectsForWorkspace` + load all accessible workspaces on pull; reload on workspace switch; Lambda GET projects sets workspaceId on items.
+- Redeploy Lambda optional for this FE fix.
+
+## 2026-07-22 - Codex with Nabil - Invitee saw 3× N4bi10p workspaces
+
+- Cause: local `.data` memberships kept smoke/e2e/accept stubs with same name, different ids.
+- Fix: collapse shared/owned by **name** (prefer real AWS over remote-owner stubs); drop `ws_smoke`/`ws_e2e`; membership store collapse; live poll projects every 8s for active workspace.
+- Cleaned local memberships for snabilshaikh186 → single `ws_mrghr0fe_rmfstk`.
+- Note: projects only appear under the **invited workspace id**; if owner created project on a different dup id, re-invite from the workspace that has the project.
+
+## 2026-07-22 - Codex with Nabil - NFT collections not shared with workspace members
+
+- Cause: NFT API stored `workspaceId` as `base64(userSub).base64(scope)` so list was per Cognito subject, not team.
+- Fix: team scope `team.<base64(storageScope)>` on create/list; `listSharedWorkspaceCollections` migrates legacy rows when owner lists; get-by-id no longer subject-gates. Tests updated (28/28).
+- Files: `services/nft-service/api/src/app.ts`, `service.ts`, `app.test.ts`.
+- Ops: restart NFT API; owner refresh NFT list once (migrates legacy → team); member refresh.
+
+## 2026-07-22 - Codex with Nabil - Owner Team page missing accepted Admin
+
+- Cause: accept only updated invitee local state + Vite memberships; owner Dynamo still had invited-only / empty for snabilshaikh186. Owner pull overwrote with thin remote members.
+- Fix: Vite `workspaceMembers[wsId]` on accept; `GET /api/workspaces/:id/members`; `loadWorkspaceDetail` merges local accepted + Dynamo; Team page polls every 5s; promote invited→active; forward accept to platform Lambda best-effort.
+- Ops: hard refresh **owner** browser on Team; Admin should appear ACTIVE.
+
+## 2026-07-22 - Codex with Nabil - Member flicker + Leave workspace
+
+- Flicker: `pullFromAWS` every 8s replaced members with thin Dynamo list; detail poll restored → nabil3 vanish/return.
+- Fix: pull always `mergeMembersLists` with previous local members; detail in-flight dedupe + fingerprint skip; slower polls (12–15s); never demote active.
+- Leave: `leaveWorkspace` store action + `POST /api/workspaces/:id/leave` + Team UI button for non-owners.
+
+## 2026-07-23 - OpenCode with Nabil - Invite email missing ?token=
+
+- Problem: Some Brevo invite mails linked only to `/dashboard` (no accept token); others had full `/invite/accept?token=…`.
+- Cause: Lambda `send_invite_email` + `/api/invite/send` fell back to `/dashboard` when `token` was falsy; FE also fire-and-forget persisted invitations so accept scan could miss tokens.
+- Fix:
+  - `build_invite_accept_url(token)` — always `…/invite/accept?token=…` or 400; no dashboard fallback.
+  - `mailApi.sendWorkspaceInviteEmail` requires non-empty token before POST.
+  - `createInvitation` / `resendInvitation` **await** workspace PUT before sending mail.
+- Deployed: Lambda `zexvro-agent-backend` + Cloudflare Pages `zexvro` (`2a93a8b7.zexvro-7oq.pages.dev` → console.zexvro.in).
+- Verified: rbac vitest 36/36; no Lambda `/dashboard` fallback; console + `/invite/accept` 200.
+- Next: re-invite from console and confirm Brevo CTA includes `?token=`.
+
+## 2026-07-23 - OpenCode with Nabil - Phase 1 durable workspace audit
+
+- Service: workspace IAM / audit ledger (Nabil plan Phase 1).
+- Infra: DynamoDB table `zexvro-workspace-audit` (pk workspaceId, sk eventKey) created; Lambda env `AUDIT_TABLE`.
+- Lambda: `append_audit_event` (fail-open), `list_audit_events`, `GET /api/workspaces/{id}/audit`.
+- Emit: invite.sent / invite.accepted / invite.revoked, workspace.updated, project.created.
+- FE: `workspaceApi.listAudit`; WorkspaceActivity + ProjectAudit load remote ledger (derived fallback if empty).
+- Tests: `scripts/test_audit_helpers.py` 5/5; rbac 36/36; tsc clean; Lambda + Pages deploy.
+- Phase 0: console + invite/accept 200; invite token fix already live.
+- Next: Phase 2 ZCR credits (after invite smoke with real users); re-invite to populate ledger.
+
+## 2026-07-24 - OpenCode with Nabil - ZCR credits + promos + env + platform admin
+
+- Scope: AWS-style platform credits; NFT payment rail hooks; founder control plane; testnet/mainnet burn gate; promo codes.
+- Infra Dynamo: `zexvro-credits`, `zexvro-credit-ledger`, `zexvro-promo-codes`, `zexvro-promo-redemptions`.
+- Lambda: `credits.py` service; workspace credit APIs (balance/ledger/consume/redeem); internal NFT topup; platform me/analytics/grant/promo CRUD.
+- Burn rule: **mainnet only**; testnet writes `consume_skipped`. New workspaces default **testnet** + starter **100 ZCR**.
+- FE: `/dashboard/w/:id/credits`, env badge + ZCR chip, Platform link `/dashboard/platform` (founders allowlist).
+- PLATFORM_ADMINS env: nabil,paris,rushi,talib,n4bi10p (+ emails if set).
+- Tests: credits helpers 5/5; audit 5/5; rbac 36/36; tsc clean. Lambda + Pages deployed.
+- Follow-ups: wire service consume hooks (NFT/Morph/De-pin); Credit Pack NFT collection → internal topup; expand founder analytics beyond partial scans.
+
+## 2026-07-24 - Codex with Paris - Merge Nabil workspace-iam into local main
+
+- Service or area: git merge `origin/feature/workspace-iam-shared-roster` into local `main`.
+- Summary: Merged RBAC, invites/Brevo mail, durable audit, ZCR credits/promos, platform admin, testnet/mainnet burn gate. Resolved `.env.example` (kept Gate + Mail) and `memory.md` (kept Gate + Nabil histories).
+- Decisions: Accepted - local main now includes Nabil branch tip `2d552ff` + main Gate/Morph. Rename/SEO WIP still in stash for reapply next.
+- Follow-ups: reapply rename stash; UI + mainnet work.
+- Blockers: None for merge.
+- Verification: no conflict markers; merge ready to commit when user asks.

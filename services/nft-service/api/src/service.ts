@@ -161,6 +161,22 @@ export class NftService {
     return this.repository.listCollections(workspaceId)
   }
 
+  /** Re-key workspace scope (e.g. legacy per-user → shared team scope). */
+  async rekeyCollectionWorkspace(
+    collectionId: string,
+    nextWorkspaceId: string,
+  ): Promise<CollectionRecord> {
+    const collection = await this.getCollection(collectionId)
+    if (collection.workspaceId === nextWorkspaceId) return collection
+    const updated: CollectionRecord = {
+      ...collection,
+      workspaceId: nextWorkspaceId,
+      updatedAt: this.now().toISOString(),
+    }
+    await this.repository.saveCollection(updated)
+    return updated
+  }
+
   async getCollection(id: string): Promise<CollectionRecord> {
     const collection = await this.repository.getCollection(id)
     if (collection === undefined) {

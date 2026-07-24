@@ -24,7 +24,7 @@ import { buildAgentChatPayload } from './agent/settings';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ||
   ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-    ? 'http://localhost:8080'
+    ? 'https://qkuostruh3.execute-api.us-east-1.amazonaws.com'
     : 'https://qkuostruh3.execute-api.us-east-1.amazonaws.com');
 
 // Mock Lists initial data
