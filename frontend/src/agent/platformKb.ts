@@ -197,13 +197,33 @@ export const MORPH_NAV_DESTINATIONS: MorphNavDest[] = [
   },
 ]
 
+export type MorphScope = 'workspace' | 'project'
+
 export type MorphRouteContext = {
+  /** Explicit scope — workspace Morph must not pretend to be in a project */
+  scope?: MorphScope
   workspaceId?: string | null
   projectId?: string | null
   workspaceName?: string | null
   projectName?: string | null
   currentScreen?: string | null
   path?: string | null
+  /** Project names in this workspace (workspace Morph context) */
+  projectNames?: string[]
+}
+
+export function resolveMorphScope(ctx: MorphRouteContext): MorphScope {
+  if (ctx.scope === 'workspace' || ctx.scope === 'project') return ctx.scope
+  return ctx.projectId ? 'project' : 'workspace'
+}
+
+/** Destinations allowed for the current Morph surface */
+export function destinationsForScope(scope: MorphScope): MorphNavDest[] {
+  if (scope === 'workspace') {
+    // No project-only tools (REQWID/NFTo/DEDSEC live under a project)
+    return MORPH_NAV_DESTINATIONS.filter((d) => !d.needsProject)
+  }
+  return MORPH_NAV_DESTINATIONS
 }
 
 export function resolveMorphPath(
@@ -232,14 +252,16 @@ export function suggestMorphDestinations(
   ctx: MorphRouteContext,
   limit = 3,
 ): MorphNavDest[] {
+  const scope = resolveMorphScope(ctx)
+  const pool = destinationsForScope(scope)
   const q = userText.toLowerCase()
-  const scored = MORPH_NAV_DESTINATIONS.map((d) => {
+  const scored = pool.map((d) => {
     let score = 0
     for (const kw of d.keywords) {
       if (q.includes(kw.toLowerCase())) score += kw.length
     }
-    if (d.needsProject && !ctx.projectId) score = 0
-    if (!d.needsProject && d.path.includes('{workspaceId}') && !ctx.workspaceId) score = 0
+    if (d.needsProject && (!ctx.projectId || scope !== 'project')) score = 0
+    if (d.path.includes('{workspaceId}') && !ctx.workspaceId) score = 0
     return { d, score }
   })
     .filter((x) => x.score > 0)
@@ -328,18 +350,51 @@ Nav: [[nav:project-settings|Project settings]]
 `.trim()
 
 export function buildMorphSystemPrompt(ctx: MorphRouteContext): string {
-  const destLines = MORPH_NAV_DESTINATIONS.map(
-    (d) => `- \`${d.id}\` → ${d.label}: ${d.blurb}${d.needsProject ? ' (needs project)' : ''}`,
-  ).join('\n')
+  const scope = resolveMorphScope(ctx)
+  const allowed = destinationsForScope(scope)
+  const destLines = allowed
+    .map((d) => `- \`${d.id}\` → ${d.label}: ${d.blurb}`)
+    .join('\n')
+
+  const projectsLine =
+    scope === 'workspace' && ctx.projectNames?.length
+      ? `projectsInWorkspace: ${ctx.projectNames.join(', ')}`
+      : scope === 'workspace'
+        ? 'projectsInWorkspace: (none yet — suggest creating a project)'
+        : null
 
   const ctxBlock = [
-    `workspaceId: ${ctx.workspaceId || '(none — user should open a workspace)'}`,
+    `morphScope: ${scope}`,
+    `workspaceId: ${ctx.workspaceId || '(none)'}`,
     `workspaceName: ${ctx.workspaceName || '—'}`,
-    `projectId: ${ctx.projectId || '(none — open a project for REQWID/NFTo/DEDSEC)'}`,
-    `projectName: ${ctx.projectName || '—'}`,
+    scope === 'project'
+      ? `projectId: ${ctx.projectId || '(missing)'}`
+      : 'projectId: (not on a project page — do NOT use project-only nav ids)',
+    scope === 'project' ? `projectName: ${ctx.projectName || '—'}` : null,
+    projectsLine,
     `currentScreen: ${ctx.currentScreen || '—'}`,
     `path: ${ctx.path || '—'}`,
-  ].join('\n')
+  ]
+    .filter(Boolean)
+    .join('\n')
+
+  const scopeRules =
+    scope === 'workspace'
+      ? `
+## Scope: WORKSPACE Morph
+You are on the **workspace** Morph Agent page (not inside a project).
+- Help with: team, credits/ZCR, projects list/create, workspace memory, audit, settings, CLI bind to this workspace, platform overview.
+- Do **not** open REQWID / NFTo / DEDSEC / project settings as if they were already selected — those need a project.
+- If the user asks for captcha, NFT, or De-pin: explain they pick a project first, then emit [[nav:projects|Open projects]] (and optionally [[nav:new-project|Create project]]).
+- Prefer workspace nav ids only from the allowed list below.
+`
+      : `
+## Scope: PROJECT Morph
+You are inside project **${ctx.projectName || ctx.projectId || 'current'}** under workspace **${ctx.workspaceName || ctx.workspaceId || 'current'}**.
+- Help with: REQWID, NFTo, DEDSEC, project services/settings, project memory, migration for this app.
+- You may still link workspace tools (credits, team) when relevant.
+- Prefer project-specific nav for product setup.
+`
 
   return `You are **Morph**, the in-console assistant for ZEXVRO.
 
@@ -348,18 +403,17 @@ Help the user operate the ZEXVRO platform. When they ask how to do something:
 1. Give a short, clear numbered guide (max ~6 steps).
 2. End with **one primary** navigation action (and at most 1–2 secondary) so they can jump there in one click.
 3. Prefer doing over theorizing. Do not dump large code unless asked.
-
+${scopeRules}
 ## Navigation action format (REQUIRED when a console page exists)
 Emit exactly this syntax on its own line (the UI turns it into a button):
 
 [[nav:DEST_ID|Button label]]
 
-Allowed DEST_ID values:
+**Allowed DEST_ID values for this scope (${scope}):**
 ${destLines}
 
 Rules:
-- Use only listed DEST_IDs.
-- If the destination needs a project and projectId is missing, use [[nav:projects|Open projects]] and explain they must pick a project first.
+- Use only listed DEST_IDs for this scope.
 - Do not invent URLs. Do not wrap nav tags in code fences.
 - Put nav tags after the prose, not in the middle of a sentence.
 

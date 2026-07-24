@@ -1,18 +1,19 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
-  ArrowUpRight,
-  Bot,
+  CheckCircle2,
   ChevronRight,
   Code2,
   Command,
+  CreditCard,
   FileSearch,
+  FolderKanban,
   Loader2,
-  MessageSquare,
   Rocket,
   Send,
   Sparkles,
   TerminalSquare,
   Trash2,
+  Users,
   Wrench,
   X,
   Zap,
@@ -26,11 +27,13 @@ import { MorphReply } from '../../agent/MorphReply';
 import {
   extractMorphActions,
   mergeSuggestedActions,
+  quickStartActions,
   type MorphAction,
 } from '../../agent/morphActions';
 import { useNavigate, useParams } from '@tanstack/react-router';
 import { useWorkspaceStore } from '../../stores/workspace';
 import { useProjectStore } from '../../stores/project';
+import type { MorphScope } from '../../agent/platformKb';
 
 const MORPH_LOGO = '/morph/morph-logo.svg';
 const MORPH_ILLUSTRATION = '/morph/morph-illustration-transparent.png';
@@ -48,11 +51,56 @@ interface AgentStudioProps {
   cliLastActive?: number | null;
 }
 
-const SUGGESTED_PROMPTS = [
-  { icon: FileSearch, label: 'Add captcha', prompt: 'How do I protect checkout with REQWID captcha on my site?' },
-  { icon: Rocket, label: 'NFT collection', prompt: 'How do I create an NFT collection and mint on NFTo?' },
-  { icon: TerminalSquare, label: 'Buy ZCR', prompt: 'How do I buy or redeem ZCR credits for this workspace?' },
-  { icon: Wrench, label: 'CLI Morph', prompt: 'How do I connect Morph CLI to this workspace and migrate a Web2 app?' },
+type SuggestItem = {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  prompt: string;
+};
+
+const WORKSPACE_SUGGESTIONS: SuggestItem[] = [
+  {
+    icon: FolderKanban,
+    label: 'Create a project',
+    prompt: 'How do I create a project in this workspace and enable services?',
+  },
+  {
+    icon: CreditCard,
+    label: 'Buy ZCR credits',
+    prompt: 'How do I check ZCR balance and buy or redeem credits for this workspace?',
+  },
+  {
+    icon: Users,
+    label: 'Invite the team',
+    prompt: 'How do I invite teammates and set roles for this workspace?',
+  },
+  {
+    icon: TerminalSquare,
+    label: 'Morph CLI setup',
+    prompt: 'How do I connect Morph CLI to this workspace with login, use, and bind?',
+  },
+];
+
+const PROJECT_SUGGESTIONS: SuggestItem[] = [
+  {
+    icon: FileSearch,
+    label: 'Add REQWID captcha',
+    prompt: 'How do I protect checkout with REQWID captcha on this project?',
+  },
+  {
+    icon: Rocket,
+    label: 'NFT collection',
+    prompt: 'How do I create an NFT collection and mint on NFTo in this project?',
+  },
+  {
+    icon: Wrench,
+    label: 'DEDSEC / De-pin',
+    prompt: 'How do I set up DEDSEC paywalled APIs for this project?',
+  },
+  {
+    icon: CheckCircle2,
+    label: 'Project memory',
+    prompt: 'What should I write to project shared memory for Morph handoffs?',
+  },
 ];
 
 function relativeTime(ts: number): string {
@@ -64,10 +112,8 @@ function relativeTime(ts: number): string {
 }
 
 const IS_LOCAL_HOST = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-const API_BASE_URL = import.meta.env.VITE_API_URL ||
-  (IS_LOCAL_HOST
-    ? 'https://qkuostruh3.execute-api.us-east-1.amazonaws.com'
-    : 'https://qkuostruh3.execute-api.us-east-1.amazonaws.com');
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL || 'https://qkuostruh3.execute-api.us-east-1.amazonaws.com';
 const AGENT_CHAT_URL = IS_LOCAL_HOST ? '/api/agent/chat' : `${API_BASE_URL}/api/chat`;
 
 export default function AgentStudio({ cliConnected = false, cliLastActive = null }: AgentStudioProps) {
@@ -75,37 +121,67 @@ export default function AgentStudio({ cliConnected = false, cliLastActive = null
   const params = useParams({ strict: false }) as { workspaceId?: string; projectId?: string };
   const workspaces = useWorkspaceStore((s) => s.workspaces);
   const projects = useProjectStore((s) => s.projects);
-  const workspaceId = params.workspaceId || workspaces[0]?.id;
-  const projectId = params.projectId;
-  const workspaceName = workspaces.find((w) => w.id === workspaceId)?.name;
-  const projectName = projects.find((p) => p.id === projectId)?.name;
 
-  const routeContext = {
-    workspaceId,
-    projectId,
-    workspaceName,
-    projectName,
-    currentScreen: 'Morph Agent studio',
-    path: typeof window !== 'undefined' ? window.location.pathname : '',
-  };
+  // Route-driven scope: /w/:id/agent = workspace; /w/:id/p/:pid/agent = project
+  const path = typeof window !== 'undefined' ? window.location.pathname : '';
+  const onProjectRoute = Boolean(params.projectId) || /\/p\/[^/]+\/agent/.test(path);
+  const scope: MorphScope = onProjectRoute ? 'project' : 'workspace';
+
+  const workspaceId = params.workspaceId || workspaces[0]?.id;
+  // Only use project id on project Morph surface
+  const projectId = scope === 'project' ? params.projectId : undefined;
+  const workspaceName = workspaces.find((w) => w.id === workspaceId)?.name;
+  const workspaceProjects = useMemo(
+    () => projects.filter((p) => p.workspaceId === workspaceId),
+    [projects, workspaceId],
+  );
+  const currentProject = workspaceProjects.find((p) => p.id === projectId);
+  const projectName = currentProject?.name;
+
+  const routeContext = useMemo(
+    () => ({
+      scope,
+      workspaceId,
+      projectId: scope === 'project' ? projectId : null,
+      workspaceName,
+      projectName: scope === 'project' ? projectName : null,
+      projectNames: workspaceProjects.map((p) => p.name),
+      currentScreen:
+        scope === 'project'
+          ? `Morph Agent · project ${projectName || projectId || ''}`
+          : `Morph Agent · workspace ${workspaceName || workspaceId || ''}`,
+      path,
+    }),
+    [scope, workspaceId, projectId, workspaceName, projectName, workspaceProjects, path],
+  );
+
+  const suggestions = scope === 'project' ? PROJECT_SUGGESTIONS : WORKSPACE_SUGGESTIONS;
+  const jumpActions = quickStartActions(routeContext);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isThinking, setIsThinking] = useState(false);
   const [error, setError] = useState('');
-  const [contextOpen, setContextOpen] = useState(false);
+  const [contextOpen, setContextOpen] = useState(true);
   const [agentSettings, setAgentSettings] = useState(() => loadAgentSettings());
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const hasMessages = messages.length > 0 || isThinking;
 
-  const go = (path: string) => {
-    navigate({ to: path as '/' });
+  // Reset chat when switching workspace/project Morph surfaces
+  useEffect(() => {
+    setMessages([]);
+    setError('');
+    setInputValue('');
+  }, [scope, workspaceId, projectId]);
+
+  const go = (to: string) => {
+    navigate({ to: to as '/' });
   };
 
   useEffect(() => {
     let mounted = true;
-    loadAgentSettingsFromAWS().then(settings => {
+    loadAgentSettingsFromAWS().then((settings) => {
       if (!mounted) return;
       setAgentSettings(settings);
     });
@@ -118,7 +194,6 @@ export default function AgentStudio({ cliConnected = false, cliLastActive = null
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isThinking]);
 
-  // Auto-dismiss errors
   useEffect(() => {
     if (!error) return;
     const t = setTimeout(() => setError(''), 8000);
@@ -144,18 +219,20 @@ export default function AgentStudio({ cliConnected = false, cliLastActive = null
     try {
       const response = await fetch(AGENT_CHAT_URL, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(buildAgentChatPayload(
-          workspaceName || 'Agentic Operations',
-          nextMessages.map((m) => ({
-            role: (m.sender === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
-            content: m.text,
-          })),
-          agentSettings,
-          routeContext,
-        )),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          buildAgentChatPayload(
+            scope === 'project'
+              ? `Project ${projectName || projectId}`
+              : `Workspace ${workspaceName || workspaceId}`,
+            nextMessages.map((m) => ({
+              role: (m.sender === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
+              content: m.text,
+            })),
+            agentSettings,
+            routeContext,
+          ),
+        ),
       });
 
       const data = await response.json().catch(() => ({}));
@@ -167,13 +244,16 @@ export default function AgentStudio({ cliConnected = false, cliLastActive = null
       const { cleanText, actions: modelActions } = extractMorphActions(String(raw), routeContext);
       const actions = mergeSuggestedActions(prompt, modelActions, routeContext, 2);
 
-      setMessages((prev) => [...prev, {
-        id: `agt-${Date.now()}`,
-        sender: 'agent',
-        text: cleanText || String(raw),
-        timestamp: Date.now(),
-        actions,
-      }]);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `agt-${Date.now()}`,
+          sender: 'agent',
+          text: cleanText || String(raw),
+          timestamp: Date.now(),
+          actions,
+        },
+      ]);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Agent request failed.';
       setError(message);
@@ -188,23 +268,56 @@ export default function AgentStudio({ cliConnected = false, cliLastActive = null
     sendMessage(inputValue);
   };
 
+  const memoryPath = projectId
+    ? `/dashboard/w/${workspaceId}/p/${projectId}/memory`
+    : workspaceId
+      ? `/dashboard/w/${workspaceId}/memory`
+      : '/dashboard';
+
+  const cliSnippet =
+    scope === 'project' && projectId
+      ? `morph login
+morph use ${workspaceId || '<workspaceId>'} ${projectId}
+cd your-app && morph bind
+morph`
+      : `morph login
+morph use ${workspaceId || '<workspaceId>'}
+cd your-app && morph bind
+morph`;
+
   return (
     <div className="flex h-[calc(100vh-7rem)] max-h-[900px] min-h-[500px] gap-0 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm shadow-zinc-950/[0.04] dark:border-white/[0.08] dark:bg-[#0A0A0B]">
-      {/* Main Chat Area */}
+      {/* Main Chat */}
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Header */}
         <div className="flex shrink-0 items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-white/[0.08] sm:px-5">
           <div className="flex min-w-0 items-center gap-3">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500/20 to-blue-500/20 dark:from-violet-500/15 dark:to-blue-500/15">
               <img src={MORPH_LOGO} alt="" className="h-5 w-5 object-contain invert dark:invert-0" />
             </div>
             <div className="min-w-0">
-              <h1 className="truncate text-sm font-semibold text-zinc-950 dark:text-white">Morph</h1>
-              <div className="flex items-center gap-2 text-[11px] text-zinc-500 dark:text-zinc-400">
-                <span className="truncate">{agentSettings.provider} / {agentSettings.model}</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="truncate text-sm font-semibold text-zinc-950 dark:text-white">Morph</h1>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                    scope === 'project'
+                      ? 'bg-violet-500/15 text-violet-700 dark:text-violet-300'
+                      : 'bg-sky-500/15 text-sky-700 dark:text-sky-300'
+                  }`}
+                >
+                  {scope === 'project' ? 'Project' : 'Workspace'}
+                </span>
+              </div>
+              <div className="flex min-w-0 items-center gap-2 text-[11px] text-zinc-500 dark:text-zinc-400">
+                <span className="truncate">
+                  {scope === 'project'
+                    ? `${projectName || 'Project'} · ${workspaceName || 'Workspace'}`
+                    : workspaceName || 'Workspace'}
+                </span>
                 <span className="text-zinc-300 dark:text-zinc-700">·</span>
                 <span className="flex items-center gap-1">
-                  <span className={`h-1.5 w-1.5 rounded-full ${cliConnected ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-400'}`} />
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${cliConnected ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-400'}`}
+                  />
                   {cliConnected ? 'CLI synced' : 'CLI offline'}
                 </span>
               </div>
@@ -221,7 +334,10 @@ export default function AgentStudio({ cliConnected = false, cliLastActive = null
             </button>
             {messages.length > 0 && (
               <button
-                onClick={() => { setMessages([]); setError(''); }}
+                onClick={() => {
+                  setMessages([]);
+                  setError('');
+                }}
                 className="inline-flex h-8 w-8 items-center justify-center rounded-md text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-white/[0.06] dark:hover:text-zinc-200"
                 title="Clear chat"
               >
@@ -231,27 +347,45 @@ export default function AgentStudio({ cliConnected = false, cliLastActive = null
           </div>
         </div>
 
-        {/* Messages Area */}
         <div className="min-h-0 flex-1 overflow-y-auto">
           {!hasMessages ? (
-            /* Welcome State */
             <div className="flex h-full flex-col items-center justify-center px-6 py-10">
               <div className="relative mb-6">
-                <img src={MORPH_ILLUSTRATION} alt="" className="h-32 w-32 object-contain opacity-90 sm:h-40 sm:w-40" />
+                <img
+                  src={MORPH_ILLUSTRATION}
+                  alt=""
+                  className="h-32 w-32 object-contain opacity-90 sm:h-40 sm:w-40"
+                />
                 <div className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-violet-500 dark:border-[#0A0A0B]">
                   <Sparkles className="h-4 w-4 text-white" />
                 </div>
               </div>
               <h2 className="text-xl font-semibold tracking-tight text-zinc-950 dark:text-white sm:text-2xl">
-                What can I help with?
+                {scope === 'project' ? 'Project Morph' : 'Workspace Morph'}
               </h2>
               <p className="mt-2 max-w-md text-center text-sm leading-6 text-zinc-500 dark:text-zinc-400">
-                Ask Morph about your workspace, plan migrations, check service readiness, or run operations.
+                {scope === 'project'
+                  ? 'REQWID, NFTo, DEDSEC, and migration help for this project only.'
+                  : 'Team, credits, projects, and CLI for this workspace — open a project for product tools.'}
               </p>
 
-              {/* Suggested prompts */}
+              {jumpActions.length > 0 && (
+                <div className="mt-5 flex flex-wrap justify-center gap-2">
+                  {jumpActions.map((a) => (
+                    <button
+                      key={a.id}
+                      type="button"
+                      onClick={() => go(a.path)}
+                      className="rounded-full border border-violet-500/25 bg-violet-500/10 px-3 py-1.5 text-[11px] font-medium text-violet-700 transition hover:bg-violet-500/15 dark:text-violet-300"
+                    >
+                      {a.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               <div className="mt-8 grid w-full max-w-2xl grid-cols-1 gap-2.5 sm:grid-cols-2">
-                {SUGGESTED_PROMPTS.map((item) => (
+                {suggestions.map((item) => (
                   <button
                     key={item.label}
                     onClick={() => sendMessage(item.prompt)}
@@ -261,35 +395,40 @@ export default function AgentStudio({ cliConnected = false, cliLastActive = null
                       <item.icon className="h-4 w-4" />
                     </span>
                     <span className="min-w-0">
-                      <span className="block text-xs font-semibold text-zinc-900 dark:text-zinc-100">{item.label}</span>
-                      <span className="mt-0.5 block text-[11px] leading-4 text-zinc-500 dark:text-zinc-400">{item.prompt.slice(0, 60)}...</span>
+                      <span className="block text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                        {item.label}
+                      </span>
+                      <span className="mt-0.5 block text-[11px] leading-4 text-zinc-500 dark:text-zinc-400">
+                        {item.prompt.slice(0, 72)}
+                        {item.prompt.length > 72 ? '…' : ''}
+                      </span>
                     </span>
                   </button>
                 ))}
               </div>
             </div>
           ) : (
-            /* Chat Messages */
             <div className="mx-auto max-w-3xl space-y-1 px-4 py-5 sm:px-6">
               {messages.map((msg) => (
-                <div key={msg.id} className={`flex gap-3 py-3 ${msg.sender === 'user' ? 'justify-end' : ''}`}>
+                <div
+                  key={msg.id}
+                  className={`flex gap-3 py-3 ${msg.sender === 'user' ? 'justify-end' : ''}`}
+                >
                   {msg.sender === 'agent' && (
                     <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-zinc-100 dark:bg-white/[0.06]">
                       <img src={MORPH_LOGO} alt="Morph" className="h-4 w-4" />
                     </div>
                   )}
                   <div className={`max-w-[85%] min-w-0 ${msg.sender === 'user' ? 'text-right' : ''}`}>
-                    <div className={`inline-block rounded-xl px-4 py-2.5 text-sm leading-6 ${
-                      msg.sender === 'user'
-                        ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
-                        : 'text-zinc-800 dark:text-zinc-200'
-                    }`}>
+                    <div
+                      className={`inline-block rounded-xl px-4 py-2.5 text-sm leading-6 ${
+                        msg.sender === 'user'
+                          ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
+                          : 'text-zinc-800 dark:text-zinc-200'
+                      }`}
+                    >
                       {msg.sender === 'agent' ? (
-                        <MorphReply
-                          text={msg.text}
-                          actions={msg.actions || []}
-                          onNavigate={go}
-                        />
+                        <MorphReply text={msg.text} actions={msg.actions || []} onNavigate={go} />
                       ) : (
                         <p>{msg.text}</p>
                       )}
@@ -319,24 +458,29 @@ export default function AgentStudio({ cliConnected = false, cliLastActive = null
           )}
         </div>
 
-        {/* Error banner */}
         {error && (
           <div className="flex items-center justify-between border-t border-amber-200 bg-amber-50 px-4 py-2 dark:border-amber-500/20 dark:bg-amber-500/10">
             <div className="flex items-center gap-2 text-xs font-medium text-amber-700 dark:text-amber-300">
               <Zap className="h-3.5 w-3.5" />
               {error}
             </div>
-            <button onClick={() => setError('')} className="text-amber-500 hover:text-amber-700 dark:hover:text-amber-200">
+            <button
+              onClick={() => setError('')}
+              className="text-amber-500 hover:text-amber-700 dark:hover:text-amber-200"
+            >
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
         )}
 
-        {/* Input Area */}
         <div className="shrink-0 border-t border-zinc-200 p-3 dark:border-white/[0.08] sm:p-4">
           <form onSubmit={handleSubmit} className="mx-auto max-w-3xl">
             <div className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50/80 px-3 py-1.5 shadow-sm transition-colors focus-within:border-violet-300 focus-within:ring-2 focus-within:ring-violet-500/10 dark:border-white/10 dark:bg-white/[0.03] dark:focus-within:border-violet-500/40 dark:focus-within:ring-violet-500/5">
-              <img src={MORPH_LOGO} alt="" className="h-4 w-4 shrink-0 object-contain opacity-40 invert dark:invert-0" />
+              <img
+                src={MORPH_LOGO}
+                alt=""
+                className="h-4 w-4 shrink-0 object-contain opacity-40 invert dark:invert-0"
+              />
               <input
                 ref={inputRef}
                 type="text"
@@ -344,10 +488,13 @@ export default function AgentStudio({ cliConnected = false, cliLastActive = null
                 disabled={isThinking}
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
-                placeholder="Ask Morph anything..."
+                placeholder={
+                  scope === 'project'
+                    ? 'Ask about this project (REQWID, NFTo, migration)…'
+                    : 'Ask about this workspace (team, credits, projects)…'
+                }
                 className="min-w-0 flex-1 bg-transparent px-1 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:outline-none dark:text-zinc-100"
               />
-              <span className="hidden text-[10px] text-zinc-400 sm:block">⌘↵</span>
               <button
                 type="submit"
                 disabled={!inputValue.trim() || isThinking}
@@ -358,53 +505,155 @@ export default function AgentStudio({ cliConnected = false, cliLastActive = null
               </button>
             </div>
             <p className="mt-2 text-center text-[10px] text-zinc-400">
-              Morph can make mistakes. Review proposals before approval.
+              Scope: {scope === 'project' ? 'this project' : 'this workspace only'}. Buttons never open the wrong level.
             </p>
           </form>
         </div>
       </div>
 
-      {/* Context Sidebar */}
+      {/* Context Sidebar — scope accurate */}
       {contextOpen && (
         <div className="hidden w-72 shrink-0 flex-col border-l border-zinc-200 dark:border-white/[0.08] lg:flex">
           <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-white/[0.08]">
-            <span className="text-xs font-semibold text-zinc-950 dark:text-white">Context</span>
-            <button onClick={() => setContextOpen(false)} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200">
+            <span className="text-xs font-semibold text-zinc-950 dark:text-white">
+              {scope === 'project' ? 'Project context' : 'Workspace context'}
+            </span>
+            <button
+              onClick={() => setContextOpen(false)}
+              className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+            >
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
           <div className="flex-1 overflow-y-auto p-4 text-xs">
-            {/* CLI setup */}
             <div className="mb-5 rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-white/10 dark:bg-white/[0.03]">
-              <p className="mb-2 font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500" style={{ fontSize: '10px' }}>
+              <p
+                className="mb-2 font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500"
+                style={{ fontSize: '10px' }}
+              >
                 Morph CLI
               </p>
               <p className="mb-2 text-[11px] leading-4 text-zinc-500 dark:text-zinc-400">
-                Link your ZEXVRO account so Morph can use Gate, NFT, and memory as you.
+                {scope === 'project'
+                  ? 'Bind CLI to this workspace and project.'
+                  : 'Bind CLI to this workspace; pick a project later for REQWID/NFTo.'}
               </p>
               <pre className="overflow-x-auto rounded-md bg-zinc-950 p-2.5 font-mono text-[10px] leading-5 text-cyan-100/90">
-{`morph login
-morph use <workspaceId>
-cd your-app && morph bind
-morph`}
+                {cliSnippet}
               </pre>
-              <a
-                href="/dashboard"
+              <button
+                type="button"
+                onClick={() => go(memoryPath)}
                 className="mt-2 inline-flex text-[11px] font-medium text-violet-600 hover:underline dark:text-violet-400"
               >
                 Shared memory →
-              </a>
+              </button>
             </div>
 
-            {/* Workspace */}
             <div className="mb-5">
-              <p className="mb-2 font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500" style={{ fontSize: '10px' }}>Workspace</p>
-              <p className="text-zinc-700 dark:text-zinc-300">ZEXVRO Platform</p>
+              <p
+                className="mb-2 font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500"
+                style={{ fontSize: '10px' }}
+              >
+                Workspace
+              </p>
+              <p className="font-medium text-zinc-800 dark:text-zinc-200">{workspaceName || '—'}</p>
+              {workspaceId && (
+                <p className="mt-0.5 break-all font-mono text-[10px] text-zinc-400">{workspaceId}</p>
+              )}
             </div>
 
-            {/* Connection */}
+            {scope === 'project' ? (
+              <div className="mb-5">
+                <p
+                  className="mb-2 font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500"
+                  style={{ fontSize: '10px' }}
+                >
+                  Project
+                </p>
+                <p className="font-medium text-zinc-800 dark:text-zinc-200">{projectName || '—'}</p>
+                {projectId && (
+                  <p className="mt-0.5 break-all font-mono text-[10px] text-zinc-400">{projectId}</p>
+                )}
+                {currentProject?.enabledServices && currentProject.enabledServices.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {currentProject.enabledServices.map((s) => (
+                      <span
+                        key={s}
+                        className="rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:border-white/10 dark:bg-white/[0.03] dark:text-zinc-400"
+                      >
+                        {s}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {quickStartActions(routeContext).map((a) => (
+                    <button
+                      key={a.id}
+                      type="button"
+                      onClick={() => go(a.path)}
+                      className="rounded-md border border-zinc-200 px-2 py-1 text-[10px] font-medium text-zinc-600 hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/[0.04]"
+                    >
+                      {a.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="mb-5">
+                <p
+                  className="mb-2 font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500"
+                  style={{ fontSize: '10px' }}
+                >
+                  Projects ({workspaceProjects.length})
+                </p>
+                {workspaceProjects.length === 0 ? (
+                  <p className="text-[11px] leading-4 text-zinc-500">
+                    No projects yet. Create one to use REQWID, NFTo, or DEDSEC.
+                  </p>
+                ) : (
+                  <ul className="space-y-1">
+                    {workspaceProjects.slice(0, 8).map((p) => (
+                      <li key={p.id}>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            go(`/dashboard/w/${workspaceId}/p/${p.id}/agent`)
+                          }
+                          className="w-full rounded-md border border-zinc-100 bg-zinc-50 px-2.5 py-1.5 text-left text-[11px] font-medium text-zinc-700 transition hover:border-violet-300 hover:bg-violet-50 dark:border-white/[0.06] dark:bg-white/[0.02] dark:text-zinc-300 dark:hover:border-violet-500/40 dark:hover:bg-violet-500/10"
+                        >
+                          {p.name}
+                          <span className="mt-0.5 block font-mono text-[9px] font-normal text-zinc-400">
+                            Open project Morph →
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {quickStartActions(routeContext).map((a) => (
+                    <button
+                      key={a.id}
+                      type="button"
+                      onClick={() => go(a.path)}
+                      className="rounded-md border border-zinc-200 px-2 py-1 text-[10px] font-medium text-zinc-600 hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/[0.04]"
+                    >
+                      {a.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="mb-5">
-              <p className="mb-2 font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500" style={{ fontSize: '10px' }}>CLI Status</p>
+              <p
+                className="mb-2 font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500"
+                style={{ fontSize: '10px' }}
+              >
+                CLI Status
+              </p>
               <div className="flex items-center gap-2">
                 <span className={`h-2 w-2 rounded-full ${cliConnected ? 'bg-emerald-500' : 'bg-zinc-400'}`} />
                 <span className={cliConnected ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-500'}>
@@ -415,30 +664,25 @@ morph`}
               </div>
             </div>
 
-            {/* Provider */}
             <div className="mb-5">
-              <p className="mb-2 font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500" style={{ fontSize: '10px' }}>Provider</p>
+              <p
+                className="mb-2 font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500"
+                style={{ fontSize: '10px' }}
+              >
+                Provider
+              </p>
               <p className="text-zinc-700 dark:text-zinc-300">{agentSettings.provider}</p>
               <p className="mt-0.5 text-zinc-500">{agentSettings.model}</p>
             </div>
 
-            {/* Available Tools */}
-            <div className="mb-5">
-              <p className="mb-2 font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500" style={{ fontSize: '10px' }}>Available Tools</p>
-              <div className="space-y-1.5">
-                {['read_file', 'write_file', 'list_dir', 'run_command', 'analyze_codebase'].map((tool) => (
-                  <div key={tool} className="flex items-center gap-2 rounded-md border border-zinc-100 bg-zinc-50 px-2.5 py-1.5 dark:border-white/[0.06] dark:bg-white/[0.02]">
-                    <Code2 className="h-3 w-3 text-zinc-400" />
-                    <span className="font-mono text-[11px] text-zinc-600 dark:text-zinc-300">{tool}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Session Info */}
             <div>
-              <p className="mb-2 font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500" style={{ fontSize: '10px' }}>Session</p>
-              <p className="text-zinc-500">{messages.length} messages</p>
+              <p
+                className="mb-2 font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500"
+                style={{ fontSize: '10px' }}
+              >
+                Session
+              </p>
+              <p className="text-zinc-500">{messages.length} messages · {scope} scope</p>
             </div>
           </div>
         </div>

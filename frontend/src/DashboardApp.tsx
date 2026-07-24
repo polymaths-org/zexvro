@@ -287,19 +287,38 @@ function NavIcon({ item, className = '' }: { item: NavItem; className?: string }
 }
 
 function ScreenSkeleton() {
+  const bone = 'max-w-full rounded bg-zinc-200 dark:bg-zinc-900 animate-pulse';
   return (
-    <div className="space-y-6" aria-label="Loading screen" role="status">
-      <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-[#080809]">
-        <div className="h-5 w-40 rounded bg-zinc-200 dark:bg-zinc-900 animate-pulse" />
-        <div className="mt-4 h-8 w-full max-w-lg rounded bg-zinc-200 dark:bg-zinc-900 animate-pulse" />
-        <div className="mt-3 h-4 w-full max-w-2xl rounded bg-zinc-200 dark:bg-zinc-900 animate-pulse" />
+    <div className="w-full min-w-0 space-y-6" aria-label="Loading screen" role="status">
+      <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-[#080809]">
+        <div className={`h-5 w-40 ${bone}`} />
+        <div className={`mt-4 h-8 w-3/4 max-w-lg ${bone}`} />
+        <div className={`mt-3 h-4 w-full max-w-xl ${bone}`} />
       </div>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 4 }).map((_, index) => (
-          <div key={index} className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-[#0A0A0B]">
-            <div className="h-4 w-24 rounded bg-zinc-200 dark:bg-zinc-900 animate-pulse" />
-            <div className="mt-4 h-7 w-20 rounded bg-zinc-200 dark:bg-zinc-900 animate-pulse" />
-            <div className="mt-3 h-3 w-32 rounded bg-zinc-200 dark:bg-zinc-900 animate-pulse" />
+          <div
+            key={index}
+            className="min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-[#0A0A0B]"
+          >
+            <div className={`h-4 w-2/5 max-w-[6rem] ${bone}`} />
+            <div className={`mt-4 h-7 w-1/3 max-w-[5rem] ${bone}`} />
+            <div className={`mt-3 h-3 w-3/5 max-w-[8rem] ${bone}`} />
+          </div>
+        ))}
+      </div>
+      <div className="grid min-w-0 gap-5 lg:grid-cols-2">
+        {Array.from({ length: 2 }).map((_, index) => (
+          <div
+            key={index}
+            className="min-h-[12rem] min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-[#0A0A0B]"
+          >
+            <div className={`h-4 w-2/5 max-w-[9rem] ${bone}`} />
+            <div className="mt-5 space-y-3">
+              <div className={`h-9 w-full ${bone}`} />
+              <div className={`h-9 w-[92%] ${bone}`} />
+              <div className={`h-9 w-[85%] ${bone}`} />
+            </div>
           </div>
         ))}
       </div>

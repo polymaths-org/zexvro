@@ -1,7 +1,8 @@
 import {
+  destinationsForScope,
   getMorphDestination,
-  MORPH_NAV_DESTINATIONS,
   resolveMorphPath,
+  resolveMorphScope,
   suggestMorphDestinations,
   type MorphNavDest,
   type MorphRouteContext,
@@ -24,10 +25,16 @@ export function extractMorphActions(
   const actions: MorphAction[] = []
   const seen = new Set<string>()
 
+  const scope = resolveMorphScope(ctx)
+  const allowedIds = new Set(destinationsForScope(scope).map((d) => d.id))
+
   const cleanText = text
     .replace(NAV_RE, (_full, id: string, label: string) => {
-      const dest = getMorphDestination(String(id).toLowerCase())
-      if (!dest) return ''
+      const destId = String(id).toLowerCase()
+      const dest = getMorphDestination(destId)
+      if (!dest || !allowedIds.has(dest.id)) return ''
+      // Workspace Morph: never resolve project-only paths
+      if (scope === 'workspace' && dest.needsProject) return ''
       const path = resolveMorphPath(dest.path, ctx)
       if (!path) return ''
       const key = path
@@ -72,13 +79,16 @@ export function mergeSuggestedActions(
 }
 
 export function quickStartActions(ctx: MorphRouteContext): MorphAction[] {
-  const ids = ctx.projectId
-    ? (['reqwid', 'nft', 'credits', 'memory'] as const)
-    : (['projects', 'credits', 'team', 'memory'] as const)
+  const scope = resolveMorphScope(ctx)
+  const ids =
+    scope === 'project'
+      ? (['reqwid', 'nft', 'depin', 'project-memory'] as const)
+      : (['projects', 'credits', 'team', 'memory'] as const)
   const out: MorphAction[] = []
   for (const id of ids) {
     const dest = getMorphDestination(id)
     if (!dest) continue
+    if (scope === 'workspace' && dest.needsProject) continue
     const path = resolveMorphPath(dest.path, ctx)
     if (!path) continue
     out.push({ id: dest.id, label: dest.label, path, source: 'suggest' })
@@ -86,9 +96,14 @@ export function quickStartActions(ctx: MorphRouteContext): MorphAction[] {
   return out
 }
 
-export function listAllResolvableDestinations(ctx: MorphRouteContext): Array<MorphNavDest & { pathResolved: string }> {
-  return MORPH_NAV_DESTINATIONS.map((d) => {
-    const pathResolved = resolveMorphPath(d.path, ctx)
-    return pathResolved ? { ...d, pathResolved } : null
-  }).filter(Boolean) as Array<MorphNavDest & { pathResolved: string }>
+export function listAllResolvableDestinations(
+  ctx: MorphRouteContext,
+): Array<MorphNavDest & { pathResolved: string }> {
+  const scope = resolveMorphScope(ctx)
+  return destinationsForScope(scope)
+    .map((d) => {
+      const pathResolved = resolveMorphPath(d.path, ctx)
+      return pathResolved ? { ...d, pathResolved } : null
+    })
+    .filter(Boolean) as Array<MorphNavDest & { pathResolved: string }>
 }
