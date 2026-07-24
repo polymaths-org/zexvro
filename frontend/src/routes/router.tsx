@@ -45,6 +45,7 @@ import WorkspaceCredits from '../components/workspace/WorkspaceCredits';
 import PlatformAdmin from '../components/platform/PlatformAdmin';
 import { memoryApi } from '../api/api';
 import type { MemoryEntry } from '../types';
+import { normalizeMemoryEntry } from '../lib/memoryNormalize';
 
 // Service components
 import TransformationAgent from '../components/services/TransformationAgent';
@@ -148,7 +149,11 @@ function WorkspaceMemoryScreen() {
         if (cancelled) return;
         const bag = response.memory || {};
         const savedEntries = bag[memoryKey];
-        setMemoryEntries(Array.isArray(savedEntries) ? (savedEntries as MemoryEntry[]) : []);
+        const rawList = Array.isArray(savedEntries) ? savedEntries : [];
+        const normalized = rawList
+          .map((row) => normalizeMemoryEntry(row))
+          .filter((row): row is MemoryEntry => Boolean(row));
+        setMemoryEntries(normalized);
         const meta: Record<string, unknown> = {};
         for (const [k, v] of Object.entries(bag)) {
           if (

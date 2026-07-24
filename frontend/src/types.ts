@@ -75,6 +75,10 @@ export interface MemoryEntry {
   /** human | morph | cli | system */
   source?: 'human' | 'morph' | 'cli' | 'system';
   label: MemoryLabel;
+  /** Blockers default open until resolved. */
+  status?: 'open' | 'resolved';
+  /** When a blocker was cleared. */
+  resolvedAt?: string;
 }
 
 export interface AuditLog {
