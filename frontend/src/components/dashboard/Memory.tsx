@@ -305,9 +305,19 @@ export default function Memory({
   };
 
   const cliLines = [
+    '# Install Morph CLI (once)',
+    'curl -fsSL https://raw.githubusercontent.com/polymaths-org/zexvro/main/scripts/install-morph.sh | bash',
+    'export PATH="$HOME/.local/bin:$PATH"',
+    '',
+    '# Link ZEXVRO account + this workspace',
     'morph login',
-    workspaceId ? `morph use ${workspaceId}${projectId ? ` ${projectId}` : ''}` : 'morph use <workspaceId>',
-    'morph bind',
+    workspaceId
+      ? `morph use ${workspaceId}${projectId ? ` ${projectId}` : ''}`
+      : 'morph use <workspaceId>',
+    'cd your-app && morph bind',
+    '',
+    '# LLM (CodexIn / Grok) then start',
+    'morph providers add codexin',
     'morph',
   ];
 
@@ -547,14 +557,20 @@ export default function Memory({
             className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[11px] font-medium text-zinc-200 transition hover:bg-white/10"
           >
             <Copy className="h-3 w-3" />
-            {copied === 'cli' ? 'Copied' : 'Copy setup'}
+            {copied === 'cli' ? 'Copied' : 'Copy install + setup'}
           </button>
         </div>
         <pre className="overflow-x-auto border-t border-white/10 bg-black/40 px-4 py-3 font-mono text-[11px] leading-6 text-cyan-100/90">
-          {cliLines.map((line) => (
-            <div key={line}>
-              <span className="select-none text-zinc-500">$ </span>
-              {line}
+          {cliLines.map((line, i) => (
+            <div key={`${i}-${line}`}>
+              {line.startsWith('#') || line === '' ? (
+                <span className="text-zinc-500">{line || ' '}</span>
+              ) : (
+                <>
+                  <span className="select-none text-zinc-500">$ </span>
+                  {line}
+                </>
+              )}
             </div>
           ))}
         </pre>

@@ -276,13 +276,23 @@ export default function AgentStudio({ cliConnected = false, cliLastActive = null
 
   const cliSnippet =
     scope === 'project' && projectId
-      ? `morph login
+      ? `# install once
+curl -fsSL https://raw.githubusercontent.com/polymaths-org/zexvro/main/scripts/install-morph.sh | bash
+export PATH="$HOME/.local/bin:$PATH"
+
+morph login
 morph use ${workspaceId || '<workspaceId>'} ${projectId}
 cd your-app && morph bind
+morph providers add codexin
 morph`
-      : `morph login
+      : `# install once
+curl -fsSL https://raw.githubusercontent.com/polymaths-org/zexvro/main/scripts/install-morph.sh | bash
+export PATH="$HOME/.local/bin:$PATH"
+
+morph login
 morph use ${workspaceId || '<workspaceId>'}
 cd your-app && morph bind
+morph providers add codexin
 morph`;
 
   return (

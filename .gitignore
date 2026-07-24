@@ -48,3 +48,9 @@ kaggle.json
 
 # Playwright CLI local snapshots
 .playwright-cli/
+
+# Morph engine build artifacts (install builds locally)
+services/morph/dist/
+services/morph/bin/morph-engine
+services/morph/engine/.src-path
+services/morph/engine-src*/

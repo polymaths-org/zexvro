@@ -1,4 +1,346 @@
 #!/usr/bin/env bash
+# Morph — ZEXVRO transformation agent (Morph application, not OpenCode-branded)
 set -euo pipefail
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-exec node "$ROOT/bin/morph.mjs" "$@"
+
+resolve_morph_home() {
+  local src dir
+  src="${BASH_SOURCE[0]}"
+  while [[ -L "$src" ]]; do
+    dir="$(cd "$(dirname "$src")" && pwd)"
+    src="$(readlink "$src")"
+    [[ "$src" != /* ]] && src="$dir/$src"
+  done
+  dir="$(cd "$(dirname "$src")" && pwd)"
+  cd "$dir/.." && pwd
+}
+
+MORPH_HOME="${MORPH_HOME:-$(resolve_morph_home)}"
+export MORPH_HOME
+MORPH_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/morph"
+export MORPH_CONFIG_DIR
+
+# Directory the user launched morph from — always the project workspace.
+# Never use the engine source tree as the project.
+LAUNCH_DIR="$(pwd -P 2>/dev/null || pwd)"
+export PWD="$LAUNCH_DIR"
+
+VERSION_FILE="$MORPH_HOME/engine/VERSION"
+VERSION="$(tr -d '[:space:]' < "$VERSION_FILE" 2>/dev/null || echo 1.18.3)"
+SRC_DIR="${MORPH_SRC_DIR:-$HOME/.cache/morph/engine-src-$VERSION}"
+if [[ -f "$MORPH_HOME/engine/.src-path" ]]; then
+  SRC_DIR="$(tr -d '[:space:]' < "$MORPH_HOME/engine/.src-path")"
+fi
+
+die() { printf '\033[31m✗ %s\033[0m\n' "$*" >&2; exit 1; }
+info() { printf '  · %s\n' "$*"; }
+ok() { printf '\033[32m  ✓\033[0m %s\n' "$*"; }
+
+# Resolve workspace: optional first arg if it's a directory, else LAUNCH_DIR.
+resolve_workspace() {
+  if [[ $# -gt 0 && -d "$1" && "$1" != -* ]]; then
+    (cd "$1" && pwd -P)
+    return 0
+  fi
+  echo "$LAUNCH_DIR"
+}
+
+print_banner() {
+  printf '\n'
+  printf '\033[36m  ███╗   ███╗ ██████╗ ██████╗ ██████╗ ██╗  ██╗\033[0m\n'
+  printf '\033[36m  ████╗ ████║██╔═══██╗██╔══██╗██╔══██╗██║  ██║\033[0m\n'
+  printf '\033[36m  ██╔████╔██║██║   ██║██████╔╝██████╔╝███████║\033[0m\n'
+  printf '\033[36m  ██║╚██╔╝██║██║   ██║██╔══██╗██╔═══╝ ██╔══██║\033[0m\n'
+  printf '\033[36m  ██║ ╚═╝ ██║╚██████╔╝██║  ██║██║     ██║  ██║\033[0m\n'
+  printf '\033[36m  ╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═╝╚═╝     ╚═╝  ╚═╝\033[0m\n'
+  printf '\n'
+  printf '  \033[1mZEXVRO transformation agent\033[0m  ·  Web2 → Web3\n'
+  printf '\n'
+}
+
+seed_config() {
+  mkdir -p "$MORPH_CONFIG_DIR"
+  local seed="$MORPH_HOME/seed"
+  [[ -d "$seed" ]] || return 0
+  # Old custom Morph REPL wrote config.json with unknown keys — move it aside
+  if [[ -f "$MORPH_CONFIG_DIR/config.json" ]] && ! grep -q '"\$schema".*opencode\|default_agent\|mcp' "$MORPH_CONFIG_DIR/config.json" 2>/dev/null; then
+    mv -f "$MORPH_CONFIG_DIR/config.json" "$MORPH_CONFIG_DIR/config.legacy-repl.json" 2>/dev/null || true
+  fi
+  if [[ ! -f "$MORPH_CONFIG_DIR/morph.jsonc" && ! -f "$MORPH_CONFIG_DIR/morph.json" ]]; then
+    cp -f "$seed/morph.jsonc" "$MORPH_CONFIG_DIR/morph.jsonc" 2>/dev/null || true
+  fi
+  [[ -f "$seed/tui.json" ]] && cp -f "$seed/tui.json" "$MORPH_CONFIG_DIR/tui.json"
+  [[ -f "$seed/AGENTS.md" ]] && cp -f "$seed/AGENTS.md" "$MORPH_CONFIG_DIR/AGENTS.md"
+  for d in agents skills themes commands; do
+    if [[ -d "$seed/$d" ]]; then
+      mkdir -p "$MORPH_CONFIG_DIR/$d"
+      cp -a "$seed/$d/." "$MORPH_CONFIG_DIR/$d/"
+    fi
+  done
+  # Built-in providers (CodexIn, …) — merge into existing morph.jsonc
+  if [[ -f "$MORPH_HOME/bin/ensure-builtin-providers.mjs" ]]; then
+    MORPH_ENSURE_QUIET=1 node "$MORPH_HOME/bin/ensure-builtin-providers.mjs" 2>/dev/null || true
+  fi
+}
+
+find_engine_bin() {
+  local c
+  for c in \
+    "$MORPH_HOME/bin/morph-engine" \
+    "$MORPH_HOME/dist/morph" \
+    "$HOME/.local/share/morph/bin/morph-engine" \
+    "$HOME/.cache/morph/bin/morph-engine"
+  do
+    [[ -x "$c" ]] && { echo "$c"; return 0; }
+  done
+  return 1
+}
+
+# Hash of branding inputs — only re-patch engine source when this changes.
+brand_inputs_hash() {
+  {
+    echo "version:$VERSION"
+    [[ -f "$MORPH_HOME/engine/VERSION" ]] && cat "$MORPH_HOME/engine/VERSION"
+    [[ -f "$MORPH_HOME/engine/apply-branding.sh" ]] && sha256sum "$MORPH_HOME/engine/apply-branding.sh"
+    if [[ -d "$MORPH_HOME/engine/patches" ]]; then
+      find "$MORPH_HOME/engine/patches" -type f 2>/dev/null | sort | while read -r f; do
+        sha256sum "$f"
+      done
+    fi
+  } 2>/dev/null | sha256sum | awk '{print $1}'
+}
+
+needs_rebrand() {
+  local want have=""
+  want="$(brand_inputs_hash)"
+  [[ -z "$want" ]] && return 0
+  if [[ -f "$SRC_DIR/.morph-brand-stamp" ]]; then
+    have="$(tr -d '[:space:]' < "$SRC_DIR/.morph-brand-stamp")"
+  fi
+  [[ "$want" != "$have" ]]
+}
+
+write_brand_stamp() {
+  mkdir -p "$SRC_DIR" 2>/dev/null || true
+  brand_inputs_hash > "$SRC_DIR/.morph-brand-stamp" 2>/dev/null || true
+}
+
+ensure_engine_src() {
+  command -v bun >/dev/null 2>&1 || die "bun required to run Morph from source. Install bun, or: morph build-engine"
+  [[ -f "$SRC_DIR/packages/opencode/src/index.ts" ]] || {
+    info "Preparing Morph engine source (one-time)…"
+    bash "$MORPH_HOME/engine/prepare-src.sh"
+    if [[ -f "$MORPH_HOME/engine/.src-path" ]]; then
+      SRC_DIR="$(tr -d '[:space:]' < "$MORPH_HOME/engine/.src-path")"
+    fi
+  }
+  # Only re-brand when patches/VERSION change — not on every launch
+  if needs_rebrand || [[ "${MORPH_FORCE_REBRAND:-0}" == "1" ]]; then
+    info "Applying Morph branding (patches updated)…"
+    bash "$MORPH_HOME/engine/apply-branding.sh" "$SRC_DIR"
+    write_brand_stamp
+  fi
+  if [[ ! -d "$SRC_DIR/node_modules" ]]; then
+    info "bun install in engine source…"
+    (cd "$SRC_DIR" && bun install) || die "bun install failed"
+  fi
+}
+
+# bun --cwd is only for resolving the engine package — project is always WORKSPACE.
+run_via_bun() {
+  ensure_engine_src
+  export MORPH_HOME
+  local workspace
+  workspace="$(resolve_workspace "$@")"
+  local -a rest=()
+  if [[ $# -gt 0 && -d "$1" && "$1" != -* ]]; then
+    shift
+  fi
+  rest=("$@")
+  export MORPH_PROJECT_DIR="$workspace"
+  # Pass absolute workspace as the [project] positional so Morph never opens in engine-src.
+  exec bun run --cwd "$SRC_DIR/packages/opencode" --conditions=browser src/index.ts \
+    --agent morph \
+    "$workspace" \
+    "${rest[@]}"
+}
+
+print_help() {
+  print_banner
+  cat <<EOF
+  Morph is a Morph-branded agent (OpenCode engine fork) for ZEXVRO Web2→Web3.
+
+  Install:
+    bash services/morph/install.sh
+
+  Start:
+    morph
+    morph /path/to/app
+
+  Inside:
+    /connect     providers
+    Tab          Morph / Morph Ops / Plan
+
+  ZEXVRO account (required for Gate/NFT/memory as YOU):
+    morph login              # device-code → console.zexvro.in approve
+    Inside Morph TUI:
+      /use                   # pick workspace by NAME (then optional project)
+      /bind                  # same + write .morph/project.json
+      /zexvro                # account + active workspace
+    Outside (still ok):
+      morph whoami | workspaces | use | bind | logout
+
+  LLM providers (brain only — not ZEXVRO):
+    morph providers add codexin   # built-in CodexIn → Grok 4.5
+    morph providers add           # interactive (built-ins + custom)
+    morph providers add --list
+    /connect in TUI               # CodexIn under Popular
+
+  Other:
+    morph run "…"
+    morph doctor
+    morph help
+
+  Config:   $MORPH_CONFIG_DIR
+  Package:  $MORPH_HOME
+
+EOF
+}
+
+doctor() {
+  print_banner
+  seed_config
+  info "MORPH_HOME       $MORPH_HOME"
+  info "MORPH_CONFIG_DIR $MORPH_CONFIG_DIR"
+  info "launch dir       $LAUNCH_DIR  (project when you run morph)"
+  info "engine source    $SRC_DIR  (runtime only — not your project)"
+  if eng="$(find_engine_bin)"; then
+    ok "standalone engine $eng"
+  else
+    info "standalone engine not built (will use bun + branded source)"
+  fi
+  [[ -f "$MORPH_CONFIG_DIR/morph.jsonc" || -f "$MORPH_CONFIG_DIR/morph.json" ]] && ok "morph.jsonc" || die "missing morph config"
+  [[ -f "$MORPH_CONFIG_DIR/agents/morph.md" ]] && ok "agent morph" || die "missing agent"
+  [[ -f "$MORPH_CONFIG_DIR/themes/morph.json" ]] && ok "theme morph" || die "missing theme"
+  [[ -f "$MORPH_CONFIG_DIR/skills/web2-web3/SKILL.md" ]] && ok "skills" || die "missing skills"
+  [[ -f "$MORPH_HOME/mcp/src/index.mjs" ]] && ok "ZEXVRO MCP" || die "missing MCP"
+  if [[ -f "$SRC_DIR/packages/tui/src/logo.ts" ]]; then
+    if grep -q '█▀▄▀█' "$SRC_DIR/packages/tui/src/logo.ts" 2>/dev/null; then
+      ok "Morph logo in engine source"
+    else
+      info "logo not yet branded — run morph prepare-src"
+    fi
+  fi
+  if [[ -f "$SRC_DIR/packages/core/src/global.ts" ]] && grep -q 'const app = "morph"' "$SRC_DIR/packages/core/src/global.ts"; then
+    ok "app name morph (config → ~/.config/morph)"
+  fi
+  # ZEXVRO login status
+  if node -e "import('$MORPH_HOME/lib/zexvro-store.mjs').then(m=>process.exit(m.isLoggedIn()?0:1))" 2>/dev/null; then
+    ok "ZEXVRO logged in"
+    node -e "import('$MORPH_HOME/lib/zexvro-store.mjs').then(m=>console.log('  · user', m.sessionSummary().username||'?'))" 2>/dev/null || true
+  else
+    info "ZEXVRO not logged in — morph login"
+  fi
+  printf '\n'
+  info "Project = folder you ran morph in (never engine-src)"
+  info "ZEXVRO account: morph login · morph use · morph bind"
+  printf '\n'
+}
+
+case "${1:-}" in
+  help|-h|--help) print_help; exit 0 ;;
+  doctor) doctor; exit 0 ;;
+  build-engine|build) exec bash "$MORPH_HOME/engine/build.sh" ;;
+  prepare-src) exec bash "$MORPH_HOME/engine/prepare-src.sh" ;;
+  rebrand|brand)
+    export MORPH_FORCE_REBRAND=1
+    ensure_engine_src
+    ok "Morph branding applied → $SRC_DIR"
+    exit 0
+    ;;
+  install) exec bash "$MORPH_HOME/install.sh" ;;
+  # ZEXVRO account
+  login|logout|whoami|workspaces|ws|use|bind|memory|status)
+    exec node "$MORPH_HOME/bin/zexvro-cmd.mjs" "$@"
+    ;;
+  migrate)
+    shift || true
+    exec node "$MORPH_HOME/bin/migrate-web3.mjs" "$@"
+    ;;
+  providers|provider)
+    shift || true
+    sub="${1:-}"
+    case "$sub" in
+      add|"")
+        shift || true
+        exec node "$MORPH_HOME/bin/providers-add.mjs" add "$@"
+        ;;
+      list|--list|-l)
+        exec node "$MORPH_HOME/bin/providers-add.mjs" --list
+        ;;
+      ensure)
+        exec node "$MORPH_HOME/bin/ensure-builtin-providers.mjs"
+        ;;
+      *)
+        die "Usage: morph providers add [codexin|custom] | morph providers list | morph providers ensure"
+        ;;
+    esac
+    ;;
+  version|-v|--version)
+    echo "Morph (ZEXVRO) · engine OpenCode-fork v$VERSION"
+    if eng="$(find_engine_bin)"; then "$eng" --version; fi
+    exit 0
+    ;;
+esac
+
+seed_config
+export MORPH_HOME
+export PWD="$LAUNCH_DIR"
+# Project dir for MCP + tools (always the app folder, never engine-src)
+export MORPH_PROJECT_DIR="$(resolve_workspace "$@")"
+# Propagate ZEXVRO token into MCP child if logged in (MCP also reads file store)
+if tok="$(node -e "import('file://$MORPH_HOME/lib/zexvro-store.mjs').then(m=>{const t=m.getAccessToken(); if(t) process.stdout.write(t)})" 2>/dev/null)" && [[ -n "$tok" ]]; then
+  export ZEXVRO_ACCESS_TOKEN="$tok"
+fi
+
+if eng="$(find_engine_bin)"; then
+  case "${1:-}" in
+    run)
+      shift
+      workspace="$(resolve_workspace "$@")"
+      if [[ $# -gt 0 && -d "$1" && "$1" != -* ]]; then shift; fi
+      export MORPH_PROJECT_DIR="$workspace"
+      exec "$eng" run --agent morph --dir "$workspace" "$@"
+      ;;
+    mcp)
+      shift
+      exec "$eng" mcp "$@"
+      ;;
+    *)
+      workspace="$(resolve_workspace "$@")"
+      if [[ $# -gt 0 && -d "$1" && "$1" != -* ]]; then shift; fi
+      export MORPH_PROJECT_DIR="$workspace"
+      exec "$eng" --agent morph "$workspace" "$@"
+      ;;
+  esac
+fi
+
+# Bun-run branded fork
+case "${1:-}" in
+  run)
+    shift
+    ensure_engine_src
+    workspace="$(resolve_workspace "$@")"
+    if [[ $# -gt 0 && -d "$1" && "$1" != -* ]]; then shift; fi
+    export MORPH_PROJECT_DIR="$workspace"
+    exec bun run --cwd "$SRC_DIR/packages/opencode" --conditions=browser src/index.ts \
+      run --agent morph --dir "$workspace" "$@"
+    ;;
+  mcp)
+    shift
+    ensure_engine_src
+    exec bun run --cwd "$SRC_DIR/packages/opencode" --conditions=browser src/index.ts mcp "$@"
+    ;;
+  *)
+    run_via_bun "$@"
+    ;;
+esac
