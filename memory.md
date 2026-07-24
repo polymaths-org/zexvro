@@ -1,5 +1,12 @@
 # ZEXVRO Shared Memory
 
+## 2026-07-25 - Push merged main + production deploy
+
+- Pushed `2f33e63` (merge Morph/Gate + Nabil platform) to `origin/main`
+- `scripts/deploy-production.sh`: Dynamo tables ok, Lambda `zexvro-agent-backend` updated, Cloudflare Pages `zexvro` deployed (preview `09051799.zexvro-7oq.pages.dev`)
+- Smoke: console 200, API unauth 401, NFT mainnet health ok, De-pin ok, Gate bank 12/96, promptwars web3 siteKey+captcha assets ok
+- Gate ECS still `zexvro-gate:4` (captcha seed already live)
+
 ## 2026-07-25 - Gate captcha photo bank live
 
 - Root cause: prod Gate `captchaPhotoBank` was empty (Docker never shipped assets; bank gitignored)
