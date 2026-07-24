@@ -1,12 +1,35 @@
 /**
- * Client for ZEXVRO Gate (Agent Auth).
+ * Client for ZEXVRO Gate / REQWID (Agent Auth).
  * Production: set VITE_AGENT_AUTH_API_URL=https://api.zexvro.in/gate
+ * Local dev: Vite proxies /api/agent-auth → :4103
+ *
+ * If VITE_* is missing on a hosted console host, fall back to production Gate
+ * so Cloudflare Pages never treats SPA HTML as JSON.
  */
 
-const GATE_API_BASE = (import.meta.env.VITE_AGENT_AUTH_API_URL || '/api/agent-auth').replace(
-  /\/$/,
-  '',
-)
+function resolveGateApiBase(): string {
+  const fromEnv = String(import.meta.env.VITE_AGENT_AUTH_API_URL || '').trim()
+  if (fromEnv) return fromEnv.replace(/\/$/, '')
+
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname
+    // Hosted console / marketing — never use relative /api/agent-auth (SPA shell)
+    if (
+      host === 'console.zexvro.in' ||
+      host.endsWith('.zexvro.pages.dev') ||
+      host.endsWith('.pages.dev') ||
+      host === 'zexvro.in' ||
+      host === 'www.zexvro.in'
+    ) {
+      return 'https://api.zexvro.in/gate'
+    }
+  }
+
+  // Local Vite dev proxy
+  return '/api/agent-auth'
+}
+
+const GATE_API_BASE = resolveGateApiBase()
 
 export type GateStatus = {
   status: string

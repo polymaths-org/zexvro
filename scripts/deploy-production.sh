@@ -12,6 +12,9 @@ API_URL="${VITE_API_URL:-https://qkuostruh3.execute-api.us-east-1.amazonaws.com}
 APP_URL="${VITE_APP_URL:-https://console.zexvro.in}"
 NFT_URL="${VITE_NFT_API_URL:-https://iyk6idmup6.us-east-1.awsapprunner.com}"
 DEPIN_URL="${VITE_DEPIN_API_URL:-https://sr9k3xpmbj.us-east-1.awsapprunner.com}"
+# REQWID = Gate (agent-auth). Must be absolute in production — relative /api/agent-auth
+# is only the Vite dev proxy and returns SPA HTML on Cloudflare Pages.
+GATE_URL="${VITE_AGENT_AUTH_API_URL:-https://api.zexvro.in/gate}"
 PAGES_PROJECT="${CF_PAGES_PROJECT:-zexvro}"
 
 ensure_table() {
@@ -120,6 +123,8 @@ export VITE_API_URL="$API_URL"
 export VITE_APP_URL="$APP_URL"
 export VITE_NFT_API_URL="$NFT_URL"
 export VITE_DEPIN_API_URL="$DEPIN_URL"
+export VITE_AGENT_AUTH_API_URL="$GATE_URL"
+echo "  VITE_AGENT_AUTH_API_URL=$VITE_AGENT_AUTH_API_URL"
 npm run build
 
 echo "==> 4) Deploy Cloudflare Pages ($PAGES_PROJECT)"
@@ -140,7 +145,10 @@ curl -sS -o /dev/null -w "api platform/me (no auth) %{http_code}\n" "$API_URL/ap
 curl -sS -o /dev/null -w "api credits path (no auth) %{http_code}\n" -X POST "$API_URL/api/workspaces/ws_smoke/credits/validate-promo" -H 'Content-Type: application/json' -d '{"code":"X"}'
 curl -sS -o /dev/null -w "invite accept route %{http_code}\n" "$APP_URL/invite/accept"
 curl -sS -o /dev/null -w "nft health %{http_code}\n" "$NFT_URL/health" || echo "nft health skip"
+curl -sS -o /dev/null -w "gate health %{http_code}\n" "$GATE_URL/health" || echo "gate health skip"
+curl -sS -o /dev/null -w "gate status %{http_code}\n" "$GATE_URL/status" || echo "gate status skip"
 echo "DONE — hard refresh https://console.zexvro.in"
 echo "  Credits: /dashboard/w/<id>/credits"
 echo "  Platform: /dashboard/platform"
+echo "  REQWID/Gate: $GATE_URL"
 echo "  Lambda: $LAMBDA ($REGION)"
