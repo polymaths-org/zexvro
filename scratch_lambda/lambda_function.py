@@ -1833,7 +1833,8 @@ def lambda_handler(event, context):
             "paymentAsset": "USDC",
         })
 
-    # Purchase credit pack — sandbox grant (always) + NFT checkout link when collection configured
+    # Purchase credit pack — ALWAYS opens NFT wallet checkout (no instant grant).
+    # ZCR is granted only after successful NFT payment via /api/internal/credits/topup.
     elif (
         path.startswith("/api/workspaces/")
         and path.endswith("/credits/purchase")
@@ -1857,37 +1858,48 @@ def lambda_handler(event, context):
         if not pack:
             return respond(400, {"error": "invalid_pack", "error_description": "Unknown packId"})
         collection_id = (os.environ.get("ZCR_NFT_COLLECTION_ID") or "").strip()
+        # Optional per-pack override: ZCR_NFT_COLLECTION_ID_ZCR_100 etc.
+        pack_env_key = f"ZCR_NFT_COLLECTION_ID_{pack_id.upper()}"
+        collection_id = (os.environ.get(pack_env_key) or collection_id or "").strip()
         frontend = (os.environ.get("FRONTEND_URL") or "https://console.zexvro.in").rstrip("/")
-        nft_checkout_url = None
-        if collection_id:
-            from urllib.parse import urlencode
-            q = urlencode({
-                "workspaceId": workspace_id,
-                "zcrAmount": str(pack["zcrAmount"]),
-                "packId": pack_id,
-            })
-            nft_checkout_url = f"{frontend}/nft/collections/{collection_id}?{q}"
 
-        # Sandbox / platform pack purchase: grant ZCR immediately (idempotent ref optional)
-        # Real USDC settlement is via NFT checkout → internal topup; this path is for
-        # founders/dev and workspaces until Credit Pack collection is configured.
-        allow_sandbox = (os.environ.get("ZCR_ALLOW_SANDBOX_PURCHASE") or "1").strip() not in ("0", "false", "no")
+        if not collection_id:
+            return respond(503, {
+                "error": "nft_gateway_not_configured",
+                "error_description": (
+                    "Credit pack NFT collection is not configured. "
+                    "Create a live Credit Pack collection with primary sale, then set "
+                    "Lambda env ZCR_NFT_COLLECTION_ID to that collection UUID."
+                ),
+                "pack": pack,
+            })
+
+        from urllib.parse import urlencode
+        q = urlencode({
+            "collectionId": collection_id,
+            "workspaceId": workspace_id,
+            "zcrAmount": str(pack["zcrAmount"]),
+            "packId": pack_id,
+        })
+        # Hosted wallet checkout popup (Freighter sign → Stellar pay → ZCR grant)
+        nft_checkout_url = f"{frontend}/nft/embed/checkout?{q}"
+
+        # Explicit opt-in only (never default): founders/dev testing without chain.
+        allow_sandbox = (os.environ.get("ZCR_ALLOW_SANDBOX_PURCHASE") or "0").strip().lower() in (
+            "1", "true", "yes", "on",
+        )
         grant_result = None
-        if allow_sandbox and not body.get("nftOnly"):
-            ref = (body.get("ref") or "").strip() or f"pack_purchase:{pack_id}:{workspace_id}:{int(time.time())}"
+        if allow_sandbox and body.get("sandbox") is True:
+            ref = (body.get("ref") or "").strip() or f"sandbox_pack:{pack_id}:{workspace_id}:{int(time.time())}"
             try:
                 grant_result = get_credits_service().grant(
                     workspace_id,
                     int(pack["zcrAmount"]),
-                    reason=f"pack_purchase:{pack_id}",
+                    reason=f"sandbox_pack:{pack_id}",
                     actor_id=username,
                     actor_email=caller_email,
                     ref=ref,
-                    meta={
-                        "packId": pack_id,
-                        "usdcPrice": pack.get("usdcPrice"),
-                        "mode": "sandbox" if not collection_id else "platform_pack",
-                    },
+                    meta={"packId": pack_id, "mode": "sandbox_explicit"},
                     tx_type="topup",
                 )
             except Exception as exc:
@@ -1897,13 +1909,14 @@ def lambda_handler(event, context):
             "status": "success",
             "pack": pack,
             "nftCheckoutUrl": nft_checkout_url,
+            "nftCollectionId": collection_id,
             "granted": grant_result is not None,
             "balance": (grant_result or {}).get("balance"),
             "tx": (grant_result or {}).get("tx"),
             "message": (
-                f"+{pack['zcrAmount']} ZCR added to workspace"
+                f"Sandbox grant +{pack['zcrAmount']} ZCR"
                 if grant_result
-                else "Open NFT checkout to complete USDC purchase"
+                else "Open NFT wallet checkout to pay with crypto and receive ZCR"
             ),
         })
 

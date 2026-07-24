@@ -1086,3 +1086,12 @@ Use `None` for empty fields. Do not delete fields.
 - Purchase: `GET /api/credits/packs` + `POST .../credits/purchase` (Starter/Builder/Scale packs, instant ZCR grant).
 - NFT gateway hook: checkout can carry `creditWorkspaceId`/`creditZcrAmount`; on confirm NFT service posts internal topup (needs App Runner env: PLATFORM_CREDITS_URL, PLATFORM_INTERNAL_SECRET, ZCR_CREDIT_COLLECTION_IDS).
 - Deployed Lambda + Cloudflare Pages. NFT App Runner redeploy still required for live USDC pack→ZCR path.
+
+## 2026-07-24 - OpenCode with Nabil - Buy pack opens NFT wallet popup (no instant ZCR)
+
+- Bug: Buy pack granted ZCR immediately (sandbox default).
+- Fix: purchase API never grants by default; returns `/nft/embed/checkout?...` Freighter popup URL.
+- Credits UI: "Pay with wallet" opens NFT gateway popup; listens for postMessage success then refreshes balance.
+- Embed checkout passes creditWorkspaceId/zcrAmount/packId into createPublicCheckoutIntent for post-pay topup.
+- ZCR_ALLOW_SANDBOX_PURCHASE=0 in prod Lambda.
+- Still required for full flow: set ZCR_NFT_COLLECTION_ID to a live Credit Pack collection with primary sale; redeploy NFT App Runner with PLATFORM_CREDITS_URL + PLATFORM_INTERNAL_SECRET + ZCR_CREDIT_COLLECTION_IDS.

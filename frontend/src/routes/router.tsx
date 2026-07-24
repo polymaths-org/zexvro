@@ -639,6 +639,10 @@ const embedNftCheckoutRoute = createRoute({
     collectionId: typeof search.collectionId === 'string' ? search.collectionId : '',
     // Game embeds (e.g. http://127.0.0.1:4173) pass their origin so success postMessage can return.
     openerOrigin: typeof search.openerOrigin === 'string' ? search.openerOrigin : '',
+    // Platform credit pack purchase (ZCR grant after wallet pay)
+    workspaceId: typeof search.workspaceId === 'string' ? search.workspaceId : '',
+    zcrAmount: typeof search.zcrAmount === 'string' ? search.zcrAmount : '',
+    packId: typeof search.packId === 'string' ? search.packId : '',
   }),
   component: EmbedCheckout,
 });

@@ -76,9 +76,16 @@ export default function EmbedCheckout() {
   const search = useSearch({ strict: false }) as {
     collectionId?: string;
     openerOrigin?: string;
+    workspaceId?: string;
+    zcrAmount?: string;
+    packId?: string;
   };
   const collectionId = search.collectionId || '';
   const openerOrigin = search.openerOrigin || '';
+  const creditWorkspaceId = (search.workspaceId || '').trim();
+  const creditZcrAmount = Number(search.zcrAmount || 0) || undefined;
+  const creditPackId = (search.packId || '').trim() || undefined;
+  const isCreditPack = Boolean(creditWorkspaceId && creditZcrAmount && creditZcrAmount > 0);
 
   const [collection, setCollection] = useState<PublicNftCollection | null>(null);
   const [loading, setLoading] = useState(true);
@@ -163,6 +170,13 @@ export default function EmbedCheckout() {
       const next = await createPublicCheckoutIntent({
         collectionId,
         buyerAddress: address,
+        ...(isCreditPack
+          ? {
+              creditWorkspaceId,
+              creditZcrAmount,
+              creditPackId,
+            }
+          : {}),
       });
       setIntent(next);
     } catch (err) {
@@ -198,6 +212,13 @@ export default function EmbedCheckout() {
         'success',
         {
           collectionId,
+          ...(isCreditPack
+            ? {
+                creditWorkspaceId,
+                creditZcrAmount,
+                creditPackId,
+              }
+            : {}),
           tokenId: result.intent.tokenId,
           transactionHash: hash,
           buyerAddress: result.intent.buyerAddress,
@@ -273,7 +294,15 @@ export default function EmbedCheckout() {
               )}
             </div>
             <div className="min-w-0">
-              <h1 className="truncate text-lg font-semibold text-white">{collection.name}</h1>
+              <h1 className="truncate text-lg font-semibold text-white">
+                {isCreditPack ? 'Buy Zexvro credits' : collection.name}
+              </h1>
+              {isCreditPack ? (
+                <p className="mt-1 text-sm text-emerald-400">
+                  +{creditZcrAmount} ZCR
+                  {creditPackId ? ` · ${creditPackId}` : ''}
+                </p>
+              ) : null}
               {priceLabel && (
                 <p className="mt-1 text-sm tabular-nums text-zinc-300">{priceLabel}</p>
               )}

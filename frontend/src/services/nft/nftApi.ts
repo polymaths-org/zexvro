@@ -532,6 +532,10 @@ export async function createPublicCheckoutIntent(input: {
   /** Optional. Omit to let the API allocate the next free token ID. */
   tokenId?: number;
   idempotencyKey?: string;
+  /** Platform ZCR credit pack: grant after confirmed wallet payment. */
+  creditWorkspaceId?: string;
+  creditZcrAmount?: number;
+  creditPackId?: string;
 }) {
   const idempotencyKey =
     input.idempotencyKey || crypto.randomUUID?.() || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
@@ -547,6 +551,13 @@ export async function createPublicCheckoutIntent(input: {
         collectionId: input.collectionId,
         buyerAddress: input.buyerAddress,
         ...(input.tokenId === undefined ? {} : { tokenId: input.tokenId }),
+        ...(input.creditWorkspaceId
+          ? {
+              creditWorkspaceId: input.creditWorkspaceId,
+              creditZcrAmount: input.creditZcrAmount,
+              creditPackId: input.creditPackId,
+            }
+          : {}),
       }),
     },
   );
