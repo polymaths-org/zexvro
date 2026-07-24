@@ -717,7 +717,13 @@ export class NftService {
     const workspaceId = intent.creditWorkspaceId
     const amount =
       intent.creditZcrAmount ?? this.creditHooks.defaultZcrAmount ?? 100
-    if (!isCreditCollection || !workspaceId || amount <= 0) return
+    if (!isCreditCollection) return
+    if (!workspaceId || amount <= 0) {
+      console.error(
+        `[credits.topup] skipped checkout=${intent.id} collection=${collection.id}: missing creditWorkspaceId/amount (workspace=${workspaceId || 'none'} amount=${amount})`,
+      )
+      return
+    }
 
     try {
       const res = await fetch(`${url}/api/internal/credits/topup`, {

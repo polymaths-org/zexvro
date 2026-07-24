@@ -70,6 +70,17 @@ const chain =
         collectionWasmHash: config.NFT_COLLECTION_WASM_HASH,
       })
 
+const creditHooks = {
+  creditCollectionIds: config.ZCR_CREDIT_COLLECTION_IDS,
+  defaultZcrAmount: config.ZCR_DEFAULT_AMOUNT,
+  ...(config.PLATFORM_CREDITS_URL === undefined
+    ? {}
+    : { platformCreditsUrl: config.PLATFORM_CREDITS_URL }),
+  ...(config.PLATFORM_INTERNAL_SECRET === undefined
+    ? {}
+    : { platformInternalSecret: config.PLATFORM_INTERNAL_SECRET }),
+}
+
 const service = new NftService(
   repository,
   pinning,
@@ -78,12 +89,7 @@ const service = new NftService(
   () => new Date(),
   config.STELLAR_USDC_CONTRACT,
   metadataBaseUrl,
-  {
-    platformCreditsUrl: config.PLATFORM_CREDITS_URL,
-    platformInternalSecret: config.PLATFORM_INTERNAL_SECRET,
-    creditCollectionIds: config.ZCR_CREDIT_COLLECTION_IDS,
-    defaultZcrAmount: config.ZCR_DEFAULT_AMOUNT,
-  },
+  creditHooks,
 )
 
 createApp(service, {

@@ -420,13 +420,17 @@ export function createApp(service: NftService, options: CreateAppOptions) {
         collectionId: input.collectionId,
         buyerAddress: input.buyerAddress,
         ...(input.tokenId === undefined ? {} : { tokenId: input.tokenId }),
-        ...(input.creditWorkspaceId
-          ? {
+        ...(input.creditWorkspaceId === undefined
+          ? {}
+          : {
               creditWorkspaceId: input.creditWorkspaceId,
-              creditZcrAmount: input.creditZcrAmount,
-              creditPackId: input.creditPackId,
-            }
-          : {}),
+              ...(input.creditZcrAmount === undefined
+                ? {}
+                : { creditZcrAmount: input.creditZcrAmount }),
+              ...(input.creditPackId === undefined
+                ? {}
+                : { creditPackId: input.creditPackId }),
+            }),
       })
       response.status(201).json({ intent: presentPublicIntent(intent) })
     }),
@@ -788,13 +792,17 @@ export function createApp(service: NftService, options: CreateAppOptions) {
         collectionId: input.collectionId,
         buyerAddress: input.buyerAddress,
         ...(input.tokenId === undefined ? {} : { tokenId: input.tokenId }),
-        ...(input.creditWorkspaceId
-          ? {
+        ...(input.creditWorkspaceId === undefined
+          ? {}
+          : {
               creditWorkspaceId: input.creditWorkspaceId,
-              creditZcrAmount: input.creditZcrAmount,
-              creditPackId: input.creditPackId,
-            }
-          : {}),
+              ...(input.creditZcrAmount === undefined
+                ? {}
+                : { creditZcrAmount: input.creditZcrAmount }),
+              ...(input.creditPackId === undefined
+                ? {}
+                : { creditPackId: input.creditPackId }),
+            }),
       })
       response.status(201).json({ intent: presentIntent(intent, subject) })
     }),

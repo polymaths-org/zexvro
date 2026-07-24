@@ -201,16 +201,27 @@ export default function WorkspaceCredits() {
       }
       setBuyMsg('Complete payment in the Freighter wallet popup. ZCR is added after the on-chain purchase confirms.');
 
+      const allowedMessageOrigins = new Set([
+        origin,
+        'https://console.zexvro.in',
+        'https://www.console.zexvro.in',
+        'https://zexvro.pages.dev',
+        'https://main.zexvro.pages.dev',
+      ]);
       const onMessage = (event: MessageEvent) => {
-        if (event.origin !== origin) return;
+        // Popup may be on console.zexvro.in while dashboard is localhost or another host.
+        if (!allowedMessageOrigins.has(event.origin) && event.origin !== origin) return;
         const data = event.data;
         if (!data || data.source !== 'zexvro-nft-checkout') return;
         if (data.type === 'success') {
           setBuyMsg(
-            `Payment confirmed${data.payload?.creditZcrAmount ? ` · +${data.payload.creditZcrAmount} ZCR pending grant` : ''}. Refreshing balance…`,
+            `Payment confirmed${data.payload?.creditZcrAmount ? ` · +${data.payload.creditZcrAmount} ZCR` : ''}. Refreshing balance…`,
           );
           window.removeEventListener('message', onMessage);
+          // Poll a few times — NFT service topup is async after chain confirm.
           void load();
+          window.setTimeout(() => void load(), 1500);
+          window.setTimeout(() => void load(), 4000);
         } else if (data.type === 'error') {
           setBuyMsg(data.payload?.message || 'Checkout failed');
         } else if (data.type === 'close') {

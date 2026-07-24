@@ -72,6 +72,14 @@ function atomicToUsdc(value: string) {
  * Hosted embed/popup checkout for third-party web games.
  * Route: /nft/embed/checkout?collectionId=...
  */
+function readQueryParam(name: string): string {
+  try {
+    return new URLSearchParams(window.location.search).get(name)?.trim() || '';
+  } catch {
+    return '';
+  }
+}
+
 export default function EmbedCheckout() {
   const search = useSearch({ strict: false }) as {
     collectionId?: string;
@@ -80,12 +88,17 @@ export default function EmbedCheckout() {
     zcrAmount?: string;
     packId?: string;
   };
-  const collectionId = search.collectionId || '';
-  const openerOrigin = search.openerOrigin || '';
-  const creditWorkspaceId = (search.workspaceId || '').trim();
-  const creditZcrAmount = Number(search.zcrAmount || 0) || undefined;
-  const creditPackId = (search.packId || '').trim() || undefined;
-  const isCreditPack = Boolean(creditWorkspaceId && creditZcrAmount && creditZcrAmount > 0);
+  // Prefer router search, but always fall back to window.location (popup / CF Pages edge cases).
+  const collectionId = (search.collectionId || readQueryParam('collectionId') || '').trim();
+  const openerOrigin = (search.openerOrigin || readQueryParam('openerOrigin') || '').trim();
+  const creditWorkspaceId = (search.workspaceId || readQueryParam('workspaceId') || '').trim();
+  const rawZcr = (search.zcrAmount || readQueryParam('zcrAmount') || '').trim();
+  const creditZcrAmount = Number(rawZcr || 0) || (creditWorkspaceId ? 100 : undefined);
+  const creditPackId =
+    (search.packId || readQueryParam('packId') || '').trim() ||
+    (creditWorkspaceId ? 'zcr_100' : undefined);
+  // Any workspace-linked checkout is a platform credit pack purchase.
+  const isCreditPack = Boolean(creditWorkspaceId);
 
   const [collection, setCollection] = useState<PublicNftCollection | null>(null);
   const [loading, setLoading] = useState(true);

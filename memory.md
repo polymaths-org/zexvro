@@ -1095,3 +1095,27 @@ Use `None` for empty fields. Do not delete fields.
 - Embed checkout passes creditWorkspaceId/zcrAmount/packId into createPublicCheckoutIntent for post-pay topup.
 - ZCR_ALLOW_SANDBOX_PURCHASE=0 in prod Lambda.
 - Still required for full flow: set ZCR_NFT_COLLECTION_ID to a live Credit Pack collection with primary sale; redeploy NFT App Runner with PLATFORM_CREDITS_URL + PLATFORM_INTERNAL_SECRET + ZCR_CREDIT_COLLECTION_IDS.
+
+## 2026-07-24 - OpenCode with Nabil - Live Credit Pack collection + NFT topup redeploy
+
+- Created live Credit Pack NFT on testnet via `scripts/create-credit-pack-collection.mjs`:
+  - collectionId `fe1969df-4b6e-4279-84b9-f3b1ab3c9736`
+  - contract `CBOE522B5WZBR626EXWXHR6FZU3BQ2IBXYIMEAXTSCZ7IZG3OWQCMY3G`
+  - primary sale 50 USDC (50000000 atomic) payment token USDC SAC
+- Lambda env: `ZCR_NFT_COLLECTION_ID=fe1969df-…`, `ZCR_ALLOW_SANDBOX_PURCHASE=0`.
+- NFT App Runner redeployed image `deploy-zcr-topup-1784911681` with credit topup hooks + env:
+  PLATFORM_CREDITS_URL, PLATFORM_INTERNAL_SECRET, ZCR_CREDIT_COLLECTION_IDS, ZCR_DEFAULT_AMOUNT=100.
+- Fixed exactOptionalPropertyTypes in nft-service `app.ts` / `server.ts` for credit checkout fields.
+- Deploy script: `deploy-nft-depin-aws.mjs` now passes platform credit env through to App Runner.
+- Smoke: collection public live+sale; NFT/depin health ok. Full Freighter pay→ZCR still needs human wallet smoke on console Credits.
+- Do not commit secrets; App Runner holds PLATFORM_INTERNAL_SECRET as runtime env (same value as Lambda INTERNAL_CREDITS_SECRET).
+
+## 2026-07-24 - OpenCode with Nabil - Fix ZCR not increasing after Freighter pay
+
+- Root cause: confirmed checkouts (tokens #3/#4) had **no** `creditWorkspaceId` on intent → topup skipped; NFT pay succeeded only.
+- Also: localhost dashboard + console.zexvro.in popup blocked postMessage origin check.
+- Fix FE: EmbedCheckout reads `workspaceId`/`zcrAmount`/`packId` from `window.location.search` fallback; WorkspaceCredits accepts console/pages origins + polls balance.
+- Fix NFT: log when topup skipped for missing credit fields.
+- Retroactive topup: +100 ZCR ×2 for intents `22811019-…` and `5bc3d6f7-…` → workspace `ws_mrghr0fe_rmfstk` balance **625**.
+- Redeployed CF Pages + NFT image `deploy-zcr-topup-fix-1784916839`.
+- Next smoke: hard refresh Credits → Pay with wallet; balance should rise after confirm.

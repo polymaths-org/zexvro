@@ -656,6 +656,18 @@ const baseNftEnv = {
   STELLAR_NETWORK_PASSPHRASE: 'Test SDF Network ; September 2015',
   STELLAR_USDC_CONTRACT: 'CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA',
   NFT_PUBLIC_BASE_URL: 'https://placeholder.local',
+  ...(process.env.PLATFORM_CREDITS_URL
+    ? { PLATFORM_CREDITS_URL: process.env.PLATFORM_CREDITS_URL }
+    : {}),
+  ...(process.env.PLATFORM_INTERNAL_SECRET
+    ? { PLATFORM_INTERNAL_SECRET: process.env.PLATFORM_INTERNAL_SECRET }
+    : {}),
+  ...(process.env.ZCR_CREDIT_COLLECTION_IDS
+    ? { ZCR_CREDIT_COLLECTION_IDS: process.env.ZCR_CREDIT_COLLECTION_IDS }
+    : {}),
+  ...(process.env.ZCR_DEFAULT_AMOUNT
+    ? { ZCR_DEFAULT_AMOUNT: process.env.ZCR_DEFAULT_AMOUNT }
+    : { ZCR_DEFAULT_AMOUNT: '100' }),
 };
 
 const nftService = getOrCreateAppRunnerService({
