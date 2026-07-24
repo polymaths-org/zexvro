@@ -101,12 +101,29 @@ if os.environ.get("BREVO_API_KEY"):
     cur["BREVO_API_KEY"] = os.environ["BREVO_API_KEY"]
 if not (cur.get("INTERNAL_CREDITS_SECRET") or "").strip():
     cur["INTERNAL_CREDITS_SECRET"] = os.environ.get("INTERNAL_CREDITS_SECRET") or secrets.token_urlsafe(32)
+# Morph assistant LLM (OpenAI-compatible). Secrets only via env / existing Lambda config — never commit keys.
+# Prefer shell env on deploy; otherwise keep current Lambda value.
+for k, default in (
+    ("OPENCODE_API_URL", "https://api.codexin.lol/v1"),
+    ("OPENCODE_MODEL", "grok-4.5"),
+    ("OPENCODE_PROVIDER", "codexin"),
+):
+    if os.environ.get(k):
+        cur[k] = os.environ[k].strip()
+    elif not (cur.get(k) or "").strip() and default:
+        cur[k] = default
+for k in ("OPENCODE_API_KEY", "MORPH_CHAT_API_KEY", "MORPH_CHAT_API_URL", "MORPH_CHAT_MODEL"):
+    if os.environ.get(k):
+        cur[k] = os.environ[k].strip()
 open("/tmp/lambda-env.json", "w").write(json.dumps({"Variables": cur}))
 print("FRONTEND_URL", cur.get("FRONTEND_URL"))
 print("has_brevo", bool(cur.get("BREVO_API_KEY")))
 print("has_internal_secret", bool(cur.get("INTERNAL_CREDITS_SECRET")))
 print("PLATFORM_ADMINS", cur.get("PLATFORM_ADMINS"))
 print("CREDITS_STARTER_GRANT", cur.get("CREDITS_STARTER_GRANT"))
+print("morph_chat_url", cur.get("OPENCODE_API_URL") or cur.get("MORPH_CHAT_API_URL"))
+print("morph_chat_model", cur.get("OPENCODE_MODEL") or cur.get("MORPH_CHAT_MODEL"))
+print("has_morph_chat_key", bool((cur.get("OPENCODE_API_KEY") or cur.get("MORPH_CHAT_API_KEY") or "").strip()))
 PY
 aws lambda update-function-configuration \
   --function-name "$LAMBDA" \
@@ -147,6 +164,10 @@ curl -sS -o /dev/null -w "invite accept route %{http_code}\n" "$APP_URL/invite/a
 curl -sS -o /dev/null -w "nft health %{http_code}\n" "$NFT_URL/health" || echo "nft health skip"
 curl -sS -o /dev/null -w "gate health %{http_code}\n" "$GATE_URL/health" || echo "gate health skip"
 curl -sS -o /dev/null -w "gate status %{http_code}\n" "$GATE_URL/status" || echo "gate status skip"
+# Morph chat needs auth usually; unauth should not 5xx
+curl -sS -o /dev/null -w "api chat unauth %{http_code}\n" -X POST "$API_URL/api/chat" \
+  -H 'Content-Type: application/json' \
+  -d '{"messages":[{"role":"user","content":"ping"}]}' || true
 echo "DONE — hard refresh https://console.zexvro.in"
 echo "  Credits: /dashboard/w/<id>/credits"
 echo "  Platform: /dashboard/platform"

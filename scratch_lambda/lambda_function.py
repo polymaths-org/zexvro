@@ -3235,42 +3235,107 @@ def lambda_handler(event, context):
             return respond(502, result)
         return respond(200, result)
 
-    # Route: POST /api/chat (Proxy for OpenCode completions to avoid CORS)
+    # Route: POST /api/chat — Morph assistant proxy (OpenAI-compatible LLM).
+    # Production key/base/model come from Lambda env only (never commit secrets).
+    # Defaults: CodexIn Grok 4.5 (demo). Override with OPENCODE_* / MORPH_CHAT_*.
     elif path == "/api/chat" and http_method == "POST":
         import urllib.request
         import urllib.error
 
-        api_url = "https://opencode.ai/zen/v1/chat/completions"
-        api_key = os.environ.get("OPENCODE_API_KEY", "")
+        api_key = (
+            os.environ.get("OPENCODE_API_KEY")
+            or os.environ.get("MORPH_CHAT_API_KEY")
+            or ""
+        ).strip()
+        if not api_key:
+            return respond(
+                503,
+                {
+                    "error": "morph_chat_unconfigured",
+                    "error_description": "Set OPENCODE_API_KEY (or MORPH_CHAT_API_KEY) on the API Lambda",
+                },
+            )
 
-        messages = body.get("messages", [])
-        model = body.get("model", "big-pickle")
-        provider = body.get("provider", "opencode zen")
-        metadata = body.get("metadata", {})
+        raw_base = (
+            os.environ.get("OPENCODE_API_URL")
+            or os.environ.get("MORPH_CHAT_API_URL")
+            or "https://api.codexin.lol/v1"
+        ).strip().rstrip("/")
+        if raw_base.endswith("/chat/completions"):
+            api_url = raw_base
+        else:
+            api_url = raw_base + "/chat/completions"
+
+        default_model = (
+            os.environ.get("OPENCODE_MODEL") or os.environ.get("MORPH_CHAT_MODEL") or "grok-4.5"
+        ).strip()
+        model = (body.get("model") or default_model or "grok-4.5").strip()
+        # Allow UI values like "codexin/grok-4.5"
+        if model.startswith("codexin/"):
+            model = model.split("/", 1)[1]
+
+        messages = body.get("messages") or []
+        if not isinstance(messages, list) or not messages:
+            return respond(400, {"error": "invalid_request", "error_description": "messages required"})
+
+        # Ensure Morph system context once (browser may already send one)
+        has_system = any(
+            isinstance(m, dict) and str(m.get("role") or "") == "system" for m in messages
+        )
+        if not has_system:
+            messages = [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are Morph, the ZEXVRO platform assistant. Be concise and practical. "
+                        "Help with workspaces, projects, REQWID/Gate, NFTo, De-pin, Zer0, credits, "
+                        "CLI auth, and Web2→Web3 migration. Do not claim you executed deploys or "
+                        "changed files unless the user confirms."
+                    ),
+                },
+                *messages,
+            ]
 
         payload = {
             "model": model,
-            "provider": provider,
             "messages": messages,
-            "metadata": metadata
         }
+        # Optional OpenCode-zen style fields when upstream expects them
+        if os.environ.get("MORPH_CHAT_SEND_PROVIDER", "").lower() in ("1", "true", "yes"):
+            payload["provider"] = body.get("provider") or os.environ.get(
+                "OPENCODE_PROVIDER", "codexin"
+            )
+            if body.get("metadata"):
+                payload["metadata"] = body.get("metadata")
 
         headers_to_send = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {api_key}",
-            "User-Agent": "ZexvroProxy/1.0"
+            "User-Agent": "ZexvroMorphProxy/1.0",
         }
 
         req = urllib.request.Request(
             api_url,
             data=json.dumps(payload).encode("utf-8"),
             headers=headers_to_send,
-            method="POST"
+            method="POST",
         )
 
         try:
-            with urllib.request.urlopen(req, timeout=20) as res:
+            with urllib.request.urlopen(req, timeout=60) as res:
                 response_data = json.loads(res.read().decode("utf-8"))
+                # Normalize for UI that expects either OpenAI shape or {text}
+                if isinstance(response_data, dict) and "text" not in response_data:
+                    try:
+                        text = (
+                            response_data.get("choices", [{}])[0]
+                            .get("message", {})
+                            .get("content")
+                        )
+                        if text:
+                            response_data = {**response_data, "text": text}
+                    except Exception:
+                        pass
                 return respond(200, response_data)
         except urllib.error.HTTPError as e:
             try:

@@ -1,7 +1,8 @@
 import { memoryApi } from '../api/api';
 
-export const OPENCODE_PROVIDER = 'opencode zen';
-export const OPENCODE_MODEL = 'big-opickle';
+/** Platform Morph assistant defaults (server holds the real key in production). */
+export const OPENCODE_PROVIDER = 'codexin';
+export const OPENCODE_MODEL = 'grok-4.5';
 const AGENT_SETTINGS_MEMORY_KEY = 'agentSettings';
 
 export type AgentSettings = {
@@ -19,6 +20,7 @@ export type AgentChatMessage = {
 export const defaultAgentSettings: AgentSettings = {
   provider: OPENCODE_PROVIDER,
   model: OPENCODE_MODEL,
+  // Empty = use API Lambda proxy defaults (CodexIn / Grok 4.5 in production)
   baseUrl: '',
   apiKey: '',
 };
