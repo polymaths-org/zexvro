@@ -1,5 +1,15 @@
 # ZEXVRO Shared Memory
 
+## 2026-07-25 - Morph assistant CodexIn (demo key on Lambda only)
+
+- Console Morph dock + Agentic Operations use `POST /api/chat` on API Gateway Lambda
+- Lambda env (not git): `OPENCODE_API_URL=https://api.codexin.lol/v1`, `OPENCODE_MODEL=grok-4.5`, `OPENCODE_API_KEY` set in AWS
+- Smoke: `/api/chat` returns MORPH_LIVE_OK
+- Frontend defaults: provider `codexin`, model `grok-4.5`
+- Local Morph CLI auth: `~/.local/share/morph/auth.json` codexin key (machine-local)
+- Cap: demo key ~300 — rotate/remove in Lambda env when done
+
+
 ## 2026-07-25 - REQWID offline: missing VITE_AGENT_AUTH_API_URL
 
 - Symptom: console REQWID "Protection service is offline" + `Unexpected token '<' ... not valid JSON`
