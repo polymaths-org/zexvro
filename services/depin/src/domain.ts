@@ -14,7 +14,7 @@ export interface ProviderConfig {
   description: string
   price: string
   recipient: string
-  network: 'stellar:testnet'
+  network: 'stellar:testnet' | 'stellar:pubnet'
   timeoutMs: number
   upstreamSecretRef?: string | undefined
   /** Optional ZEXVRO Gate capability requirement (Access Shield composition). */

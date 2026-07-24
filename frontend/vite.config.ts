@@ -56,6 +56,16 @@ function extractText(payload: any): string {
   );
 }
 
+function inviteMailApi(env: Record<string, string>): Plugin {
+  return {
+    name: 'zexvro-invite-mail-api',
+    async configureServer(server) {
+      const { inviteMailMiddleware } = await import('./scripts/invite-mail-middleware.mjs');
+      server.middlewares.use(inviteMailMiddleware(env));
+    },
+  };
+}
+
 function opencodeAgentApi(env: Record<string, string>): Plugin {
   return {
     name: 'zexvro-opencode-agent-api',
@@ -157,6 +167,7 @@ export default defineConfig(({ mode }) => {
   };
   return {
     plugins: [
+      inviteMailApi(env),
       opencodeAgentApi(env),
       react(),
       tailwindcss(),

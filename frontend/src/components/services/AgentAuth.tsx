@@ -399,7 +399,7 @@ export default function AgentAuth() {
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-white">
-              Agent Auth
+              REQWID
             </h1>
             <span
               className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${

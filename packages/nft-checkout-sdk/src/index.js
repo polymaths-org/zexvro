@@ -150,10 +150,14 @@ export function openCheckout(options) {
   const top = Math.max(0, Math.floor(window.screenY + (window.outerHeight - height) / 2))
   // Tell the embed which opener origin may receive postMessage (game may be on another port).
   const openerOrigin = window.location.origin
-  const url =
-    `${origin}/nft/embed/checkout` +
-    `?collectionId=${encodeURIComponent(collectionId)}` +
-    `&openerOrigin=${encodeURIComponent(openerOrigin)}`
+  const params = new URLSearchParams({
+    collectionId,
+    openerOrigin,
+  })
+  if (options.workspaceId) params.set('workspaceId', String(options.workspaceId))
+  if (options.zcrAmount != null) params.set('zcrAmount', String(options.zcrAmount))
+  if (options.packId) params.set('packId', String(options.packId))
+  const url = `${origin}/nft/embed/checkout?${params.toString()}`
 
   const popup = window.open(
     url,

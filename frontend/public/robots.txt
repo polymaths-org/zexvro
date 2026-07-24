@@ -1,0 +1,5 @@
+# Console is an app — do not index product UI in Google
+User-agent: *
+Disallow: /
+
+Sitemap: https://zexvro.in/sitemap.xml

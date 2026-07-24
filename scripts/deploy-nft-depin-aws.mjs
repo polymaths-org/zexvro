@@ -155,8 +155,24 @@ function ensureBucket(bucket) {
 }
 
 function tarGzipDir(srcDir, outFile) {
-  // Portable: use system tar
-  run('tar', ['-czf', outFile, '-C', srcDir, '.']);
+  // CodeBuild S3 source expects a ZIP (not tar.gz) so buildspec.yml is found at archive root.
+  const zipScript = path.join(workDir, 'make-source-zip.py');
+  writeFileSync(
+    zipScript,
+    [
+      'import os, zipfile, sys',
+      'src, out = sys.argv[1], sys.argv[2]',
+      'with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:',
+      '  for root, _dirs, files in os.walk(src):',
+      '    for name in files:',
+      '      full = os.path.join(root, name)',
+      '      rel = os.path.relpath(full, src)',
+      '      z.write(full, rel)',
+      'print(out, os.path.getsize(out))',
+      '',
+    ].join('\n'),
+  );
+  run('python3', [zipScript, srcDir, outFile]);
 }
 
 function getOrCreateAppRunnerService({
@@ -446,8 +462,8 @@ artifacts:
 `,
 );
 
-const sourceKey = `builds/nft-depin-${tag}.tar.gz`;
-const tarball = path.join(workDir, 'source.tar.gz');
+const sourceKey = `builds/nft-depin-${tag}.zip`;
+const tarball = path.join(workDir, 'source.zip');
 tarGzipDir(stageDir, tarball);
 run('aws', ['s3', 'cp', tarball, `s3://${sourceBucket}/${sourceKey}`, '--region', region]);
 

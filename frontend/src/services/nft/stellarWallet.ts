@@ -12,9 +12,22 @@ export class StellarWalletError extends Error {
   }
 }
 
-const TESTNET_PASSPHRASE = 'Test SDF Network ; September 2015';
+import {
+  STELLAR_TESTNET_PASSPHRASE as NET_TESTNET_PASSPHRASE,
+  STELLAR_PUBLIC_PASSPHRASE as NET_PUBLIC_PASSPHRASE,
+  DEFAULT_SOROBAN_RPC_TESTNET,
+  DEFAULT_SOROBAN_RPC_MAINNET,
+  isTestnetPassphrase,
+} from '../../lib/stellarNetwork';
+
+const TESTNET_PASSPHRASE = NET_TESTNET_PASSPHRASE;
+const PUBLIC_PASSPHRASE = NET_PUBLIC_PASSPHRASE;
 const FREIGHTER_INSTALL_URL = 'https://www.freighter.app/';
-const PLACEHOLDER_RPC_URL = 'https://soroban-testnet.stellar.org';
+function placeholderRpcForPassphrase(networkPassphrase: string): string {
+  return isTestnetPassphrase(networkPassphrase)
+    ? DEFAULT_SOROBAN_RPC_TESTNET
+    : DEFAULT_SOROBAN_RPC_MAINNET;
+}
 
 type PreparedAssembledJson = {
   method?: string;
@@ -176,18 +189,22 @@ export async function assertWalletNetwork(
   const passphrase = (network.networkPassphrase || '').trim();
   const label = (network.network || '').trim().toUpperCase();
   if (passphrase && passphrase !== networkPassphrase) {
-    const expected =
-      networkPassphrase === TESTNET_PASSPHRASE ? 'Testnet' : 'the required Stellar network';
+    const expected = isTestnetPassphrase(networkPassphrase) ? 'Testnet' : 'Mainnet (Public)';
     throw new StellarWalletError(
       'wallet_network_mismatch',
       `Freighter is on ${label || passphrase}, but ZEXVRO expects ${expected}. Open Freighter → switch network, then retry.`,
     );
   }
-  if (!passphrase && label && networkPassphrase === TESTNET_PASSPHRASE && label !== 'TESTNET') {
-    throw new StellarWalletError(
-      'wallet_network_mismatch',
-      `Freighter is on ${label}, but ZEXVRO expects Testnet. Open Freighter → switch network, then retry.`,
-    );
+  const wantTestnet = isTestnetPassphrase(networkPassphrase);
+  if (!passphrase && label) {
+    const freighterTest = label === 'TESTNET' || label === 'FUTURENET';
+    const freighterPublic = label === 'PUBLIC' || label === 'MAINNET';
+    if ((wantTestnet && !freighterTest) || (!wantTestnet && !freighterPublic)) {
+      throw new StellarWalletError(
+        'wallet_network_mismatch',
+        `Freighter is on ${label}, but ZEXVRO expects ${wantTestnet ? 'Testnet' : 'Mainnet'}. Open Freighter → switch network, then retry.`,
+      );
+    }
   }
 }
 
@@ -217,7 +234,7 @@ export async function getPublicKey(): Promise<string> {
     'Freighter did not grant access. Approve this site in the Freighter popup and try again.',
   );
   if (access.address?.trim()) {
-    await assertWalletNetwork();
+    // Do not force Testnet here — callers pass passphrase on sign for mainnet/testnet.
     return access.address.trim();
   }
 
@@ -239,7 +256,7 @@ export async function getPublicKey(): Promise<string> {
     'Freighter did not return a public key.',
   );
   if (addressResult.address?.trim()) {
-    await assertWalletNetwork();
+    // Caller should assert network with the intended passphrase before signing.
     return addressResult.address.trim();
   }
 
@@ -289,7 +306,7 @@ export async function signTransaction(
     }
   }
 
-  const network = networkPassphrase === TESTNET_PASSPHRASE ? 'TESTNET' : undefined;
+  const network = isTestnetPassphrase(networkPassphrase) ? 'TESTNET' : 'PUBLIC';
   
   let txIsJSON = false;
   try {
@@ -328,7 +345,7 @@ export async function signTransaction(
         {
           contractId: target.contractId,
           networkPassphrase,
-          rpcUrl: PLACEHOLDER_RPC_URL,
+          rpcUrl: placeholderRpcForPassphrase(networkPassphrase),
           method,
           parseResultXdr: () => undefined,
         },
@@ -374,7 +391,7 @@ export async function signTransaction(
   throwIfFreighterError(
     signed,
     'wallet_sign_failed',
-    'Freighter could not sign the transaction. Confirm Freighter is unlocked, on Testnet, and that you approve the prompt.',
+    'Freighter could not sign the transaction. Confirm Freighter is unlocked, on the correct network, and that you approve the prompt.',
   );
   if (!signed.signedTxXdr?.trim()) {
     throw new StellarWalletError('wallet_sign_failed', 'Freighter did not return a signed transaction.');
@@ -389,4 +406,16 @@ export function formatWalletError(error: unknown): string {
 }
 
 export const STELLAR_TESTNET_PASSPHRASE = TESTNET_PASSPHRASE;
+export const STELLAR_PUBLIC_PASSPHRASE = PUBLIC_PASSPHRASE;
 export const FREIGHTER_WALLET_INSTALL_URL = FREIGHTER_INSTALL_URL;
+export { isTestnetPassphrase, DEFAULT_SOROBAN_RPC_MAINNET, DEFAULT_SOROBAN_RPC_TESTNET };
+
+/** Prefer API health / project preference passphrase when available. */
+export function resolveNftSignPassphrase(apiPassphrase?: string): string {
+  if (apiPassphrase?.trim()) return apiPassphrase.trim();
+  try {
+    const pref = localStorage.getItem('zexvro_nft_network_pref');
+    if (pref === 'mainnet' || pref === 'stellar:pubnet') return PUBLIC_PASSPHRASE;
+  } catch { /* ignore */ }
+  return TESTNET_PASSPHRASE;
+}

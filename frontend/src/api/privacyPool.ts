@@ -19,14 +19,120 @@ import {
 } from 'stellar-sdk';
 import { zkNotesApi, zkWorkerApi } from './api';
 
-/* ─── Constants ─── */
+/* ─── Network (runtime — follows Zer0 Settings Horizon / Soroban) ─── */
 
-const SOROBAN_RPC_URL = import.meta.env.VITE_SOROBAN_RPC || 'https://soroban-testnet.stellar.org';
-const HORIZON_URL = 'https://horizon-testnet.stellar.org';
-const SAC_NATIVE = 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC';
-const NETWORK_PASSPHRASE = Networks.TESTNET;
+const TESTNET_SOROBAN = import.meta.env.VITE_SOROBAN_RPC || 'https://soroban-testnet.stellar.org';
+const TESTNET_HORIZON = 'https://horizon-testnet.stellar.org';
+const TESTNET_SAC_NATIVE = 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC';
+/** Classic native XLM SAC on public network (stellar.expert) */
+const MAINNET_SAC_NATIVE = 'CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA';
+const MAINNET_HORIZON = 'https://horizon.stellar.org';
+/** Public mainnet Soroban RPC (must be JSON-RPC, not horizon.stellar.org). */
+const MAINNET_SOROBAN =
+  (import.meta.env.VITE_SOROBAN_RPC_MAINNET as string | undefined)?.trim()
+  || 'https://mainnet.sorobanrpc.com';
+/** Fallback if primary RPC is unreachable from the browser. */
+const MAINNET_SOROBAN_FALLBACKS = [
+  MAINNET_SOROBAN,
+  'https://mainnet.sorobanrpc.com',
+  'https://soroban-rpc.mainnet.stellar.gateway.fm',
+  'https://stellar.api.onfinality.io/public',
+].filter((u, i, a) => u && a.indexOf(u) === i);
+
+let SOROBAN_RPC_URL = TESTNET_SOROBAN;
+let HORIZON_URL = TESTNET_HORIZON;
+let SAC_NATIVE = TESTNET_SAC_NATIVE;
+let NETWORK_PASSPHRASE: string = Networks.TESTNET;
+let horizon = new Horizon.Server(HORIZON_URL);
+
+function isTestnetHorizon(horizonUrl: string): boolean {
+  const u = (horizonUrl || '').toLowerCase();
+  if (!u.trim()) return true;
+  if (u.includes('testnet') || u.includes('futurenet')) return true;
+  if (u.includes('horizon.stellar.org') || u.includes('public')) return false;
+  return false;
+}
+
+/** Reject non-RPC URLs people often paste (horizon UI, bare stellar.org). */
+function looksLikeSorobanRpc(url: string, testnet: boolean): boolean {
+  const u = (url || '').toLowerCase();
+  if (!u.startsWith('https://')) return false;
+  if (u.includes('horizon')) return false;
+  if (u === 'https://mainnet.stellar.org' || u === 'https://stellar.org') return false;
+  if (testnet) {
+    return u.includes('soroban') || u.includes('rpc') || u.includes('testnet') || u.includes('futurenet');
+  }
+  return (
+    u.includes('soroban')
+    || u.includes('sorobanrpc')
+    || u.includes('/rpc')
+    || u.includes('onfinality')
+    || u.includes('gateway.fm')
+    || u.includes('ankr.com')
+    || u.includes('lightsail')
+    || u.includes('liquify')
+  );
+}
+
+function normalizeHorizonUrl(horizonUrl: string, testnet: boolean): string {
+  const clean = (horizonUrl || '').trim().replace(/\/$/, '');
+  if (clean.includes('horizon')) return clean;
+  return testnet ? TESTNET_HORIZON : MAINNET_HORIZON;
+}
+
+function normalizeSorobanUrl(sorobanUrl: string | undefined, testnet: boolean): string {
+  const clean = (sorobanUrl || '').trim().replace(/\/$/, '');
+  if (testnet) {
+    if (looksLikeSorobanRpc(clean, true) && !clean.toLowerCase().includes('mainnet')) return clean;
+    return TESTNET_SOROBAN;
+  }
+  if (looksLikeSorobanRpc(clean, false) && !clean.toLowerCase().includes('testnet')) return clean;
+  return MAINNET_SOROBAN;
+}
+
+/**
+ * Align privacy-pool builds + Freighter sign with Zer0 wallet network.
+ * Call whenever Settings Horizon / Soroban changes and before pay.
+ */
+export function configurePrivacyPoolNetwork(opts?: {
+  horizonUrl?: string;
+  sorobanRpcUrl?: string;
+}): void {
+  const horizonUrl = (opts?.horizonUrl || HORIZON_URL || TESTNET_HORIZON).trim();
+  const testnet = isTestnetHorizon(horizonUrl);
+  HORIZON_URL = normalizeHorizonUrl(horizonUrl, testnet);
+  NETWORK_PASSPHRASE = testnet ? Networks.TESTNET : Networks.PUBLIC;
+  SAC_NATIVE = testnet ? TESTNET_SAC_NATIVE : MAINNET_SAC_NATIVE;
+  SOROBAN_RPC_URL = normalizeSorobanUrl(opts?.sorobanRpcUrl ?? SOROBAN_RPC_URL, testnet);
+  horizon = new Horizon.Server(HORIZON_URL);
+}
+
+export function getPrivacyPoolNetwork(): {
+  horizonUrl: string;
+  sorobanRpcUrl: string;
+  networkPassphrase: string;
+  isTestnet: boolean;
+} {
+  return {
+    horizonUrl: HORIZON_URL,
+    sorobanRpcUrl: SOROBAN_RPC_URL,
+    networkPassphrase: NETWORK_PASSPHRASE,
+    isTestnet: NETWORK_PASSPHRASE === Networks.TESTNET,
+  };
+}
+
 const TREE_DEPTH = 20;
 const STROOPS_PER_XLM = 10_000_000;
+/** Classic Stellar base reserve — account must keep this after native/SAC spend. */
+export const STELLAR_BASE_RESERVE_XLM = 1;
+/** Extra headroom for Soroban resource fees + multiple fund/deposit txs. */
+export const PRIVATE_PAY_FEE_BUFFER_XLM = 0.5;
+
+/** XLM that must be on the funding wallet for a private settle of `settleXlm`. */
+export function requiredXlmForPrivatePay(settleXlm: number): number {
+  const settle = Math.max(0, Number(settleXlm) || 0);
+  return settle + STELLAR_BASE_RESERVE_XLM + PRIVATE_PAY_FEE_BUFFER_XLM;
+}
 
 /**
  * Multi-denomination shared pools (same Groth16 circuit — only unit size differs).
@@ -40,7 +146,8 @@ export interface PoolTier {
   contract: string;
 }
 
-export const POOL_TIERS: PoolTier[] = [
+/** Testnet pool contracts (shipped). Mainnet IDs via VITE_ZER0_CONTRACT_*_MAINNET when deployed. */
+const TESTNET_POOL_TIERS: PoolTier[] = [
   {
     id: '1000xlm',
     xlm: 1000,
@@ -67,11 +174,56 @@ export const POOL_TIERS: PoolTier[] = [
   },
 ];
 
+/** Mainnet pools deployed 2026-07-24 (wasm 13926cfd…, native SAC CAS3J7G…). Override via VITE_*. */
+const MAINNET_POOL_DEFAULTS: Record<string, string> = {
+  '1000xlm': 'CDRN2ZBO7OBGZYC653FHKQCBQAJWRIEXMHQSPDVMHGW7MQGQB67Q5DEE',
+  '100xlm': 'CCLAKHWCPLJDZBFNFHI4E5EUZ23E4HJPETBU5CI3M3TXHSKT4QVBMM3Y',
+  '10xlm': 'CC5H2MOIYZSCPZ7GOSUKHIOMHWQRXWJNHEZVYRBGGOGI2FLEOUA3BY6N',
+  '1xlm': 'CAMBCV544D7EI72HBXZ4BPEVVMOCIUN6ZBSMPFWX73NRTW7INWUTJRFW',
+};
+
+function mainnetPoolTiers(): PoolTier[] {
+  const rows: Array<[string, number, string | undefined]> = [
+    ['1000xlm', 1000, import.meta.env.VITE_ZER0_CONTRACT_1000_MAINNET || MAINNET_POOL_DEFAULTS['1000xlm']],
+    ['100xlm', 100, import.meta.env.VITE_ZER0_CONTRACT_100_MAINNET || MAINNET_POOL_DEFAULTS['100xlm']],
+    ['10xlm', 10, import.meta.env.VITE_ZER0_CONTRACT_10_MAINNET || MAINNET_POOL_DEFAULTS['10xlm']],
+    ['1xlm', 1, import.meta.env.VITE_ZER0_CONTRACT_MAINNET || import.meta.env.VITE_ZER0_CONTRACT_1_MAINNET || MAINNET_POOL_DEFAULTS['1xlm']],
+  ];
+  return rows
+    .filter(([, , c]) => typeof c === 'string' && /^C[A-Z0-9]{55}$/.test(c.trim()))
+    .map(([id, xlm, c]) => ({
+      id,
+      xlm,
+      stroops: BigInt(xlm * STROOPS_PER_XLM),
+      contract: c!.trim(),
+    }));
+}
+
+/** Active pool tier list for current network (testnet defaults; mainnet only if env set). */
+export function getPoolTiers(): PoolTier[] {
+  if (NETWORK_PASSPHRASE === Networks.PUBLIC) return mainnetPoolTiers();
+  return TESTNET_POOL_TIERS;
+}
+
+/** @deprecated use getPoolTiers() — kept for imports that expect a constant array */
+export const POOL_TIERS: PoolTier[] = TESTNET_POOL_TIERS;
+
 /** Legacy default = 1 XLM pool (smallest tier). Prefer planShieldPay / shieldPayAmount. */
-const DEFAULT_TIER = POOL_TIERS[POOL_TIERS.length - 1];
+const DEFAULT_TIER = TESTNET_POOL_TIERS[TESTNET_POOL_TIERS.length - 1];
 let activePoolContract = DEFAULT_TIER.contract;
 let activeDenomStroops = DEFAULT_TIER.stroops;
 let activeDenomXlm = DEFAULT_TIER.xlm;
+
+export function assertShieldedNetworkReady(): void {
+  if (NETWORK_PASSPHRASE !== Networks.PUBLIC) return;
+  const tiers = mainnetPoolTiers();
+  if (tiers.length === 0) {
+    throw new Error(
+      'Shielded (private) pay has no mainnet pool contracts configured. '
+      + 'Set VITE_ZER0_CONTRACT_*_MAINNET or use Testnet.',
+    );
+  }
+}
 
 export function usePool(tier: PoolTier) {
   activePoolContract = tier.contract;
@@ -123,6 +275,17 @@ export interface ShieldPayPlan {
  * e.g. 2500 → 2×1000 + 5×100 = 7 notes; 11 → 1×10 + 1×1 = 2 notes.
  */
 export function planShieldPay(amountXlm: number): ShieldPayPlan {
+  const tiers = getPoolTiers();
+  if (tiers.length === 0) {
+    return {
+      amountXlm: Math.max(0, Math.ceil(Number(amountXlm) || 0)),
+      settledXlm: 0,
+      notes: [],
+      totalNotes: 0,
+      estimatedSeconds: 0,
+      description: 'No privacy pools on this network',
+    };
+  }
   const target = Math.max(0, Math.ceil(Number(amountXlm) || 0));
   if (target <= 0) {
     return {
@@ -132,7 +295,7 @@ export function planShieldPay(amountXlm: number): ShieldPayPlan {
   }
   let remaining = target;
   const notes: ShieldNotePlan[] = [];
-  for (const tier of POOL_TIERS) {
+  for (const tier of tiers) {
     const count = Math.floor(remaining / tier.xlm);
     if (count <= 0) continue;
     notes.push({ tier, count, xlm: count * tier.xlm });
@@ -140,13 +303,13 @@ export function planShieldPay(amountXlm: number): ShieldPayPlan {
   }
   // Dust below 1 XLM rounds up to one 1-XLM note
   if (remaining > 0) {
-    const one = POOL_TIERS.find(t => t.xlm === 1)!;
+    const one = tiers.find(t => t.xlm === 1) || tiers[tiers.length - 1];
     const existing = notes.find(n => n.tier.id === one.id);
     if (existing) {
       existing.count += 1;
-      existing.xlm += 1;
+      existing.xlm += one.xlm;
     } else {
-      notes.push({ tier: one, count: 1, xlm: 1 });
+      notes.push({ tier: one, count: 1, xlm: one.xlm });
     }
     remaining = 0;
   }
@@ -255,17 +418,48 @@ export async function pushNotesToAws(): Promise<void> {
 
 /* ─── Horizon + Soroban RPC (object params, no getAccount on Soroban) ─── */
 
-const horizon = new Horizon.Server(HORIZON_URL);
+function networkFetchError(url: string, err: unknown): Error {
+  const msg = err instanceof Error ? err.message : String(err);
+  const net = NETWORK_PASSPHRASE === Networks.PUBLIC ? 'mainnet' : 'testnet';
+  return new Error(
+    `Network error reaching Soroban RPC (${url}) on ${net}. `
+    + (net === 'mainnet'
+      ? 'Zer0 Settings → Wallet must use a real mainnet RPC (e.g. mainnet.sorobanrpc.com), not horizon.stellar.org. '
+        + 'Shielded pays also need mainnet pool contracts (VITE_ZER0_CONTRACT_*_MAINNET).'
+      : 'Check connectivity / CORS / RPC URL.')
+    + ` Detail: ${msg}`,
+  );
+}
 
 async function rpcCall(method: string, params: Record<string, unknown>): Promise<any> {
-  const resp = await fetch(SOROBAN_RPC_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
-  });
-  const json = await resp.json();
-  if (json.error) throw new Error(`RPC error: ${json.error.message || JSON.stringify(json.error)}`);
-  return json.result;
+  const isMainnet = NETWORK_PASSPHRASE === Networks.PUBLIC;
+  const candidates = isMainnet
+    ? [SOROBAN_RPC_URL, ...MAINNET_SOROBAN_FALLBACKS].filter((u, i, a) => u && a.indexOf(u) === i)
+    : [SOROBAN_RPC_URL];
+
+  let lastErr: unknown;
+  for (const url of candidates) {
+    try {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+      });
+      if (!resp.ok) {
+        lastErr = new Error(`HTTP ${resp.status} from ${url}`);
+        continue;
+      }
+      const json = await resp.json();
+      if (json.error) throw new Error(`RPC error: ${json.error.message || JSON.stringify(json.error)}`);
+      // Prefer a working endpoint for subsequent calls
+      if (url !== SOROBAN_RPC_URL) SOROBAN_RPC_URL = url;
+      return json.result;
+    } catch (e) {
+      lastErr = e;
+      // try next fallback
+    }
+  }
+  throw networkFetchError(candidates[0] || SOROBAN_RPC_URL, lastErr);
 }
 
 async function loadAccount(address: string): Promise<Account> {
@@ -580,6 +774,12 @@ function decodeSubmitError(errorResultXdr?: string): string {
       if (code === -6) {
         return `${name}: missing Soroban auth (auto-sign must authorizeEntry for require_auth)`;
       }
+      if (code === -1 || code === -7) {
+        return (
+          `${name}: not enough XLM left after the transfer (account must keep ~1 XLM reserve + fees). `
+          + 'Top up the funding wallet and retry.'
+        );
+      }
       return name;
     }
   } catch { /* ignore */ }
@@ -669,6 +869,25 @@ export async function fundPool(
   const from = resolveFundingAddress(fromAddress);
   if (!from) throw new Error('No funding address (connect wallet or configure treasury auto-sign)');
   const account = await loadAccount(from);
+  // Preflight: SAC transfer spends classic native; must leave base reserve + fee buffer.
+  try {
+    const nativeBal = Number(
+      (account as any).balances?.find((b: any) => b.asset_type === 'native')?.balance || 0,
+    );
+    const needXlm = Number(totalStroops) / STROOPS_PER_XLM;
+    const required = requiredXlmForPrivatePay(needXlm);
+    if (nativeBal + 1e-9 < required) {
+      throw new Error(
+        `Not enough XLM to fund the private pool.\n`
+        + `Wallet: ${nativeBal.toFixed(4)} XLM\n`
+        + `Need ≈ ${required.toFixed(2)} XLM `
+        + `(${needXlm} for notes + ${STELLAR_BASE_RESERVE_XLM} reserve + ~${PRIVATE_PAY_FEE_BUFFER_XLM} fees).\n`
+        + 'Top up the funding wallet and retry.',
+      );
+    }
+  } catch (e) {
+    if (e instanceof Error && e.message.startsWith('Not enough XLM')) throw e;
+  }
   const sacTx = new TransactionBuilder(account, {
     fee: '100000',
     networkPassphrase: NETWORK_PASSPHRASE,
@@ -683,7 +902,20 @@ export async function fundPool(
     )
     .setTimeout(180)
     .build();
-  return prepareAndSubmit(sacTx);
+  try {
+    return await prepareAndSubmit(sacTx);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/balance is not within|INSUFFICIENT|txFAILED/i.test(msg)) {
+      throw new Error(
+        `${msg}\n`
+        + 'Tip: private fund moves XLM out of your wallet but you must keep ~1 XLM account reserve + fees. '
+        + `For a ${Number(totalStroops) / STROOPS_PER_XLM} XLM private pay, hold at least `
+        + `${requiredXlmForPrivatePay(Number(totalStroops) / STROOPS_PER_XLM).toFixed(1)} XLM.`,
+      );
+    }
+    throw e;
+  }
 }
 
 /* ─── Deposit ─── */
@@ -1091,6 +1323,7 @@ export async function shieldPayAmount(args: {
     batchDepositThenWithdraw?: boolean;
   };
 }): Promise<{ lastTxHash: string; notes: DepositNote[]; settledXlm: number; plan: ShieldPayPlan }> {
+  assertShieldedNetworkReady();
   const plan = planShieldPay(args.amountXlm);
   if (plan.totalNotes === 0) throw new Error('Amount must be > 0');
   if (plan.totalNotes > MAX_SHIELD_UNITS) {
@@ -1144,7 +1377,8 @@ export async function shieldPayAmount(args: {
   // Best-effort; failures do not roll back the real payment.
   if (decoyCount > 0 && isAutoSignEnabled()) {
     try {
-      const tier1 = POOL_TIERS.find(t => t.xlm === 1) || POOL_TIERS[POOL_TIERS.length - 1];
+      const tiers = getPoolTiers();
+      const tier1 = tiers.find(t => t.xlm === 1) || tiers[tiers.length - 1];
       usePool(tier1);
       for (let i = 0; i < decoyCount; i++) {
         progress(`Decoy deposit ${i + 1}/${decoyCount} @ ${tier1.xlm} XLM`);

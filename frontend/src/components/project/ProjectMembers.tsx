@@ -1,40 +1,71 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams } from '@tanstack/react-router';
 import { Users, UserPlus, Shield, X } from 'lucide-react';
 import { useProjectStore } from '../../stores/project';
 import { useWorkspaceStore } from '../../stores/workspace';
 import type { WorkspaceRole } from '../../stores/types';
+import { loadWorkspaceDetail } from '../../stores/awsSync';
+import { INVITABLE_ROLES } from '../../rbac/permissions';
 
 export default function ProjectMembers() {
   const { workspaceId, projectId } = useParams({ strict: false });
   const currentProject = useProjectStore(s => s.projects.find(project => project.id === projectId));
   const workspace = useWorkspaceStore(s => s.workspaces.find(item => item.id === workspaceId));
-  const addMember = useWorkspaceStore(s => s.addMember);
+  const createInvitation = useWorkspaceStore(s => s.createInvitation);
   const removeMember = useWorkspaceStore(s => s.removeMember);
 
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteName, setInviteName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<WorkspaceRole>('Developer');
+  const [inviteError, setInviteError] = useState('');
+  const [inviting, setInviting] = useState(false);
+
+  // Keep roster fresh while this page is open
+  useEffect(() => {
+    if (!workspaceId) return;
+    void loadWorkspaceDetail(workspaceId);
+    const t = setInterval(() => void loadWorkspaceDetail(workspaceId), 12000);
+    return () => clearInterval(t);
+  }, [workspaceId]);
+
+  const members = useMemo(() => {
+    const list = workspace?.members || [];
+    // Owner first, then active, then invited
+    return [...list].sort((a, b) => {
+      const rank = (m: typeof a) =>
+        (m.role === 'Owner' ? 0 : 1)
+        + (m.status === 'active' ? 0 : 2)
+        + (m.email ? 0 : 1);
+      return rank(a) - rank(b);
+    });
+  }, [workspace?.members]);
 
   if (!currentProject || !workspace) return null;
 
-  const members = workspace.members;
-
-  const handleInvite = (event: React.FormEvent) => {
+  const handleInvite = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!inviteName.trim() || !inviteEmail.trim()) return;
-
-    addMember(workspace.id, {
-      name: inviteName.trim(),
-      email: inviteEmail.trim(),
-      role: inviteRole,
-      status: 'invited',
-    });
-    setInviteName('');
-    setInviteEmail('');
-    setInviteRole('Developer');
-    setShowInviteModal(false);
+    if (!inviteEmail.trim()) return;
+    setInviting(true);
+    setInviteError('');
+    try {
+      await createInvitation({
+        workspaceId: workspace.id,
+        email: inviteEmail.trim(),
+        role: inviteRole,
+        invitedBy: workspace.ownerId || 'owner',
+        invitedByEmail: workspace.members.find(m => m.role === 'Owner')?.email,
+      });
+      setInviteName('');
+      setInviteEmail('');
+      setInviteRole('Developer');
+      setShowInviteModal(false);
+      void loadWorkspaceDetail(workspace.id);
+    } catch (err) {
+      setInviteError(err instanceof Error ? err.message : 'Invite failed');
+    } finally {
+      setInviting(false);
+    }
   };
 
   const handleRemove = (id: string) => {
@@ -77,16 +108,20 @@ export default function ProjectMembers() {
               <div key={member.id} className="flex items-center justify-between gap-4 p-4">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-semibold text-zinc-900 dark:text-white">{member.name}</span>
+                    <span className="text-sm font-semibold text-zinc-900 dark:text-white">
+                      {member.name || member.email?.split('@')[0] || 'Member'}
+                    </span>
                     <span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase ${
                       member.status === 'active' || member.status === 'accepted'
                         ? 'bg-green-500/10 text-green-600 dark:text-green-400'
                         : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
                     }`}>
-                      {member.status === 'active' ? 'accepted' : member.status}
+                      {member.status === 'active' || member.status === 'accepted' ? 'accepted' : member.status}
                     </span>
                   </div>
-                  <p className="mt-0.5 font-mono text-xs text-zinc-400">{member.email || 'No email provided'}</p>
+                  <p className="mt-0.5 font-mono text-xs text-zinc-400">
+                    {member.email || (member.role === 'Owner' ? 'Workspace owner' : 'No email provided')}
+                  </p>
                 </div>
 
                 <div className="flex shrink-0 items-center gap-4">
@@ -130,16 +165,20 @@ export default function ProjectMembers() {
               <div>
                 <label className="mb-1 block text-xs font-semibold text-zinc-550">Role Permissions</label>
                 <select value={inviteRole} onChange={event => setInviteRole(event.target.value as WorkspaceRole)} className="h-9 w-full rounded-lg border border-zinc-200 bg-white px-2.5 text-xs outline-none dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
-                  <option value="Admin">Admin</option>
-                  <option value="Developer">Developer</option>
-                  <option value="Finance">Finance</option>
-                  <option value="Viewer">Viewer</option>
+                  {INVITABLE_ROLES.map(r => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
                 </select>
               </div>
+              {inviteError && (
+                <p className="text-xs text-red-500">{inviteError}</p>
+              )}
 
               <div className="mt-4 flex justify-end gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-800">
                 <button type="button" onClick={() => setShowInviteModal(false)} className="rounded-md px-3 py-1.5 text-xs font-medium text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">Cancel</button>
-                <button type="submit" className="rounded-md bg-zinc-900 px-3.5 py-1.5 text-xs font-medium text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-900">Send Invite</button>
+                <button type="submit" disabled={inviting} className="rounded-md bg-zinc-900 px-3.5 py-1.5 text-xs font-medium text-white transition hover:bg-zinc-800 disabled:opacity-60 dark:bg-white dark:text-zinc-900">
+                  {inviting ? 'Sending…' : 'Send Invite'}
+                </button>
               </div>
             </form>
           </div>

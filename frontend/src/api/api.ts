@@ -3,12 +3,27 @@
  *
  * Centralized HTTP client for AWS Lambda backend.
  * Stellar transaction building, signing (Freighter), and submission via Horizon.
+ *
+ * Mail never uses localhost:8080 — see services/mail/mailApi.ts (server → Brevo).
  */
 
-const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+import {
+  acceptInviteByToken,
+  getInviteByToken,
+  listLocalWorkspaceMembers,
+  listMySharedWorkspaces,
+  mailApiBase,
+  platformApiBase,
+  sendWorkspaceInviteEmail,
+  type SendWorkspaceInviteInput,
+  type SendWorkspaceInviteResult,
+} from '../services/mail/mailApi';
 
-export const API_BASE = import.meta.env.VITE_API_URL ||
-  (IS_LOCAL ? 'http://localhost:8080' : 'https://qkuostruh3.execute-api.us-east-1.amazonaws.com');
+/** Platform API — hosted Gateway by default (no localhost:8080). */
+export const API_BASE = platformApiBase();
+
+/** Mail send base — local Vite /api or hosted Lambda (both → Brevo). */
+export const INVITE_API_BASE = mailApiBase();
 
 function getAuthHeaders(): Record<string, string> {
   const session = localStorage.getItem('zexvro_user_session');
@@ -54,12 +69,228 @@ export const api = {
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
 };
 
+export type WorkspaceAuditEvent = {
+  id: string;
+  eventKey?: string;
+  workspaceId: string;
+  action: string;
+  actorId?: string;
+  actorEmail?: string;
+  target?: string;
+  projectId?: string;
+  meta?: Record<string, unknown>;
+  severity?: 'info' | 'warning' | 'critical';
+  createdAt: number;
+};
+
+export type CreditBalance = {
+  workspaceId: string;
+  balance: number;
+  currency: string;
+  updatedAt?: number;
+};
+
+export type CreditLedgerEvent = {
+  id: string;
+  sk?: string;
+  type: string;
+  amount: number;
+  balanceAfter: number;
+  reason?: string;
+  service?: string;
+  action?: string;
+  environment?: string;
+  actorId?: string;
+  actorEmail?: string;
+  ref?: string;
+  meta?: Record<string, unknown>;
+  createdAt: number;
+};
+
+export type PromoCode = {
+  code: string;
+  creditAmount: number;
+  maxRedemptions?: number | null;
+  maxPerWorkspace?: number;
+  startsAt?: number | null;
+  expiresAt?: number | null;
+  status: string;
+  redeemedCount?: number;
+  createdBy?: string;
+  note?: string;
+  eligibleEnvironments?: string[];
+  createdAt?: number;
+  oneTime?: boolean;
+  isExpired?: boolean;
+  isExhausted?: boolean;
+  remainingRedemptions?: number | null;
+};
+
 export const workspaceApi = {
   list: () => api.get<{ workspaces: any[] }>('/api/workspaces'),
+  get: (id: string) => api.get<{ workspace: any }>(`/api/workspaces/${encodeURIComponent(id)}`),
   create: (data: any) => api.post<any>('/api/workspaces', data),
   update: (id: string, data: any) => api.put<any>(`/api/workspaces/${id}`, data),
   delete: (id: string) => api.delete<any>(`/api/workspaces/${id}`),
   invite: (id: string, member: any) => api.post<any>(`/api/workspaces/${id}/invite`, member),
+  /** Durable append-only audit ledger (Lambda → Dynamo). */
+  listAudit: (id: string, opts?: { limit?: number; cursor?: string; projectId?: string }) => {
+    const params = new URLSearchParams();
+    if (opts?.limit) params.set('limit', String(opts.limit));
+    if (opts?.cursor) params.set('cursor', opts.cursor);
+    if (opts?.projectId) params.set('projectId', opts.projectId);
+    const q = params.toString();
+    return api.get<{ events: WorkspaceAuditEvent[]; nextCursor?: string | null; workspaceId: string }>(
+      `/api/workspaces/${encodeURIComponent(id)}/audit${q ? `?${q}` : ''}`,
+    );
+  },
+  setEnvironment: (id: string, environment: 'testnet' | 'mainnet') =>
+    api.post<{ status: string; environment: string; workspace: any }>(
+      `/api/workspaces/${encodeURIComponent(id)}/environment`,
+      { environment },
+    ),
+  getCredits: (id: string) =>
+    api.get<{
+      credits: CreditBalance;
+      environment: 'testnet' | 'mainnet';
+      burnsOnUse: boolean;
+      recent: CreditLedgerEvent[];
+    }>(`/api/workspaces/${encodeURIComponent(id)}/credits`),
+  listCreditPacks: () =>
+    api.get<{
+      packs: Array<{
+        id: string;
+        name: string;
+        zcrAmount: number;
+        usdcPrice: string;
+        description?: string;
+      }>;
+      nftCollectionId?: string | null;
+      purchaseMode: string;
+      currency: string;
+      paymentAsset: string;
+    }>('/api/credits/packs'),
+  purchaseCreditPack: (
+    id: string,
+    body: { packId: string; nftOnly?: boolean; ref?: string },
+  ) =>
+    api.post<{
+      status: string;
+      pack: { id: string; name: string; zcrAmount: number; usdcPrice: string };
+      nftCheckoutUrl?: string | null;
+      nftCollectionId?: string | null;
+      granted: boolean;
+      balance?: CreditBalance;
+      message?: string;
+    }>(`/api/workspaces/${encodeURIComponent(id)}/credits/purchase`, body),
+  listCreditLedger: (id: string, opts?: { limit?: number; cursor?: string }) => {
+    const params = new URLSearchParams();
+    if (opts?.limit) params.set('limit', String(opts.limit));
+    if (opts?.cursor) params.set('cursor', opts.cursor);
+    const q = params.toString();
+    return api.get<{ events: CreditLedgerEvent[]; nextCursor?: string | null }>(
+      `/api/workspaces/${encodeURIComponent(id)}/credits/ledger${q ? `?${q}` : ''}`,
+    );
+  },
+  consumeCredits: (
+    id: string,
+    body: { service: string; action: string; amount?: number; ref?: string; meta?: Record<string, unknown> },
+  ) => api.post<{ status: string; charged: boolean; skipped?: boolean; balance: CreditBalance; cost: number }>(
+    `/api/workspaces/${encodeURIComponent(id)}/credits/consume`,
+    body,
+  ),
+  redeemPromo: (id: string, code: string) =>
+    api.post<{ status: string; balance: CreditBalance; tx: CreditLedgerEvent }>(
+      `/api/workspaces/${encodeURIComponent(id)}/credits/redeem`,
+      { code },
+    ),
+  validatePromo: (id: string, code: string) =>
+    api.post<{
+      valid: boolean;
+      status: string;
+      message: string;
+      code?: string;
+      creditAmount?: number;
+      promo?: PromoCode;
+      fresh?: boolean;
+      expiresAt?: number;
+      redeemedAt?: number;
+    }>(`/api/workspaces/${encodeURIComponent(id)}/credits/validate-promo`, { code }),
+};
+
+export type PlatformMember = {
+  id?: string;
+  email?: string;
+  name?: string;
+  role?: string;
+  status?: string;
+};
+
+export type PlatformWorkspaceRow = {
+  workspaceId: string;
+  name: string;
+  plan?: string;
+  ownerId: string;
+  ownerEmail?: string;
+  environment?: string;
+  createdAt?: number;
+  updatedAt?: number;
+  memberCount: number;
+  pendingInvites?: number;
+  members: PlatformMember[];
+  roles: {
+    owners: PlatformMember[];
+    admins: PlatformMember[];
+    developers: PlatformMember[];
+    finance: PlatformMember[];
+    viewers: PlatformMember[];
+    agents: PlatformMember[];
+  };
+  projectCount: number;
+  services: string[];
+  zcrBalance: number | null;
+};
+
+export const platformApi = {
+  me: () => api.get<{ username: string; email?: string; platformAdmin: boolean }>('/api/platform/me'),
+  analytics: () =>
+    api.get<{
+      workspaceCount: number;
+      rawWorkspaceRows?: number;
+      duplicateWorkspaceRows?: number;
+      ownerCount?: number;
+      environmentCounts: Record<string, number>;
+      totalZcrInCirculation: number;
+      creditAccountCount: number;
+      activePromoCount: number;
+      promoCount: number;
+      note?: string;
+    }>('/api/platform/analytics'),
+  listWorkspaces: () =>
+    api.get<{
+      workspaces: PlatformWorkspaceRow[];
+      count: number;
+      rawWorkspaceRows?: number;
+      duplicateWorkspaceRows?: number;
+    }>('/api/platform/workspaces'),
+  grantCredits: (body: { workspaceId: string; amount: number; reason?: string; ref?: string }) =>
+    api.post<{ status: string; balance: CreditBalance }>('/api/platform/credits/grant', body),
+  listPromos: () => api.get<{ promos: PromoCode[] }>('/api/platform/promo-codes'),
+  createPromo: (body: {
+    code?: string;
+    creditAmount: number;
+    maxRedemptions?: number | null;
+    maxPerWorkspace?: number;
+    expiresAt?: number | null;
+    expiresInDays?: number | null;
+    autoGenerate?: boolean;
+    note?: string;
+  }) => api.post<{ status: string; promo: PromoCode }>('/api/platform/promo-codes', body),
+  disablePromo: (code: string) =>
+    api.post<{ status: string; promo: PromoCode }>(
+      `/api/platform/promo-codes/${encodeURIComponent(code)}/disable`,
+      {},
+    ),
 };
 
 export const projectApi = {
@@ -96,8 +327,59 @@ export const memoryApi = {
 };
 
 export const inviteApi = {
-  send: (data: { email: string; workspaceId: string; workspaceName: string; inviterName: string; role: string }) =>
-    api.post<any>('/api/invite/send', data),
+  /** @deprecated use create — always routes to server → Brevo */
+  send: (data: {
+    email: string;
+    workspaceId: string;
+    workspaceName: string;
+    inviterName: string;
+    role: string;
+    token?: string;
+    inviteId?: string;
+    expiresAt?: number;
+  }) =>
+    sendWorkspaceInviteEmail({
+      email: data.email,
+      workspaceId: data.workspaceId,
+      workspaceName: data.workspaceName,
+      inviterName: data.inviterName,
+      role: data.role,
+      token: data.token || `legacy_${Date.now().toString(36)}`,
+      inviteId: data.inviteId || `inv_legacy_${Date.now().toString(36)}`,
+      expiresAt: data.expiresAt || Date.now() + 7 * 24 * 60 * 60 * 1000,
+    }),
+
+  /** Create / send invite mail (Vite middleware or Lambda → api.brevo.com). */
+  create: (data: SendWorkspaceInviteInput): Promise<SendWorkspaceInviteResult> =>
+    sendWorkspaceInviteEmail(data),
+
+  revoke: (data: { workspaceId: string; inviteId: string; token?: string }) =>
+    fetch(`${mailApiBase()}/api/invite/revoke`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify(data),
+    }).then(async (r) => {
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error_description || j.error || 'Revoke failed');
+      return j as { status: string };
+    }),
+
+  /** Lookup invite — always mail API base (Vite store / Lambda), never localhost:8080. */
+  getByToken: (token: string) => getInviteByToken(token),
+
+  accept: (data: {
+    token: string;
+    principalId?: string;
+    email?: string;
+    username?: string;
+    name?: string;
+  }) => acceptInviteByToken(data),
+
+  /** Local membership index + optional Lambda-shared list helper. */
+  listShared: (email?: string) => listMySharedWorkspaces(email),
+
+  /** Accepted members for a workspace (local Vite store — owner roster sync). */
+  listLocalMembers: (workspaceId: string) => listLocalWorkspaceMembers(workspaceId),
 };
 
 export const proofApi = {
@@ -252,14 +534,23 @@ import {
 } from 'stellar-sdk';
 import { signTransaction as freighterSign } from '@stellar/freighter-api';
 
-/** Known USDC/EURC testnet issuers (Stellar Development Foundation) */
+/** Known USDC/EURC issuers — testnet (SDF) vs mainnet (Circle). */
 const TESTNET_ISSUERS: Record<string, string> = {
   USDC: 'GBBD47IF6LWK7P7M7SC3DEUQ7OCSEZUO7UHYE2442BENPDUXZUCMV32V',
   EURC: 'GB3Q6QDZYADPKVZGQ5G4Y3XSZFCR5B4XHY7G2T2GK4YRQO6G4SP6YO3G',
 };
+const MAINNET_ISSUERS: Record<string, string> = {
+  // Circle USDC + EURC on Stellar public network
+  USDC: 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN',
+  EURC: 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN',
+};
 
 function isTestnet(horizonUrl: string): boolean {
-  return horizonUrl.includes('testnet');
+  const u = (horizonUrl || '').toLowerCase();
+  if (!u.trim()) return true;
+  if (u.includes('testnet') || u.includes('futurenet')) return true;
+  if (u.includes('horizon.stellar.org')) return false;
+  return u.includes('test');
 }
 
 function getNetworkPassphrase(horizonUrl: string): string {
@@ -268,8 +559,14 @@ function getNetworkPassphrase(horizonUrl: string): string {
 
 function getStellarAsset(currency: string, horizonUrl: string): Asset {
   if (currency === 'XLM') return Asset.native();
-  const issuer = TESTNET_ISSUERS[currency];
-  if (!issuer) throw new Error(`Unknown asset: ${currency}. Only XLM, USDC, EURC are supported.`);
+  const issuers = isTestnet(horizonUrl) ? TESTNET_ISSUERS : MAINNET_ISSUERS;
+  const issuer = issuers[currency];
+  if (!issuer) {
+    throw new Error(
+      `Unknown asset: ${currency} on ${isTestnet(horizonUrl) ? 'testnet' : 'mainnet'}. `
+      + 'Only XLM, USDC, EURC are supported.',
+    );
+  }
   return new Asset(currency, issuer);
 }
 

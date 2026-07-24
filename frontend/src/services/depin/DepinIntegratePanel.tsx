@@ -107,7 +107,7 @@ function buildSnippets(input: {
       route,
       method,
       upstreamUrl: 'https://your-origin.example/resource',
-      description: 'Protected resource behind Access Shield',
+      description: 'Protected resource behind DEDSEC',
       price: '$0.001',
       recipient: recipient || 'G...PROVIDER_WITH_USDC_TRUSTLINE',
       network: 'stellar:testnet',
@@ -172,7 +172,7 @@ export default function DepinIntegratePanel({
             Agent / client integration
           </div>
           <h2 id="depin-integrate-title" className="text-lg font-semibold tracking-tight text-zinc-950 dark:text-white">
-            Access Shield integrate
+            DEDSEC integrate
           </h2>
           <p className="mt-1 max-w-xl text-sm leading-5 text-zinc-500 dark:text-zinc-400">
             Copy-ready probe, pay, config, and env snippets for exact per-request USDC (x402).

@@ -13,7 +13,7 @@ import WorkspaceOverview from '../components/workspace/WorkspaceOverview';
 import ProjectsIndex from '../components/workspace/ProjectsIndex';
 import Payroll from '../components/workspace/Payroll';
 import ProjectOverview from '../components/project/ProjectOverview';
-import ProjectExecutions from '../components/project/ProjectExecutions';
+
 import Zer0Layout from '../components/zer0/Zer0Layout';
 import Zer0Dashboard from '../components/zer0/Zer0Dashboard';
 import Zer0People from '../components/zer0/Zer0People';
@@ -36,10 +36,13 @@ import ProjectAudit from '../components/project/ProjectAudit';
 import ProjectSettings from '../components/project/ProjectSettings';
 
 import WorkspaceTeam from '../components/workspace/WorkspaceTeam';
+import AcceptInvite from '../components/workspace/AcceptInvite';
 import WorkspaceSecurity from '../components/workspace/WorkspaceSecurity';
 import WorkspaceAnalytics from '../components/workspace/WorkspaceAnalytics';
 import WorkspaceSettings from '../components/workspace/WorkspaceSettings';
 import WorkspaceActivity from '../components/workspace/WorkspaceActivity';
+import WorkspaceCredits from '../components/workspace/WorkspaceCredits';
+import PlatformAdmin from '../components/platform/PlatformAdmin';
 import { memoryApi } from '../api/api';
 import type { MemoryEntry } from '../types';
 
@@ -260,6 +263,13 @@ const withdrawRoute = createRoute({
   component: WithdrawRoute,
 });
 
+/** IAM invite accept — auth required to bind role, page itself is outside dashboard shell */
+const acceptInviteRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/invite/accept',
+  component: AcceptInvite,
+});
+
 const agentShortcutRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/agent',
@@ -424,6 +434,18 @@ const wsSettingsRoute = createRoute({
   component: WorkspaceSettings,
 });
 
+const wsCreditsRoute = createRoute({
+  getParentRoute: () => dashboardLayoutRoute,
+  path: '/dashboard/w/$workspaceId/credits',
+  component: WorkspaceCredits,
+});
+
+const platformAdminRoute = createRoute({
+  getParentRoute: () => dashboardLayoutRoute,
+  path: '/dashboard/platform',
+  component: PlatformAdmin,
+});
+
 // --- Project screens ---
 const projectRootRoute = createRoute({
   getParentRoute: () => dashboardLayoutRoute,
@@ -440,12 +462,6 @@ const projectOverviewRoute = createRoute({
   getParentRoute: () => dashboardLayoutRoute,
   path: '/dashboard/w/$workspaceId/p/$projectId/overview',
   component: ProjectOverview,
-});
-
-const projectExecutionsRoute = createRoute({
-  getParentRoute: () => dashboardLayoutRoute,
-  path: '/dashboard/w/$workspaceId/p/$projectId/executions',
-  component: ProjectExecutions,
 });
 
 const projectProjectsRoute = createRoute({
@@ -669,6 +685,10 @@ const embedNftCheckoutRoute = createRoute({
     collectionId: typeof search.collectionId === 'string' ? search.collectionId : '',
     // Game embeds (e.g. http://127.0.0.1:4173) pass their origin so success postMessage can return.
     openerOrigin: typeof search.openerOrigin === 'string' ? search.openerOrigin : '',
+    // Platform credit pack purchase (ZCR grant after wallet pay)
+    workspaceId: typeof search.workspaceId === 'string' ? search.workspaceId : '',
+    zcrAmount: typeof search.zcrAmount === 'string' ? search.zcrAmount : '',
+    packId: typeof search.packId === 'string' ? search.packId : '',
   }),
   component: EmbedCheckout,
 });
@@ -676,6 +696,7 @@ const embedNftCheckoutRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   indexRoute,
   withdrawRoute,
+  acceptInviteRoute,
   agentShortcutRoute,
   servicesShortcutRoute,
   misspelledServicesShortcutRoute,
@@ -708,9 +729,10 @@ const routeTree = rootRoute.addChildren([
     wsSecurityRoute,
     wsAnalyticsRoute,
     wsSettingsRoute,
+    wsCreditsRoute,
+    platformAdminRoute,
     projectRootRoute,
     projectOverviewRoute,
-    projectExecutionsRoute,
     projectProjectsRoute,
     projectServicesRoute,
     projectZer0LayoutRoute.addChildren([

@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { ShieldCheck, Plus, Trash2, Copy, Check } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ShieldCheck, Plus, Trash2, Copy, Check, AlertTriangle } from 'lucide-react';
+import { useParams } from '@tanstack/react-router';
 import { copyText } from '../../lib/clipboard';
 
 type ApiKey = {
@@ -17,6 +18,17 @@ type SecuritySettings = {
   ipAllowlist: string;
 };
 
+const DEFAULT_SETTINGS: SecuritySettings = {
+  requireMfaForAdmins: false,
+  ownerOnlyTokens: true,
+  requireDeploymentApproval: false,
+  ipAllowlist: '',
+};
+
+function storageKey(workspaceId: string | undefined, suffix: string) {
+  return `zexvro.security.${workspaceId || 'local'}.${suffix}`;
+}
+
 function createTokenSecret() {
   const bytes = new Uint8Array(24);
   crypto.getRandomValues(bytes);
@@ -33,25 +45,54 @@ function formatDate(timestamp: number) {
   });
 }
 
+function loadJson<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
 export default function WorkspaceSecurity() {
-  const [keys, setKeys] = useState<ApiKey[]>([]);
-  const [securitySettings, setSecuritySettings] = useState<SecuritySettings>({
-    requireMfaForAdmins: false,
-    ownerOnlyTokens: true,
-    requireDeploymentApproval: false,
-    ipAllowlist: '',
-  });
+  const { workspaceId } = useParams({ strict: false });
+  const keysKey = storageKey(workspaceId, 'tokens');
+  const settingsKey = storageKey(workspaceId, 'settings');
+
+  const [keys, setKeys] = useState<ApiKey[]>(() => loadJson(keysKey, []));
+  const [securitySettings, setSecuritySettings] = useState<SecuritySettings>(() =>
+    loadJson(settingsKey, DEFAULT_SETTINGS),
+  );
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [newKeyName, setNewKeyName] = useState('');
   const [generatedKey, setGeneratedKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    setKeys(loadJson(keysKey, []));
+    setSecuritySettings(loadJson(settingsKey, DEFAULT_SETTINGS));
+    setGeneratedKey(null);
+  }, [keysKey, settingsKey]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(keysKey, JSON.stringify(keys));
+    } catch { /* ignore quota */ }
+  }, [keys, keysKey]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(settingsKey, JSON.stringify(securitySettings));
+    } catch { /* ignore quota */ }
+  }, [securitySettings, settingsKey]);
 
   const handleCreateKey = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newKeyName.trim()) return;
 
     const secret = createTokenSecret();
-    const fullKey = `zx_live_${secret}`;
-    const obfuscated = `zx_live_${secret.slice(0, 4)}...${secret.slice(-4)}`;
+    const fullKey = `zx_local_${secret}`;
+    const obfuscated = `zx_local_${secret.slice(0, 4)}...${secret.slice(-4)}`;
 
     const newKey: ApiKey = {
       id: `key-${Date.now()}`,
@@ -89,15 +130,25 @@ export default function WorkspaceSecurity() {
       <div>
         <h1 className="text-lg font-semibold text-zinc-900 dark:text-white">Workspace Security</h1>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          Manage API keys, authorization tokens, and audit platform connection permissions.
+          Local draft for API tokens and policy checklists. Not platform-backed yet.
         </p>
       </div>
 
+      <div className="flex gap-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-4 text-xs text-amber-900 dark:text-amber-200">
+        <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+        <div>
+          <p className="font-semibold">Browser-only · not enforced by the API</p>
+          <p className="mt-1 text-amber-800/80 dark:text-amber-200/70">
+            Tokens and checklist toggles stay in this browser&apos;s localStorage for this workspace.
+            They do not authorize Morph, Gate, or deploy APIs until a security backend ships.
+          </p>
+        </div>
+      </div>
+
       <div className="grid gap-6 md:grid-cols-3">
-        {/* Token Generator */}
         <div className="md:col-span-2 space-y-6">
           <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-[#080809]">
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-white mb-4">API & Deploy Tokens</h2>
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-white mb-4">Local draft tokens</h2>
 
             <form onSubmit={handleCreateKey} className="flex gap-2 mb-6">
               <input
@@ -112,14 +163,16 @@ export default function WorkspaceSecurity() {
                 type="submit"
                 className="h-9 rounded-lg bg-zinc-900 px-4 text-xs font-semibold text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200 flex items-center gap-1.5"
               >
-                <Plus className="h-4 w-4" /> Create Key
+                <Plus className="h-4 w-4" /> Create draft
               </button>
             </form>
 
             {generatedKey && (
               <div className="mb-6 p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs">
-                <span className="text-emerald-800 dark:text-emerald-400 font-bold block mb-1">New Token Created!</span>
-                <span className="text-zinc-500 dark:text-zinc-400 block mb-2">Copy this key now. You will not be able to view it again.</span>
+                <span className="text-emerald-800 dark:text-emerald-400 font-bold block mb-1">Draft token created</span>
+                <span className="text-zinc-500 dark:text-zinc-400 block mb-2">
+                  Copy now if you need it for notes. This value is not accepted by ZEXVRO APIs.
+                </span>
                 <div className="flex items-center justify-between rounded bg-zinc-950 p-2.5 font-mono text-zinc-100">
                   <span className="break-all">{generatedKey}</span>
                   <button
@@ -135,7 +188,7 @@ export default function WorkspaceSecurity() {
             <div className="space-y-3">
               {keys.length === 0 && (
                 <div className="rounded-lg border border-dashed border-zinc-200 bg-zinc-50 p-6 text-center text-xs text-zinc-500 dark:border-zinc-800 dark:bg-zinc-950">
-                  No API or deploy tokens have been created for this workspace.
+                  No draft tokens for this workspace in this browser.
                 </div>
               )}
 
@@ -147,7 +200,7 @@ export default function WorkspaceSecurity() {
                     <div className="flex items-center gap-2 mt-1 text-[10px] text-zinc-400">
                       <span>Created {formatDate(k.createdAt)}</span>
                       <span>•</span>
-                      <span>Last used {k.lastUsedAt ? formatDate(k.lastUsedAt) : 'Never'}</span>
+                      <span>Local only</span>
                     </div>
                   </div>
 
@@ -163,10 +216,9 @@ export default function WorkspaceSecurity() {
           </div>
         </div>
 
-        {/* Security Overview */}
         <div className="space-y-6">
           <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-[#080809]">
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-white mb-3">Security Checklist</h2>
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-white mb-3">Policy checklist (local)</h2>
             <div className="space-y-3 mt-4 text-xs">
               {[
                 ['requireMfaForAdmins', 'Require MFA for admins'],
@@ -185,11 +237,11 @@ export default function WorkspaceSecurity() {
               ))}
 
               <label className="block">
-                <span className="mb-1.5 block text-zinc-650 dark:text-zinc-400">Allowed IP ranges</span>
+                <span className="mb-1.5 block text-zinc-650 dark:text-zinc-400">Allowed IP ranges (notes)</span>
                 <textarea
                   value={securitySettings.ipAllowlist}
                   onChange={e => setSecuritySettings(prev => ({ ...prev, ipAllowlist: e.target.value }))}
-                  placeholder="One CIDR range per line"
+                  placeholder="One CIDR range per line — not enforced yet"
                   rows={4}
                   className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs outline-none dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
                 />
@@ -202,7 +254,7 @@ export default function WorkspaceSecurity() {
             <div className="text-xs">
               <span className="font-semibold text-zinc-900 dark:text-white block">Security Events</span>
               <span className="text-zinc-555 dark:text-zinc-350 mt-1 block">
-                No security events have been recorded for this workspace.
+                No platform security event stream is connected. Use Audit Log for workspace activity when available.
               </span>
             </div>
           </div>

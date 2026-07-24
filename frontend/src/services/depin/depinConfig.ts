@@ -1,6 +1,13 @@
-/** Client-side Access Shield / De-pin config builder (no control-plane API). */
+/** Client-side DEDSEC (x402) config builder (no control-plane API). */
+
+import {
+  OZ_CHANNELS_MAINNET,
+  OZ_CHANNELS_TESTNET,
+  type StellarCaipNetwork,
+} from '../../lib/stellarNetwork';
 
 export type DepinHttpMethod = 'GET' | 'HEAD';
+export type DepinNetwork = StellarCaipNetwork;
 
 export interface DepinProviderDraft {
   route: string;
@@ -9,7 +16,7 @@ export interface DepinProviderDraft {
   description: string;
   price: string;
   recipient: string;
-  network: 'stellar:testnet';
+  network: DepinNetwork;
   timeoutMs: number;
   upstreamSecretRef?: string;
 }
@@ -27,7 +34,7 @@ export interface DepinGatewayConfig {
 }
 
 export const DEFAULT_FACILITATOR_URL = 'https://x402.org/facilitator';
-export const OZ_CHANNELS_TESTNET = 'https://channels.openzeppelin.com/x402/testnet';
+export { OZ_CHANNELS_TESTNET, OZ_CHANNELS_MAINNET };
 export const HOSTED_DEPIN_SECRET = 'zexvro/depin/config-json';
 
 export const EMPTY_PROVIDER_DRAFT: DepinProviderDraft = {
@@ -40,6 +47,18 @@ export const EMPTY_PROVIDER_DRAFT: DepinProviderDraft = {
   network: 'stellar:testnet',
   timeoutMs: 5000,
 };
+
+export function normalizeDepinNetwork(value?: string): DepinNetwork {
+  const v = (value || '').toLowerCase();
+  if (v.includes('pubnet') || v.includes('public') || v === 'mainnet' || v === 'stellar:mainnet') {
+    return 'stellar:pubnet';
+  }
+  return 'stellar:testnet';
+}
+
+export function facilitatorForNetwork(network: DepinNetwork): string {
+  return network === 'stellar:pubnet' ? OZ_CHANNELS_MAINNET : OZ_CHANNELS_TESTNET;
+}
 
 export const DEFAULT_GATEWAY_SHELL: Omit<DepinGatewayConfig, 'providers'> = {
   port: 4102,
@@ -135,7 +154,7 @@ export function sanitizeProviderDraft(draft: DepinProviderDraft): DepinProviderD
     description: draft.description.trim(),
     price: normalizePrice(draft.price),
     recipient: draft.recipient.trim(),
-    network: 'stellar:testnet',
+    network: normalizeDepinNetwork(draft.network),
     timeoutMs: draft.timeoutMs,
     ...(secret ? { upstreamSecretRef: secret } : {}),
   };

@@ -8,8 +8,16 @@ import { getExplorerTxUrl, truncateKey } from '../../api/walletConnect';
 import { useZer0Store } from '../../stores/zer0';
 import { stellar, payrollApi, employeeApi } from '../../api/api';
 import {
-  estimateFreighterPromptsForAmount, isAutoSignEnabled,
-  MAX_SHIELD_UNITS, planShieldPay,
+  estimateFreighterPromptsForAmount,
+  isAutoSignEnabled,
+  MAX_SHIELD_UNITS,
+  planShieldPay,
+  configurePrivacyPoolNetwork,
+  getPoolTiers,
+  getPrivacyPoolNetwork,
+  requiredXlmForPrivatePay,
+  STELLAR_BASE_RESERVE_XLM,
+  PRIVATE_PAY_FEE_BUFFER_XLM,
 } from '../../api/privacyPool';
 import { copyText } from '../../lib/clipboard';
 import { useStealthStore } from '../../stores/stealth';
@@ -60,6 +68,7 @@ export default function Zer0PayParty() {
   const [currency, setCurrency] = useState<Zer0Currency>(settings.defaultCurrency || 'XLM');
   const [paymentType, setPaymentType] = useState<Zer0PaymentType>('one-time');
   const [memo, setMemo] = useState('');
+  // Prefer private when pool tiers exist for the current network.
   const [shielded, setShielded] = useState(true);
   /** Per-payment stealth — does NOT rewrite workspace settings */
   const [useStealth, setUseStealth] = useState(!!settings.stealthPaymentsEnabled);
@@ -147,31 +156,34 @@ export default function Zer0PayParty() {
     const autoRefresh = async () => {
       if (settings.walletAddress && settings.walletAddress.trim()) {
         try {
+          // Keep network config aligned so private-pay plans match Freighter/Horizon.
+          configurePrivacyPoolNetwork({
+            horizonUrl: settings.horizonUrl,
+            sorobanRpcUrl: settings.sorobanRpcUrl,
+          });
           const balances = await stellar.getPoolBalance(settings.walletAddress.trim(), settings.horizonUrl);
           const usdc = Number(balances.USDC) || 0;
           const xlm = Number(balances.XLM) || 0;
           const eurc = Number(balances.EURC) || 0;
-          const hasAnyBalance = usdc > 0 || xlm > 0 || eurc > 0;
-          if (hasAnyBalance) {
-            useZer0Store.setState(state => ({
-              pool: {
-                ...state.pool,
-                balances: {
-                  USDC: Number.isFinite(usdc) ? usdc : state.pool.balances.USDC,
-                  XLM: Number.isFinite(xlm) ? xlm : state.pool.balances.XLM,
-                  EURC: Number.isFinite(eurc) ? eurc : state.pool.balances.EURC,
-                },
-                lastUpdated: Date.now(),
+          // Always write balances (including zeros) so insufficient-funds UI is accurate.
+          useZer0Store.setState(state => ({
+            pool: {
+              ...state.pool,
+              balances: {
+                USDC: Number.isFinite(usdc) ? usdc : 0,
+                XLM: Number.isFinite(xlm) ? xlm : 0,
+                EURC: Number.isFinite(eurc) ? eurc : 0,
               },
-            }));
-          }
+              lastUpdated: Date.now(),
+            },
+          }));
         } catch (err) {
           console.error('Failed to auto-refresh pool balance in PayParty:', err);
         }
       }
     };
     autoRefresh();
-  }, [settings.walletAddress, settings.horizonUrl]);
+  }, [settings.walletAddress, settings.horizonUrl, settings.sorobanRpcUrl]);
 
   const employeeMetaMap = useStealthStore(s => s.employeeMeta);
   const setEmployeeMeta = useStealthStore(s => s.setEmployeeMeta);
@@ -307,20 +319,42 @@ export default function Zer0PayParty() {
       setStealthSetupBusy(false);
     }
   };
+  // Align pool planner with Zer0 Settings network before computing notes / balance need.
+  configurePrivacyPoolNetwork({
+    horizonUrl: settings.horizonUrl,
+    sorobanRpcUrl: settings.sorobanRpcUrl,
+  });
+  const privacyNet = getPrivacyPoolNetwork();
+  const poolTiers = getPoolTiers();
+  const privatePoolsAvailable = poolTiers.length > 0;
+  const onMainnet = !privacyNet.isTestnet;
+
   // Free-form amount → multi-denom plan (1000/100/10/1 XLM notes) for few ZK proofs.
   const typedAmount = parseFloat(amount);
-  const shieldPlan = (!isNaN(typedAmount) && typedAmount > 0)
+  const shieldPlan = (shielded && !isNaN(typedAmount) && typedAmount > 0)
     ? planShieldPay(typedAmount)
     : null;
   const shieldedUnits = shieldPlan?.totalNotes || 0;
   const shieldedOnChainXlm = shieldPlan?.settledXlm || 0;
   const freighterPrompts = estimateFreighterPromptsForAmount(typedAmount || 0);
   const parsedAmount = typedAmount;
+  // Private pays: notes + 1 XLM account reserve + fee buffer (SAC transfer leaves classic balance).
+  const settleNotesXlm = shielded
+    ? (isNaN(typedAmount) || typedAmount <= 0
+      ? 0
+      : (shieldedOnChainXlm > 0 ? shieldedOnChainXlm : Math.ceil(typedAmount)))
+    : 0;
   const needBalance = shielded
-    ? (isNaN(typedAmount) || typedAmount <= 0 ? 0 : shieldedOnChainXlm)
+    ? (settleNotesXlm > 0 ? requiredXlmForPrivatePay(settleNotesXlm) : 0)
     : (isNaN(typedAmount) ? 0 : typedAmount);
-  const hasFunds = !isNaN(typedAmount) && typedAmount > 0
-    && (pool.balances[shielded ? 'XLM' : currency] || 0) >= needBalance;
+  const availableBal = pool.balances[shielded ? 'XLM' : currency] || 0;
+  const hasFunds = !isNaN(typedAmount)
+    && typedAmount > 0
+    && needBalance > 0
+    && availableBal + 1e-9 >= needBalance;
+  const privatePlanBlocked = shielded && typedAmount > 0 && !isNaN(typedAmount) && (
+    !privatePoolsAvailable || (shieldPlan != null && shieldPlan.totalNotes === 0)
+  );
 
   const recipientsReady = newWalletMode
     ? !!customRecipient.trim() && (!!customWallet.trim() || !!customStealthMeta.trim())
@@ -353,6 +387,38 @@ export default function Zer0PayParty() {
       alert('Enter a valid amount greater than 0.');
       return;
     }
+    if (shielded && !privatePoolsAvailable) {
+      alert(
+        onMainnet
+          ? 'Private pay is not available on mainnet yet (privacy pools not deployed). Switch to public pay, or use Testnet for private pays.'
+          : 'No privacy pool tiers are configured for this network.',
+      );
+      return;
+    }
+    if (shielded && shieldPlan && shieldPlan.totalNotes === 0) {
+      alert('Private amount rounds to 0 notes — enter at least 1 XLM (smallest pool unit).');
+      return;
+    }
+    if (shielded && shieldPlan && shieldPlan.totalNotes > MAX_SHIELD_UNITS) {
+      alert(
+        `Private pay needs ${shieldPlan.totalNotes} ZK notes (max ${MAX_SHIELD_UNITS}). `
+        + 'Split into smaller payments.',
+      );
+      return;
+    }
+    if (!hasFunds) {
+      alert(
+        shielded
+          ? `Not enough XLM for private pay.\n`
+            + `Wallet: ${availableBal.toLocaleString(undefined, { maximumFractionDigits: 4 })} XLM\n`
+            + `Need ≈ ${needBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })} XLM\n`
+            + `(${settleNotesXlm} notes + ${STELLAR_BASE_RESERVE_XLM} reserve + ~${PRIVATE_PAY_FEE_BUFFER_XLM} fees)`
+          : `Not enough ${currency} on the funding wallet.\n`
+            + `Available: ${availableBal.toLocaleString(undefined, { maximumFractionDigits: 4 })}\n`
+            + `Needed: ${needBalance.toLocaleString(undefined, { maximumFractionDigits: 4 })}`,
+      );
+      return;
+    }
     if (!recipientsReady && !newWalletMode) {
       alert('Go back and select recipients first.');
       setStep('recipients');
@@ -361,6 +427,42 @@ export default function Zer0PayParty() {
     if (newWalletMode && !customRecipient.trim()) {
       alert('Recipient name is required.');
       setStep('recipients');
+      return;
+    }
+    // Live Horizon balance check before review
+    try {
+      if (settings.walletAddress?.trim()) {
+        const funder = await stellar.getPoolBalance(settings.walletAddress.trim(), settings.horizonUrl);
+        const have = shielded ? (funder.XLM || 0) : (funder[currency] || 0);
+        const notes = shielded ? (shieldedOnChainXlm || Math.ceil(parsedAmount)) : 0;
+        const need = shielded ? requiredXlmForPrivatePay(notes) : parsedAmount;
+        useZer0Store.setState(state => ({
+          pool: {
+            ...state.pool,
+            balances: {
+              USDC: Number(funder.USDC) || 0,
+              XLM: Number(funder.XLM) || 0,
+              EURC: Number(funder.EURC) || 0,
+            },
+            lastUpdated: Date.now(),
+          },
+        }));
+        if (need > 0 && have + 1e-9 < need) {
+          alert(
+            shielded
+              ? `Not enough XLM on-chain for private pay.\n`
+                + `Wallet: ${have.toLocaleString(undefined, { maximumFractionDigits: 4 })} XLM\n`
+                + `Need ≈ ${need.toLocaleString(undefined, { maximumFractionDigits: 2 })} XLM\n`
+                + `(${notes} notes + ${STELLAR_BASE_RESERVE_XLM} reserve + ~${PRIVATE_PAY_FEE_BUFFER_XLM} fees)`
+              : `Not enough ${currency} on-chain.\n`
+                + `Wallet: ${have.toLocaleString(undefined, { maximumFractionDigits: 4 })}\n`
+                + `Need: ${need.toLocaleString(undefined, { maximumFractionDigits: 4 })}`,
+          );
+          return;
+        }
+      }
+    } catch (err: any) {
+      alert(`Could not verify wallet balance: ${err?.message || err}`);
       return;
     }
     setStep('review');
@@ -410,15 +512,19 @@ export default function Zer0PayParty() {
       // Live Horizon pre-read before creating the payment row
       try {
         const funder = await stellar.getPoolBalance(fundingWallet, settings.horizonUrl);
-        const need = shielded
-          ? (shieldedOnChainXlm || 0)
-          : (parsedAmount || 0);
+        const notes = shielded ? (shieldedOnChainXlm || Math.ceil(parsedAmount || 0)) : 0;
+        const need = shielded ? requiredXlmForPrivatePay(notes) : (parsedAmount || 0);
         const have = shielded ? (funder.XLM || 0) : (funder[currency] || 0);
-        if (need > 0 && have < need) {
+        if (need > 0 && have + 1e-9 < need) {
           alert(
-            `Not enough ${shielded ? 'XLM' : currency} on the funding wallet.\n`
-            + `On-chain: ${have}\nNeed: ${need}\n`
-            + (settings.horizonUrl?.includes('testnet') ? 'Tip: use Friendbot / Fund from faucet on testnet.' : 'Top up the wallet and retry.'),
+            shielded
+              ? `Not enough XLM on the funding wallet for private pay.\n`
+                + `On-chain: ${have}\nNeed ≈ ${need.toFixed(2)} `
+                + `(${notes} notes + ${STELLAR_BASE_RESERVE_XLM} reserve + ~${PRIVATE_PAY_FEE_BUFFER_XLM} fees)\n`
+                + 'Top up and retry.'
+              : `Not enough ${currency} on the funding wallet.\n`
+                + `On-chain: ${have}\nNeed: ${need}\n`
+                + (settings.horizonUrl?.includes('testnet') ? 'Tip: Friendbot / faucet on testnet.' : 'Top up and retry.'),
           );
           return;
         }
@@ -443,11 +549,21 @@ export default function Zer0PayParty() {
         settings.paymentApprovalRequired
         || (settings.enforceThresholdApproval && parsedAmount >= (settings.complianceThreshold || 0));
 
-      // Books keep the amount you typed; chain settles ceil(amount / unit) units
+      // Books keep the amount you typed; chain settles multi-denom pool notes.
       const settleAmount = shielded ? shieldedOnChainXlm : parsedAmount;
+      if (shielded && !privatePoolsAvailable) {
+        alert(
+          onMainnet
+            ? 'Private pay is not available on mainnet yet. Use public pay, or switch Zer0 to Testnet.'
+            : 'No privacy pools configured for this network.',
+        );
+        return;
+      }
       if (!(settleAmount > 0)) {
         alert(shielded
-          ? 'Private amount rounds to 0 notes — enter at least 1 XLM.'
+          ? (onMainnet
+            ? 'Private pay cannot plan notes on mainnet (pools not deployed). Use public pay or Testnet.'
+            : 'Private amount rounds to 0 notes — enter at least 1 XLM.')
           : 'Enter a valid amount greater than 0.');
         return;
       }
@@ -825,6 +941,19 @@ export default function Zer0PayParty() {
             </div>
           </div>
 
+          {shielded && privatePlanBlocked && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-[11px] text-amber-800 dark:text-amber-300">
+              {onMainnet && !privatePoolsAvailable ? (
+                <>
+                  <strong>Private pay misconfigured</strong> — mainnet pool IDs missing.
+                  Rebuild console with <code className="font-mono">VITE_ZER0_CONTRACT_*_MAINNET</code> set.
+                </>
+              ) : (
+                <>Private amount cannot be planned. Enter at least <strong>1 XLM</strong>.</>
+              )}
+            </div>
+          )}
+
           {/* Amount + currency — currency always choosable; private pays settle as XLM on-chain */}
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-2">
@@ -870,13 +999,45 @@ export default function Zer0PayParty() {
             </div>
           </div>
 
-          {/* Balance indicator */}
-          {amount && (
+          {/* Always explain private-pay headroom (Stellar reserve + fees) */}
+          {shielded && (
+            <div className="rounded-lg border border-sky-500/25 bg-sky-500/5 px-3 py-2.5 text-[11px] leading-relaxed text-sky-900 dark:text-sky-200">
+              <p className="font-semibold text-sky-800 dark:text-sky-100">Private pay funding rule</p>
+              <p className="mt-1 text-sky-800/90 dark:text-sky-200/90">
+                Your wallet must hold more than the payment amount. Stellar keeps ~{STELLAR_BASE_RESERVE_XLM} XLM
+                as account reserve, and private settle needs a small fee buffer (~{PRIVATE_PAY_FEE_BUFFER_XLM} XLM).
+              </p>
+              <ul className="mt-1.5 list-inside list-disc space-y-0.5 text-[10px] text-sky-800/80 dark:text-sky-200/80">
+                <li>
+                  Example: <strong>1 XLM private pay</strong> → hold at least{' '}
+                  <strong>~{requiredXlmForPrivatePay(1).toFixed(1)} XLM</strong>
+                  {' '}(1 notes + {STELLAR_BASE_RESERVE_XLM} reserve + ~{PRIVATE_PAY_FEE_BUFFER_XLM} fees)
+                </li>
+                {settleNotesXlm > 0 && (
+                  <li>
+                    This amount: <strong>{settleNotesXlm} XLM</strong> into pool → need ≥{' '}
+                    <strong>{needBalance.toFixed(2)} XLM</strong> on the funding wallet
+                    (you have {availableBal.toLocaleString('en-US', { minimumFractionDigits: 2 })} XLM)
+                  </li>
+                )}
+              </ul>
+            </div>
+          )}
+
+          {/* Balance indicator — always when amount entered */}
+          {amount && !isNaN(typedAmount) && typedAmount > 0 && !privatePlanBlocked && (
             hasFunds ? (
-              <div className="flex items-center gap-1.5 text-[10px] font-semibold text-emerald-600">
-                <CheckCircle2 className="h-3 w-3" />
-                Funding wallet: {(pool.balances[shielded ? 'XLM' : currency] || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} {shielded ? 'XLM' : currency}
-                {shielded && ` · will move ${shieldedOnChainXlm.toLocaleString()} XLM on-chain`}
+              <div className="flex flex-col gap-0.5 text-[10px] font-semibold text-emerald-600">
+                <span className="inline-flex items-center gap-1.5">
+                  <CheckCircle2 className="h-3 w-3" />
+                  Funding wallet OK: {availableBal.toLocaleString('en-US', { minimumFractionDigits: 2 })} {shielded ? 'XLM' : currency}
+                  {shielded && ` ≥ ${needBalance.toFixed(1)} required`}
+                </span>
+                {shielded && (
+                  <span className="pl-4 font-normal text-emerald-700/80 dark:text-emerald-400/80">
+                    Breakdown: {settleNotesXlm} notes + {STELLAR_BASE_RESERVE_XLM} reserve + ~{PRIVATE_PAY_FEE_BUFFER_XLM} fees
+                  </span>
+                )}
               </div>
             ) : (
               <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
@@ -885,8 +1046,10 @@ export default function Zer0PayParty() {
                   <div>
                     <span className="font-semibold block text-[11px] uppercase tracking-wider text-red-700 dark:text-red-300">Insufficient balance</span>
                     <span className="text-zinc-600 dark:text-zinc-300 text-[11px] block mt-0.5 font-normal">
-                      Wallet has {(pool.balances[shielded ? 'XLM' : currency] || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} {shielded ? 'XLM' : currency}.
-                      Needs {needBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })} {shielded ? 'XLM' : currency}.
+                      Wallet has {availableBal.toLocaleString('en-US', { minimumFractionDigits: 2 })} {shielded ? 'XLM' : currency}.
+                      {shielded
+                        ? ` Need ≥ ${needBalance.toFixed(2)} XLM (${settleNotesXlm} notes + ${STELLAR_BASE_RESERVE_XLM} reserve + ~${PRIVATE_PAY_FEE_BUFFER_XLM} fees). Top up and retry — this is the usual cause of “resulting balance not within allowed range”.`
+                        : ` Needs ${needBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })} ${currency}.`}
                     </span>
                   </div>
                 </div>
@@ -939,11 +1102,39 @@ export default function Zer0PayParty() {
                     : 'Direct transfer — amount and parties fully public'}</span>
                 </div>
               </div>
-              <button type="button" onClick={() => setShielded(!shielded)}
-                className={`relative h-5 w-9 rounded-full transition-colors ${shielded ? 'bg-blue-500' : 'bg-zinc-300 dark:bg-zinc-700'}`}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!shielded && !privatePoolsAvailable) {
+                    alert(
+                      onMainnet
+                        ? 'Private pay is not available on mainnet yet. Use public pay, or switch Zer0 to Testnet.'
+                        : 'No privacy pools configured for this network.',
+                    );
+                    return;
+                  }
+                  setShielded(!shielded);
+                }}
+                className={`relative h-5 w-9 rounded-full transition-colors ${shielded ? 'bg-blue-500' : 'bg-zinc-300 dark:bg-zinc-700'}`}
+              >
                 <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${shielded ? 'left-[18px]' : 'left-0.5'}`} />
               </button>
             </div>
+            {shielded && (
+              <p className="text-[10px] leading-relaxed text-zinc-500">
+                <strong className="text-zinc-700 dark:text-zinc-300">Wallet headroom:</strong>{' '}
+                hold more than the pay amount — Stellar keeps ~{STELLAR_BASE_RESERVE_XLM} XLM reserve + ~{PRIVATE_PAY_FEE_BUFFER_XLM} XLM fees.
+                Example: 1 XLM private pay needs ≥ ~{requiredXlmForPrivatePay(1).toFixed(1)} XLM on the funding wallet.
+                {onMainnet && privatePoolsAvailable
+                  ? ' Mainnet pools live (1 / 10 / 100 / 1000 XLM).'
+                  : ''}
+              </p>
+            )}
+            {!shielded && onMainnet && privatePoolsAvailable && (
+              <p className="text-[10px] text-zinc-500">
+                Mainnet private pools are live (1 / 10 / 100 / 1000 XLM). Real funds — double-check amounts.
+              </p>
+            )}
 
             {/* Stealth — nested under shield so it is obvious and one-click */}
             {shielded && (
@@ -1172,7 +1363,7 @@ export default function Zer0PayParty() {
             </button>
             <button
               type="submit"
-              disabled={!amount || !hasFunds}
+              disabled={!amount || !hasFunds || privatePlanBlocked || (shielded && !!shieldPlan && shieldPlan.totalNotes > MAX_SHIELD_UNITS)}
               className="flex h-10 flex-[2] items-center justify-center gap-2 rounded-lg bg-zinc-900 text-xs font-semibold text-white transition hover:bg-zinc-800 disabled:opacity-40 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
             >
               Review payment <ChevronRight className="h-3.5 w-3.5" />
@@ -1237,6 +1428,12 @@ export default function Zer0PayParty() {
               { label: 'Privacy', value: shielded ? 'Shielded (ZK pool)' : 'Transparent' },
               ...(shielded
                 ? [{
+                    label: 'Wallet must hold',
+                    value: `≥ ${needBalance.toFixed(2)} XLM (${settleNotesXlm} notes + ${STELLAR_BASE_RESERVE_XLM} reserve + ~${PRIVATE_PAY_FEE_BUFFER_XLM} fees)`,
+                  }, {
+                    label: 'Funding wallet',
+                    value: `${availableBal.toLocaleString('en-US', { minimumFractionDigits: 2 })} XLM ${hasFunds ? '· OK' : '· too low'}`,
+                  }, {
                     label: 'Stealth (this pay)',
                     value: useStealth
                       ? (canUseStealth
@@ -1257,6 +1454,23 @@ export default function Zer0PayParty() {
               </div>
             ))}
           </div>
+
+          {shielded && (
+            <div className={`rounded-lg border px-3 py-2.5 text-[11px] leading-relaxed ${
+              hasFunds
+                ? 'border-sky-500/25 bg-sky-500/5 text-sky-900 dark:text-sky-200'
+                : 'border-red-500/25 bg-red-500/5 text-red-800 dark:text-red-300'
+            }`}>
+              <p className="font-semibold">
+                {hasFunds ? 'Private pay funding rule' : 'Top up before sending'}
+              </p>
+              <p className="mt-1 opacity-90">
+                A private pay moves XLM into the pool, but your account must keep ~{STELLAR_BASE_RESERVE_XLM} XLM
+                reserve + ~{PRIVATE_PAY_FEE_BUFFER_XLM} XLM for fees. Example: 1 XLM private pay needs ≥ ~{requiredXlmForPrivatePay(1).toFixed(1)} XLM
+                on the funding wallet — not just 1 XLM.
+              </p>
+            </div>
+          )}
 
           <div className="flex gap-2 pt-2">
             <button onClick={() => setStep('details')}

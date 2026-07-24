@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Archive,
   ArrowLeft,
@@ -12,9 +13,12 @@ import {
   RefreshCw,
   RotateCcw,
   ShieldCheck,
+  Settings,
   ShoppingCart,
   Sparkles,
   Trash2,
+  X,
+  LoaderCircle,
 } from 'lucide-react';
 import {
   Area,
@@ -43,15 +47,22 @@ import {
   submitNftMint,
   submitNftSaleConfig,
   unarchiveNftCollection,
+  updateNftCollection,
   type ApiNftCollection,
   type NftMintedItem,
   type NftServiceHealth,
   type PreparedNftTransaction,
+  nftExplorerBase,
+  nftNetworkLabel,
+  nftNetworkPassphrase,
+  getNftNetworkPreference,
+  setNftNetworkPreference,
 } from './nftApi';
 import { formatWalletError, getPublicKey, isWalletAvailable, signTransaction } from './stellarWallet';
 import NftLaunchCinema from '../../components/NftLaunchCinema';
 import SectionSkeleton from '../../components/ui/SectionSkeleton';
 import NftSdkPanel from './NftSdkPanel';
+import { useProjectStore } from '../../stores/project';
 
 interface CollectionStudioProps {
   workspaceId: string;
@@ -112,6 +123,11 @@ export default function CollectionStudio({
   const [mintIntent, setMintIntent] = useState<PreparedNftTransaction | null>(null);
   const [showSdk, setShowSdk] = useState(false);
   const [launchOpen, setLaunchOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [nftNetPref, setNftNetPref] = useState<'testnet' | 'mainnet'>(() => getNftNetworkPreference());
+  const [editDraft, setEditDraft] = useState({ name: '', symbol: '', description: '', royaltyBps: 0 });
+  const [saveBusy, setSaveBusy] = useState(false);
+  const projects = useProjectStore(s => s.projects);
   const [tab, setTab] = useState<'overview' | 'sale' | 'mint' | 'ledger' | 'integrate'>(() => {
     try {
       const saved = sessionStorage.getItem(`zexvro.nft.studioTab.${collectionId}`);
@@ -214,6 +230,57 @@ export default function CollectionStudio({
       setMessage(`${label} copied.`);
     } catch {
       setMessage(value);
+    }
+  };
+
+  const openSettings = () => {
+    if (!collection) return;
+    setEditDraft({
+      name: collection.name,
+      symbol: collection.symbol,
+      description: collection.description || '',
+      royaltyBps: collection.royaltyBps ?? 0,
+    });
+    setNftNetPref(getNftNetworkPreference());
+    setError('');
+    setSettingsOpen(true);
+  };
+
+  const applyNetworkPref = (env: 'testnet' | 'mainnet') => {
+    setNftNetworkPreference(env);
+    setNftNetPref(env);
+    const wsId = workspaceId.includes(':') ? workspaceId.split(':')[0] : workspaceId;
+    const project = projects.find(p => p.workspaceId === wsId && (p.enabledServices || []).includes('srv-nft'))
+      || projects.find(p => p.workspaceId === wsId);
+    if (project) {
+      useProjectStore.getState().updateProject(project.id, {
+        serviceNetworks: {
+          ...(project.serviceNetworks || {}),
+          nfto: env,
+        },
+      });
+    }
+    setMessage(`Freighter preference → ${env === 'mainnet' ? 'Mainnet' : 'Testnet'}.`);
+  };
+
+  const saveCollectionMeta = async () => {
+    if (!collection || !editDraft.name.trim()) return;
+    setSaveBusy(true);
+    setError('');
+    try {
+      await updateNftCollection(collection.id, {
+        name: editDraft.name.trim(),
+        symbol: editDraft.symbol.trim().toUpperCase(),
+        description: editDraft.description.trim(),
+        royaltyBps: editDraft.royaltyBps,
+      }, accessToken);
+      setSettingsOpen(false);
+      setMessage('Collection settings saved.');
+      await load(undefined, true);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setSaveBusy(false);
     }
   };
 
@@ -327,7 +394,7 @@ export default function CollectionStudio({
       }
       const signedTransaction =
         saleIntent.requiredSigners?.length
-          ? await signTransaction(saleIntent.serializedTransaction)
+          ? await signTransaction(saleIntent.serializedTransaction, nftNetworkPassphrase())
           : saleIntent.serializedTransaction;
       await submitNftSaleConfig({
         collectionId: collection.id,
@@ -379,7 +446,7 @@ export default function CollectionStudio({
     try {
       const operatorAddress = await getPublicKey();
       const recipient = mintRecipient.trim() || operatorAddress;
-      const signedTransaction = await signTransaction(mintIntent.serializedTransaction);
+      const signedTransaction = await signTransaction(mintIntent.serializedTransaction, nftNetworkPassphrase());
       await submitNftMint({
         collectionId: collection.id,
         preparedTransaction: mintIntent.serializedTransaction,
@@ -489,6 +556,13 @@ export default function CollectionStudio({
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={openSettings}
+            className="inline-flex h-10 items-center gap-2 rounded-md border border-zinc-200 px-3 text-sm font-medium text-zinc-700 dark:border-zinc-800 dark:text-zinc-200"
+          >
+            <Settings className="h-4 w-4" /> Settings
+          </button>
           <button
             type="button"
             onClick={() => void load()}
@@ -652,7 +726,7 @@ export default function CollectionStudio({
                 </div>
                 {collection.contractId && (
                   <a
-                    href={`https://stellar.expert/explorer/testnet/contract/${collection.contractId}`}
+                    href={`${nftExplorerBase()}/contract/${collection.contractId}`}
                     target="_blank"
                     rel="noreferrer"
                     className="flex items-center justify-between gap-3 rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800"
@@ -695,7 +769,7 @@ export default function CollectionStudio({
                 </div>
                 <div className="flex items-center gap-2 bg-white px-3 py-2.5 dark:bg-[#050506]">
                   <ShieldCheck className={`h-4 w-4 ${health?.capabilities?.stellarConfigured ? 'text-emerald-500' : 'text-zinc-400'}`} />
-                  Stellar testnet
+                  ${nftNetworkLabel()}
                 </div>
                 <div className="flex items-center gap-2 bg-white px-3 py-2.5 dark:bg-[#050506]">
                   Storage {health?.capabilities?.storageMode || '—'}
@@ -874,7 +948,7 @@ export default function CollectionStudio({
                       </span>
                       <span className="truncate font-mono text-xs text-zinc-500">{shortAddress(item.ownerAddress)}</span>
                       <a
-                        href={`https://stellar.expert/explorer/testnet/tx/${item.transactionHash}`}
+                        href={`${nftExplorerBase()}/tx/${item.transactionHash}`}
                         target="_blank"
                         rel="noreferrer"
                         className="text-brand-blue"
@@ -915,6 +989,117 @@ export default function CollectionStudio({
           collectionName={collection.name}
           onClose={() => setShowSdk(false)}
         />
+      )}
+
+      {settingsOpen && collection && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <section className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-lg border border-zinc-200 bg-white p-5 shadow-2xl dark:border-zinc-800 dark:bg-[#0A0A0B]">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-base font-semibold text-zinc-950 dark:text-white">Collection settings</h2>
+                <p className="mt-1 text-sm text-zinc-500">
+                  Rename, description, royalty, and Freighter network for this collection.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSettingsOpen(false)}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-zinc-200 text-zinc-500 dark:border-zinc-800"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-5 space-y-4">
+              <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Freighter network</p>
+                <p className="mt-1 text-[11px] text-zinc-500">
+                  Hosted API: {nftNetworkLabel(health)} · preference below is for wallet signing.
+                </p>
+                <div className="mt-2 inline-flex rounded-md border border-zinc-200 p-0.5 dark:border-zinc-800">
+                  {(['testnet', 'mainnet'] as const).map((env) => (
+                    <button
+                      key={env}
+                      type="button"
+                      onClick={() => applyNetworkPref(env)}
+                      className={`rounded px-3 py-1.5 text-[11px] font-semibold ${
+                        nftNetPref === env
+                          ? 'bg-zinc-950 text-white dark:bg-white dark:text-zinc-950'
+                          : 'text-zinc-500'
+                      }`}
+                    >
+                      {env === 'mainnet' ? 'Mainnet' : 'Testnet'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <label className="block text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                Name
+                <input
+                  value={editDraft.name}
+                  onChange={e => setEditDraft(d => ({ ...d, name: e.target.value }))}
+                  className="mt-2 w-full rounded-md border border-zinc-200 bg-white px-3 py-2.5 text-sm outline-none dark:border-zinc-800 dark:bg-[#050506] dark:text-white"
+                />
+              </label>
+              <label className="block text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                Symbol
+                <input
+                  value={editDraft.symbol}
+                  disabled={collection.status === 'live'}
+                  onChange={e => setEditDraft(d => ({
+                    ...d,
+                    symbol: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10),
+                  }))}
+                  className="mt-2 w-full rounded-md border border-zinc-200 bg-white px-3 py-2.5 font-mono text-sm outline-none disabled:opacity-60 dark:border-zinc-800 dark:bg-[#050506] dark:text-white"
+                />
+              </label>
+              <label className="block text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                Description
+                <textarea
+                  value={editDraft.description}
+                  onChange={e => setEditDraft(d => ({ ...d, description: e.target.value }))}
+                  rows={3}
+                  className="mt-2 w-full resize-none rounded-md border border-zinc-200 bg-white px-3 py-2.5 text-sm outline-none dark:border-zinc-800 dark:bg-[#050506] dark:text-white"
+                />
+              </label>
+              <label className="block text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                Royalty %
+                <input
+                  type="number"
+                  min={0}
+                  max={10}
+                  step={0.25}
+                  value={editDraft.royaltyBps / 100}
+                  onChange={e => setEditDraft(d => ({
+                    ...d,
+                    royaltyBps: Math.round(Number(e.target.value) * 100),
+                  }))}
+                  className="mt-2 w-full rounded-md border border-zinc-200 bg-white px-3 py-2.5 text-sm outline-none dark:border-zinc-800 dark:bg-[#050506] dark:text-white"
+                />
+              </label>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setSettingsOpen(false)}
+                className="h-10 rounded-md border border-zinc-200 px-4 text-sm dark:border-zinc-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={saveBusy || !editDraft.name.trim()}
+                onClick={() => void saveCollectionMeta()}
+                className="inline-flex h-10 items-center gap-2 rounded-md bg-zinc-950 px-4 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-zinc-950"
+              >
+                {saveBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
+                Save
+              </button>
+            </div>
+          </section>
+        </div>
       )}
     </div>
   );

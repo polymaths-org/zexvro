@@ -73,7 +73,7 @@ const HOW_IT_WORKS = [
   },
   {
     title: 'Client pays exact USDC',
-    body: 'Buyer builds an x402 exact payment on stellar:testnet for the challenge amount and payTo G-address, then retries with PAYMENT-SIGNATURE.',
+    body: 'Buyer builds an x402 exact payment on stellar:testnet or stellar:pubnet for the challenge amount and payTo G-address, then retries with PAYMENT-SIGNATURE.',
   },
   {
     title: 'Verify → upstream once',
@@ -178,11 +178,11 @@ export default function DepinService() {
         <div>
           <div className="mb-2 flex items-center gap-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">
             <RadioTower className="h-4 w-4 text-brand-blue" />
-            De-pin · Access Shield
+            DEDSEC
           </div>
           <h1 className="text-2xl font-semibold text-zinc-950 dark:text-white">x402 Gateway</h1>
           <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-500 dark:text-zinc-400">
-            Protect HTTP resources with exact per-request Stellar testnet USDC. Unpaid traffic gets 402;
+            Protect HTTP resources with exact per-request Stellar USDC (testnet or mainnet). Unpaid traffic gets 402;
             paid traffic is verified, proxied once, settled, then released. Build route config here, apply at boot, then probe.
           </p>
           <p className="mt-2 font-mono text-[11px] text-zinc-400 dark:text-zinc-500">
@@ -331,7 +331,7 @@ export default function DepinService() {
           {tab === 'overview' && (
             <div className="space-y-6">
               <section>
-                <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">How Access Shield works</h2>
+                <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">How DEDSEC works</h2>
                 <p className="mt-1 max-w-2xl text-sm text-zinc-500 dark:text-zinc-400">
                   Economic edge for APIs and agent tool-loops: free-capacity farming becomes uneconomic because every call has a price.
                 </p>
@@ -459,7 +459,7 @@ export default function DepinService() {
                     <div>
                       <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Protected resources</h2>
                       <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                        {providers.length} live route{providers.length === 1 ? '' : 's'} on {status?.capabilities?.network || 'stellar:testnet'}
+                        {providers.length} live route{providers.length === 1 ? '' : 's'} on {(status?.capabilities?.networks || [status?.capabilities?.network || 'stellar:testnet']).join(', ')}
                         {status?.configSource ? ` · config ${status.configSource.type}:${status.configSource.detail}` : ''}
                       </p>
                     </div>
@@ -629,7 +629,7 @@ export default function DepinService() {
                   className="inline-flex h-10 items-center gap-2 rounded-md border border-zinc-200 px-4 text-sm font-medium dark:border-zinc-800"
                 >
                   <BookOpen className="h-4 w-4" />
-                  Access Shield docs
+                  DEDSEC docs
                 </a>
               </div>
               <ul className="grid gap-2 text-xs text-zinc-600 dark:text-zinc-400 sm:grid-cols-2">

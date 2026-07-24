@@ -1,0 +1,57 @@
+# Cloudflare Pages headers — SEO + favicon cache bust helpers
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: SAMEORIGIN
+
+# HTML always revalidated so meta / favicon link tags refresh quickly
+/
+  Cache-Control: public, max-age=0, must-revalidate
+/index.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+# Favicon + brand marks: long cache; new URL path (v2) busts old Google cache
+/favicon.ico
+  Cache-Control: public, max-age=604800, immutable
+  Content-Type: image/x-icon
+/favicon-v2.ico
+  Cache-Control: public, max-age=604800, immutable
+  Content-Type: image/x-icon
+/icons/*
+  Cache-Control: public, max-age=604800, immutable
+/site.webmanifest
+  Cache-Control: public, max-age=86400, must-revalidate
+  Content-Type: application/manifest+json
+/og-image.png
+  Cache-Control: public, max-age=86400, must-revalidate
+/brand-mark.png
+  Cache-Control: public, max-age=86400, must-revalidate
+/logo.png
+  Cache-Control: public, max-age=86400, must-revalidate
+/logo-transparent.png
+  Cache-Control: public, max-age=86400, must-revalidate
+/sitemap.xml
+  Cache-Control: public, max-age=3600, must-revalidate
+/robots.txt
+  Cache-Control: public, max-age=3600, must-revalidate
+
+# Decorative marketing assets: keep out of Google Images when possible
+/cubes.png
+  X-Robots-Tag: noindex, noimageindex
+/mobile_statue.png
+  X-Robots-Tag: noindex, noimageindex
+/deploy-nfts-clicks.png
+  X-Robots-Tag: noindex, noimageindex
+/web2.png
+  X-Robots-Tag: noindex, noimageindex
+/web3.png
+  X-Robots-Tag: noindex, noimageindex
+/paris1.png
+  X-Robots-Tag: noindex, noimageindex
+/paris2.png
+  X-Robots-Tag: noindex, noimageindex
+/rushi1.png
+  X-Robots-Tag: noindex, noimageindex
+/rushi2.png
+  X-Robots-Tag: noindex, noimageindex

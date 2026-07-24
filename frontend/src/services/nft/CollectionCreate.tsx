@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef, useState, useCallback } from 'react';
+import {
+  useEffect, useId, useRef, useState, useCallback } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
@@ -27,6 +28,9 @@ import {
   uploadNftMedia,
   type ApiNftCollection,
   type NftServiceHealth,
+  nftExplorerBase,
+  nftNetworkLabel,
+  nftNetworkPassphrase,
 } from './nftApi';
 import NftLaunchCinema from '../../components/NftLaunchCinema';
 import CollectionCreatedModal from './CollectionCreatedModal';
@@ -302,7 +306,7 @@ export default function CollectionCreate({
             // already on-chain
           } else if (saleIntent.requiredSigners?.length) {
             setSubmitStatus('signing');
-            const signedTransaction = await signTransaction(saleIntent.serializedTransaction);
+            const signedTransaction = await signTransaction(saleIntent.serializedTransaction, nftNetworkPassphrase());
             const saleResult = await submitNftSaleConfig({
               collectionId: created.id,
               preparedTransaction: saleIntent.serializedTransaction,
@@ -597,7 +601,7 @@ export default function CollectionCreate({
             </div>
             {errors.unitPriceXlm && <p className="mt-2 text-xs text-red-500">{errors.unitPriceXlm}</p>}
             <p className="mt-3 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
-              After deploy, Freighter will ask you to activate the primary sale so buyers can purchase immediately (Stellar testnet XLM, same unit amount).
+              After deploy, Freighter will ask you to activate the primary sale so buyers can purchase immediately (${nftNetworkLabel()} XLM, same unit amount).
             </p>
           </div>
         </section>

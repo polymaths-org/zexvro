@@ -1,8 +1,9 @@
 import { Project, Deployment, Service, TeamMember, CollaborationNote, MemoryEntry, AuditLog, SecurityKey } from '../types';
 
-// AI NOTE: Mock data has been cleaned. Only the 6 MVP service definitions remain
+// AI NOTE: Mock data has been cleaned. Only the 5 MVP service definitions remain
 // as real product data. All fake team members, deployments, projects, metrics,
 // and security keys have been removed. Screens should show clean empty states.
+// A-2-A Trade is out of MVP (scaffold may remain in routes).
 
 export const mockProjects: Project[] = [];
 
@@ -11,7 +12,7 @@ export const mockDeployments: Deployment[] = [];
 export const mockServices: Service[] = [
   {
     id: 'srv-privacy',
-    name: 'Zero-Knowledge Privacy Pool',
+    name: 'Zer0',
     owner: 'Unassigned',
     status: 'configuring',
     description: 'Private transaction workflow for companies that need Web3 verification without public transaction detail exposure.',
@@ -21,7 +22,7 @@ export const mockServices: Service[] = [
   },
   {
     id: 'srv-transformation',
-    name: 'Transformation Agent',
+    name: 'Morph',
     owner: 'Unassigned',
     status: 'configuring',
     description: 'Repository inspection and Web2-to-Web3 migration planning with human approval before any code-changing action.',
@@ -30,28 +31,18 @@ export const mockServices: Service[] = [
     category: 'transformation'
   },
   {
-    id: 'srv-trade',
-    name: 'A-2-A Trade Pipeline',
-    owner: 'Unassigned',
-    status: 'configuring',
-    description: 'Agent-to-agent negotiation and settlement pipeline. Protocol and wallet rules still need owner decisions.',
-    progress: 0,
-    lastActivity: 'Needs protocol draft',
-    category: 'trade'
-  },
-  {
     id: 'srv-agent-auth',
-    name: 'ZEXVRO Gate (Agent Auth)',
+    name: 'REQWID',
     owner: 'Unassigned',
     status: 'configuring',
-    description: 'Human vs agent access classification service with SDK/API direction. Privacy model and signals are not finalized.',
-    progress: 25,
-    lastActivity: 'Cognito sign-in/signup/reset UI connected',
+    description: 'Dual-channel human/agent capability gate with policy modes, SDK (@zexvro/gate), and anti-relay challenges. Not a puzzle CAPTCHA.',
+    progress: 45,
+    lastActivity: 'Gate API + captcha engine on main',
     category: 'auth'
   },
   {
     id: 'srv-nft',
-    name: 'NFT Service',
+    name: 'NFTo',
     owner: 'Unassigned',
     status: 'inactive',
     description: 'Simple NFT deployment and management flow for non-Web3 users such as indie game developers and small studios.',
@@ -61,7 +52,7 @@ export const mockServices: Service[] = [
   },
   {
     id: 'srv-depin',
-    name: 'Access Shield (De-pin x402)',
+    name: 'DEDSEC',
     owner: 'Platform',
     status: 'configuring',
     description: 'Stellar x402 gateway for exact USDC payments that unlock HTTP API and compute resources for autonomous agents.',

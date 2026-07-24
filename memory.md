@@ -75,6 +75,75 @@
 - Decisions: Accepted - built-in preset, not only custom flow. API key still user-supplied (auth.json).
 - Verification: ensure wrote user config; apply-branding has codexin priority; `morph providers list` shows codexin.
 
+## 2026-07-25 - Push + tomorrow checklist (GN)
+
+- Pushing session WIP on `main` (NFT mainnet, ZCR UX, nav, Settings, auth fix).
+- **Tomorrow (2026-07-26) checklist** also in `context.md`:
+  1. Fix Credit system (E2E pack pay + grant + ledger)
+  2. Update Landing page
+  3. Update Legals
+  4. Check Morph (agent + memory; no dummy surfaces)
+  5. Smoke NFTo mainnet Settings / mint
+- GN — pick up from checklist; do not invent parallel backlog.
+
+## 2026-07-25 - NFTo Settings on live routes (CollectionList + Studio)
+
+- Bug: Settings was only on unused `CollectionDashboard`; live `/nft` uses `CollectionList` + `CollectionStudio`.
+- Fix: **Settings** on NFTo list header + per-row gear; Settings on collection studio header.
+- Modal: Freighter Testnet/Mainnet, service status, rename/description/royalty via `updateNftCollection`.
+
+## 2026-07-25 - ZCR NFT checkout + nav + NFT network toggle (Paris)
+
+- **ZCR pack collection** wired to `c516b900-b3a0-4997-9ca5-1ca3f9270f4f`:
+  - Lambda `zexvro-agent-backend` `ZCR_NFT_COLLECTION_ID`
+  - App Runner NFT `ZCR_CREDIT_COLLECTION_IDS` (same id)
+- Credits UI: `openNftCheckout` (`frontend/src/lib/nftCheckout.ts`) — same Freighter popup as SDK `openCheckout`; pack buy opens checkout then refreshes ledger.
+- NFT dashboard: Testnet/Mainnet Freighter preference toggle; fixed hardcoded “testnet” / broken template strings.
+- Project nav: removed dummy Morph (`transformation`); Agentic = Morph Agent + Shared Memory only; **REQWID under Security & Insights**.
+- Note: hosted NFT API remains mainnet; Freighter pref is for wallet signing UX. Credit pack sale must be live on that collection with USDC price.
+
+## 2026-07-25 - NFTo Auth InvalidInput fix (preserve signed auth)
+
+- Symptom: `HostError: Error(Auth, InvalidInput)` on mint/sale submit after Freighter sign (contract `CBRVAE…`).
+- Cause: `submitWithFreshSponsorSequence` rebuilt the host-function op **without** Freighter-signed Soroban `auth` entries; `prepareTransaction` then refilled simulation auth → invalid/unsigned auth on-chain.
+- Fix: rebuild with `Operation.invokeHostFunction({ func, auth: originalOp.auth })` so signed entries survive sequence refresh; clearer `authorization_invalid` mapping; FE JSON sign uses mainnet RPC placeholder when passphrase is public.
+- Deployed App Runner image `zexvro-nft-api:authfix-20260725012729` (still pubnet). Retry: prepare → Freighter sign → submit once.
+
+## 2026-07-25 - NFTo App Runner cut over to mainnet
+
+- Root AWS account `290294660486` via CLI.
+- WASM already on pubnet: `4beb4b6f90eb65291db698ca148903cf1946b20b7ffb381f5b1e25fe779af700`.
+- Sponsor `GCD4…` already had **18 XLM** on mainnet (Secrets Manager `zexvro/nft/sponsor-secret` unchanged).
+- Fixed TS build (`exactOptionalPropertyTypes` in `app.ts` / `server.ts`), built/pushed `zexvro-nft-api:mainnet-20260725011109`.
+- App Runner `zexvro-nft-api` updated: mainnet RPC/passphrase/USDC SAC + new WASM hash + new image.
+- **Health live:** `network: stellar:pubnet`, `stellarConfigured: true`, paymentToken Circle USDC mainnet.
+- URL: https://iyk6idmup6.us-east-1.awsapprunner.com/health
+- Note: hosted NFT is **mainnet-only** now; local `.env` may still be testnet. Top up sponsor if fee balance drops.
+
+## 2026-07-25 - NFTo mainnet WASM installed
+
+- Service: `services/nft-service` collection contract
+- Action: `stellar contract upload` on Public network with identity `zexvro-privacy` (`GADWIZ…`)
+- **WASM hash:** `4beb4b6f90eb65291db698ca148903cf1946b20b7ffb381f5b1e25fe779af700`
+- Tx: https://stellar.expert/explorer/public/tx/51c6bd8e4dfbfaed9f6b00a6cd390f3ce82e8d0ae441ac45fc796aba93fce346
+- Deployer balance after upload: ~26.7 XLM (was ~45.4 after +30 fund)
+- Artifact: `services/nft-service/mainnet-wasm.env`
+- Hosted cutover completed in entry above.
+
+## 2026-07-25 - Console UI batch (Paris): sidebar, NFT Freighter, icons, security honesty
+
+- Service/area: frontend console polish (Paris tickets)
+- Files: `DashboardLayout.tsx`, `ProjectOverview.tsx`, `ProjectSettings.tsx`, `WorkspaceOverview.tsx`, `WorkspaceSecurity.tsx`, `Services.tsx`, `nftApi.ts`, `stellarWallet.ts`, `CollectionDashboard.tsx`, `frontend/public/services/*`
+- Done:
+  - Project sidebar: **Finance → Zer0**; Morph not under Services; REQWID only when enabled; Services Manager stays under Services
+  - NFT Freighter: stopped forcing Testnet on `getPublicKey`; passphrase prefers API health then `zexvro_nft_network_pref`; project settings / NFTo open hydrates pref from `serviceNetworks.nfto`
+  - Project overview metrics: enabled services / wallet balances / network prefs / team (no fake “needs configuration” spam)
+  - Workspace overview balances: Horizon from Zer0 settings or project mainnet pref
+  - Security: local-only draft tokens + explicit not-API-backed banner; persists per workspace in localStorage
+  - Service icons: transparent PNGs under `/services/{zer0,nfto,dedsec,reqwid}-32.png` used in sidebar + Services Manager
+- Still blocked: NFT mainnet WASM upload (`TxInsufficientBalance` on deployer); hosted NFT App Runner mainnet env after upload
+- Verification: `cd frontend && npm run lint` (tsc clean)
+
 
 ## 2026-07-23 - CLI device-code login: skip intro, show auth
 
@@ -240,12 +309,12 @@ If a detail is only a work update, keep it here.
 
 | Service | Owner | Current status | Edit rule |
 | --- | --- | --- | --- |
-| Zero-Knowledge Privacy Pool (Zer0) | Paris / `paris-29` | **Complete (product UI)** — suite, privacy pool, stealth, settings client-facing | Ask before changing core proving/pool design; product UX marked complete 2026-07-17 |
-| Transformation Agent (Morph) | Morph track (was Paris / `paris-29`) | **In Progress — CLI built; agentic + demo + CI/CD remaining** | Morph assignee builds CLI/agent/CI/demo/surface. Shared memory must actually update. |
-| A-2-A Trade Pipeline | Rushi / `Wraient` | Planned | Ask or record coordination before changing protocol, wallet, or negotiation design |
-| ZEXVRO Gate (Agent Auth + Captcha) | Rushi / `Wraient` | **Local-ready on `gate-captcha-local`** — dual-channel human captcha + agent Ed25519/PoP; AWS deploy blocked until owner approves | Coordinate before changing Gate protocol, captcha engine, or class integrity |
-| NFT Service | Nabil / `n4bi10p` + Paris | **Complete (product UI)** — create cinema, studio dashboard, public checkout, SDK, docs | Ask before changing minting, metadata, checkout, or NFT model |
-| De-pin | Nabil / `n4bi10p` | **In progress** — CORS/status harden on branch; full Access Shield product testing **tomorrow** | Follow exact per-request x402 scope; redeploy App Runner before claiming live CORS |
+| Zer0 (Zero-Knowledge Privacy Pool) | Paris / `paris-29` | **Complete (product UI)** — suite, privacy pool, stealth, settings client-facing | Ask before changing core proving/pool design; product UX marked complete 2026-07-17 |
+| Morph (Transformation Agent) | Morph track (was Paris / `paris-29`) | **In Progress — CLI rebuilt on OpenCode + MCP; demo/CI remaining** | Morph assignee builds CLI/agent/CI/demo/surface. Shared memory must actually update. |
+| REQWID (Agent Auth / Gate) | Rushi / `Wraient` | **On main** — dual-channel human captcha + agent Ed25519/PoP; hosted Gate API | Coordinate before changing Gate protocol, captcha engine, or class integrity |
+| NFTo (NFT Service) | Nabil / `n4bi10p` + Paris | **Complete (product UI)** — create cinema, studio dashboard, public checkout, SDK, docs | Ask before changing minting, metadata, checkout, or NFT model |
+| DEDSEC (x402 gateway; code `services/depin`) | Nabil / `n4bi10p` | **In progress** — gateway + optional Gate bind | Follow exact per-request x402 scope; code paths still say depin |
+| ~~A-2-A Trade Pipeline~~ | — | **Out of MVP** | Do not market or treat as core service; scaffold may remain |
 
 Shared areas that need extra care:
 
@@ -267,7 +336,7 @@ Shared areas that need extra care:
 3. Do not silently change shared contracts.
 4. Do not introduce secrets or credentials.
 5. Do not commit `.env` files.
-6. Keep De-pin v1 on standard x402 exact per-request payments; streaming and sessions are deferred.
+6. Keep DEDSEC v1 on standard x402 exact per-request payments; streaming and sessions are deferred.
 7. Do not treat locally tested code as a deployed integration.
 8. Update this file after meaningful changes.
 9. Commit the code/docs change and memory update together.
@@ -345,7 +414,7 @@ Use `None` for empty fields. Do not delete fields.
 - Decision: Accepted - README stays brand-level and should not explain individual services.
 - Decision: Accepted - Detailed service context belongs in `context.md`.
 - Decision: Accepted - Work state, decisions, blockers, and handoffs belong in `memory.md`.
-- Decision: Accepted - MVP priority is the six unique services before generic PaaS features.
+- Decision: Accepted - MVP priority is the five unique services before generic PaaS features (A2A out of MVP as of 2026-07-24).
 - Decision: Accepted - Frontend direction is Vite + React.
 - Decision: Accepted - Prefer Stellar Network for Web3/backend pieces where technically appropriate.
 - Decision: Accepted - Morph is the product name for Transformation Agent.
@@ -1140,3 +1209,249 @@ Use `None` for empty fields. Do not delete fields.
 - Docs: `docs/gate_integrator.md`.
 - Follow-ups: Deploy console Pages with `VITE_AGENT_AUTH_API_URL=https://api.zexvro.in/gate`; optional purge CF cache; photo bank for image captchas.
 - Verification: unit tests 63/63; live health + admin sites + challenge.
+
+## 2026-07-21 - Codex with Nabil - RBAC system v1
+
+- Service or area: Platform RBAC (Nabil ticket #1).
+- Files changed: `frontend/src/rbac/permissions.ts`, `useWorkspaceRbac.ts`, `RequirePermission.tsx`, `permissions.test.ts`, `stores/workspace.ts`, `components/layout/DashboardLayout.tsx`, `components/workspace/WorkspaceTeam.tsx`, `WorkspaceSettings.tsx`, `docs/DocsLibrary.tsx`, `scratch_lambda/lambda_function.py`, `memory.md`.
+- Summary: Implemented workspace RBAC matrix (Owner/Admin/Developer/Finance/Viewer/Agent), permission helpers, sidebar section filtering, Team/Settings gates, role change for Admins, owner email on workspace create, and Lambda invite/settings write role checks.
+- Decisions: Accepted - FE enforces via `memberCan` + section map; invited users limited to view until active. Accepted - Invite roles exclude Owner. Accepted - Lambda invite requires Owner/Admin; workspace PUT requires Owner/Admin.
+- Follow-ups: Credits system; team invite SES reliability; backfill empty owner emails on legacy workspaces; optional route-level beforeLoad guards for deep links.
+- Blockers: None for v1 FE + Lambda policy.
+- Verification: `vitest` rbac 9/9; `tsc --noEmit` clean.
+
+## 2026-07-21 - Codex with Nabil - IAM invite/accept flow
+
+- Service or area: Platform team IAM (Nabil — invite fix + RBAC depth).
+- Files changed: `stores/types.ts`, `stores/workspace.ts`, `api/api.ts`, `WorkspaceTeam.tsx`, `AcceptInvite.tsx`, `router.tsx`, `DashboardLayout.tsx`, `rbac/permissions.ts`, `rbac/invite-flow.test.ts`, `scratch_lambda/lambda_function.py`, `memory.md`.
+- Summary: Tokenized workspace invitations (7-day TTL), accept page at `/invite/accept?token=…`, IAM-style Team UI (Members / Invitations / Roles), principal labels (`user:` / `serviceAccount:`), role bindings with boundAt/boundBy, Lambda email accept URL + get/accept/revoke invite APIs.
+- Decisions: Accepted - Invite is not membership until accept. Accepted - Accept requires matching signed-in email. Accepted - Local store works offline; Lambda is source of truth when reachable.
+- Follow-ups: Deploy Lambda + API Gateway routes for `/api/invite/*`; SES production domain; audit log entries on grant/accept/revoke.
+- Blockers: Hosted Lambda redeploy needed for email accept links in prod.
+- Verification: vitest rbac 12/12; tsc clean.
+
+## 2026-07-21 - Codex with Nabil - Brevo mail for invites
+
+- Service or area: platform mail (invites + future transactional).
+- Files changed: `scratch_lambda/brevo_mail.py` (new), `scratch_lambda/lambda_function.py` (SES → Brevo), `.env.example`, `scripts/test_brevo_mail.py`, local `.env` (gitignored key).
+- Summary: Replaced AWS SES invite sender with Brevo Transactional API. Shared `send_email()` helper for all backend mail. Smoke send succeeded (messageId returned).
+- Decisions: Accepted - MAIL_PROVIDER=brevo; server-only BREVO_API_KEY; sender defaults to verified Brevo account email until custom domain verified.
+- Follow-ups: Set BREVO_* on Lambda env + package `brevo_mail.py` in deploy zip; verify custom domain sender in Brevo for noreply@zexvro.in; rotate key if it was exposed in chat.
+- Blockers: None for local/API mail path once Lambda env is set.
+- Verification: Brevo account API ok; smoke send to zexvro@gmail.com returned 201 + messageId.
+
+## 2026-07-22 - Codex with Nabil - Branded email templates
+
+- Service or area: transactional mail design (Brevo).
+- Files changed: `scratch_lambda/email_templates.py`, `scratch_lambda/lambda_function.py` (invite uses templates), `scripts/preview_email_template.py`, `docs/email-previews/*`.
+- Summary: Dark brand email shell matching logo mark + UNIFIED WEB3 PAAS + BUILD·DEPLOY·SCALE·OWN. Workspace invite template with role details card + CTA. Generic shell for future mails.
+- Decisions: Accepted - table-based HTML; logo from MAIL_ASSET_BASE_URL/console brand path; CSS wordmark (not image) for reliability.
+- Follow-ups: Host logo on always-public CDN if console auth blocks /brand/*; add credits/audit templates when those features ship.
+- Verification: preview HTML written; Brevo send to snabilshaikh186@gmail.com 201.
+
+## 2026-07-22 - Codex with Nabil - Fix invite email not sending (local)
+
+- Service or area: Team invites / Brevo.
+- Root cause: FE called `http://localhost:8080/api/invite/send` but no local Lambda on 8080; errors were swallowed (`console.warn` only) while UI still showed invitation created.
+- Files changed: `frontend/scripts/invite-mail-middleware.mjs` (POST /api/invite/send → Brevo), `frontend/vite.config.ts` (plugin), `frontend/src/api/api.ts` (same-origin invite API), `frontend/src/stores/workspace.ts` (surface mail failures; resend pending), `WorkspaceTeam.tsx` (error copy + link).
+- Verification: middleware smoke → Brevo 200 + messageId to snabilshaikh186@gmail.com.
+- Follow-ups: **Restart Vite** so middleware loads; set BREVO_* on hosted Lambda for production invites.
+
+## 2026-07-22 - Codex with Nabil - All mail routes → Brevo (no localhost:8080)
+
+- Service or area: transactional mail routing.
+- Files: `frontend/src/services/mail/mailApi.ts` (single mail client), `api/api.ts`, removed `localhost:8080` defaults from DashboardLayout/AuthSessionProvider/DashboardApp/Settings/AgentStudio, invite tests mock Brevo path.
+- Decision: Accepted - Browser never holds BREVO_API_KEY; local mail = Vite `/api/invite/send` → api.brevo.com; prod = API Gateway/Lambda → Brevo.
+- Verification: tsc clean; rbac tests pass with mocked inviteApi.
+- Ops: Restart Vite after pull; ensure root `.env` has BREVO_*.
+
+## 2026-07-22 - Codex with Nabil - Cognito branded verification email + SES from domain
+
+- Service or area: AWS Cognito auth emails.
+- Problem: Cognito used COGNITO_DEFAULT → no-reply@verificationemail.com with plain AWS template.
+- Changes:
+  - Custom Message Lambda `zexvro-cognito-custom-message` attached (HTML brand: wordmark + code + logo).
+  - Email subject/message defaults set to ZEXVRO wording.
+  - SES domain identity `zexvro.in` created (DKIM PENDING) for From `no-reply@zexvro.in`.
+- Blocker: SES not verified yet — From still COGNITO_DEFAULT until DKIM CNAMEs are live.
+- DNS (CNAME):
+  - nl7yc3c5xhwadajsw3rj5yknhym7oka5._domainkey.zexvro.in → nl7yc3c5xhwadajsw3rj5yknhym7oka5.dkim.amazonses.com
+  - pdryyekdfqgyvzsdh7udjcqdp6tcgsq4._domainkey.zexvro.in → pdryyekdfqgyvzsdh7udjcqdp6tcgsq4.dkim.amazonses.com
+  - 2z6cczh6psbixbmd6jecbjmgojuubjh5._domainkey.zexvro.in → 2z6cczh6psbixbmd6jecbjmgojuubjh5.dkim.amazonses.com
+- After DNS: run `./scripts/cognito/configure-cognito-email.sh`
+- Scripts: `scripts/cognito/*`
+
+## 2026-07-22 - Codex with Nabil - Shared workspace after invite accept
+
+- Service or area: workspace IAM / invites (Nabil).
+- Problem: Invitee accepted invite but switcher only showed personal workspace — owner-keyed Dynamo list + `pullFromAWS` wiped local bind; accept on already-accepted failed.
+- Changes:
+  - Vite store: `memberships[email]` + `GET /api/me/workspaces`; accept upserts membership and returns `workspace` payload (idempotent re-accept).
+  - Lambda: `GET /api/workspaces` merges owned + shared (member scan); accept re-binds accepted invites and returns full workspace; PUT workspaces may update `members`/`invitations`.
+  - FE: `awsSync` merges remote + `/api/me/workspaces` + preserves local shared; AcceptInvite re-bind for already-accepted; `acceptInvitationLocal` no longer rejects accepted status.
+- Verification: vitest invite-flow + permissions 13/13; node smoke accept → me/workspaces lists shared ws.
+- Next: redeploy Lambda for prod list/accept; invitee hard-refresh and re-open accept link if needed.
+
+## 2026-07-22 - Codex with Nabil - Shared workspace projects visible
+
+- Problem: Invitee saw shared workspace but zero projects.
+- Cause: `pullFromAWS` only listed projects for `currentWorkspaceId` (usually personal), never shared ids; UI filters `p.workspaceId === route workspaceId`.
+- Fix: `loadProjectsForWorkspace` + load all accessible workspaces on pull; reload on workspace switch; Lambda GET projects sets workspaceId on items.
+- Redeploy Lambda optional for this FE fix.
+
+## 2026-07-22 - Codex with Nabil - Invitee saw 3× N4bi10p workspaces
+
+- Cause: local `.data` memberships kept smoke/e2e/accept stubs with same name, different ids.
+- Fix: collapse shared/owned by **name** (prefer real AWS over remote-owner stubs); drop `ws_smoke`/`ws_e2e`; membership store collapse; live poll projects every 8s for active workspace.
+- Cleaned local memberships for snabilshaikh186 → single `ws_mrghr0fe_rmfstk`.
+- Note: projects only appear under the **invited workspace id**; if owner created project on a different dup id, re-invite from the workspace that has the project.
+
+## 2026-07-22 - Codex with Nabil - NFT collections not shared with workspace members
+
+- Cause: NFT API stored `workspaceId` as `base64(userSub).base64(scope)` so list was per Cognito subject, not team.
+- Fix: team scope `team.<base64(storageScope)>` on create/list; `listSharedWorkspaceCollections` migrates legacy rows when owner lists; get-by-id no longer subject-gates. Tests updated (28/28).
+- Files: `services/nft-service/api/src/app.ts`, `service.ts`, `app.test.ts`.
+- Ops: restart NFT API; owner refresh NFT list once (migrates legacy → team); member refresh.
+
+## 2026-07-22 - Codex with Nabil - Owner Team page missing accepted Admin
+
+- Cause: accept only updated invitee local state + Vite memberships; owner Dynamo still had invited-only / empty for snabilshaikh186. Owner pull overwrote with thin remote members.
+- Fix: Vite `workspaceMembers[wsId]` on accept; `GET /api/workspaces/:id/members`; `loadWorkspaceDetail` merges local accepted + Dynamo; Team page polls every 5s; promote invited→active; forward accept to platform Lambda best-effort.
+- Ops: hard refresh **owner** browser on Team; Admin should appear ACTIVE.
+
+## 2026-07-22 - Codex with Nabil - Member flicker + Leave workspace
+
+- Flicker: `pullFromAWS` every 8s replaced members with thin Dynamo list; detail poll restored → nabil3 vanish/return.
+- Fix: pull always `mergeMembersLists` with previous local members; detail in-flight dedupe + fingerprint skip; slower polls (12–15s); never demote active.
+- Leave: `leaveWorkspace` store action + `POST /api/workspaces/:id/leave` + Team UI button for non-owners.
+
+## 2026-07-23 - OpenCode with Nabil - Invite email missing ?token=
+
+- Problem: Some Brevo invite mails linked only to `/dashboard` (no accept token); others had full `/invite/accept?token=…`.
+- Cause: Lambda `send_invite_email` + `/api/invite/send` fell back to `/dashboard` when `token` was falsy; FE also fire-and-forget persisted invitations so accept scan could miss tokens.
+- Fix:
+  - `build_invite_accept_url(token)` — always `…/invite/accept?token=…` or 400; no dashboard fallback.
+  - `mailApi.sendWorkspaceInviteEmail` requires non-empty token before POST.
+  - `createInvitation` / `resendInvitation` **await** workspace PUT before sending mail.
+- Deployed: Lambda `zexvro-agent-backend` + Cloudflare Pages `zexvro` (`2a93a8b7.zexvro-7oq.pages.dev` → console.zexvro.in).
+- Verified: rbac vitest 36/36; no Lambda `/dashboard` fallback; console + `/invite/accept` 200.
+- Next: re-invite from console and confirm Brevo CTA includes `?token=`.
+
+## 2026-07-23 - OpenCode with Nabil - Phase 1 durable workspace audit
+
+- Service: workspace IAM / audit ledger (Nabil plan Phase 1).
+- Infra: DynamoDB table `zexvro-workspace-audit` (pk workspaceId, sk eventKey) created; Lambda env `AUDIT_TABLE`.
+- Lambda: `append_audit_event` (fail-open), `list_audit_events`, `GET /api/workspaces/{id}/audit`.
+- Emit: invite.sent / invite.accepted / invite.revoked, workspace.updated, project.created.
+- FE: `workspaceApi.listAudit`; WorkspaceActivity + ProjectAudit load remote ledger (derived fallback if empty).
+- Tests: `scripts/test_audit_helpers.py` 5/5; rbac 36/36; tsc clean; Lambda + Pages deploy.
+- Phase 0: console + invite/accept 200; invite token fix already live.
+- Next: Phase 2 ZCR credits (after invite smoke with real users); re-invite to populate ledger.
+
+## 2026-07-24 - OpenCode with Nabil - ZCR credits + promos + env + platform admin
+
+- Scope: AWS-style platform credits; NFT payment rail hooks; founder control plane; testnet/mainnet burn gate; promo codes.
+- Infra Dynamo: `zexvro-credits`, `zexvro-credit-ledger`, `zexvro-promo-codes`, `zexvro-promo-redemptions`.
+- Lambda: `credits.py` service; workspace credit APIs (balance/ledger/consume/redeem); internal NFT topup; platform me/analytics/grant/promo CRUD.
+- Burn rule: **mainnet only**; testnet writes `consume_skipped`. New workspaces default **testnet** + starter **100 ZCR**.
+- FE: `/dashboard/w/:id/credits`, env badge + ZCR chip, Platform link `/dashboard/platform` (founders allowlist).
+- PLATFORM_ADMINS env: nabil,paris,rushi,talib,n4bi10p (+ emails if set).
+- Tests: credits helpers 5/5; audit 5/5; rbac 36/36; tsc clean. Lambda + Pages deployed.
+- Follow-ups: wire service consume hooks (NFT/Morph/De-pin); Credit Pack NFT collection → internal topup; expand founder analytics beyond partial scans.
+
+## 2026-07-24 - Codex with Paris - Merge Nabil workspace-iam into local main
+
+- Service or area: git merge `origin/feature/workspace-iam-shared-roster` into local `main`.
+- Summary: Merged RBAC, invites/Brevo mail, durable audit, ZCR credits/promos, platform admin, testnet/mainnet burn gate. Resolved `.env.example` (kept Gate + Mail) and `memory.md` (kept Gate + Nabil histories).
+- Decisions: Accepted - local main includes Nabil branch + main Gate/Morph.
+- Follow-ups: UI cleanup + mainnet prefs; pull further Nabil commits as they land.
+- Blockers: None for merge.
+- Verification: merge commit on local main.
+
+## 2026-07-24 - OpenCode with Nabil - Production deploy credits/platform
+
+- Ran full `scripts/deploy-production.sh` (prod-ready):
+  - Dynamo tables verified (audit, credits, ledger, promo, redemptions)
+  - Lambda package: lambda_function + credits + brevo + email_templates
+  - Env: FRONTEND_URL, credits tables, PLATFORM_ADMINS, starter 100 ZCR, INTERNAL_CREDITS_SECRET, Brevo
+  - Lambda sized **timeout 60s / 256MB** for platform directory scans
+  - Cloudflare Pages project `zexvro` → console.zexvro.in
+- Smoke: console 200, auth-gated API 401 (expected), invite route 200, NFT health 200
+- Tests: credits 7/7, audit helpers pass
+
+## 2026-07-24 - OpenCode with Nabil - Fix env switch + credit pack purchase
+
+- Fix: testnet↔mainnet switch via `POST /api/workspaces/:id/environment` (owner scan fallback; settings merge).
+- Credits UI: both env buttons always clickable; shell badge reads environment correctly.
+- Purchase: `GET /api/credits/packs` + `POST .../credits/purchase` (Starter/Builder/Scale packs, instant ZCR grant).
+- NFT gateway hook: checkout can carry `creditWorkspaceId`/`creditZcrAmount`; on confirm NFT service posts internal topup (needs App Runner env: PLATFORM_CREDITS_URL, PLATFORM_INTERNAL_SECRET, ZCR_CREDIT_COLLECTION_IDS).
+- Deployed Lambda + Cloudflare Pages. NFT App Runner redeploy still required for live USDC pack→ZCR path.
+
+## 2026-07-24 - OpenCode with Nabil - Buy pack opens NFT wallet popup (no instant ZCR)
+
+- Bug: Buy pack granted ZCR immediately (sandbox default).
+- Fix: purchase API never grants by default; returns `/nft/embed/checkout?...` Freighter popup URL.
+- Credits UI: "Pay with wallet" opens NFT gateway popup; listens for postMessage success then refreshes balance.
+- Embed checkout passes creditWorkspaceId/zcrAmount/packId into createPublicCheckoutIntent for post-pay topup.
+- ZCR_ALLOW_SANDBOX_PURCHASE=0 in prod Lambda.
+- Still required for full flow: set ZCR_NFT_COLLECTION_ID to a live Credit Pack collection with primary sale; redeploy NFT App Runner with PLATFORM_CREDITS_URL + PLATFORM_INTERNAL_SECRET + ZCR_CREDIT_COLLECTION_IDS.
+
+## 2026-07-24 - Codex with Paris - Pull Nabil tip 4fa9924 into local main
+
+- Service or area: merge latest `feature/workspace-iam-shared-roster`.
+- Summary: Merged 5 new Nabil commits (platform directory, auto promo codes, prod deploy, env switch both ways, credit pack NFT wallet checkout). Only conflict: `memory.md` (kept both histories).
+- Follow-ups: reapply UI cleanup stash.
+- Verification: no conflict markers after resolve.
+
+## 2026-07-23 - Codex with Paris - Marketing docs + marketing.zip kit
+
+- Service or area: Marketing / brand surfaces (docs + export pack).
+- Files changed: `context.md` (Marketing Surfaces), `design.md` (Marketing Design), `docs/marketing.md` (new), `README.md`, `AGENTS.md`, `memory.md`, local `marketing.zip`.
+- Summary: Documented landing, in-app welcome, product cinema, presentation, and brand kit paths; split marketing vs dashboard design rules; claim-safe service messaging; built shareable `marketing.zip`.
+- Decisions: Accepted - Marketing claim-aligned with MVP status.
+- Follow-ups: Paris landing demos/icons ticket still open.
+- Verification: Docs sections present.
+
+## 2026-07-24 - Codex with Paris - MVP service renames + drop A2A
+
+- Summary: Product names — **NFTo**, **REQWID**, **DEDSEC**; A2A out of MVP. Five services: Zer0 · Morph · REQWID · NFTo · DEDSEC.
+- Decisions: Accepted - product names in UI/docs; keep code path IDs.
+
+## 2026-07-24 - Codex with Paris - UI cleanup + network prefs
+
+- Service or area: Paris shell polish + project network UI.
+- Files: `ProjectOverview`, `ProjectSettings`, `Services`, `WorkspaceOverview`, `DashboardLayout`, `router` (executions removed), `stores/types` + `project` (`serviceNetworks`), deleted `ProjectExecutions.tsx`.
+- Summary: Removed fake Executions; slimmed Services Manager; sidebar **Zer0**; need-help → `/docs`; `max-w-5xl` layout; project default + per-service Testnet/Mainnet prefs (Zer0 wires Horizon; NFTo/DEDSEC mainnet locked honestly).
+- Decisions: Accepted - UI-first network model; Zer0 sidebar product name.
+- Follow-ups: Wire NFTo/DEDSEC mainnet when owners ship endpoints.
+- Verification: frontend lint clean after reapply.
+
+## 2026-07-24 - Codex with Paris - Mainnet pay NetworkError + overview projects
+
+- Service or area: Zer0 mainnet shielded pay + workspace overview.
+- Root cause: privacy pool hard-coded testnet; saved Soroban URL often Horizon / mainnet.stellar.org (not JSON-RPC) → browser NetworkError on fetch.
+- Fix: configurePrivacyPoolNetwork + RPC validation/fallbacks; auto-heal bad URL on pay; mainnet Circle USDC/EURC issuers; clear error if mainnet shielded pools not deployed (VITE_ZER0_CONTRACT_*_MAINNET).
+- Overview: Customer→Projects rename, projects section first, Customize widgets (overviewWidgets persist).
+- Verification: frontend lint clean.
+
+## 2026-07-24 - Codex with Paris - Mainnet privacy pools LIVE
+
+- Funded deployer GADWIZ… with 50 XLM; first script run hit **testnet** due to env default — fixed script to force `--rpc-url` + public passphrase.
+- Deployed 4 mainnet pools (wasm `13926cfd…`, SAC `CAS3J7G…`):
+  - 1 XLM: `CAMBCV544D7EI72HBXZ4BPEVVMOCIUN6ZBSMPFWX73NRTW7INWUTJRFW`
+  - 10: `CC5H2MOIYZSCPZ7GOSUKHIOMHWQRXWJNHEZVYRBGGOGI2FLEOUA3BY6N`
+  - 100: `CCLAKHWCPLJDZBFNFHI4E5EUZ23E4HJPETBU5CI3M3TXHSKT4QVBMM3Y`
+  - 1000: `CDRN2ZBO7OBGZYC653FHKQCBQAJWRIEXMHQSPDVMHGW7MQGQB67Q5DEE`
+- Remaining deployer balance ~15.4 XLM after fees.
+- FE: hard-coded MAINNET_POOL_DEFAULTS + `.env` / `.env.example` updated; private pay enabled when mainnet selected.
+- Explorer: stellar.expert public links for each C… id.
+- Follow-ups: seed anonymity (optional); Cloudflare Pages env if production build does not pick local `.env`.
+
+## 2026-07-24 - Codex with Paris - NFTo / DEDSEC / REQWID mainnet rails
+
+- Shared helpers: `frontend/src/lib/stellarNetwork.ts` (CAIP testnet/pubnet, explorers, OZ facilitators, USDC SACs).
+- **DEDSEC**: config/domain accept `stellar:pubnet`; payment registers both schemes; wizard network + OZ mainnet facilitator; `depin.config.mainnet.example.json`.
+- **NFTo**: API health reports network/passphrase/rpc/paymentToken from env; FE explorers + Freighter passphrase follow health; Project Settings marks nfto/dedsec mainnetReady.
+- **REQWID**: off-chain only — no chain toggle (documented in Project Settings).
+- NFT collection WASM mainnet upload blocked: deployer `TxInsufficientBalance` (~15 XLM left). Ops: fund more + `stellar contract upload` → set `NFT_COLLECTION_WASM_HASH` + mainnet sponsor on App Runner.
+- Verification: depin config tests 14/14; frontend `tsc --noEmit` clean.

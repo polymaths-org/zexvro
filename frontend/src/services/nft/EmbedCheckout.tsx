@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import {
+  useEffect, useMemo, useState } from 'react';
 import { useSearch } from '@tanstack/react-router';
 import {
   CircleAlert,
@@ -17,6 +18,9 @@ import {
   submitPublicCheckoutIntent,
   type NftCheckoutIntent,
   type PublicNftCollection,
+  nftExplorerBase,
+  nftNetworkLabel,
+  nftNetworkPassphrase,
 } from './nftApi';
 import { formatWalletError, getPublicKey, isWalletAvailable, signTransaction } from './stellarWallet';
 
@@ -76,9 +80,16 @@ export default function EmbedCheckout() {
   const search = useSearch({ strict: false }) as {
     collectionId?: string;
     openerOrigin?: string;
+    workspaceId?: string;
+    zcrAmount?: string;
+    packId?: string;
   };
   const collectionId = search.collectionId || '';
   const openerOrigin = search.openerOrigin || '';
+  const creditWorkspaceId = (search.workspaceId || '').trim();
+  const creditZcrAmount = Number(search.zcrAmount || 0) || undefined;
+  const creditPackId = (search.packId || '').trim() || undefined;
+  const isCreditPack = Boolean(creditWorkspaceId && creditZcrAmount && creditZcrAmount > 0);
 
   const [collection, setCollection] = useState<PublicNftCollection | null>(null);
   const [loading, setLoading] = useState(true);
@@ -163,6 +174,13 @@ export default function EmbedCheckout() {
       const next = await createPublicCheckoutIntent({
         collectionId,
         buyerAddress: address,
+        ...(isCreditPack
+          ? {
+              creditWorkspaceId,
+              creditZcrAmount,
+              creditPackId,
+            }
+          : {}),
       });
       setIntent(next);
     } catch (err) {
@@ -183,7 +201,7 @@ export default function EmbedCheckout() {
       if (walletAddress !== intent.buyerAddress) {
         throw new Error('Connected wallet must match the buyer address used to prepare checkout.');
       }
-      const signedTransaction = await signTransaction(intent.serializedTransaction);
+      const signedTransaction = await signTransaction(intent.serializedTransaction, nftNetworkPassphrase());
       const result = await submitPublicCheckoutIntent({
         intentId: intent.id,
         signedTransaction,
@@ -198,6 +216,13 @@ export default function EmbedCheckout() {
         'success',
         {
           collectionId,
+          ...(isCreditPack
+            ? {
+                creditWorkspaceId,
+                creditZcrAmount,
+                creditPackId,
+              }
+            : {}),
           tokenId: result.intent.tokenId,
           transactionHash: hash,
           buyerAddress: result.intent.buyerAddress,
@@ -273,11 +298,19 @@ export default function EmbedCheckout() {
               )}
             </div>
             <div className="min-w-0">
-              <h1 className="truncate text-lg font-semibold text-white">{collection.name}</h1>
+              <h1 className="truncate text-lg font-semibold text-white">
+                {isCreditPack ? 'Buy Zexvro credits' : collection.name}
+              </h1>
+              {isCreditPack ? (
+                <p className="mt-1 text-sm text-emerald-400">
+                  +{creditZcrAmount} ZCR
+                  {creditPackId ? ` · ${creditPackId}` : ''}
+                </p>
+              ) : null}
               {priceLabel && (
                 <p className="mt-1 text-sm tabular-nums text-zinc-300">{priceLabel}</p>
               )}
-              <p className="mt-0.5 text-xs text-zinc-500">Stellar testnet · sponsored fees</p>
+              <p className="mt-0.5 text-xs text-zinc-500">${nftNetworkLabel()} · sponsored fees</p>
             </div>
           </div>
 
@@ -351,7 +384,7 @@ export default function EmbedCheckout() {
 
             {confirmedHash && (
               <a
-                href={`https://stellar.expert/explorer/testnet/tx/${confirmedHash}`}
+                href={`${nftExplorerBase()}/tx/${confirmedHash}`}
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center gap-2 text-sm text-emerald-300"

@@ -1,6 +1,6 @@
 # De-pin local smoke checklist
 
-Owner: Nabil (`n4bi10p`). Gateway MVP for **Access Shield** economic enforcement.
+Owner: Nabil (`n4bi10p`). Gateway MVP for **DEDSEC** economic enforcement.
 
 ## Prerequisites
 
@@ -24,7 +24,7 @@ Expect:
 - `/status` → providers, `stateBackend`, `multiInstanceSafe`, `capabilities.settleReady`
 - First provider unpaid → **HTTP 402** + `PAYMENT-REQUIRED`
 
-Dashboard: project → **De-pin x402 Gateway** → **Probe 402**.
+Dashboard: project → **DEDSEC** → **Probe 402**.
 
 ## Paid settle (optional)
 
@@ -44,4 +44,4 @@ Record success (tx hash, amounts) in `memory.md`. Never commit secrets.
 
 - Multi-process: `DEPIN_STATE_BACKEND=file` (or future redis).
 - Managed config: `DEPIN_CONFIG_JSON` or `DEPIN_CONFIG_URL`.
-- Do not claim Access Shield GA; gateway exact GET/HEAD is the shipped enforcement plane.
+- Do not claim DEDSEC GA; gateway exact GET/HEAD is the shipped enforcement plane.

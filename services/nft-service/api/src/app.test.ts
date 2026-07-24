@@ -400,7 +400,7 @@ describe('NFT service API', () => {
     })
   })
 
-  it('scopes workspace records to the authenticated subject', async () => {
+  it('shares workspace collections across authenticated team members', async () => {
     const created = await request(app)
       .post('/v1/collections')
       .set('X-Test-Subject', 'user-a')
@@ -412,12 +412,14 @@ describe('NFT service API', () => {
       .set('X-Test-Subject', 'user-b')
       .query({ workspaceId: validCollection.workspaceId })
       .expect(200)
-    expect(otherUserList.body.collections).toEqual([])
+    expect(otherUserList.body.collections).toHaveLength(1)
+    expect(otherUserList.body.collections[0].id).toBe(created.body.collection.id)
+    expect(otherUserList.body.collections[0].workspaceId).toBe(validCollection.workspaceId)
 
     await request(app)
       .get(`/v1/collections/${String(created.body.collection.id)}`)
       .set('X-Test-Subject', 'user-b')
-      .expect(404)
+      .expect(200)
   })
 
   it('serves public token metadata without exposing workspace ownership', async () => {

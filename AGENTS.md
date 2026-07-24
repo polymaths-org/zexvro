@@ -33,7 +33,8 @@ Full checklists live in `context.md` → **Remaining Work**. Do not invent a par
 
 | File | Use |
 | --- | --- |
-| `context.md` | Product context, ownership, **active remaining work** |
+| `context.md` | Product context, ownership, **active remaining work**, marketing surfaces |
 | `memory.md` | Chronological handoffs, decisions, blockers |
-| `design.md` | UI / brand rules |
+| `design.md` | Product UI + marketing design rules |
+| `docs/marketing.md` | Marketing kit brief / copy inventory |
 | `AGENTS.md` | This boot file |

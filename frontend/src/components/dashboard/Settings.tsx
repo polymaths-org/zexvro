@@ -17,7 +17,7 @@ import {
 const IS_LOCAL_HOST = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 const API_BASE_URL = import.meta.env.VITE_API_URL ||
   (IS_LOCAL_HOST
-    ? 'http://localhost:8080'
+    ? 'https://qkuostruh3.execute-api.us-east-1.amazonaws.com'
     : 'https://qkuostruh3.execute-api.us-east-1.amazonaws.com');
 const AGENT_CHAT_URL = IS_LOCAL_HOST ? '/api/agent/chat' : `${API_BASE_URL}/api/chat`;
 
@@ -374,7 +374,7 @@ export default function SettingsView({
               {[
                 { key: 'service-readiness-checks', label: 'Service readiness checks', desc: 'Show setup checks before enabling a service' },
                 { key: 'agent-git-commits', label: 'Agent Git proposals', desc: 'Allows agents to draft changes for human review' },
-                { key: 'high-frequency-arbitrage', label: 'Trade safety guards', desc: 'Shows planned limits for A-2-A trading flows' },
+                { key: 'high-frequency-arbitrage', label: 'Trade safety guards', desc: 'Reserved; A2A Trade is out of MVP' },
                 { key: 'stellar-mainnet-beta', label: 'Stellar Mainnet Bridge', desc: 'Connects mainnet Horizon endpoints' }
               ].map((flag) => {
                 const isActive = flags[flag.key as keyof typeof flags];

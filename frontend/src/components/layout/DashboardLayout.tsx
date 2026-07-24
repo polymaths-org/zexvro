@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Search, Menu, X, ChevronRight, User,
   HelpCircle, Sun, Moon, Settings, Send, ArrowUpRight, Sparkles, LogOut,
@@ -19,27 +19,33 @@ import {
   type UserSession,
 } from '../../auth/cognito';
 import { buildAgentChatPayload, loadAgentSettingsFromAWS } from '../../agent/settings';
+import AuthOverlay from '../auth/AuthOverlay';
+import BrandLoader from '../BrandLoader';
 import CliActivation from '../auth/CliActivation';
 import PlatformBootup from '../PlatformBootup';
-import { initializeAWSSync, pullFromAWS } from '../../stores/awsSync';
+import {
+  initializeAWSSync,
+  loadProjectsForWorkspace,
+  loadWorkspaceDetail,
+  pullFromAWS,
+} from '../../stores/awsSync';
+import { useWorkspaceRbac } from '../../rbac/useWorkspaceRbac';
+import { INVITABLE_ROLES } from '../../rbac/permissions';
+import type { WorkspaceRole } from '../../stores/types';
+
 const IS_LOCAL_HOST = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 const API_BASE_URL = import.meta.env.VITE_API_URL ||
-  (IS_LOCAL_HOST
-    ? 'http://localhost:8080'
-    : 'https://qkuostruh3.execute-api.us-east-1.amazonaws.com');
+  'https://qkuostruh3.execute-api.us-east-1.amazonaws.com';
 const AGENT_CHAT_URL = IS_LOCAL_HOST ? '/api/agent/chat' : `${API_BASE_URL}/api/chat`;
 const SHOULD_CHECK_CLI_STATUS =
   !IS_LOCAL_HOST ||
-  API_BASE_URL.startsWith('http://localhost') ||
-  API_BASE_URL.startsWith('http://127.0.0.1');
+  API_BASE_URL.includes('localhost') ||
+  API_BASE_URL.includes('127.0.0.1');
 
 const BRAND_MARK = '/brand/logo-transparent.png';
 const BRAND_WORDMARK = '/brand/wordmark-transparent.png';
 const MORPH_LOGO = '/morph/morph-logo.svg';
 const MORPH_ILLUSTRATION = '/morph/morph-illustration-transparent.png';
-
-const WORKSPACE_ROLES = ['Admin', 'Developer', 'Viewer'] as const;
-type WorkspaceRole = typeof WORKSPACE_ROLES[number];
 
 function titleCaseName(value: string) {
   return value
@@ -69,21 +75,31 @@ type CustomIconName =
   | 'privacy' | 'transform' | 'trade' | 'auth' | 'nft' | 'depin'
   | 'transactions' | 'payroll';
 
+const SERVICE_ICON_SRC: Partial<Record<CustomIconName, string>> = {
+  agent: MORPH_LOGO,
+  privacy: '/services/zer0-32.png',
+  nft: '/services/nfto-32.png',
+  depin: '/services/dedsec-32.png',
+  auth: '/services/reqwid-32.png',
+};
+
 function CustomIcon({ name, className = '' }: { name: CustomIconName; className?: string }) {
-  if (name === 'agent') {
+  const brandSrc = SERVICE_ICON_SRC[name];
+  if (brandSrc) {
+    const invert = name === 'agent' || name === 'privacy' || name === 'depin';
     return (
       <img
-        src={MORPH_LOGO}
+        src={brandSrc}
         alt=""
         aria-hidden="true"
-        className={`scale-95 object-contain invert dark:invert-0 ${className}`}
+        className={`object-contain ${invert ? 'invert dark:invert-0' : ''} ${className}`}
       />
     );
   }
 
   const common = 'fill-none stroke-current stroke-[1.8] stroke-linecap-round stroke-linejoin-round';
   const accent = 'fill-current stroke-none';
-  const icons: Record<Exclude<CustomIconName, 'agent'>, React.ReactNode> = {
+  const icons: Record<Exclude<CustomIconName, 'agent' | 'privacy' | 'nft' | 'depin' | 'auth'>, React.ReactNode> = {
     overview: (
       <>
         <path className={common} d="M5 6.5h5.2v5.2H5zM13.8 6.5H19v3.8h-5.2zM5 15h5.2v2.5H5zM13.8 13.2H19v4.3h-5.2z" />
@@ -139,12 +155,6 @@ function CustomIcon({ name, className = '' }: { name: CustomIconName; className?
         <path className={common} d="M9 5.8v3.4M15 10.3v3.4M11.5 14.8v3.4" />
       </>
     ),
-    privacy: (
-      <>
-        <path className={common} d="M7.2 10.5h9.6v7.2H7.2zM9 10.5V8.2a3 3 0 0 1 6 0v2.3" />
-        <path className={common} d="M12 13.2v1.9" />
-      </>
-    ),
     transform: (
       <>
         <path className={common} d="M5.2 7.2h5.6v5.6H5.2zM13.2 11.2h5.6v5.6h-5.6z" />
@@ -155,24 +165,6 @@ function CustomIcon({ name, className = '' }: { name: CustomIconName; className?
       <>
         <path className={common} d="M6 8.2h9.5l-2-2.1M18 15.8H8.5l2 2.1" />
         <path className={common} d="M15.5 8.2 18 10.7M8.5 15.8 6 13.3" />
-      </>
-    ),
-    auth: (
-      <>
-        <path className={common} d="M8.8 12.2a3 3 0 1 1 2.4 2.9L9 17.3H6.8v-2.2z" />
-        <path className={common} d="M14.5 6.3c2 .5 3.5 2 4 4M14.4 9.3c.7.3 1.2.8 1.4 1.5" />
-      </>
-    ),
-    nft: (
-      <>
-        <path className={common} d="M12 4.8 18.2 12 12 19.2 5.8 12z" />
-        <path className={common} d="M8.9 12h6.2M12 8.4v7.2" />
-      </>
-    ),
-    depin: (
-      <>
-        <path className={common} d="M12 12.2a2.3 2.3 0 1 0 0-4.6 2.3 2.3 0 0 0 0 4.6ZM5.8 17.8a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6ZM18.2 17.8a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6Z" />
-        <path className={common} d="m10.1 11.2-2.8 3.2M13.9 11.2l2.8 3.2M7.6 16h8.8" />
       </>
     ),
     transactions: (
@@ -190,9 +182,11 @@ function CustomIcon({ name, className = '' }: { name: CustomIconName; className?
     ),
   };
 
+  const glyph = icons[name as keyof typeof icons];
+  if (!glyph) return null;
   return (
     <svg className={`scale-[1.28] ${className}`} viewBox="0 0 24 24" aria-hidden="true">
-      {icons[name]}
+      {glyph}
     </svg>
   );
 }
@@ -247,24 +241,19 @@ const SIDEBAR_CATEGORIES: Array<{
     label: 'Workspace Management',
     items: [
       { to: 'overview', label: 'Overview', icon: 'overview' },
-      { to: 'projects', label: 'Projects / Environments', icon: 'projects' },
+      { to: 'projects', label: 'Projects', icon: 'projects' },
       { to: 'team', label: 'Team', icon: 'team' },
+      { to: 'credits', label: 'Credits (ZCR)', icon: 'payroll' },
       { to: 'audit', label: 'Audit Log', icon: 'security' },
       { to: 'settings', label: 'Settings', icon: 'settings' },
     ],
   },
   {
-    id: 'zer0-service',
-    label: 'Payroll',
+    // Full Zer0 nav lives in Zer0Layout sub-sidebar — shell only links into the product.
+    id: 'finance',
+    label: 'Finance',
     items: [
-      { to: 'zer0', label: 'Overview', icon: 'privacy' },
-      { to: 'zer0/people', label: 'Team directory', icon: 'team' },
-      { to: 'zer0/payroll', label: 'Payroll runs', icon: 'payroll' },
-      { to: 'zer0/pay', label: 'Send payment', icon: 'payroll' },
-      { to: 'zer0/history', label: 'Payment ledger', icon: 'transactions' },
-      { to: 'zer0/proofs', label: 'Payment proofs', icon: 'security' },
-      { to: 'zer0/data-preview', label: 'What stays private', icon: 'security' },
-      { to: 'zer0/settings', label: 'Payroll settings', icon: 'settings' },
+      { to: 'zer0', label: 'Zer0', icon: 'privacy' },
     ],
   },
   {
@@ -304,8 +293,11 @@ export default function DashboardLayout() {
   const selectWorkspace = useWorkspaceStore(s => s.selectWorkspace);
   const deleteWorkspace = useWorkspaceStore(s => s.deleteWorkspace);
   const addMember = useWorkspaceStore(s => s.addMember);
+  const { can, canSection, role: currentRole } = useWorkspaceRbac(workspaceId);
 
-  const [userSession, setUserSession] = useState<UserSession | null>(() => readStoredSession());
+  // Never paint the dashboard until stored session is validated (or confirmed absent).
+  const [userSession, setUserSession] = useState<UserSession | null>(null);
+  const [authReady, setAuthReady] = useState(false);
 
   const [cliConnected, setCliConnected] = useState(false);
   const [cliLastActive, setCliLastActive] = useState<number | null>(null);
@@ -325,9 +317,9 @@ export default function DashboardLayout() {
     return code ? code.toUpperCase() : null;
   });
   const [expandedCats, setExpandedCats] = useState<Record<string, boolean>>({
-    'workspace-management': true, 'zer0-service': true, services: true, 'agentic-operation': true, 'security-section': true,
-    'project-core': true, 'project-services': true, 'project-digital-assets': true, 'project-resource-gateway': true,
-    'project-agentic': true, 'project-security': true, 'project-admin': true,
+    'workspace-management': true, finance: true, services: true, 'agentic-operation': true, 'security-section': true,
+    'project-core': true, 'project-finance': true, 'project-services': true, 'project-digital-assets': true,
+    'project-resource-gateway': true, 'project-agentic': true, 'project-security': true, 'project-admin': true,
   });
   const [agentWidgetOpen, setAgentWidgetOpen] = useState(false);
   const [widgetMessages, setWidgetMessages] = useState<WidgetMessage[]>([]);
@@ -337,6 +329,36 @@ export default function DashboardLayout() {
   const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
   const currentWorkspace = workspaces.find(w => w.id === workspaceId) || workspaces[0] || null;
   const currentPath = routerState.location.pathname;
+
+  // Preloader auth gate: validate Cognito session before any dashboard chrome.
+  useEffect(() => {
+    let cancelled = false;
+    const bootAuth = async () => {
+      const stored = readStoredSession();
+      if (!stored) {
+        if (!cancelled) {
+          setUserSession(null);
+          setAuthReady(true);
+        }
+        return;
+      }
+      try {
+        await ensureValidAccessToken(stored);
+        if (cancelled) return;
+        setUserSession(readStoredSession());
+      } catch {
+        if (cancelled) return;
+        clearStoredSession();
+        setUserSession(null);
+      } finally {
+        if (!cancelled) setAuthReady(true);
+      }
+    };
+    void bootAuth();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!userSession) return;
@@ -355,28 +377,33 @@ export default function DashboardLayout() {
 
   const dynamicProjectCategories = React.useMemo(() => {
     const enabled = currentProject?.enabledServices || [];
-    const serviceItems: Array<{ to: string; label: string; icon: CustomIconName }> = [];
-    // Always expose primary surfaces on project routes so users can open them
-    // even when the project was created without selecting services.
+    // Finance owns Zer0 (same IA as workspace shell). Morph lives under Agentic only.
+    const financeItems: Array<{ to: string; label: string; icon: CustomIconName }> = [];
+    if (enabled.includes('srv-privacy') || enabled.length === 0) {
+      financeItems.push({ to: 'zer0', label: 'Zer0', icon: 'privacy' as const });
+    }
+    // Services Manager only — no dummy Morph under Services.
+    const serviceItems: Array<{ to: string; label: string; icon: CustomIconName }> = [
+      { to: 'services', label: 'Services Manager', icon: 'services' as const },
+    ];
     const digitalAssetItems: Array<{ to: string; label: string; icon: CustomIconName }> = [
-      { to: 'nft', label: 'NFT Collections', icon: 'nft' as const },
+      { to: 'nft', label: 'NFTo', icon: 'nft' as const },
     ];
     const resourceGatewayItems: Array<{ to: string; label: string; icon: CustomIconName }> = [
-      { to: 'depin', label: 'De-pin x402 Gateway', icon: 'depin' as const },
+      { to: 'depin', label: 'DEDSEC', icon: 'depin' as const },
     ];
-    if (enabled.includes('srv-privacy')) {
-      serviceItems.push({ to: 'zer0', label: 'Payroll', icon: 'privacy' as const });
+    // Morph Agent + Shared Memory only (no dummy Morph / transformation surface).
+    const agenticItems: Array<{ to: string; label: string; icon: CustomIconName }> = [
+      { to: 'agent', label: 'Morph Agent', icon: 'agent' as const },
+      { to: 'memory', label: 'Shared Memory', icon: 'memory' as const },
+    ];
+    const securityItems: Array<{ to: string; label: string; icon: CustomIconName }> = [
+      { to: 'security', label: 'Security', icon: 'security' as const },
+    ];
+    if (enabled.includes('srv-agent-auth') || enabled.length === 0) {
+      securityItems.push({ to: 'agent-auth', label: 'REQWID', icon: 'auth' as const });
     }
-    if (enabled.includes('srv-transformation')) {
-      serviceItems.push({ to: 'transformation', label: 'Transformation Agent', icon: 'transform' as const });
-    }
-    if (enabled.includes('srv-trade')) {
-      serviceItems.push({ to: 'trade', label: 'A-2-A Trade Pipeline', icon: 'trade' as const });
-    }
-    if (enabled.includes('srv-agent-auth')) {
-      serviceItems.push({ to: 'agent-auth', label: 'Agent Authentication', icon: 'auth' as const });
-    }
-    serviceItems.push({ to: 'services', label: 'Services Manager', icon: 'services' as const });
+    securityItems.push({ to: 'analytics', label: 'Analytics', icon: 'analytics' as const });
 
     return [
       {
@@ -384,8 +411,12 @@ export default function DashboardLayout() {
         label: 'Project Core',
         items: [
           { to: 'overview', label: 'Overview', icon: 'overview' as const },
-          { to: 'executions', label: 'Executions & Runs', icon: 'deployments' as const },
         ],
+      },
+      {
+        id: 'project-finance',
+        label: 'Finance',
+        items: financeItems,
       },
       {
         id: 'project-services',
@@ -405,18 +436,12 @@ export default function DashboardLayout() {
       {
         id: 'project-agentic',
         label: 'Agentic Operation',
-        items: [
-          { to: 'agent', label: 'Morph Agent', icon: 'agent' as const },
-          { to: 'memory', label: 'Shared Memory', icon: 'memory' as const },
-        ],
+        items: agenticItems,
       },
       {
         id: 'project-security',
         label: 'Security & Insights',
-        items: [
-          { to: 'security', label: 'Security', icon: 'security' as const },
-          { to: 'analytics', label: 'Analytics', icon: 'analytics' as const },
-        ],
+        items: securityItems,
       },
       {
         id: 'project-admin',
@@ -440,22 +465,21 @@ export default function DashboardLayout() {
   }
 
   const SECTION_LABELS: Record<string, string> = {
-    nft: 'NFT',
-    depin: 'De-pin',
+    nft: 'NFTo',
+    depin: 'DEDSEC',
     zer0: 'Zer0',
-    'agent-auth': 'Agent Auth',
+    'agent-auth': 'REQWID',
     overview: 'Overview',
     services: 'Services',
     settings: 'Settings',
-    executions: 'Executions',
+    credits: 'Credits',
     members: 'Members',
     audit: 'Audit',
     agent: 'Agent',
     memory: 'Memory',
     security: 'Security',
     analytics: 'Analytics',
-    transformation: 'Transformation',
-    trade: 'Trade',
+    transformation: 'Morph',
   };
   const currentSectionLabel =
     SECTION_LABELS[activeSection]
@@ -542,15 +566,23 @@ export default function DashboardLayout() {
     initializeAWSSync();
   }, []);
 
-  // Load remote ZEXVRO state from AWS DynamoDB on login, with 10s periodic polling
+  // Live sync: workspaces + projects (poll). Roster merge never shrinks on pull.
   useEffect(() => {
     if (!userSession) return;
     pullFromAWS();
     const interval = setInterval(() => {
       pullFromAWS();
-    }, 10000);
+    }, 15000);
     return () => clearInterval(interval);
   }, [userSession]);
+
+  // On workspace switch: load projects + roster once (Team page does its own slower poll)
+  useEffect(() => {
+    if (!userSession || !workspaceId) return;
+    selectWorkspace(workspaceId);
+    void loadProjectsForWorkspace(workspaceId);
+    void loadWorkspaceDetail(workspaceId);
+  }, [userSession, workspaceId, selectWorkspace]);
 
   // Keyboard shortcut
   useEffect(() => {
@@ -571,13 +603,22 @@ export default function DashboardLayout() {
     return () => window.clearTimeout(timer);
   }, [currentPath, reducedMotion]);
 
-  // Create default workspace if none exists
+  // Create default workspace once after a successful empty pull (never on failed pull)
+  const defaultCreateAttempted = useRef(false);
   useEffect(() => {
-    if (isHydrated && workspaces.length === 0 && userSession) {
-      const name = `${getWorkspaceOwnerName(userSession)}'s Workspace`;
-      createWorkspace(name, userSession.username || userSession.email || 'user');
+    if (!userSession) {
+      defaultCreateAttempted.current = false;
+      return;
     }
-  }, [isHydrated, workspaces.length, userSession]);
+    if (!isHydrated || workspaces.length > 0 || defaultCreateAttempted.current) return;
+    defaultCreateAttempted.current = true;
+    const name = `${getWorkspaceOwnerName(userSession)}'s Workspace`;
+    createWorkspace(
+      name,
+      userSession.username || userSession.email || 'user',
+      userSession.email || '',
+    );
+  }, [isHydrated, workspaces.length, userSession, createWorkspace]);
 
   const handleSendWidgetMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -623,7 +664,11 @@ export default function DashboardLayout() {
       setWorkspaceNotice('A workspace with this name already exists.');
       return;
     }
-    const ws = createWorkspace(name, userSession?.username || 'user');
+    const ws = createWorkspace(
+      name,
+      userSession?.username || userSession?.email || 'user',
+      userSession?.email || '',
+    );
     setNewWorkspaceName('');
     setWorkspaceNotice(`Created ${ws.name}.`);
     navigate({ to: '/dashboard/w/$workspaceId/overview', params: { workspaceId: ws.id } });
@@ -651,16 +696,80 @@ export default function DashboardLayout() {
     }
   };
 
+  /** One-shot cleanup for spam rows from the old auto-create race (same name, many ids). */
+  const handleCleanDuplicateWorkspaces = () => {
+    const byName = new Map<string, typeof workspaces>();
+    for (const ws of workspaces) {
+      const key = ws.name.trim().toLowerCase();
+      const list = byName.get(key) || [];
+      list.push(ws);
+      byName.set(key, list);
+    }
+    const toDelete: string[] = [];
+    let keepId: string | null = useWorkspaceStore.getState().currentWorkspaceId;
+    for (const group of byName.values()) {
+      if (group.length <= 1) continue;
+      const ranked = [...group].sort((a, b) => {
+        const sa = (a.members?.length || 0) * 1000 + (a.invitations?.length || 0);
+        const sb = (b.members?.length || 0) * 1000 + (b.invitations?.length || 0);
+        if (sb !== sa) return sb - sa;
+        return (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0);
+      });
+      const keeper = ranked[0];
+      if (!keepId || group.some(g => g.id === keepId) === false) {
+        /* leave keepId if outside this group */
+      } else if (keepId && group.some(g => g.id === keepId)) {
+        // current selection is in this dup group — prefer keeping the current if it's the best, else switch
+        if (keeper.id !== keepId) keepId = keeper.id;
+      }
+      for (const dup of ranked.slice(1)) toDelete.push(dup.id);
+    }
+    if (!toDelete.length) {
+      setWorkspaceNotice('No duplicate workspace names found.');
+      return;
+    }
+    const confirmed = window.confirm(
+      `Delete ${toDelete.length} duplicate workspace(s)? Keeps one of each name (richest members/invites).`,
+    );
+    if (!confirmed) return;
+    for (const id of toDelete) deleteWorkspace(id);
+    const remaining = useWorkspaceStore.getState().workspaces;
+    const next = remaining.find(w => w.id === keepId) || remaining[0];
+    if (next) {
+      selectWorkspace(next.id);
+      navigate({ to: '/dashboard/w/$workspaceId/overview', params: { workspaceId: next.id } });
+    }
+    setWorkspaceNotice(`Removed ${toDelete.length} duplicate workspace(s).`);
+    setWorkspaceMenuOpen(false);
+  };
+
+  const createInvitation = useWorkspaceStore(s => s.createInvitation);
+
   const handleInviteToWorkspace = (e: React.FormEvent) => {
     e.preventDefault();
     const email = inviteEmail.trim().toLowerCase();
+    if (!can('team.invite')) {
+      setWorkspaceNotice('Your role cannot invite members.');
+      return;
+    }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setWorkspaceNotice('Enter a valid email invite.'); return; }
     if (!currentWorkspace) return;
-    addMember(currentWorkspace.id, {
-      email, name: email.split('@')[0], role: inviteRole, status: 'invited',
-    });
-    setInviteEmail('');
-    setWorkspaceNotice(`Invite added for ${email}.`);
+    void createInvitation({
+      workspaceId: currentWorkspace.id,
+      email,
+      role: inviteRole,
+      invitedBy: userSession?.username || 'admin',
+      invitedByEmail: userSession?.email,
+    })
+      .then(invite => {
+        setInviteEmail('');
+        setWorkspaceNotice(
+          `IAM invite created for ${email} as roles/${invite.role}. Share /invite/accept link from Team → Invitations.`,
+        );
+      })
+      .catch(err => {
+        setWorkspaceNotice(err instanceof Error ? err.message : 'Invite failed');
+      });
   };
 
   const toggleCat = (catId: string) => {
@@ -682,17 +791,19 @@ export default function DashboardLayout() {
     item.label.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  if (!userSession) {
-    // Lazy import auth overlay
-    const AuthOverlay = React.lazy(() => import('../auth/AuthOverlay'));
+  if (!authReady) {
+    return <BrandLoader fullscreen size="lg" label="Checking session" />;
+  }
 
+  if (!userSession) {
     return (
-      <React.Suspense fallback={null}>
-        <AuthOverlay onSuccess={(session) => {
+      <AuthOverlay
+        onSuccess={(session) => {
           persistSession(session);
           setUserSession(session);
-        }} />
-      </React.Suspense>
+          setAuthReady(true);
+        }}
+      />
     );
   }
 
@@ -798,9 +909,24 @@ export default function DashboardLayout() {
                       >
                         <div className="max-h-[72vh] overflow-y-auto">
                           <div className="border-b border-zinc-100 p-2 dark:border-zinc-900">
-                            <div className="mb-1 flex items-center justify-between px-1">
+                            <div className="mb-1 flex items-center justify-between gap-2 px-1">
                               <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Workspaces</span>
-                              <span className="text-[10px] text-zinc-400">{workspaces.length}</span>
+                              <span className="flex items-center gap-1.5">
+                                {workspaces.length > 5 && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleCleanDuplicateWorkspaces();
+                                    }}
+                                    className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-600 hover:bg-amber-500/10 dark:text-amber-400"
+                                    title="Delete same-name duplicate workspaces"
+                                  >
+                                    Clean dups
+                                  </button>
+                                )}
+                                <span className="text-[10px] text-zinc-400">{workspaces.length}</span>
+                              </span>
                             </div>
                             {workspaces.map(ws => {
                               const isCurrent = ws.id === workspaceId;
@@ -813,10 +939,11 @@ export default function DashboardLayout() {
                                       : 'text-zinc-600 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-900'
                                   }`}
                                 >
-                                  <button
+                                      <button
                                     type="button"
                                     onClick={() => {
                                       selectWorkspace(ws.id);
+                                      void loadProjectsForWorkspace(ws.id);
                                       setWorkspaceMenuOpen(false);
                                       navigate({ to: '/dashboard/w/$workspaceId/overview', params: { workspaceId: ws.id } });
                                     }}
@@ -864,12 +991,18 @@ export default function DashboardLayout() {
                             </div>
                           </form>
 
+                          {can('team.invite') ? (
                           <form onSubmit={handleInviteToWorkspace} className="space-y-2 p-3">
                             <div className="flex items-center justify-between gap-2">
                               <div className="flex min-w-0 items-center gap-2 text-xs font-semibold text-zinc-800 dark:text-zinc-100">
                                 <Mail className="h-3.5 w-3.5 text-blue-500" />
                                 <span className="truncate">Invite to {currentWorkspace.name}</span>
                               </div>
+                              {currentRole && (
+                                <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[9px] font-medium text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
+                                  You: {currentRole}
+                                </span>
+                              )}
                             </div>
                             <div className="space-y-2">
                               <input
@@ -883,7 +1016,7 @@ export default function DashboardLayout() {
                                 onChange={(event) => setInviteRole(event.target.value as WorkspaceRole)}
                                 className="h-9 w-full rounded-md border border-zinc-200 bg-white px-2 text-xs text-zinc-800 outline-none transition focus:border-blue-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
                               >
-                                {WORKSPACE_ROLES.map(role => (
+                                {INVITABLE_ROLES.map(role => (
                                   <option key={role} value={role}>{role}</option>
                                 ))}
                               </select>
@@ -896,6 +1029,12 @@ export default function DashboardLayout() {
                               <p className="rounded-md bg-zinc-50 px-2.5 py-2 text-[10px] text-zinc-500 dark:bg-zinc-950 dark:text-zinc-400">{workspaceNotice}</p>
                             )}
                           </form>
+                          ) : (
+                            <div className="space-y-1 p-3 text-[10px] text-zinc-500 dark:text-zinc-400">
+                              <p>Your role{currentRole ? ` (${currentRole})` : ''} cannot invite members.</p>
+                              {workspaceNotice && <p>{workspaceNotice}</p>}
+                            </div>
+                          )}
                         </div>
                       </motion.div>
                     )}
@@ -955,7 +1094,9 @@ export default function DashboardLayout() {
                       </Link>
                       <div className="w-8 h-px bg-zinc-100 dark:bg-zinc-800 my-1" />
                       {SIDEBAR_CATEGORIES.map(cat =>
-                        cat.items.map(item => (
+                        cat.items
+                          .filter(item => canSection(item.to))
+                          .map(item => (
                           <Link
                             key={item.label}
                             to={makeNavTo(item.to) as any}
@@ -1030,8 +1171,10 @@ export default function DashboardLayout() {
                       </div>
 
                       {SIDEBAR_CATEGORIES.map(cat => {
+                        const visibleItems = cat.items.filter(item => canSection(item.to));
                         const isExpanded = expandedCats[cat.id];
-                        const hasItems = cat.items.length > 0;
+                        const hasItems = visibleItems.length > 0;
+                        if (!hasItems && cat.items.length > 0) return null;
                         return (
                           <div key={cat.id} className="space-y-1">
                             {hasItems ? (
@@ -1054,7 +1197,7 @@ export default function DashboardLayout() {
                                   transition={{ duration: 0.15 }}
                                   className="overflow-hidden space-y-0.5 pl-3 border-l border-zinc-100 dark:border-zinc-800 ml-3.5"
                                 >
-                                  {cat.items.map(sub => {
+                                  {visibleItems.map(sub => {
                                     const isSelected = isSectionSelected(sub.to);
                                     const to = makeNavTo(sub.to);
                                     return (
@@ -1080,46 +1223,26 @@ export default function DashboardLayout() {
               </div>
             )}
 
-            {/* Support footer */}
+            {/* Docs footer */}
             <div className="border-t border-zinc-100 dark:border-zinc-850/40 p-3 shrink-0">
               {!sidebarCollapsed ? (
-                currentWorkspace ? (
-                  <Link to="/dashboard/w/$workspaceId/settings" params={{ workspaceId: currentWorkspace.id }} className="group flex w-full items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-zinc-50/70 px-3 py-2.5 text-left transition hover:border-zinc-300 hover:bg-white dark:border-zinc-800 dark:bg-zinc-950/30 dark:hover:border-zinc-700 dark:hover:bg-zinc-900/50">
-                    <span className="flex min-w-0 items-center gap-2.5">
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-500/10 text-blue-500">
-                        <HelpCircle className="h-4 w-4" />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-xs font-semibold leading-none text-zinc-855 dark:text-zinc-200">Need help?</span>
-                        <span className="mt-1 block truncate text-[10px] text-zinc-400">Contact support</span>
-                      </span>
-                    </span>
-                    <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-zinc-400 transition group-hover:text-blue-500" />
-                  </Link>
-                ) : (
-                  <div className="flex w-full items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-zinc-50/70 px-3 py-2.5 text-left opacity-70 dark:border-zinc-800 dark:bg-zinc-950/30">
+                <a href="/docs" className="group flex w-full items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-zinc-50/70 px-3 py-2.5 text-left transition hover:border-zinc-300 hover:bg-white dark:border-zinc-800 dark:bg-zinc-950/30 dark:hover:border-zinc-700 dark:hover:bg-zinc-900/50">
                   <span className="flex min-w-0 items-center gap-2.5">
                     <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-500/10 text-blue-500">
                       <HelpCircle className="h-4 w-4" />
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-xs font-semibold leading-none text-zinc-855 dark:text-zinc-200">Need help?</span>
-                      <span className="mt-1 block truncate text-[10px] text-zinc-400">Contact support</span>
+                      <span className="mt-1 block truncate text-[10px] text-zinc-400">Open docs</span>
                     </span>
                   </span>
-                </div>
-                )
+                  <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-zinc-400 transition group-hover:text-blue-500" />
+                </a>
               ) : (
                 <div className="flex justify-center py-1">
-                  {currentWorkspace ? (
-                    <Link to="/dashboard/w/$workspaceId/settings" params={{ workspaceId: currentWorkspace.id }} className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-500/10 text-blue-500 transition hover:bg-blue-500/15" title="Contact support">
-                      <HelpCircle className="h-4 w-4" />
-                    </Link>
-                  ) : (
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-500/10 text-blue-500 opacity-70" title="Contact support">
+                  <a href="/docs" className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-500/10 text-blue-500 transition hover:bg-blue-500/15" title="Open docs">
                     <HelpCircle className="h-4 w-4" />
-                  </div>
-                  )}
+                  </a>
                 </div>
               )}
             </div>
@@ -1166,10 +1289,47 @@ export default function DashboardLayout() {
             </div>
             <div className="flex items-center gap-2.5 relative">
               {currentWorkspace && (
-                <Link to="/dashboard/w/$workspaceId/settings" params={{ workspaceId: currentWorkspace.id }} className="hidden sm:inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-900 dark:hover:text-white">
-                  <HelpCircle className="h-3.5 w-3.5 text-zinc-400" />
-                  Support
-                </Link>
+                <>
+                  <span
+                    className={`hidden sm:inline-flex items-center rounded-md border px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${
+                      (currentWorkspace.environment
+                        || currentWorkspace.settings?.environment
+                        || (String(currentWorkspace.settings?.defaultNetwork || '').toLowerCase().includes('main')
+                          ? 'mainnet'
+                          : 'testnet')) === 'mainnet'
+                        ? 'border-orange-500/40 bg-orange-500/10 text-orange-600 dark:text-orange-400'
+                        : 'border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-400'
+                    }`}
+                    title="Workspace environment — ZCR burns only on mainnet. Switch on Credits page."
+                  >
+                    {(currentWorkspace.environment
+                      || currentWorkspace.settings?.environment
+                      || (String(currentWorkspace.settings?.defaultNetwork || '').toLowerCase().includes('main')
+                        ? 'mainnet'
+                        : 'testnet')) === 'mainnet'
+                      ? 'Mainnet'
+                      : 'Testnet'}
+                  </span>
+                  <Link
+                    to="/dashboard/w/$workspaceId/credits"
+                    params={{ workspaceId: currentWorkspace.id }}
+                    className="hidden sm:inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1 text-[11px] font-semibold text-zinc-800 transition hover:bg-zinc-200 hover:text-zinc-950 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800 dark:hover:text-white"
+                    title="Workspace credits"
+                  >
+                    ZCR
+                  </Link>
+                  <Link
+                    to="/dashboard/platform"
+                    className="hidden lg:inline-flex items-center rounded-md px-2 py-1 text-[10px] font-medium text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-white"
+                    title="Platform control plane (founders)"
+                  >
+                    Platform
+                  </Link>
+                  <a href="/docs" className="hidden sm:inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-900 dark:hover:text-white">
+                    <HelpCircle className="h-3.5 w-3.5 text-zinc-400" />
+                    Docs
+                  </a>
+                </>
               )}
               <button onClick={() => setSearchOpen(true)} className="md:hidden p-1.5 rounded text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-900 cursor-pointer">
                 <Search className="h-4.5 w-4.5" />

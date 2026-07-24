@@ -55,7 +55,7 @@ export const Footer: React.FC = () => {
                   {!logoError && (
                     <img
                       src="/logo-transparent.png"
-                      alt=""
+                      alt="Zexvro"
                       className="h-9 w-9 object-contain"
                       onError={() => setLogoError(true)}
                     />

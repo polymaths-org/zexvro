@@ -375,13 +375,27 @@ export default function Zer0Settings() {
   const denomXlm = DENOMINATION_XLM;
   const selectedProof = PROOF_SYSTEMS[local.proofSystem];
 
+  const settingsIsMainnet = !String(local.horizonUrl || '').toLowerCase().includes('testnet')
+    && !String(local.horizonUrl || '').toLowerCase().includes('futurenet');
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 border-b border-zinc-200 pb-5 dark:border-zinc-900 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-lg font-bold text-zinc-900 dark:text-white">Settings</h1>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
-            Payroll privacy and wallet preferences — designed for finance teams.
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-semibold text-zinc-950 dark:text-white">Zer0 settings</h1>
+            <span
+              className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${
+                settingsIsMainnet
+                  ? 'border-orange-500/40 bg-orange-500/10 text-orange-600 dark:text-orange-400'
+                  : 'border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-400'
+              }`}
+            >
+              {settingsIsMainnet ? 'Mainnet' : 'Testnet'}
+            </span>
+          </div>
+          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+            Privacy and wallet preferences — switch network under Wallet & Network.
           </p>
         </div>
         <button onClick={handleSave}
@@ -527,7 +541,8 @@ export default function Zer0Settings() {
                   onClick={() => setLocal(l => ({
                     ...l,
                     horizonUrl: 'https://horizon.stellar.org',
-                    sorobanRpcUrl: 'https://mainnet.stellar.org',
+                    // Public Soroban RPC used for contract simulates / submits
+                    sorobanRpcUrl: 'https://mainnet.sorobanrpc.com',
                   }))}
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
                     !local.horizonUrl.includes('testnet')
@@ -537,10 +552,10 @@ export default function Zer0Settings() {
                   Mainnet (real funds)
                 </button>
               </div>
-              <p className="text-[11px] text-zinc-500">
+                  <p className="text-[11px] text-zinc-500">
                 {local.horizonUrl.includes('testnet')
-                  ? 'Testnet uses free test money — safe for demos.'
-                  : 'Mainnet moves real assets. Double-check amounts before signing.'}
+                  ? 'Testnet uses free test money — safe for demos. Private (shielded) pays work here.'
+                  : 'Mainnet moves real assets. Soroban RPC must be a JSON-RPC endpoint (not Horizon). Private pays need mainnet pool contracts; use public pay until those are deployed.'}
               </p>
             </div>
 

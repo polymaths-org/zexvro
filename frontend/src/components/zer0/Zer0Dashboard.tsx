@@ -178,13 +178,27 @@ export default function Zer0Dashboard() {
     failed: { color: 'text-red-500', bg: 'bg-red-500/10' },
   };
 
+  const isMainnet = !String(settings.horizonUrl || '').toLowerCase().includes('testnet')
+    && !String(settings.horizonUrl || '').toLowerCase().includes('futurenet');
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 border-b border-zinc-200 pb-5 dark:border-zinc-900 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-lg font-bold text-zinc-900 dark:text-white">Payroll overview</h1>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-semibold text-zinc-950 dark:text-white">Zer0 overview</h1>
+            <span
+              className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${
+                isMainnet
+                  ? 'border-orange-500/40 bg-orange-500/10 text-orange-600 dark:text-orange-400'
+                  : 'border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-400'
+              }`}
+            >
+              {isMainnet ? 'Mainnet' : 'Testnet'}
+            </span>
+          </div>
+          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
             Funding wallet, team roster, and disbursements — private or public.
           </p>
         </div>

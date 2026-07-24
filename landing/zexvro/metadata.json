@@ -1,7 +1,6 @@
 {
-  "name": "ZEXVRO",
-  "description": "Zexvro (ZEXVRO) — premium Web3 landing page. Wallets, payments, and NFT tooling without the stack noise.",
-
+  "name": "Zexvro",
+  "description": "Zexvro (ZEXVRO) — Web3 Made Simple. Wallets, payments, and NFT tooling without the stack noise. Official site zexvro.in.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -91,6 +91,17 @@ const configSchema = z.object({
     .regex(/^C[A-Z2-7]{55}$/)
     .default('CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC'),
   NFT_CHECKOUT_TTL_SECONDS: z.coerce.number().int().min(30).max(900).default(300),
+  /** Platform Lambda base URL for ZCR top-up after credit-pack NFT checkout. */
+  PLATFORM_CREDITS_URL: optionalUrl,
+  PLATFORM_INTERNAL_SECRET: optionalSecret,
+  /** Comma-separated collection IDs that grant ZCR on purchase. */
+  ZCR_CREDIT_COLLECTION_IDS: z.string().default('').transform((value) =>
+    value
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean),
+  ),
+  ZCR_DEFAULT_AMOUNT: z.coerce.number().int().min(1).max(1_000_000).default(100),
 })
 
 export type NftServiceConfig = z.infer<typeof configSchema>

@@ -68,7 +68,7 @@ describe('DepinService', () => {
     render(<DepinService />);
 
     expect(await screen.findByRole('heading', { name: 'x402 Gateway' })).toBeInTheDocument();
-    expect(screen.getByText(/How Access Shield works/i)).toBeInTheDocument();
+    expect(screen.getByText(/How DEDSEC works/i)).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: /Protect route/i }).length).toBeGreaterThan(0);
   });
 

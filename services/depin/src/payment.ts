@@ -66,10 +66,10 @@ export class X402PaymentProtocol implements PaymentProtocol {
             },
           }),
     })
-    const resourceServer = new x402ResourceServer(facilitator).register(
-      'stellar:testnet',
-      new ExactStellarScheme(),
-    )
+    // Register both networks so a single gateway can serve testnet and/or pubnet providers.
+    const resourceServer = new x402ResourceServer(facilitator)
+      .register('stellar:testnet', new ExactStellarScheme())
+      .register('stellar:pubnet', new ExactStellarScheme())
     this.server = new x402HTTPResourceServer(
       resourceServer,
       buildX402Routes(config.providers),

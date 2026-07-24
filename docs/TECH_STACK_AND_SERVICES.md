@@ -20,16 +20,17 @@
 | Auth | Amazon Cognito User Pools |
 | Settlement asset (MVP) | SEP-41 USDC on Stellar |
 
-### Six MVP services (ownership)
+### Five MVP services (ownership)
 
 | # | Service | Owner | Product status |
 | --- | --- | --- | --- |
 | 1 | **Zer0** — Zero-Knowledge Privacy Pool | Paris (`paris-29`) | Product UI complete |
-| 2 | **Morph** — Transformation Agent | Paris (`paris-29`) | CLI implemented & packaged |
-| 3 | **A-2-A Trade Pipeline** | Rushi (`Wraient`) | Planned / UI scaffold |
-| 4 | **Agent Auth** (captcha-like human/agent classification) | Rushi (`Wraient`) | Planned / UI scaffold |
-| 5 | **NFT Service** | Nabil (`n4bi10p`) + Paris (UX) | Product UI complete |
-| 6 | **De-pin** (x402 gateway / Access Shield economic plane) | Nabil (`n4bi10p`) | In progress (gateway MVP) |
+| 2 | **Morph** — Transformation Agent | Morph track / Paris | CLI implemented & packaged |
+| 3 | **REQWID** — Agent Authentication (human/agent classification) | Rushi (`Wraient`) | Planned / UI scaffold |
+| 4 | **NFTo** — NFT Service | Nabil (`n4bi10p`) + Paris (UX) | Product UI complete |
+| 5 | **DEDSEC** — x402 gateway (code: `services/depin`) | Nabil (`n4bi10p`) | In progress (gateway MVP) |
+
+**Out of MVP:** A-2-A Trade Pipeline (scaffold only; do not market as core).
 
 ---
 
@@ -242,7 +243,7 @@ Reference source samples: `docs/lambda_auth.py`, `docs/lambda_function.py`.
 
 ---
 
-### 4.4 Agent Auth (Captcha-like) + HDM direction
+### 4.4 REQWID (Agent Auth) + HDM direction
 
 **Problem:** Platforms must distinguish humans from agents and control access; optional HDM lets verified humans sell human-origin data.
 
@@ -260,7 +261,7 @@ Reference source samples: `docs/lambda_auth.py`, `docs/lambda_function.py`.
 
 ---
 
-### 4.5 NFT Service
+### 4.5 NFTo (NFT Service)
 
 **Problem:** Indie games and studios need NFTs without learning full Web3 tooling.
 
@@ -324,13 +325,13 @@ Reference source samples: `docs/lambda_auth.py`, `docs/lambda_function.py`.
 
 ---
 
-### 4.6 De-pin — x402 Agentic Resource Gateway (+ Access Shield)
+### 4.6 DEDSEC — x402 Agentic Resource Gateway
 
 **Problem (MVP):** Agents cannot easily buy API/compute capacity with card-based Web2 billing.
 
 **Problem (strategic):** Big platforms lose COGS to free-tier farms and agent spam; economic pay-per-request makes abuse unprofitable.
 
-**Product framing:** Enforcement plane of **ZEXVRO Access Shield** (`docs/access_shield.md`). Full control-plane UI is **proposed**, not fully shipped.
+**Product name: DEDSEC.** Code path: `services/depin`. Full control-plane UI is **proposed**, not fully shipped. Historical framing: `docs/access_shield.md`.
 
 #### Shipping gateway features
 
@@ -397,12 +398,12 @@ These are not the six MVP “product services,” but they power the dashboard.
 | Morph CLI transform assist | Python Typer, OpenAI, SQLite, tools | **Morph** |
 | Web agent chat | Lambda `/api/chat`, OpenCode/Gemini env | **Morph** + shared API |
 | Shared agent memory | DynamoDB user-memory, React Memory UI | Shared + Morph |
-| NFT create / mint / sale | Express, Soroban NFT contract, S3, DynamoDB, Freighter | **NFT Service** |
-| NFT public buy / game embed | Public REST, checkout SDK, CloudFront media | **NFT Service** |
+| NFT create / mint / sale | Express, Soroban NFT contract, S3, DynamoDB, Freighter | **NFTo** |
+| NFT public buy / game embed | Public REST, checkout SDK, CloudFront media | **NFTo** |
 | Pay-per-request API gate | x402, Stellar USDC, OZ facilitator, Express proxy | **De-pin** |
-| Access Shield narrative | De-pin + future Agent Auth + policy | **De-pin** + **Agent Auth** (proposed) |
+| DEDSEC narrative | x402 gateway + future REQWID + policy | **DEDSEC** + **REQWID** (proposed) |
 | Agent-to-agent trade | TBD protocol | **A-2-A** (planned) |
-| Human/agent captcha | TBD classifier SDK | **Agent Auth** (planned) |
+| Human/agent captcha | TBD classifier SDK | **REQWID** (planned) |
 | Marketing homepage | React/Three or static landing | Frontend / `landing/` |
 
 ---
@@ -508,10 +509,10 @@ Cost note (from `docs/aws_inventory_and_cost.md`): EC2 ZK worker dominates (~$12
 - Multi-chain NFT or De-pin
 - Secondary NFT marketplace / auctions / fiat card rails
 - De-pin streaming, POST completions, redis state, physical device adapters
-- Perfect agent detection (Agent Auth)
+- Perfect agent detection (REQWID)
 - Autonomous Morph actions without approval/audit design
 - Committing secrets to git
-- Claiming Access Shield control plane is fully shipped
+- Claiming DEDSEC control plane is fully shipped
 
 ---
 
@@ -528,7 +529,7 @@ Cost note (from `docs/aws_inventory_and_cost.md`): EC2 ZK worker dominates (~$12
 | NFT API | `services/nft-service/api/` | Express, DynamoDB, S3, Stellar |
 | NFT games SDK | `packages/nft-checkout-sdk/` | Vanilla JS client |
 | Pay-per-request APIs | `services/depin/` | x402, Stellar USDC, Express |
-| Access Shield story | `docs/access_shield.md` | De-pin + Agent Auth (future) |
+| DEDSEC story | `docs/access_shield.md` (historical) | DEDSEC + REQWID (future) |
 | AWS inventory | `docs/aws_inventory_and_cost.md` | Full resource list |
 
 ---

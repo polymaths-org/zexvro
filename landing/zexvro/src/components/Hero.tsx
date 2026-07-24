@@ -168,7 +168,8 @@ export const Hero: React.FC = () => {
             >
               <img
                 src="/cubes.png"
-                alt="Prism glass cubes"
+                alt=""
+                role="presentation"
                 className="w-full max-h-[48vh] md:max-h-[54vh] h-auto object-contain object-left-top"
                 onError={() => setCubesError(true)}
               />
@@ -248,14 +249,16 @@ export const Hero: React.FC = () => {
             <>
               <img
                 src="/mobile_statue.png"
-                alt="Classical Greek Statue"
+                alt=""
+                role="presentation"
                 className="w-full h-full object-contain object-right-center md:hidden"
                 referrerPolicy="no-referrer"
                 onError={() => setStatueError(true)}
               />
               <img
-                src="/Deploy NTFs with just some clicks.png"
-                alt="Classical Greek Statue"
+                src="/deploy-nfts-clicks.png"
+                alt=""
+                role="presentation"
                 className="hidden md:block w-full h-full object-contain object-right-bottom"
                 referrerPolicy="no-referrer"
                 onError={() => setStatueError(true)}
