@@ -1307,14 +1307,14 @@ export default function DashboardLayout() {
                   <Link
                     to="/dashboard/w/$workspaceId/credits"
                     params={{ workspaceId: currentWorkspace.id }}
-                    className="hidden sm:inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1 text-[11px] font-semibold text-zinc-700 transition hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
+                    className="hidden sm:inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1 text-[11px] font-semibold text-zinc-800 transition hover:bg-zinc-200 hover:text-zinc-950 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800 dark:hover:text-white"
                     title="Workspace credits"
                   >
                     ZCR
                   </Link>
                   <Link
                     to="/dashboard/platform"
-                    className="hidden lg:inline-flex items-center rounded-md px-2 py-1 text-[10px] font-medium text-zinc-400 transition hover:text-zinc-700 dark:hover:text-zinc-200"
+                    className="hidden lg:inline-flex items-center rounded-md px-2 py-1 text-[10px] font-medium text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-white"
                     title="Platform control plane (founders)"
                   >
                     Platform

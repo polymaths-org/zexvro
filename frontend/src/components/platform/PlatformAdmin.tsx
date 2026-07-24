@@ -117,14 +117,27 @@ export default function PlatformAdmin() {
       ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat icon={<BarChart3 className="h-3.5 w-3.5" />} label="Workspaces" value={analytics?.workspaceCount ?? '—'} />
+        <Stat
+          icon={<BarChart3 className="h-3.5 w-3.5" />}
+          label="Unique workspaces"
+          value={analytics?.workspaceCount ?? '—'}
+          hint={
+            analytics?.rawWorkspaceRows != null && analytics.rawWorkspaceRows !== analytics.workspaceCount
+              ? `${analytics.rawWorkspaceRows} Dynamo rows · ${analytics.duplicateWorkspaceRows ?? 0} dups collapsed`
+              : undefined
+          }
+        />
         <Stat icon={<Coins className="h-3.5 w-3.5" />} label="ZCR in circulation" value={analytics?.totalZcrInCirculation ?? '—'} />
         <Stat
           icon={<SnowflakeIcon />}
           label="Testnet / Mainnet"
           value={`${analytics?.environmentCounts?.testnet ?? 0} / ${analytics?.environmentCounts?.mainnet ?? 0}`}
         />
-        <Stat icon={<Ticket className="h-3.5 w-3.5" />} label="Active promos" value={analytics?.activePromoCount ?? '—'} />
+        <Stat
+          icon={<Ticket className="h-3.5 w-3.5" />}
+          label="Owners · promos"
+          value={`${analytics?.ownerCount ?? '—'} · ${analytics?.activePromoCount ?? 0}`}
+        />
       </div>
       {analytics?.note ? <p className="text-[11px] text-zinc-400">{analytics.note}</p> : null}
 
@@ -261,10 +274,12 @@ function Stat({
   icon,
   label,
   value,
+  hint,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string | number;
+  hint?: string;
 }) {
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-[#080809]">
@@ -273,6 +288,7 @@ function Stat({
         {label}
       </div>
       <p className="mt-2 text-2xl font-semibold tabular-nums text-zinc-900 dark:text-white">{value}</p>
+      {hint ? <p className="mt-1 text-[10px] leading-snug text-zinc-500">{hint}</p> : null}
     </div>
   );
 }

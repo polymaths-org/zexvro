@@ -175,6 +175,9 @@ export const platformApi = {
   analytics: () =>
     api.get<{
       workspaceCount: number;
+      rawWorkspaceRows?: number;
+      duplicateWorkspaceRows?: number;
+      ownerCount?: number;
       environmentCounts: Record<string, number>;
       totalZcrInCirculation: number;
       creditAccountCount: number;

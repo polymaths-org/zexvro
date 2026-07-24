@@ -1648,27 +1648,81 @@ def lambda_handler(event, context):
         if denied:
             return denied
         try:
-            # Lightweight aggregates
-            ws_scan = workspaces_table.scan(Limit=200)
-            workspaces = ws_scan.get("Items") or []
+            # Full table scan (paginated). Collapse spam duplicates: many auto-create
+            # races left N× "X's Workspace" rows per owner — count unique owner+name.
+            workspaces = []
+            scan_kwargs = {}
+            while True:
+                res = workspaces_table.scan(**scan_kwargs)
+                workspaces.extend(res.get("Items") or [])
+                lek = res.get("LastEvaluatedKey")
+                if not lek:
+                    break
+                scan_kwargs["ExclusiveStartKey"] = lek
+
+            raw_row_count = len(workspaces)
+            # Prefer newest row per (ownerId, normalized name)
+            canonical = {}
+            for raw in workspaces:
+                w = normalize_workspace_item(dict(raw))
+                wid = (w.get("workspaceId") or w.get("id") or "").strip()
+                if not wid or wid.startswith("ws_smoke") or wid.startswith("ws_e2e"):
+                    continue
+                owner = _norm_identity(w.get("ownerId"))
+                name = (w.get("name") or "").strip().lower()
+                if not owner:
+                    continue
+                key = (owner, name or wid)
+                prev = canonical.get(key)
+                created = int(w.get("createdAt") or w.get("updatedAt") or 0)
+                if not prev or created >= int(prev.get("createdAt") or prev.get("updatedAt") or 0):
+                    canonical[key] = w
+
+            unique_workspaces = list(canonical.values())
             env_counts = {"testnet": 0, "mainnet": 0}
-            for w in workspaces:
-                n = normalize_workspace_item(dict(w))
-                env_counts[n.get("environment") or "testnet"] = env_counts.get(n.get("environment") or "testnet", 0) + 1
-            cred_scan = credits_table.scan(Limit=200)
+            for w in unique_workspaces:
+                env = w.get("environment") or "testnet"
+                if env not in env_counts:
+                    env_counts[env] = 0
+                env_counts[env] += 1
+
+            owners = {_norm_identity(w.get("ownerId")) for w in unique_workspaces if w.get("ownerId")}
+            # Drop known non-human/dev owners from "users" if desired — keep count honest
+            user_owners = {o for o in owners if o and o not in ("stellar_dev",)}
+
             total_zcr = 0
-            for c in (cred_scan.get("Items") or []):
-                total_zcr += int(c.get("balance") or 0)
-            promo_scan = promo_codes_table.scan(Limit=50)
+            credit_accounts = 0
+            cred_kwargs = {}
+            while True:
+                cred_scan = credits_table.scan(**cred_kwargs)
+                for c in (cred_scan.get("Items") or []):
+                    credit_accounts += 1
+                    total_zcr += int(c.get("balance") or 0)
+                lek = cred_scan.get("LastEvaluatedKey")
+                if not lek:
+                    break
+                cred_kwargs["ExclusiveStartKey"] = lek
+
+            promo_scan = promo_codes_table.scan(Limit=200)
             promos = promo_scan.get("Items") or []
+            dup_rows = max(0, raw_row_count - len(unique_workspaces))
+            note = None
+            if dup_rows > 0:
+                note = (
+                    f"Showing {len(unique_workspaces)} unique workspaces "
+                    f"(collapsed {dup_rows} duplicate Dynamo rows from auto-create spam)."
+                )
             return respond(200, {
-                "workspaceCount": len(workspaces),
+                "workspaceCount": len(unique_workspaces),
+                "rawWorkspaceRows": raw_row_count,
+                "duplicateWorkspaceRows": dup_rows,
+                "ownerCount": len(user_owners),
                 "environmentCounts": env_counts,
                 "totalZcrInCirculation": total_zcr,
-                "creditAccountCount": len(cred_scan.get("Items") or []),
+                "creditAccountCount": credit_accounts,
                 "activePromoCount": sum(1 for p in promos if (p.get("status") or "") == "active"),
                 "promoCount": len(promos),
-                "note": "Partial scan aggregates (first pages); full metrics ship with dedicated GSI later.",
+                "note": note,
             })
         except Exception as exc:
             return respond(502, {"error": "analytics_error", "error_description": str(exc)})
