@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>EDGERUN · Night City Arcade</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="app">
+    <div id="game-wrap">
+      <canvas id="game" width="960" height="540"></canvas>
+      <div class="scanlines"></div>
+
+      <div id="hud">
+        <div class="hud-left">
+          <div class="hud-stat hp"><span class="label">HP</span> <span class="value" id="stat-hp">100/100</span></div>
+          <div class="hud-stat tera"><span class="label">TERA</span> <span class="value" id="stat-tera">0</span></div>
+          <div class="hud-stat"><span class="label">GEAR</span> <span class="value" id="stat-gear">NONE</span></div>
+        </div>
+        <div class="hud-right">
+          <div class="hud-stat"><span class="label">NIGHT CITY</span> <span class="value">ARCADE</span></div>
+        </div>
+      </div>
+
+      <div id="menu-btns">
+        <button class="btn yellow" id="btn-topup" type="button">Top Up [T]</button>
+        <button class="btn" id="btn-market" type="button">Market [M]</button>
+      </div>
+
+      <div id="mobile-controls">
+        <div class="d-pad">
+          <button class="ctrl-btn" id="btn-left" type="button">◀</button>
+          <button class="ctrl-btn" id="btn-right" type="button">▶</button>
+        </div>
+        <div class="action-pad">
+          <button class="ctrl-btn" id="btn-dash" type="button">⚡</button>
+          <button class="ctrl-btn" id="btn-shoot" type="button">✕</button>
+          <button class="ctrl-btn" id="btn-jump" type="button">▲</button>
+        </div>
+      </div>
+
+      <!-- Start -->
+      <div class="overlay open" id="overlay-start">
+        <div class="panel">
+          <h1>EDGERUN</h1>
+          <p class="subtitle">NIGHT CITY ARCADE · 2077</p>
+          <p>
+            Side-scroll Night City rooftops. Spend <strong style="color:#00ff9d">tera-coin (TERA)</strong>
+            at the market — balance starts at 0. Top up TERA or mint NFT gear via ZEXVRO checkout.
+          </p>
+          <div class="controls-list">
+            <div><kbd>A</kbd><kbd>D</kbd> / <kbd>←</kbd><kbd>→</kbd> Move</div>
+            <div><kbd>Space</kbd> / <kbd>W</kbd> Jump (double-jump with Sandevistan)</div>
+            <div><kbd>X</kbd> Shoot / slash</div>
+            <div><kbd>Shift</kbd> Dash (Sandevistan)</div>
+            <div><kbd>M</kbd> Market · <kbd>T</kbd> Top up TERA</div>
+          </div>
+          <div class="center-actions">
+            <button class="btn pink" id="btn-start" type="button">Jack In</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Market -->
+      <div class="overlay" id="overlay-market">
+        <div class="panel">
+          <h2>RIPPERDOC MARKET</h2>
+          <div class="market-balance">
+            <span>TERA-COIN BALANCE</span>
+            <strong id="market-tera">0 TERA</strong>
+          </div>
+          <p class="panel-hint">Buy chrome with in-game <strong>tera-coin</strong>. Need more? Use Top Up (ZEXVRO checkout).</p>
+          <div class="shop-grid" id="shop-grid"></div>
+          <div class="center-actions">
+            <button class="btn yellow" id="btn-market-topup" type="button">Top Up TERA</button>
+            <button class="btn" id="btn-close-market" type="button">Close [Esc]</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Top Up -->
+      <div class="overlay" id="overlay-topup">
+        <div class="panel">
+          <h2>TERA-COIN TOP UP</h2>
+          <div class="market-balance">
+            <span>CURRENT BALANCE</span>
+            <strong id="topup-tera">0 TERA</strong>
+          </div>
+          <p class="panel-hint">
+            Top up in-game <strong>tera-coin</strong> via ZEXVRO NFT checkout (on-chain).
+            Each pack mints a receipt NFT and credits TERA to your wallet in-game.
+          </p>
+          <div class="shop-grid" id="topup-grid"></div>
+          <div class="center-actions">
+            <button class="btn" id="btn-close-topup" type="button">Close [Esc]</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Game over -->
+      <div class="overlay" id="overlay-gameover">
+        <div class="panel">
+          <h1>FLATLINED</h1>
+          <p class="subtitle">YOU GOT ZEROED, CHOOM</p>
+          <p>Your tera-coin and chrome upgrades are saved. Hit retry and run it back.</p>
+          <div class="center-actions">
+            <button class="btn pink" id="btn-retry" type="button">Respawn [R]</button>
+            <button class="btn yellow" id="btn-go-topup" type="button">Top Up TERA</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Win -->
+      <div class="overlay" id="overlay-win">
+        <div class="panel">
+          <h1>GIG COMPLETE</h1>
+          <p class="subtitle">YOU REACHED THE DROP POINT</p>
+          <p>Balance: <strong id="win-tera" style="color:#00ff9d">0 TERA</strong></p>
+          <div class="center-actions">
+            <button class="btn pink" id="btn-win-retry" type="button">Run Again</button>
+            <button class="btn" id="btn-win-market" type="button">Open Market</button>
+            <button class="btn yellow" id="btn-win-topup" type="button">Top Up TERA</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="toast"></div>
+    </div>
+  </div>
+
+  <script type="module" src="js/game.js"></script>
+</body>
+</html>

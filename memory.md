@@ -1,5 +1,73 @@
 # ZEXVRO Shared Memory
 
+## 2026-07-25 - EDGERUN captcha live (Gate siteKey)
+
+- Service: Morph migrate + Gate + demos/spacewar/web2 → GitHub Wraient/promptwars
+- Web2 main: `954422a` · Web3 branch: `2817fea`
+- Live Web3: https://promptwars-web3.vercel.app — `GATE_SITE_KEY=zk_live_xmzaw…` non-empty; `protectWithCaptcha` on TERA pack buy
+- Gate site: PromptWars EDGERUN Web3 (origins include promptwars-web3.vercel.app)
+- Morph: `migrate-web3.mjs` idempotent re-key + optional auto site create via GATE_ADMIN_API_KEY; fail-hard if empty siteKey
+- Gate: adminAuth accepts Cognito access **or** id tokens (device-code often forwards id)
+- Tests: migrate unit 5/5; agent-auth admin-related gate tests pass
+- Human still signs Freighter after captcha on checkout
+- Do not commit site secretKey
+
+## 2026-07-25 - EDGERUN Web2→Morph Web3 demo pipeline
+
+- Web2: `demos/spacewar/web2` + GitHub `Wraient/promptwars` main `954422a`
+- Morph: `morph migrate` CLI + Gate MCP Bearer fix
+- Web3 branch `web3` · deploy https://promptwars-web3.vercel.app
+- Captcha on token.purchase packs with live siteKey (see entry above)
+
+## 2026-07-24 - Pixel Run product game (demo day)
+
+- Product: `demos/pixel-run` — original 2D pixel platformer (title/shop/coins/3 stages). No user-facing Web3.
+- GitHub trials: 10 candidates logged in `demos/pixel-run/CANDIDATES.md` — all ditched (GPL/404/backend/engine-only).
+- Live: https://pixel-run-murex.vercel.app
+- Tests: `npm test` 11 pass; dual `npm run build` green.
+
+
+## 2026-07-24 - Morph: Neon Run arcade Web2→Web3
+
+- Service: Morph / demos/arcade (migration target)
+- Files: `demos/arcade/server/index.ts`, `client/index.tsx`, `README.md`, `AGENTS.md`, `.env.lakebed.server.example`, `.gitignore`
+- Summary: Wired **Gate** captcha on `score.submit` (client SDK + capability required), **NFT** skin unlock (checkout embed when `NFT_COLLECTION_ID` set; session demo unlock fallback), **De-pin** tip metadata + client probe of live `/v1/weather` (expect 402). Anonymous Lakebed build green (no server outbound network; claim required for env sync + future remote `/v1/verify`).
+- Decisions: Default `GAME_MODE=web3`; secrets only in `.env.lakebed.server`; public siteKey/URLs via `gameConfig`.
+- Blockers: Gate site create / NFT collection need valid admin Cognito or `GATE_ADMIN_API_KEY`; Lakebed not logged in this session so deploy not pushed.
+- Follow-ups: create Gate site + keys; optional NFT collection; `lakebed auth login && claim && deploy`.
+- Verification: `cd demos/arcade && npx lakebed@0.0.29 build --target anonymous` OK; De-pin health + unpaid 402 OK; platform Gate/NFT/De-pin health OK.
+
+## 2026-07-24 - Morph /use is project-first (fewer clicks)
+
+- Summary: Optimized TUI link UX for the common case (one workspace, many projects). `/use` opens **project list** immediately for the linked/default workspace — one Enter to switch. Workspace pick only on first setup (or `/workspace`). Chip shows **project name**. Create project on list; create workspace demoted. Aliases: /project /p.
+- Verification: install synced + branding applied.
+
+
+## 2026-07-23 - Morph compulsory workspace link per directory
+
+- Service: Morph TUI ZEXVRO plugin
+- Summary: Launch dir without `.morph/project.json` **must** pick workspace (DialogSelect, names first) on start; dismiss re-opens until linked. `/use` and `/bind` always rewrite the dir link. Session hydrated from local bind. Helpers: `readLocalBind`, `needsWorkspaceLink` in project-bind.mjs.
+- Verification: apply-branding copies updated feature-zexvro-use.tsx; unit smoke on needsWorkspaceLink.
+
+
+## 2026-07-23 - Morph TUI /use for ZEXVRO workspaces (native)
+
+- Service: Morph TUI (OpenCode fork feature plugin)
+- Files: `engine/patches/feature-zexvro-use.tsx`, `apply-branding.sh` (registers plugin), `bin/morph` (always re-brand), README
+- Summary: Native in-TUI slash commands (not external CLI): **/use** (aliases /workspace /ws) DialogSelect lists workspaces with **name as title**, id as description, active marked; then optional project by name. **/bind** same + writes `.morph/project.json`. **/zexvro** (/whoami) status. Uses Morph lib listWorkspaces/listProjects/updateSession/writeProjectBind via MORPH_HOME.
+- Decisions: Accepted - TUI-native DialogSelect over `morph use` readline. Did not reuse OpenCode experimental /workspaces (those are git worktrees).
+- Verification: apply-branding registers ZexvroUse in builtins; plugin installed under feature-plugins/zexvro/use.tsx.
+
+
+## 2026-07-23 - Morph built-in provider: CodexIn (Grok 4.5)
+
+- Service: Morph LLM providers
+- Files: `seed/morph.jsonc`, `lib/builtin-providers.mjs`, `bin/ensure-builtin-providers.mjs`, `bin/providers-add.mjs`, `bin/morph`, `engine/apply-branding.sh`, README
+- Summary: CodexIn is a first-class built-in OpenAI-compatible provider (`codexin` → `https://api.codexin.lol/v1`, model `grok-4.5` / Grok 4.5). Seeded into morph.jsonc; merged on every `morph` launch via ensure-builtin-providers. `/connect` lists CodexIn under Popular. CLI: `morph providers add codexin` (API key only).
+- Decisions: Accepted - built-in preset, not only custom flow. API key still user-supplied (auth.json).
+- Verification: ensure wrote user config; apply-branding has codexin priority; `morph providers list` shows codexin.
+
+
 ## 2026-07-23 - CLI device-code login: skip intro, show auth
 
 - Service or area: Console frontend (Cloudflare Pages `zexvro` / console.zexvro.in)

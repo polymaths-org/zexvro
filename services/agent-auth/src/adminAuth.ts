@@ -48,10 +48,18 @@ export function createAdminAuthMiddleware(config: AdminAuthConfig): RequestHandl
     }
   }
 
-  const verifier = hasCognito
+  // Accept access tokens (preferred) and id tokens (device-code / console may forward either).
+  const accessVerifier = hasCognito
     ? CognitoJwtVerifier.create({
         userPoolId: config.userPoolId!,
         tokenUse: 'access',
+        clientId: config.clientId!,
+      })
+    : null
+  const idVerifier = hasCognito
+    ? CognitoJwtVerifier.create({
+        userPoolId: config.userPoolId!,
+        tokenUse: 'id',
         clientId: config.clientId!,
       })
     : null
@@ -79,7 +87,7 @@ export function createAdminAuthMiddleware(config: AdminAuthConfig): RequestHandl
       return
     }
 
-    if (!verifier || !token) {
+    if ((!accessVerifier && !idVerifier) || !token) {
       response
         .status(401)
         .json(
@@ -92,18 +100,28 @@ export function createAdminAuthMiddleware(config: AdminAuthConfig): RequestHandl
       return
     }
 
-    void verifier
-      .verify(token)
-      .then((payload) => {
-        if (!payload.sub) {
+    void (async () => {
+      try {
+        let payload: { sub?: string } | null = null
+        if (accessVerifier) {
+          try {
+            payload = await accessVerifier.verify(token)
+          } catch {
+            /* try id token next */
+          }
+        }
+        if (!payload && idVerifier) {
+          payload = await idVerifier.verify(token)
+        }
+        if (!payload?.sub) {
           response.status(401).json(problem(401, 'unauthorized', 'Invalid access token subject'))
           return
         }
         response.locals.gateAdmin = { subject: payload.sub, via: 'cognito' }
         next()
-      })
-      .catch(() => {
+      } catch {
         response.status(401).json(problem(401, 'unauthorized', 'Invalid or expired access token'))
-      })
+      }
+    })()
   }
 }

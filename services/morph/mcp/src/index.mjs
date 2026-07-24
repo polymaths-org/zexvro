@@ -1,37 +1,55 @@
 #!/usr/bin/env node
 /**
- * Minimal MCP stdio server — ZEXVRO platform tools for Morph.
- * No npm deps (easy to run from OpenCode).
- *
- * Env (never log values):
- *   ZEXVRO_API_URL, ZEXVRO_GATE_URL, ZEXVRO_NFT_URL, ZEXVRO_DEPIN_URL
- *   ZEXVRO_ACCESS_TOKEN, ZEXVRO_GATE_ADMIN_KEY
+ * ZEXVRO MCP for Morph.
+ * Auth: morph login session (~/.local/share/morph/zexvro-auth.json)
+ *       or env ZEXVRO_ACCESS_TOKEN (CI / break-glass)
+ * Workspace: .morph/project.json or session workspaceId
  */
 import { createInterface } from 'node:readline'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import {
+  defaultApiBase,
+  defaultDepinUrl,
+  defaultGateUrl,
+  defaultNftUrl,
+} from '../../lib/paths.mjs'
+import { getAccessToken, loadSession } from '../../lib/zexvro-store.mjs'
+import { resolveWorkspaceContext } from '../../lib/project-bind.mjs'
+import {
+  makeMemoryEntry,
+  projectMemoryKey,
+  workspaceMemoryKey,
+} from '../../lib/memory-schema.mjs'
 
-const cfg = {
-  api: (process.env.ZEXVRO_API_URL || 'https://qkuostruh3.execute-api.us-east-1.amazonaws.com').replace(
-    /\/$/,
-    '',
-  ),
-  gate: (process.env.ZEXVRO_GATE_URL || 'https://api.zexvro.in/gate').replace(/\/$/, ''),
-  nft: (
-    process.env.ZEXVRO_NFT_URL ||
-    process.env.NFT_API_BASE ||
-    'https://iyk6idmup6.us-east-1.awsapprunner.com'
-  ).replace(/\/$/, ''),
-  depin: (
-    process.env.ZEXVRO_DEPIN_URL ||
-    process.env.VITE_DEPIN_API_URL ||
-    'https://sr9k3xpmbj.us-east-1.awsapprunner.com'
-  ).replace(/\/$/, ''),
-  token: (process.env.ZEXVRO_ACCESS_TOKEN || '').trim(),
-  gateAdmin: (process.env.ZEXVRO_GATE_ADMIN_KEY || process.env.GATE_ADMIN_API_KEY || '').trim(),
+const __dirname = dirname(fileURLToPath(import.meta.url))
+
+function resolveCfg() {
+  const session = loadSession()
+  const token = getAccessToken()
+  const ctx = resolveWorkspaceContext(session)
+  return {
+    api: (session?.apiBase || defaultApiBase()).replace(/\/$/, ''),
+    gate: defaultGateUrl(),
+    nft: defaultNftUrl(),
+    depin: defaultDepinUrl(),
+    token,
+    gateAdmin: (process.env.ZEXVRO_GATE_ADMIN_KEY || process.env.GATE_ADMIN_API_KEY || '').trim(),
+    workspaceId: ctx.workspaceId,
+    projectId: ctx.projectId,
+    username: session?.username || '',
+    authSource: process.env.ZEXVRO_ACCESS_TOKEN
+      ? 'env'
+      : session?.accessToken
+        ? 'morph-login'
+        : 'none',
+    bindSource: ctx.source,
+  }
 }
 
-function redact(s) {
+function redact(s, secrets = []) {
   let out = String(s ?? '')
-  for (const secret of [cfg.token, cfg.gateAdmin]) {
+  for (const secret of secrets) {
     if (secret && secret.length > 4) out = out.split(secret).join('***')
   }
   out = out.replace(/\bS[A-Za-z0-9]{50,}\b/g, 'S***')
@@ -49,40 +67,69 @@ async function httpJson(url, init = {}) {
   })
   const ct = res.headers.get('content-type') || ''
   let body
-  if (ct.includes('application/json')) {
-    body = await res.json().catch(() => null)
-  } else {
-    body = await res.text().catch(() => '')
-  }
+  if (ct.includes('application/json')) body = await res.json().catch(() => null)
+  else body = await res.text().catch(() => '')
   return { status: res.status, ok: res.ok, body }
 }
 
-function textResult(obj) {
+function textResult(obj, secrets = []) {
   return {
-    content: [{ type: 'text', text: redact(typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2)) }],
+    content: [
+      {
+        type: 'text',
+        text: redact(typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2), secrets),
+      },
+    ],
   }
+}
+
+function needToken(cfg) {
+  if (cfg.token) return null
+  return textResult({
+    error: 'not_logged_in',
+    message: 'Run: morph login  (or set ZEXVRO_ACCESS_TOKEN for CI)',
+  })
+}
+
+function needWorkspace(cfg) {
+  if (cfg.workspaceId) return null
+  return textResult({
+    error: 'no_workspace',
+    message: 'Run: morph use <workspaceId> && morph bind',
+  })
 }
 
 const tools = [
   {
+    name: 'zexvro_whoami',
+    description: 'Show Morph ZEXVRO login + workspace/project context for this session',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
     name: 'zexvro_health',
-    description: 'Check health of ZEXVRO Gate, NFT, De-pin, and platform API.',
+    description: 'Health-check Gate, NFT, De-pin, and platform memory (auth status)',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'zexvro_workspaces',
+    description: 'List ZEXVRO workspaces for the logged-in user',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
     name: 'gate_status',
-    description: 'GET Gate /status (issuer, product).',
+    description: 'GET Gate /status',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
     name: 'gate_list_sites',
-    description: 'List Gate sites (requires ZEXVRO_GATE_ADMIN_KEY).',
+    description:
+      'List Gate sites. Uses morph login Bearer (Cognito) and/or ZEXVRO_GATE_ADMIN_KEY.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
     name: 'gate_create_site',
     description:
-      'Create a Gate site for embedding captcha. Args: name, allowedOrigins (string array). Requires admin key. Returns siteKey (secretKey only once — do not log full secret).',
+      'Create Gate site (name, allowedOrigins[]). Uses morph login Bearer and/or ZEXVRO_GATE_ADMIN_KEY. Client only needs public siteKey.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -94,22 +141,20 @@ const tools = [
   },
   {
     name: 'nft_health',
-    description: 'GET NFT service /health (network should be stellar:testnet).',
+    description: 'GET NFT /health (expect stellar:testnet)',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
     name: 'nft_list_collections',
-    description: 'List NFT collections for a workspace. Requires ZEXVRO_ACCESS_TOKEN.',
+    description: 'List NFT collections for workspace (Bearer from morph login). Optional workspaceId.',
     inputSchema: {
       type: 'object',
       properties: { workspaceId: { type: 'string' } },
-      required: ['workspaceId'],
     },
   },
   {
     name: 'nft_create_collection',
-    description:
-      'Create/deploy an NFT collection on testnet. Requires ZEXVRO_ACCESS_TOKEN. Body fields: workspaceId, name, symbol, description, ownerAddress, royaltyRecipient, royaltyBps, coverImageUri.',
+    description: 'Create NFT collection on testnet. Requires login. Pass API body fields.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -122,66 +167,88 @@ const tools = [
         royaltyBps: { type: 'number' },
         coverImageUri: { type: 'string' },
       },
-      required: [
-        'workspaceId',
-        'name',
-        'symbol',
-        'description',
-        'ownerAddress',
-        'royaltyRecipient',
-        'royaltyBps',
-        'coverImageUri',
-      ],
+      required: ['name', 'symbol', 'description', 'ownerAddress', 'royaltyRecipient', 'royaltyBps', 'coverImageUri'],
     },
   },
   {
     name: 'depin_status',
-    description: 'GET De-pin /status (providers, settleReady, network).',
+    description: 'GET De-pin /status',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
     name: 'depin_probe',
-    description: 'Probe a De-pin route unpaid (expect 402). Args: path (default /v1/weather).',
+    description: 'Probe unpaid De-pin route (expect 402)',
     inputSchema: {
       type: 'object',
       properties: { path: { type: 'string' } },
-      additionalProperties: false,
     },
   },
   {
     name: 'memory_get',
-    description: 'GET platform /api/memory?key=… Requires ZEXVRO_ACCESS_TOKEN.',
+    description:
+      'Read platform shared memory (dashboard + Morph). Optional key returns one key; omit for all keys.',
     inputSchema: {
       type: 'object',
       properties: { key: { type: 'string' } },
-      required: ['key'],
     },
   },
   {
     name: 'memory_put',
-    description: 'POST platform /api/memory with { key, value }. Requires ZEXVRO_ACCESS_TOKEN. Never store secrets.',
+    description:
+      'Merge platform memory. Prefer append_entry for agent notes: { append_entry: { summary, label, service, decisions?, blockers?, followUps?, filesChanged? } } writes into projectMemory/workspaceMemory array. Or { key, value } / { memory }. Never secrets.',
     inputSchema: {
       type: 'object',
       properties: {
         key: { type: 'string' },
         value: {},
+        memory: { type: 'object' },
+        append_entry: {
+          type: 'object',
+          properties: {
+            summary: { type: 'string' },
+            label: { type: 'string' },
+            service: { type: 'string' },
+            decisions: { type: 'array', items: { type: 'string' } },
+            blockers: { type: 'array', items: { type: 'string' } },
+            followUps: { type: 'array', items: { type: 'string' } },
+            filesChanged: { type: 'array', items: { type: 'string' } },
+            verification: { type: 'string' },
+          },
+        },
       },
-      required: ['key', 'value'],
     },
   },
   {
     name: 'lakebed_deploy_hint',
-    description: 'Return commands to redeploy the Morph arcade demo on Lakebed after code changes.',
+    description: 'Redeploy commands for a Lakebed capsule if the project uses Lakebed',
     inputSchema: {
       type: 'object',
       properties: { capsuleDir: { type: 'string' } },
-      additionalProperties: false,
     },
   },
 ]
 
 async function callTool(name, args = {}) {
+  const cfg = resolveCfg()
+  const secrets = [cfg.token, cfg.gateAdmin].filter(Boolean)
+
   switch (name) {
+    case 'zexvro_whoami':
+      return textResult({
+        loggedIn: Boolean(cfg.token),
+        authSource: cfg.authSource,
+        username: cfg.username || null,
+        workspaceId: cfg.workspaceId || null,
+        projectId: cfg.projectId || null,
+        bindSource: cfg.bindSource,
+        urls: { api: cfg.api, gate: cfg.gate, nft: cfg.nft, depin: cfg.depin },
+        next: !cfg.token
+          ? 'morph login'
+          : !cfg.workspaceId
+            ? 'morph use <workspaceId> && morph bind'
+            : 'ready',
+      })
+
     case 'zexvro_health': {
       const [gate, nft, depin, api] = await Promise.all([
         httpJson(`${cfg.gate}/health`),
@@ -191,62 +258,114 @@ async function callTool(name, args = {}) {
           headers: cfg.token ? { authorization: `Bearer ${cfg.token}` } : {},
         }),
       ])
-      return textResult({
-        gate: { status: gate.status, body: gate.body },
-        nft: { status: nft.status, body: nft.body },
-        depin: { status: depin.status, body: depin.body },
-        platformMemory: {
-          status: api.status,
-          note: api.status === 401 || api.status === 403 ? 'auth required or invalid token' : 'reachable',
-        },
-        configured: {
-          gateAdmin: Boolean(cfg.gateAdmin),
-          accessToken: Boolean(cfg.token),
-        },
-      })
-    }
-    case 'gate_status':
-      return textResult(await httpJson(`${cfg.gate}/status`))
-    case 'gate_list_sites': {
-      if (!cfg.gateAdmin) return textResult({ error: 'ZEXVRO_GATE_ADMIN_KEY not set' })
       return textResult(
-        await httpJson(`${cfg.gate}/v1/admin/sites`, {
-          headers: { 'x-gate-admin-key': cfg.gateAdmin },
-        }),
+        {
+          gate: { status: gate.status, body: gate.body },
+          nft: { status: nft.status, body: nft.body },
+          depin: { status: depin.status, body: depin.body },
+          platformMemory: {
+            status: api.status,
+            note:
+              api.status === 401 || api.status === 403
+                ? 'auth required — morph login'
+                : 'reachable',
+          },
+          session: {
+            authSource: cfg.authSource,
+            workspaceId: cfg.workspaceId || null,
+            projectId: cfg.projectId || null,
+            hasGateAdmin: Boolean(cfg.gateAdmin),
+          },
+        },
+        secrets,
       )
     }
+
+    case 'zexvro_workspaces': {
+      const miss = needToken(cfg)
+      if (miss) return miss
+      const r = await httpJson(`${cfg.api}/api/workspaces`, {
+        headers: { authorization: `Bearer ${cfg.token}` },
+      })
+      return textResult(
+        {
+          status: r.status,
+          body: r.body,
+          hint: r.ok ? 'morph use <workspaceId>' : 'If 404, set workspace id manually: morph use <id>',
+        },
+        secrets,
+      )
+    }
+
+    case 'gate_status':
+      return textResult(await httpJson(`${cfg.gate}/status`), secrets)
+
+    case 'gate_list_sites': {
+      // Gate admin routes accept Cognito access token (morph login) OR X-Gate-Admin-Key.
+      const headers = {}
+      if (cfg.gateAdmin) headers['x-gate-admin-key'] = cfg.gateAdmin
+      if (cfg.token) headers.authorization = `Bearer ${cfg.token}`
+      if (!headers['x-gate-admin-key'] && !headers.authorization) {
+        return textResult({
+          error: 'auth_required',
+          message: 'morph login (Bearer) or ZEXVRO_GATE_ADMIN_KEY required for Gate site list',
+        })
+      }
+      return textResult(await httpJson(`${cfg.gate}/v1/admin/sites`, { headers }), secrets)
+    }
+
     case 'gate_create_site': {
-      if (!cfg.gateAdmin) return textResult({ error: 'ZEXVRO_GATE_ADMIN_KEY not set' })
+      const headers = { 'content-type': 'application/json' }
+      if (cfg.gateAdmin) headers['x-gate-admin-key'] = cfg.gateAdmin
+      if (cfg.token) headers.authorization = `Bearer ${cfg.token}`
+      if (!headers['x-gate-admin-key'] && !headers.authorization) {
+        return textResult({
+          error: 'auth_required',
+          message: 'morph login (Bearer) or ZEXVRO_GATE_ADMIN_KEY required to create Gate sites',
+        })
+      }
       const r = await httpJson(`${cfg.gate}/v1/admin/sites`, {
         method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-gate-admin-key': cfg.gateAdmin,
-        },
+        headers,
         body: JSON.stringify({
           name: args.name,
           allowedOrigins: args.allowedOrigins,
         }),
       })
-      // Return keys once for Morph to embed; instruct not to commit secretKey
-      return textResult({
-        ...r,
-        warning: 'Store secretKey only in env/secrets. Do not commit to git.',
-      })
-    }
-    case 'nft_health':
-      return textResult(await httpJson(`${cfg.nft}/health`))
-    case 'nft_list_collections': {
-      if (!cfg.token) return textResult({ error: 'ZEXVRO_ACCESS_TOKEN not set' })
-      const ws = encodeURIComponent(args.workspaceId)
       return textResult(
-        await httpJson(`${cfg.nft}/v1/collections?workspaceId=${ws}`, {
-          headers: { authorization: `Bearer ${cfg.token}` },
-        }),
+        {
+          ...r,
+          warning:
+            'Store secretKey only in env/secrets — never in client or git. Put public siteKey in game config + morph memory.',
+        },
+        secrets,
       )
     }
+
+    case 'nft_health':
+      return textResult(await httpJson(`${cfg.nft}/health`), secrets)
+
+    case 'nft_list_collections': {
+      const miss = needToken(cfg)
+      if (miss) return miss
+      const ws = args.workspaceId || cfg.workspaceId
+      if (!ws) return needWorkspace(cfg)
+      return textResult(
+        await httpJson(`${cfg.nft}/v1/collections?workspaceId=${encodeURIComponent(ws)}`, {
+          headers: { authorization: `Bearer ${cfg.token}` },
+        }),
+        secrets,
+      )
+    }
+
     case 'nft_create_collection': {
-      if (!cfg.token) return textResult({ error: 'ZEXVRO_ACCESS_TOKEN not set' })
+      const miss = needToken(cfg)
+      if (miss) return miss
+      const body = {
+        ...args,
+        workspaceId: args.workspaceId || cfg.workspaceId,
+      }
+      if (!body.workspaceId) return needWorkspace(cfg)
       return textResult(
         await httpJson(`${cfg.nft}/v1/collections`, {
           method: 'POST',
@@ -254,58 +373,120 @@ async function callTool(name, args = {}) {
             authorization: `Bearer ${cfg.token}`,
             'content-type': 'application/json',
           },
-          body: JSON.stringify(args),
+          body: JSON.stringify(body),
         }),
+        secrets,
       )
     }
+
     case 'depin_status':
-      return textResult(await httpJson(`${cfg.depin}/status`))
+      return textResult(await httpJson(`${cfg.depin}/status`), secrets)
+
     case 'depin_probe': {
       let path = args.path || '/v1/weather'
       if (!path.startsWith('/')) path = `/${path}`
       const r = await httpJson(`${cfg.depin}${path}`)
-      return textResult({
-        path,
-        status: r.status,
-        expected: '402 Payment Required for unpaid protected routes',
-        bodyPreview: typeof r.body === 'string' ? r.body.slice(0, 200) : r.body,
-      })
+      return textResult(
+        {
+          path,
+          status: r.status,
+          expected: '402 for unpaid protected routes',
+          body: typeof r.body === 'string' ? r.body.slice(0, 200) : r.body,
+        },
+        secrets,
+      )
     }
+
     case 'memory_get': {
-      if (!cfg.token) return textResult({ error: 'ZEXVRO_ACCESS_TOKEN not set' })
-      const key = encodeURIComponent(args.key)
+      const miss = needToken(cfg)
+      if (miss) return miss
+      const r = await httpJson(`${cfg.api}/api/memory`, {
+        headers: { authorization: `Bearer ${cfg.token}` },
+      })
+      if (!r.ok) return textResult({ status: r.status, body: r.body }, secrets)
+      const memory = r.body?.memory || {}
+      if (args.key) {
+        return textResult(
+          { key: args.key, value: memory[args.key], username: r.body?.username },
+          secrets,
+        )
+      }
+      // Prefer project/workspace keys when bound
+      const prefer = []
+      if (cfg.projectId) prefer.push(`projectMemory:${cfg.projectId}`)
+      if (cfg.workspaceId) prefer.push(`workspaceMemory:${cfg.workspaceId}`)
+      prefer.push('morph:migrations')
       return textResult(
-        await httpJson(`${cfg.api}/api/memory?key=${key}`, {
-          headers: { authorization: `Bearer ${cfg.token}` },
-        }),
+        {
+          username: r.body?.username,
+          keys: Object.keys(memory),
+          prefer,
+          memory,
+        },
+        secrets,
       )
     }
+
     case 'memory_put': {
-      if (!cfg.token) return textResult({ error: 'ZEXVRO_ACCESS_TOKEN not set' })
-      return textResult(
-        await httpJson(`${cfg.api}/api/memory`, {
-          method: 'POST',
-          headers: {
-            authorization: `Bearer ${cfg.token}`,
-            'content-type': 'application/json',
-          },
-          body: JSON.stringify({ key: args.key, value: args.value }),
-        }),
-      )
+      const miss = needToken(cfg)
+      if (miss) return miss
+      let patch = args.memory
+      if (!patch && args.key !== undefined) {
+        patch = { [args.key]: args.value }
+      }
+      // Structured agent note → project/workspace feed (dashboard Shared Memory)
+      if (args.append_entry?.summary) {
+        const bag = await httpJson(`${cfg.api}/api/memory`, {
+          headers: { authorization: `Bearer ${cfg.token}` },
+        })
+        const memory = bag.ok ? bag.body?.memory || {} : {}
+        const feedKey = cfg.projectId
+          ? projectMemoryKey(cfg.projectId)
+          : cfg.workspaceId
+            ? workspaceMemoryKey(cfg.workspaceId)
+            : null
+        if (!feedKey) return needWorkspace(cfg)
+        const prev = Array.isArray(memory[feedKey]) ? memory[feedKey] : []
+        const entry = makeMemoryEntry({
+          ...args.append_entry,
+          source: 'morph',
+          owner: cfg.username || 'Morph',
+        })
+        patch = {
+          ...(patch || {}),
+          [feedKey]: [entry, ...prev],
+          'morph:lastWriteAt': new Date().toISOString(),
+        }
+      }
+      if (!patch || typeof patch !== 'object') {
+        return textResult({
+          error: 'Provide append_entry, { key, value }, or { memory: object }',
+        })
+      }
+      if (cfg.workspaceId) patch = { ...patch, 'morph:lastWorkspaceId': cfg.workspaceId }
+      if (cfg.projectId) patch = { ...patch, 'morph:lastProjectId': cfg.projectId }
+      const r = await httpJson(`${cfg.api}/api/memory`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${cfg.token}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ memory: patch }),
+      })
+      return textResult({ status: r.status, body: r.body }, secrets)
     }
+
     case 'lakebed_deploy_hint': {
-      const dir = args.capsuleDir || 'demos/arcade'
+      const dir = args.capsuleDir || '.'
       return textResult({
         steps: [
           `cd ${dir}`,
-          'npx lakebed dev          # local',
-          'npx lakebed auth login   # once',
-          'npx lakebed deploy       # creates/updates shared URL (commit lakebed.json)',
-          'npx lakebed domains add arcade.lakebed.app   # optional stable subdomain after claim',
+          'npx lakebed@0.0.29 deploy',
+          'npx lakebed claim   # optional',
         ],
-        note: 'Redeploy after Morph patches so every share link shows Web3.',
       })
     }
+
     default:
       return textResult({ error: `unknown tool ${name}` })
   }
@@ -328,26 +509,21 @@ async function handle(msg) {
         result: {
           protocolVersion: '2024-11-05',
           capabilities: { tools: {} },
-          serverInfo: { name: 'zexvro-morph-mcp', version: '0.1.0' },
+          serverInfo: { name: 'zexvro-morph-mcp', version: '0.2.0' },
         },
       })
     }
-    if (method === 'notifications/initialized' || method === 'initialized') {
-      return
-    }
+    if (method === 'notifications/initialized' || method === 'initialized') return
     if (method === 'tools/list') {
       return send({ jsonrpc: '2.0', id, result: { tools } })
     }
     if (method === 'tools/call') {
-      const name = params.name
-      const args = params.arguments || {}
-      const result = await callTool(name, args)
+      const result = await callTool(params.name, params.arguments || {})
       return send({ jsonrpc: '2.0', id, result })
     }
     if (method === 'ping') {
       return send({ jsonrpc: '2.0', id, result: {} })
     }
-    // ignore unknown notifications (no id)
     if (id === undefined || id === null) return
     return send({
       jsonrpc: '2.0',
@@ -359,7 +535,13 @@ async function handle(msg) {
     return send({
       jsonrpc: '2.0',
       id,
-      error: { code: -32000, message: redact(e instanceof Error ? e.message : String(e)) },
+      error: {
+        code: -32000,
+        message: redact(e instanceof Error ? e.message : String(e), [
+          getAccessToken(),
+          process.env.ZEXVRO_GATE_ADMIN_KEY,
+        ]),
+      },
     })
   }
 }
