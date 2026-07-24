@@ -1067,3 +1067,14 @@ Use `None` for empty fields. Do not delete fields.
 - PLATFORM_ADMINS env: nabil,paris,rushi,talib,n4bi10p (+ emails if set).
 - Tests: credits helpers 5/5; audit 5/5; rbac 36/36; tsc clean. Lambda + Pages deployed.
 - Follow-ups: wire service consume hooks (NFT/Morph/De-pin); Credit Pack NFT collection → internal topup; expand founder analytics beyond partial scans.
+
+## 2026-07-24 - OpenCode with Nabil - Production deploy credits/platform
+
+- Ran full `scripts/deploy-production.sh` (prod-ready):
+  - Dynamo tables verified (audit, credits, ledger, promo, redemptions)
+  - Lambda package: lambda_function + credits + brevo + email_templates
+  - Env: FRONTEND_URL, credits tables, PLATFORM_ADMINS, starter 100 ZCR, INTERNAL_CREDITS_SECRET, Brevo
+  - Lambda sized **timeout 60s / 256MB** for platform directory scans
+  - Cloudflare Pages project `zexvro` → console.zexvro.in
+- Smoke: console 200, auth-gated API 401 (expected), invite route 200, NFT health 200
+- Tests: credits 7/7, audit helpers pass

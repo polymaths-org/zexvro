@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Production deploy for console.zexvro.in + API Gateway Lambda.
 # Usage (from repo root):
-#   set -a && source .env && set +a
-#   export CLOUDFLARE_API_TOKEN=...   # required for Pages
+#   set -a && source .env && set +a   # optional (BREVO_API_KEY, CLOUDFLARE_API_TOKEN)
 #   ./scripts/deploy-production.sh
 set -euo pipefail
 
@@ -14,6 +13,36 @@ APP_URL="${VITE_APP_URL:-https://console.zexvro.in}"
 NFT_URL="${VITE_NFT_API_URL:-https://iyk6idmup6.us-east-1.awsapprunner.com}"
 DEPIN_URL="${VITE_DEPIN_API_URL:-https://sr9k3xpmbj.us-east-1.awsapprunner.com}"
 PAGES_PROJECT="${CF_PAGES_PROJECT:-zexvro}"
+
+ensure_table() {
+  local name="$1"
+  local hash="$2"
+  local range="${3:-}"
+  if aws dynamodb describe-table --table-name "$name" --region "$REGION" >/dev/null 2>&1; then
+    echo "  table ok: $name"
+    return 0
+  fi
+  echo "  creating table: $name"
+  if [[ -n "$range" ]]; then
+    aws dynamodb create-table --table-name "$name" --region "$REGION" \
+      --attribute-definitions AttributeName="$hash",AttributeType=S AttributeName="$range",AttributeType=S \
+      --key-schema AttributeName="$hash",KeyType=HASH AttributeName="$range",KeyType=RANGE \
+      --billing-mode PAY_PER_REQUEST >/dev/null
+  else
+    aws dynamodb create-table --table-name "$name" --region "$REGION" \
+      --attribute-definitions AttributeName="$hash",AttributeType=S \
+      --key-schema AttributeName="$hash",KeyType=HASH \
+      --billing-mode PAY_PER_REQUEST >/dev/null
+  fi
+  aws dynamodb wait table-exists --table-name "$name" --region "$REGION"
+}
+
+echo "==> 0) Ensure production Dynamo tables"
+ensure_table "zexvro-workspace-audit" "workspaceId" "eventKey"
+ensure_table "zexvro-credits" "workspaceId" ""
+ensure_table "zexvro-credit-ledger" "workspaceId" "sk"
+ensure_table "zexvro-promo-codes" "code" ""
+ensure_table "zexvro-promo-redemptions" "code" "workspaceId"
 
 echo "==> 1) Package + deploy Lambda $LAMBDA"
 WORKDIR="$(mktemp -d)"
@@ -38,9 +67,9 @@ aws lambda update-function-code \
   --query 'LastModified' --output text
 aws lambda wait function-updated --function-name "$LAMBDA" --region "$REGION"
 
-echo "==> 2) Merge Lambda env (Brevo + console URL)"
+echo "==> 2) Merge Lambda env (production defaults + credits/audit/platform)"
 python3 - <<'PY'
-import json, os, subprocess
+import json, os, secrets, subprocess
 region = os.environ.get("AWS_REGION", "us-east-1")
 cur = json.loads(subprocess.check_output([
     "aws", "lambda", "get-function-configuration",
@@ -57,16 +86,30 @@ cur.update({
     "BREVO_SENDER_NAME": os.environ.get("BREVO_SENDER_NAME") or "ZEXVRO",
     "INVITE_SOURCE_EMAIL": os.environ.get("INVITE_SOURCE_EMAIL") or os.environ.get("BREVO_SENDER_EMAIL") or "noreply@zexvro.in",
     "PAYROLL_TAXONOMY_TABLE": os.environ.get("PAYROLL_TAXONOMY_TABLE") or "zexvro-payroll-taxonomy",
+    "AUDIT_TABLE": os.environ.get("AUDIT_TABLE") or "zexvro-workspace-audit",
+    "CREDITS_TABLE": os.environ.get("CREDITS_TABLE") or "zexvro-credits",
+    "CREDIT_LEDGER_TABLE": os.environ.get("CREDIT_LEDGER_TABLE") or "zexvro-credit-ledger",
+    "PROMO_CODES_TABLE": os.environ.get("PROMO_CODES_TABLE") or "zexvro-promo-codes",
+    "PROMO_REDEMPTIONS_TABLE": os.environ.get("PROMO_REDEMPTIONS_TABLE") or "zexvro-promo-redemptions",
+    "CREDITS_STARTER_GRANT": os.environ.get("CREDITS_STARTER_GRANT") or cur.get("CREDITS_STARTER_GRANT") or "100",
+    "PLATFORM_ADMINS": os.environ.get("PLATFORM_ADMINS") or cur.get("PLATFORM_ADMINS") or "nabil,paris,rushi,talib,n4bi10p",
 })
 if os.environ.get("BREVO_API_KEY"):
     cur["BREVO_API_KEY"] = os.environ["BREVO_API_KEY"]
+if not (cur.get("INTERNAL_CREDITS_SECRET") or "").strip():
+    cur["INTERNAL_CREDITS_SECRET"] = os.environ.get("INTERNAL_CREDITS_SECRET") or secrets.token_urlsafe(32)
 open("/tmp/lambda-env.json", "w").write(json.dumps({"Variables": cur}))
 print("FRONTEND_URL", cur.get("FRONTEND_URL"))
 print("has_brevo", bool(cur.get("BREVO_API_KEY")))
+print("has_internal_secret", bool(cur.get("INTERNAL_CREDITS_SECRET")))
+print("PLATFORM_ADMINS", cur.get("PLATFORM_ADMINS"))
+print("CREDITS_STARTER_GRANT", cur.get("CREDITS_STARTER_GRANT"))
 PY
 aws lambda update-function-configuration \
   --function-name "$LAMBDA" \
   --region "$REGION" \
+  --timeout 60 \
+  --memory-size 256 \
   --environment "file:///tmp/lambda-env.json" \
   --query 'LastModified' --output text
 aws lambda wait function-updated --function-name "$LAMBDA" --region "$REGION"
@@ -79,24 +122,25 @@ export VITE_NFT_API_URL="$NFT_URL"
 export VITE_DEPIN_API_URL="$DEPIN_URL"
 npm run build
 
-if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
-  echo ""
-  echo "ERROR: CLOUDFLARE_API_TOKEN is not set."
-  echo "Create a token at https://dash.cloudflare.com/profile/api-tokens"
-  echo "Then: export CLOUDFLARE_API_TOKEN=... && ./scripts/deploy-production.sh"
-  echo "Build is ready at frontend/dist — deploy manually with:"
-  echo "  npx wrangler pages deploy frontend/dist --project-name=$PAGES_PROJECT --branch=main"
+echo "==> 4) Deploy Cloudflare Pages ($PAGES_PROJECT)"
+if command -v npx >/dev/null 2>&1; then
+  npx wrangler pages deploy dist \
+    --project-name="$PAGES_PROJECT" \
+    --branch=main \
+    --commit-dirty=true
+else
+  echo "ERROR: npx/wrangler not available"
   exit 2
 fi
 
-echo "==> 4) Deploy Cloudflare Pages ($PAGES_PROJECT)"
-npx wrangler pages deploy dist \
-  --project-name="$PAGES_PROJECT" \
-  --branch=main \
-  --commit-dirty=true
-
-echo "==> 5) Smoke"
+echo "==> 5) Production smoke"
 curl -sS -o /dev/null -w "console %{http_code}\n" "$APP_URL/"
-curl -sS -o /dev/null -w "api workspaces %{http_code}\n" "$API_URL/api/workspaces"
-curl -sS -o /dev/null -w "nft health %{http_code}\n" "$NFT_URL/health"
+curl -sS -o /dev/null -w "api workspaces (no auth) %{http_code}\n" "$API_URL/api/workspaces"
+curl -sS -o /dev/null -w "api platform/me (no auth) %{http_code}\n" "$API_URL/api/platform/me"
+curl -sS -o /dev/null -w "api credits path (no auth) %{http_code}\n" -X POST "$API_URL/api/workspaces/ws_smoke/credits/validate-promo" -H 'Content-Type: application/json' -d '{"code":"X"}'
+curl -sS -o /dev/null -w "invite accept route %{http_code}\n" "$APP_URL/invite/accept"
+curl -sS -o /dev/null -w "nft health %{http_code}\n" "$NFT_URL/health" || echo "nft health skip"
 echo "DONE — hard refresh https://console.zexvro.in"
+echo "  Credits: /dashboard/w/<id>/credits"
+echo "  Platform: /dashboard/platform"
+echo "  Lambda: $LAMBDA ($REGION)"
