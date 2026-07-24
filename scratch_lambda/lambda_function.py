@@ -622,6 +622,131 @@ def get_credits_service():
     )
 
 
+def scan_all_workspaces():
+    """Paginated full table scan of workspaces."""
+    items = []
+    scan_kwargs = {}
+    while True:
+        res = workspaces_table.scan(**scan_kwargs)
+        items.extend(res.get("Items") or [])
+        lek = res.get("LastEvaluatedKey")
+        if not lek:
+            break
+        scan_kwargs["ExclusiveStartKey"] = lek
+    return items
+
+
+def canonical_unique_workspaces(raw_items=None):
+    """
+    Collapse auto-create spam: keep newest row per (ownerId, normalized name).
+    Drops smoke/e2e ids.
+    """
+    workspaces = raw_items if raw_items is not None else scan_all_workspaces()
+    canonical = {}
+    for raw in workspaces:
+        w = normalize_workspace_item(dict(raw))
+        wid = (w.get("workspaceId") or w.get("id") or "").strip()
+        if not wid or wid.startswith("ws_smoke") or wid.startswith("ws_e2e"):
+            continue
+        owner = _norm_identity(w.get("ownerId"))
+        name = (w.get("name") or "").strip().lower()
+        if not owner:
+            continue
+        key = (owner, name or wid)
+        prev = canonical.get(key)
+        created = int(w.get("createdAt") or w.get("updatedAt") or 0)
+        if not prev or created >= int(prev.get("createdAt") or prev.get("updatedAt") or 0):
+            canonical[key] = w
+    return list(canonical.values()), len(workspaces)
+
+
+def summarize_workspace_for_platform(w):
+    """Founder directory row: members by role, projects, credits, services."""
+    wid = (w.get("workspaceId") or w.get("id") or "").strip()
+    members = list(w.get("members") or [])
+    active = []
+    for m in members:
+        status = str(m.get("status") or "active").lower()
+        if status in ("inactive", "revoked", "expired"):
+            continue
+        active.append({
+            "id": m.get("id") or m.get("principalId") or "",
+            "email": m.get("email") or "",
+            "name": m.get("name") or "",
+            "role": m.get("role") or "Viewer",
+            "status": status or "active",
+        })
+    by_role = {"Owner": [], "Admin": [], "Developer": [], "Finance": [], "Viewer": [], "Agent": []}
+    for m in active:
+        role = m.get("role") or "Viewer"
+        by_role.setdefault(role, []).append(m)
+
+    project_count = 0
+    enabled_services = set()
+    try:
+        if wid:
+            pres = projects_table.query(KeyConditionExpression=Key("workspaceId").eq(wid))
+            projects = pres.get("Items") or []
+            project_count = len(projects)
+            for p in projects:
+                for s in (p.get("enabledServices") or []):
+                    if s:
+                        enabled_services.add(str(s))
+                # Infer common services from project fields
+                if p.get("framework"):
+                    enabled_services.add("app")
+    except Exception as exc:
+        print(f"[platform.workspace projects] {wid}: {exc}")
+
+    zcr_balance = None
+    try:
+        if wid:
+            crow = credits_table.get_item(Key={"workspaceId": wid}).get("Item")
+            if crow:
+                zcr_balance = int(crow.get("balance") or 0)
+    except Exception:
+        pass
+
+    owner_id = w.get("ownerId") or ""
+    owner_email = ""
+    for m in active:
+        if (m.get("role") or "") == "Owner" and m.get("email"):
+            owner_email = m["email"]
+            break
+    if not owner_email and "@" in str(owner_id):
+        owner_email = owner_id
+
+    pending_invites = 0
+    for inv in (w.get("invitations") or []):
+        if str(inv.get("status") or "pending").lower() == "pending":
+            pending_invites += 1
+
+    return {
+        "workspaceId": wid,
+        "name": w.get("name") or wid,
+        "plan": w.get("plan") or "",
+        "ownerId": owner_id,
+        "ownerEmail": owner_email,
+        "environment": w.get("environment") or "testnet",
+        "createdAt": int(w.get("createdAt") or 0),
+        "updatedAt": int(w.get("updatedAt") or 0),
+        "memberCount": len(active),
+        "pendingInvites": pending_invites,
+        "members": active,
+        "roles": {
+            "owners": [m for m in by_role.get("Owner", [])],
+            "admins": [m for m in by_role.get("Admin", [])],
+            "developers": [m for m in by_role.get("Developer", [])],
+            "finance": [m for m in by_role.get("Finance", [])],
+            "viewers": [m for m in by_role.get("Viewer", [])],
+            "agents": [m for m in by_role.get("Agent", [])],
+        },
+        "projectCount": project_count,
+        "services": sorted(enabled_services),
+        "zcrBalance": zcr_balance,
+    }
+
+
 def _caller_email(event, username):
     email = ""
     try:
@@ -1648,37 +1773,7 @@ def lambda_handler(event, context):
         if denied:
             return denied
         try:
-            # Full table scan (paginated). Collapse spam duplicates: many auto-create
-            # races left N× "X's Workspace" rows per owner — count unique owner+name.
-            workspaces = []
-            scan_kwargs = {}
-            while True:
-                res = workspaces_table.scan(**scan_kwargs)
-                workspaces.extend(res.get("Items") or [])
-                lek = res.get("LastEvaluatedKey")
-                if not lek:
-                    break
-                scan_kwargs["ExclusiveStartKey"] = lek
-
-            raw_row_count = len(workspaces)
-            # Prefer newest row per (ownerId, normalized name)
-            canonical = {}
-            for raw in workspaces:
-                w = normalize_workspace_item(dict(raw))
-                wid = (w.get("workspaceId") or w.get("id") or "").strip()
-                if not wid or wid.startswith("ws_smoke") or wid.startswith("ws_e2e"):
-                    continue
-                owner = _norm_identity(w.get("ownerId"))
-                name = (w.get("name") or "").strip().lower()
-                if not owner:
-                    continue
-                key = (owner, name or wid)
-                prev = canonical.get(key)
-                created = int(w.get("createdAt") or w.get("updatedAt") or 0)
-                if not prev or created >= int(prev.get("createdAt") or prev.get("updatedAt") or 0):
-                    canonical[key] = w
-
-            unique_workspaces = list(canonical.values())
+            unique_workspaces, raw_row_count = canonical_unique_workspaces()
             env_counts = {"testnet": 0, "mainnet": 0}
             for w in unique_workspaces:
                 env = w.get("environment") or "testnet"
@@ -1687,7 +1782,6 @@ def lambda_handler(event, context):
                 env_counts[env] += 1
 
             owners = {_norm_identity(w.get("ownerId")) for w in unique_workspaces if w.get("ownerId")}
-            # Drop known non-human/dev owners from "users" if desired — keep count honest
             user_owners = {o for o in owners if o and o not in ("stellar_dev",)}
 
             total_zcr = 0
@@ -1726,6 +1820,27 @@ def lambda_handler(event, context):
             })
         except Exception as exc:
             return respond(502, {"error": "analytics_error", "error_description": str(exc)})
+
+    # Platform directory: all unique workspaces + members/roles/projects/credits
+    elif path == "/api/platform/workspaces" and http_method == "GET":
+        username, auth_error = require_username(event, headers)
+        if auth_error:
+            return auth_error
+        denied = require_platform_admin(event, username)
+        if denied:
+            return denied
+        try:
+            unique_workspaces, raw_row_count = canonical_unique_workspaces()
+            rows = [summarize_workspace_for_platform(w) for w in unique_workspaces]
+            rows.sort(key=lambda r: (r.get("name") or "").lower())
+            return respond(200, {
+                "workspaces": rows,
+                "count": len(rows),
+                "rawWorkspaceRows": raw_row_count,
+                "duplicateWorkspaceRows": max(0, raw_row_count - len(rows)),
+            })
+        except Exception as exc:
+            return respond(502, {"error": "platform_workspaces_error", "error_description": str(exc)})
 
     elif path == "/api/platform/credits/grant" and http_method == "POST":
         username, auth_error = require_username(event, headers)

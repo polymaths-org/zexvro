@@ -170,6 +170,39 @@ export const workspaceApi = {
     ),
 };
 
+export type PlatformMember = {
+  id?: string;
+  email?: string;
+  name?: string;
+  role?: string;
+  status?: string;
+};
+
+export type PlatformWorkspaceRow = {
+  workspaceId: string;
+  name: string;
+  plan?: string;
+  ownerId: string;
+  ownerEmail?: string;
+  environment?: string;
+  createdAt?: number;
+  updatedAt?: number;
+  memberCount: number;
+  pendingInvites?: number;
+  members: PlatformMember[];
+  roles: {
+    owners: PlatformMember[];
+    admins: PlatformMember[];
+    developers: PlatformMember[];
+    finance: PlatformMember[];
+    viewers: PlatformMember[];
+    agents: PlatformMember[];
+  };
+  projectCount: number;
+  services: string[];
+  zcrBalance: number | null;
+};
+
 export const platformApi = {
   me: () => api.get<{ username: string; email?: string; platformAdmin: boolean }>('/api/platform/me'),
   analytics: () =>
@@ -185,6 +218,13 @@ export const platformApi = {
       promoCount: number;
       note?: string;
     }>('/api/platform/analytics'),
+  listWorkspaces: () =>
+    api.get<{
+      workspaces: PlatformWorkspaceRow[];
+      count: number;
+      rawWorkspaceRows?: number;
+      duplicateWorkspaceRows?: number;
+    }>('/api/platform/workspaces'),
   grantCredits: (body: { workspaceId: string; amount: number; reason?: string; ref?: string }) =>
     api.post<{ status: string; balance: CreditBalance }>('/api/platform/credits/grant', body),
   listPromos: () => api.get<{ promos: PromoCode[] }>('/api/platform/promo-codes'),
