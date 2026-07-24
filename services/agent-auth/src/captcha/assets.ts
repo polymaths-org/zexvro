@@ -48,10 +48,21 @@ const EXT_MIME: Record<string, string> = {
   '.svg': 'image/svg+xml',
 }
 
+const IMAGE_EXT_RE = /\.(jpe?g|png|webp|gif|svg)$/i
+
 function assetsRoot(): string {
-  // services/agent-auth/src/captcha -> services/agent-auth/captcha-assets
+  // Prefer CAPTCHA_ASSETS_ROOT, then /app/captcha-assets (Docker), then package-relative.
+  const envRoot = process.env.CAPTCHA_ASSETS_ROOT?.trim()
+  if (envRoot) return envRoot
   const here = dirname(fileURLToPath(import.meta.url))
-  return join(here, '..', '..', 'captcha-assets')
+  // dist/captcha -> /app/captcha-assets when image is built from Dockerfile
+  const packaged = join(here, '..', '..', 'captcha-assets')
+  if (existsSync(packaged)) return packaged
+  // monorepo dev: services/agent-auth/captcha-seed (committed) or captcha-assets (local curate)
+  const pkg = join(here, '..', '..')
+  const seed = join(pkg, 'captcha-seed')
+  if (existsSync(join(seed, 'verified'))) return seed
+  return packaged
 }
 
 let bankCache: Map<AssetLabel, string[]> | null = null
@@ -89,7 +100,7 @@ function loadBank(): Map<AssetLabel, string[]> {
       const dir = join(fileRoot, label)
       if (!existsSync(dir)) continue
       const files = readdirSync(dir)
-        .filter((f) => /\.(jpe?g|png|webp|gif)$/i.test(f))
+        .filter((f) => IMAGE_EXT_RE.test(f))
         .map((f) => join(dir, f))
       if (files.length) map.set(label, files)
     }
@@ -180,7 +191,7 @@ export type CaptchaImageAsset = {
 }
 
 /**
- * Pick a real photo for a label. Never falls back to SVG for image challenges.
+ * Pick a bank image for a label (photo or seed SVG). No invent-on-the-fly for empty bank.
  * Pass `usedPaths` to avoid repeating the same file in one challenge.
  */
 export function imageForLabel(
@@ -199,6 +210,15 @@ export function imageForLabel(
   usedPaths?.add(path)
   const ext = path.slice(path.lastIndexOf('.')).toLowerCase()
   const mime = EXT_MIME[ext] || 'image/jpeg'
+  // SVG seed tiles are text; photos stay base64 binary.
+  if (ext === '.svg' || mime === 'image/svg+xml') {
+    return {
+      contentType: 'image/svg+xml',
+      body: readFileSync(path, 'utf8'),
+      encoding: 'utf8',
+      sourcePath: path,
+    }
+  }
   const buf = readFileSync(path)
   return {
     contentType: mime,

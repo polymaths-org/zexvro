@@ -1,5 +1,13 @@
 # ZEXVRO Shared Memory
 
+## 2026-07-25 - Gate captcha photo bank live
+
+- Root cause: prod Gate `captchaPhotoBank` was empty (Docker never shipped assets; bank gitignored)
+- Fix: committed `services/agent-auth/captcha-seed` (12 labels × 8 SVG tiles), Dockerfile COPY → `/app/captcha-assets`
+- Deploy: ECR `zexvro-agent-auth:latest` + ECS `zexvro-gate:4`; status now labels=12 files=96
+- CORS includes `https://promptwars-web3.vercel.app` and `https://*.vercel.app`
+- Evidence: image_select 9 tiles + reference assets return 200 image/svg+xml
+
 ## 2026-07-25 - EDGERUN captcha live (Gate siteKey)
 
 - Service: Morph migrate + Gate + demos/spacewar/web2 → GitHub Wraient/promptwars

@@ -81,16 +81,17 @@ describe('captcha engine', () => {
     expect(verifyCaptchaAnswer(state, { value: [a, b] }).ok).toBe(true)
   })
 
-  it('image_select includes a reference example and only photo assets', () => {
+  it('image_select includes a reference example and bank-backed tile assets', () => {
     const state = issueCaptcha({ preferredType: 'image_select' })
     if (state.type !== 'image_select') return // bank fallback
     expect(state.public.ui.referenceAssetPath).toBe('reference')
-    expect(state.assets.reference?.contentType).toMatch(/image\//)
-    expect(state.assets.reference?.contentType).not.toMatch(/svg/)
+    // Seed bank may be SVG tiles; curated bank is jpeg/png. Both are image/* with non-empty bodies.
+    expect(state.assets.reference?.contentType).toMatch(/^image\//)
+    expect(state.assets.reference?.body?.length).toBeGreaterThan(20)
     for (const tile of state.public.ui.tiles as { id: string }[]) {
       const a = state.assets[tile.id]
-      expect(a?.contentType).toMatch(/image\//)
-      expect(a?.contentType).not.toMatch(/svg/)
+      expect(a?.contentType).toMatch(/^image\//)
+      expect(a?.body?.length).toBeGreaterThan(20)
     }
   })
 

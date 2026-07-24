@@ -1,0 +1,122 @@
+{
+  "motorcycle": [
+    "seed_0.svg",
+    "seed_1.svg",
+    "seed_2.svg",
+    "seed_3.svg",
+    "seed_4.svg",
+    "seed_5.svg",
+    "seed_6.svg",
+    "seed_7.svg"
+  ],
+  "boat": [
+    "seed_0.svg",
+    "seed_1.svg",
+    "seed_2.svg",
+    "seed_3.svg",
+    "seed_4.svg",
+    "seed_5.svg",
+    "seed_6.svg",
+    "seed_7.svg"
+  ],
+  "bridge": [
+    "seed_0.svg",
+    "seed_1.svg",
+    "seed_2.svg",
+    "seed_3.svg",
+    "seed_4.svg",
+    "seed_5.svg",
+    "seed_6.svg",
+    "seed_7.svg"
+  ],
+  "bus": [
+    "seed_0.svg",
+    "seed_1.svg",
+    "seed_2.svg",
+    "seed_3.svg",
+    "seed_4.svg",
+    "seed_5.svg",
+    "seed_6.svg",
+    "seed_7.svg"
+  ],
+  "car": [
+    "seed_0.svg",
+    "seed_1.svg",
+    "seed_2.svg",
+    "seed_3.svg",
+    "seed_4.svg",
+    "seed_5.svg",
+    "seed_6.svg",
+    "seed_7.svg"
+  ],
+  "cat": [
+    "seed_0.svg",
+    "seed_1.svg",
+    "seed_2.svg",
+    "seed_3.svg",
+    "seed_4.svg",
+    "seed_5.svg",
+    "seed_6.svg",
+    "seed_7.svg"
+  ],
+  "crosswalk": [
+    "seed_0.svg",
+    "seed_1.svg",
+    "seed_2.svg",
+    "seed_3.svg",
+    "seed_4.svg",
+    "seed_5.svg",
+    "seed_6.svg",
+    "seed_7.svg"
+  ],
+  "dog": [
+    "seed_0.svg",
+    "seed_1.svg",
+    "seed_2.svg",
+    "seed_3.svg",
+    "seed_4.svg",
+    "seed_5.svg",
+    "seed_6.svg",
+    "seed_7.svg"
+  ],
+  "mountain": [
+    "seed_0.svg",
+    "seed_1.svg",
+    "seed_2.svg",
+    "seed_3.svg",
+    "seed_4.svg",
+    "seed_5.svg",
+    "seed_6.svg",
+    "seed_7.svg"
+  ],
+  "palm": [
+    "seed_0.svg",
+    "seed_1.svg",
+    "seed_2.svg",
+    "seed_3.svg",
+    "seed_4.svg",
+    "seed_5.svg",
+    "seed_6.svg",
+    "seed_7.svg"
+  ],
+  "stop_sign": [
+    "seed_0.svg",
+    "seed_1.svg",
+    "seed_2.svg",
+    "seed_3.svg",
+    "seed_4.svg",
+    "seed_5.svg",
+    "seed_6.svg",
+    "seed_7.svg"
+  ],
+  "traffic_light": [
+    "seed_0.svg",
+    "seed_1.svg",
+    "seed_2.svg",
+    "seed_3.svg",
+    "seed_4.svg",
+    "seed_5.svg",
+    "seed_6.svg",
+    "seed_7.svg"
+  ]
+}

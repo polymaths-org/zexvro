@@ -14,6 +14,9 @@ const DEFAULT_CORS = [
   'https://*.zexvro.pages.dev',
   'https://zexvro.in',
   'https://www.zexvro.in',
+  // Morph / demo Web3 games on Vercel
+  'https://promptwars-web3.vercel.app',
+  'https://*.vercel.app',
 ]
 
 const envSchema = z.object({

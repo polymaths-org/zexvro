@@ -25,6 +25,10 @@ COPY --from=build /app/package.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY static ./static
+# Image captchas need a verified photo/seed bank at runtime (status.captchaPhotoBank).
+# captcha-seed is committed; local captcha-assets (gitignored) can override when present.
+COPY captcha-seed ./captcha-assets
+ENV CAPTCHA_ASSETS_ROOT=/app/captcha-assets
 EXPOSE 4103
 USER node
 CMD ["node", "dist/server.js"]
