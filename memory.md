@@ -1,5 +1,14 @@
 # ZEXVRO Shared Memory
 
+## 2026-07-25 - Fix Deploy console CI (npm peer deps) + redeploy Pages
+
+- Failed run: Actions `Deploy console (Cloudflare Pages)` on push `0711aa9` — `npm ci` ERESOLVE
+- Cause: `@creit.tech/stellar-wallets-kit@1.9.5` peer needs `@stellar/stellar-base@^14`; package pinned `^13.1.0`
+- Fix: bump frontend `@stellar/stellar-base` to `^14.1.0` + lockfile refresh; verified clean `npm ci`
+- Deploy: local wrangler OAuth pages deploy project `zexvro` branch main (GH secret `CLOUDFLARE_API_TOKEN` still missing — CI deploy step needs that secret for future auto-deploys)
+- Smoke: console.zexvro.in after deploy
+- Live deploy: https://1f2acf6b.zexvro-7oq.pages.dev (wrangler OAuth, project zexvro branch main)
+
 ## 2026-07-25 - Morph installer: complete package on main + ASCII banner
 
 - Symptom: `curl …/install-morph.sh | bash` → `✗ missing seed/morph.jsonc`
