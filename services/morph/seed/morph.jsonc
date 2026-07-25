@@ -1,0 +1,52 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  // Morph application defaults (lives in ~/.config/morph/)
+  "default_agent": "morph",
+  "instructions": ["AGENTS.md"],
+  "autoupdate": false,
+  "share": "disabled",
+  // Built-in LLM: CodexIn (Grok). API key via /connect or: morph providers add codexin
+  "model": "codexin/grok-4.5",
+  "provider": {
+    "codexin": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "CodexIn",
+      "options": {
+        "baseURL": "https://api.codexin.lol/v1"
+      },
+      "models": {
+        "grok-4.5": {
+          "name": "Grok 4.5"
+        }
+      }
+    }
+  },
+  "permission": {
+    "edit": "allow",
+    "bash": "allow",
+    "read": "allow",
+    "grep": "allow",
+    "glob": "allow",
+    "list": "allow",
+    "webfetch": "allow",
+    "skill": "allow"
+  },
+  "mcp": {
+    "zexvro": {
+      "type": "local",
+      "command": ["node", "{env:MORPH_HOME}/mcp/src/index.mjs"],
+      "enabled": true,
+      "timeout": 15000,
+      "environment": {
+        "MORPH_HOME": "{env:MORPH_HOME}",
+        "MORPH_PROJECT_DIR": "{env:MORPH_PROJECT_DIR}",
+        "ZEXVRO_API_URL": "{env:ZEXVRO_API_URL}",
+        "ZEXVRO_ACCESS_TOKEN": "{env:ZEXVRO_ACCESS_TOKEN}",
+        "ZEXVRO_GATE_ADMIN_KEY": "{env:ZEXVRO_GATE_ADMIN_KEY}",
+        "ZEXVRO_GATE_URL": "{env:ZEXVRO_GATE_URL}",
+        "ZEXVRO_NFT_URL": "{env:ZEXVRO_NFT_URL}",
+        "ZEXVRO_DEPIN_URL": "{env:ZEXVRO_DEPIN_URL}"
+      }
+    }
+  }
+}

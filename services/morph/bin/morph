@@ -45,15 +45,27 @@ resolve_workspace() {
 }
 
 print_banner() {
+  local banner="$MORPH_HOME/assets/banner.txt"
   printf '\n'
-  printf '\033[36m  ███╗   ███╗ ██████╗ ██████╗ ██████╗ ██╗  ██╗\033[0m\n'
-  printf '\033[36m  ████╗ ████║██╔═══██╗██╔══██╗██╔══██╗██║  ██║\033[0m\n'
-  printf '\033[36m  ██╔████╔██║██║   ██║██████╔╝██████╔╝███████║\033[0m\n'
-  printf '\033[36m  ██║╚██╔╝██║██║   ██║██╔══██╗██╔═══╝ ██╔══██║\033[0m\n'
-  printf '\033[36m  ██║ ╚═╝ ██║╚██████╔╝██║  ██║██║     ██║  ██║\033[0m\n'
-  printf '\033[36m  ╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═╝╚═╝     ╚═╝  ╚═╝\033[0m\n'
+  if [[ -f "$banner" ]]; then
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      printf '\033[36m%s\033[0m\n' "$line"
+    done < "$banner"
+  else
+    # Fallback if package missing banner.txt
+    printf '\033[36m  █████                                    █████\033[0m\n'
+    printf '\033[36m  ████████                              ████████\033[0m\n'
+    printf '\033[36m  ███████████                        ███████████\033[0m\n'
+    printf '\033[36m  ██████████████                 ███████████████\033[0m\n'
+    printf '\033[36m  ██████████████████          ██████████████████\033[0m\n'
+    printf '\033[36m  █████████     ████████  ████████    ██████████\033[0m\n'
+    printf '\033[36m  ███████████                        ███████████\033[0m\n'
+    printf '\033[36m  ██████████████   ███      ███   ██████████████\033[0m\n'
+    printf '\033[36m         ████████                ████████\033[0m\n'
+    printf '\033[36m            █████                ████\033[0m\n'
+  fi
   printf '\n'
-  printf '  \033[1mZEXVRO transformation agent\033[0m  ·  Web2 → Web3\n'
+  printf '  \033[1mMORPH\033[0m  ·  ZEXVRO transformation agent  ·  Web2 → Web3\n'
   printf '\n'
 }
 
@@ -95,6 +107,19 @@ find_engine_bin() {
   return 1
 }
 
+# True when branding patches are newer than the compiled binary (logo etc. would be stale).
+engine_binary_stale() {
+  local eng="$1" f
+  [[ -x "$eng" ]] || return 0
+  [[ -d "$MORPH_HOME/engine/patches" ]] || return 1
+  while IFS= read -r f; do
+    [[ -f "$f" && "$f" -nt "$eng" ]] && return 0
+  done < <(find "$MORPH_HOME/engine/patches" -type f 2>/dev/null)
+  [[ -f "$MORPH_HOME/engine/apply-branding.sh" && "$MORPH_HOME/engine/apply-branding.sh" -nt "$eng" ]] && return 0
+  [[ -f "$MORPH_HOME/assets/ascii-art.txt" && "$MORPH_HOME/assets/ascii-art.txt" -nt "$eng" ]] && return 0
+  return 1
+}
+
 # Hash of branding inputs — only re-patch engine source when this changes.
 brand_inputs_hash() {
   {
@@ -106,6 +131,8 @@ brand_inputs_hash() {
         sha256sum "$f"
       done
     fi
+    # Brand mark source for TUI logo
+    [[ -f "$MORPH_HOME/assets/ascii-art.txt" ]] && sha256sum "$MORPH_HOME/assets/ascii-art.txt"
   } 2>/dev/null | sha256sum | awk '{print $1}'
 }
 
@@ -224,10 +251,15 @@ doctor() {
   [[ -f "$MORPH_CONFIG_DIR/skills/web2-web3/SKILL.md" ]] && ok "skills" || die "missing skills"
   [[ -f "$MORPH_HOME/mcp/src/index.mjs" ]] && ok "ZEXVRO MCP" || die "missing MCP"
   if [[ -f "$SRC_DIR/packages/tui/src/logo.ts" ]]; then
-    if grep -q '█▀▄▀█' "$SRC_DIR/packages/tui/src/logo.ts" 2>/dev/null; then
+    if grep -qE 'logoArt|█▀▄▀█' "$SRC_DIR/packages/tui/src/logo.ts" 2>/dev/null; then
       ok "Morph logo in engine source"
     else
       info "logo not yet branded — run morph prepare-src"
+    fi
+  fi
+  if [[ -f "$SRC_DIR/packages/tui/src/component/logo.tsx" ]]; then
+    if grep -q 'logoArt' "$SRC_DIR/packages/tui/src/component/logo.tsx" 2>/dev/null; then
+      ok "Morph logo animation (ascii mark)"
     fi
   fi
   if [[ -f "$SRC_DIR/packages/core/src/global.ts" ]] && grep -q 'const app = "morph"' "$SRC_DIR/packages/core/src/global.ts"; then
@@ -303,25 +335,30 @@ if tok="$(node -e "import('file://$MORPH_HOME/lib/zexvro-store.mjs').then(m=>{co
 fi
 
 if eng="$(find_engine_bin)"; then
-  case "${1:-}" in
-    run)
-      shift
-      workspace="$(resolve_workspace "$@")"
-      if [[ $# -gt 0 && -d "$1" && "$1" != -* ]]; then shift; fi
-      export MORPH_PROJECT_DIR="$workspace"
-      exec "$eng" run --agent morph --dir "$workspace" "$@"
-      ;;
-    mcp)
-      shift
-      exec "$eng" mcp "$@"
-      ;;
-    *)
-      workspace="$(resolve_workspace "$@")"
-      if [[ $# -gt 0 && -d "$1" && "$1" != -* ]]; then shift; fi
-      export MORPH_PROJECT_DIR="$workspace"
-      exec "$eng" --agent morph "$workspace" "$@"
-      ;;
-  esac
+  if engine_binary_stale "$eng"; then
+    # Patches (logo/branding) newer than binary — use bun-run branded source until rebuild.
+    info "Engine binary outdated vs branding patches — using bun source (morph build-engine to refresh binary)"
+  else
+    case "${1:-}" in
+      run)
+        shift
+        workspace="$(resolve_workspace "$@")"
+        if [[ $# -gt 0 && -d "$1" && "$1" != -* ]]; then shift; fi
+        export MORPH_PROJECT_DIR="$workspace"
+        exec "$eng" run --agent morph --dir "$workspace" "$@"
+        ;;
+      mcp)
+        shift
+        exec "$eng" mcp "$@"
+        ;;
+      *)
+        workspace="$(resolve_workspace "$@")"
+        if [[ $# -gt 0 && -d "$1" && "$1" != -* ]]; then shift; fi
+        export MORPH_PROJECT_DIR="$workspace"
+        exec "$eng" --agent morph "$workspace" "$@"
+        ;;
+    esac
+  fi
 fi
 
 # Bun-run branded fork

@@ -54,3 +54,7 @@ services/morph/dist/
 services/morph/bin/morph-engine
 services/morph/engine/.src-path
 services/morph/engine-src*/
+
+# Morph engine logo preview assets (not required at runtime)
+services/morph/engine/patches/logo-*.png
+services/morph/engine/patches/logo-screenshot.png

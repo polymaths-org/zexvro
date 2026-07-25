@@ -1,0 +1,32 @@
+# Files required for a self-contained Morph install (relative to package root).
+# install.sh validates these after copy/clone. Keep in sync when adding required paths.
+bin/morph
+engine/VERSION
+engine/apply-branding.sh
+engine/prepare-src.sh
+engine/build.sh
+engine/patches/logo.ts
+engine/patches/logo.tsx
+engine/patches/feature-zexvro-use.tsx
+seed/morph.jsonc
+seed/tui.json
+seed/AGENTS.md
+seed/agents/morph.md
+seed/agents/morph-ops.md
+seed/themes/morph.json
+seed/skills/web2-web3/SKILL.md
+seed/skills/gate/SKILL.md
+seed/skills/nft/SKILL.md
+seed/skills/depin/SKILL.md
+lib/zexvro-store.mjs
+lib/zexvro-cli.mjs
+lib/zexvro-login.mjs
+lib/zexvro-api.mjs
+lib/paths.mjs
+lib/builtin-providers.mjs
+lib/project-bind.mjs
+mcp/src/index.mjs
+mcp/package.json
+assets/ascii-art.txt
+assets/banner.txt
+package.json

@@ -21,13 +21,17 @@ stamp_brand() {
   } >"$stamp_file" 2>/dev/null || true
 }
 
-# 1) Splash logo (Morph wordmark) — all copies
+# 1) Splash logo — brand mark (ascii-art) + animated Logo component
 cp "$PATCH_DIR/logo.ts" "$ROOT/packages/tui/src/logo.ts"
-# Morph Logo component (single primary wordmark)
 if [[ -f "$PATCH_DIR/logo.tsx" && -f "$ROOT/packages/tui/src/component/logo.tsx" ]]; then
   cp "$PATCH_DIR/logo.tsx" "$ROOT/packages/tui/src/component/logo.tsx"
 fi
-# TUI presentation wordmark (keep in sync with logo.ts)
+# Home: less reserved spacer above tall brand mark (was sized for 4-line wordmark)
+if [[ -f "$ROOT/packages/tui/src/routes/home.tsx" ]]; then
+  sed -i 's/<box height={4} minHeight={0} flexShrink={1} \/>/<box height={1} minHeight={0} flexShrink={1} \/>/' \
+    "$ROOT/packages/tui/src/routes/home.tsx" || true
+fi
+# TUI presentation wordmark (compact MORPH letters — not the full mark)
 if [[ -f "$ROOT/packages/tui/src/util/presentation.ts" ]]; then
   python3 - "$ROOT/packages/tui/src/util/presentation.ts" <<'PY'
 import re, sys
@@ -48,7 +52,7 @@ t = t.replace("opencode -s", "morph -s")
 p.write_text(t)
 PY
 fi
-# CLI help/banner wordmark (same art)
+# CLI help/banner wordmark (compact MORPH letters)
 if [[ -f "$ROOT/packages/opencode/src/cli/ui.ts" ]]; then
   python3 - "$ROOT/packages/opencode/src/cli/ui.ts" <<'PY'
 import re, sys

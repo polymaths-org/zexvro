@@ -34,7 +34,7 @@ services/morph/
 
 Engine = OpenCode MIT fork at pinned version (`engine/VERSION`) with:
 
-- Morph logo (`engine/patches/logo.ts`)
+- Morph brand mark (`engine/patches/logo.ts` + animated `logo.tsx` from `assets/ascii-art.txt`)
 - XDG app name `morph` → `~/.config/morph`
 - Config files `morph.json` / `morph.jsonc`
 - Project folder `.morph`

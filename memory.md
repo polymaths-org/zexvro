@@ -1,5 +1,29 @@
 # ZEXVRO Shared Memory
 
+## 2026-07-25 - Morph installer: complete package on main + ASCII banner
+
+- Symptom: `curl …/install-morph.sh | bash` → `✗ missing seed/morph.jsonc`
+- Root cause: `services/morph/seed/`, `lib/`, engine patches, etc. were never on `main` — installer cloned an incomplete package
+- Fix: ship full Morph package (seed/lib/engine/bin/assets), `PACKAGE.manifest` validation, ASCII brand banner on install + `morph doctor`
+- Files: `scripts/install-morph.sh`, `services/morph/install.sh`, `PACKAGE.manifest`, `assets/{ascii-art,banner}.txt`, seed/*, lib/*, engine/*
+- Fresh-machine path: sparse clone `services/morph` → validate manifest → prepare-src → optional binary → `~/.local/bin/morph`
+- Verify: local `MORPH_BUILD_BINARY=0 bash services/morph/install.sh` → doctor OK
+
+## 2026-07-25 - Morph TUI: animated brand-mark logo
+
+- Service or area: Morph track / TUI splash
+- Intent: use `services/morph/assets/ascii-art.txt` as the Morph logo in the TUI, with a lively start animation
+- Files:
+  - `services/morph/assets/ascii-art.txt` — cleaned source mark
+  - `services/morph/engine/patches/logo.ts` — `logoArtFull` / `logoArt` / `logoArtCompact` + CLI wordmark
+  - `services/morph/engine/patches/logo.tsx` — radial reveal (~1.1s) then idle cyan shimmer
+  - `services/morph/engine/apply-branding.sh` — copies logo patches; home spacer `height={4}`→`1`
+  - `services/morph/bin/morph` — brand hash includes ascii-art; doctor checks `logoArt`
+- Behavior: TUI home picks art by terminal size (compact / medium / full); presentation/CLI keep short MORPH wordmark
+- Launcher: if `morph-engine` binary is older than patches/ascii-art, falls through to bun branded source (so logo shows without rebuild)
+- Apply: next `morph` launch rebrands when patch hash changes (`morph rebrand` or just start TUI)
+- Optional later: `morph build-engine` to bake logo into standalone binary; CLI `print_banner` swap to compact mark
+
 ## 2026-07-25 - CI: wrangler Pages deploy on main push
 
 - Service or area: Morph track / CI/CD / console.zexvro.in
