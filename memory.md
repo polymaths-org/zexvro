@@ -1,5 +1,28 @@
 # ZEXVRO Shared Memory
 
+## 2026-07-25 - CI: wrangler Pages deploy on main push
+
+- Service or area: Morph track / CI/CD / console.zexvro.in
+- Intent: auto-deploy Cloudflare Pages project `zexvro` on every `main` push
+- Files: `.github/workflows/deploy-console.yml`
+- Behavior: checkout → `frontend` npm ci + vite build with prod VITE_* defaults → `wrangler pages deploy dist --project-name=zexvro --branch=main` → smoke `https://console.zexvro.in`
+- Required secret: `CLOUDFLARE_API_TOKEN` (Pages Edit). Account id default `ac51c31a2a40b154a68a40bd5283fae2` (override via secret/var `CLOUDFLARE_ACCOUNT_ID`)
+- Does **not** deploy Lambda/Dynamo/Gate — still use `./scripts/deploy-production.sh` for full stack
+- Manual run: Actions → "Deploy console (Cloudflare Pages)" → Run workflow
+
+
+## 2026-07-25 - Web2-first Morph demo (no pre-shipped Web3)
+
+- Service or area: Morph track / EDGERUN demo narrative
+- Intent: show pure Web2 on Vercel first; Morph CLI login → create project → migrate Web3 → deploy Vercel live
+- Web2 prod: **https://promptwars-mu.vercel.app** (project `promptwars`, commit `954422a`, free local pack claim — no GATE/Freighter)
+- Removed Vercel project **promptwars-web3** so “after” is created in-demo (web3 URL now 404)
+- Local Morph target: `/tmp/edgerun-web2-demo` (clone of Wraient/promptwars main)
+- Demo card: `services/morph/DEMO-WEB2-FIRST.md`
+- Morph session: workspace `ws_mrpzc6fy_pov06z`, project PromptWars still bound; demo uses `/use` → New project on game cwd
+- Need for captcha one-shot: `GATE_ADMIN_API_KEY` / `ZEXVRO_GATE_ADMIN_KEY` in shell **or** `--site-key` / console site (not currently in process env)
+- Keep GitHub `main` Web2; do not push migrate onto main if re-demoing
+
 ## 2026-07-25 - Morph assistant CodexIn (demo key on Lambda only)
 
 - Console Morph dock + Agentic Operations use `POST /api/chat` on API Gateway Lambda
