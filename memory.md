@@ -1,5 +1,13 @@
 # ZEXVRO Shared Memory
 
+## 2026-07-25 - Console Pages: live deploy + CI lockfile fix
+
+- CI fail 1: `npm ci` peer ERESOLVE (`stellar-base` 13 vs wallets-kit peer 14) → bumped `@stellar/stellar-base` ^14.1.0
+- CI fail 2: incomplete lockfile (`Missing: … from lock file`) → full clean lock regen (15564 lines); verified `npm ci` OK
+- Workflow: `npm ci` with `npm install` fallback; missing `CLOUDFLARE_API_TOKEN` warns + skips deploy (not hard-fail)
+- **Live deploy done locally** via wrangler OAuth: https://1f2acf6b.zexvro-7oq.pages.dev · console.zexvro.in → 200
+- Follow-up: add GH secret `CLOUDFLARE_API_TOKEN` (Pages Edit) for auto-deploy on main
+
 ## 2026-07-25 - Fix Deploy console CI (npm peer deps) + redeploy Pages
 
 - Failed run: Actions `Deploy console (Cloudflare Pages)` on push `0711aa9` — `npm ci` ERESOLVE
