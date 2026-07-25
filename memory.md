@@ -1,5 +1,51 @@
 # ZEXVRO Shared Memory
 
+## 2026-07-25 - presentation/ folder reorg
+
+- Layout: `ppt/` · `video/` · `demo-video/` · `imp/` (+ README).
+- Dropped scratch `_1818_work` / `_cinema_work` / `_pro_work`.
+- Deck: `presentation/ppt/ZEXVRO.pptx`; builder: `imp/scripts/build_enterprise_pitch.py` → writes `ppt/`.
+- Marketing kit recipe in `context.md` updated to new paths.
+
+## 2026-07-25 - Landing service logos + load/CDN
+
+- Copied real product logos to `landing/zexvro/public/services/` (zer0/nfto/reqwid/dedsec ladder + morph svg/png).
+- `ServiceLogo` morphic states: idle / active / morph / focus; wired in Web3Grid bubbles + carousel + ServiceShowcase.
+- Load: WebP hero (~10MB PNG → ~0.4MB webp), preload LCP/fonts/64px logos, fonts via link not CSS @import, lazy team imgs, CF `_headers` immutable for `/services/*` `/fonts/*`.
+- Fixed “six services” copy → five; claim-safe code snippets by real service ids.
+- Rebuild: `cd landing/zexvro && npm run build`.
+
+## 2026-07-25 - Zer0 Merkle path mismatch on multi-note pay
+
+- Error: `Merkle path mismatch: computed=… onchain=…` when paying >1 note (multi-deposit then prove).
+- Cause: `get_root` raced parallel `get_commitment` fetches across ledgers; also 15s worker merkle cache after deposits; width already OK offline.
+- Fix: consistent snapshot (count → leaves → recheck count → root last → verify offline root); retry; skip cache when wanted commitments set; client verifies server paths before prove.
+- Files: `frontend/src/api/privacyPool.ts`, `services/zk-prover/server.mjs` — **redeploy ZK worker** for server path.
+
+## 2026-07-25 - Enterprise B2B pitch deck (presentation/)
+
+- Rebuilt pitch for `design.md` (dark `#050505`, zinc surfaces, Inter, purple/blue accents — not arcade neon).
+- Files: `presentation/ppt/ZEXVRO.pptx` + `ZEXVRO_Enterprise_Pitch.pptx`; old arcade deck backed up as `ZEXVRO_arcade_backup.pptx`.
+- Builder: `presentation/imp/scripts/build_enterprise_pitch.py` (regenerate anytime).
+- 14 slides: B2B buyer wedge, problem, burden chart, solution pillars, architecture graph, 5 services, revenue mix, agent economics, Morph flow, outcomes, Stellar, claim-safe proof, CTA.
+- Assets: `assets/brand/*`, product icons from prior deck media, Inter from rsms/inter GitHub release.
+- Framing: sell to businesses/platforms (volume via their users+agents), not consumer wallets.
+
+## 2026-07-25 - NFT checkout trustline: mainnet payment was USDC not XLM
+
+- Symptom: public checkout “missing trustline / payment token” while UI said XLM + Mainnet; error text still said “Freighter Testnet”.
+- Cause: App Runner `STELLAR_USDC_CONTRACT` was Circle **mainnet USDC** SAC; sale config + purchase require that token. Buyer without USDC trustline/balance fails simulation.
+- Fix: set production payment SAC to **mainnet native XLM** `CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA`; deploy script updated; error copy network-agnostic.
+- **Required for existing collections:** owner must re-activate primary sale after cutover so on-chain payment token becomes XLM (old configs still store USDC).
+
+## 2026-07-25 - NFT network labels + overview balance chain (Paris)
+
+- Problem: panel could say Mainnet while public checkout said Testnet; overview balances used default testnet Horizon without labels.
+- NFT: public/embed load `/health`; labels/explorers use health; fixed broken `${nftNetworkLabel()}` template bugs; Freighter copy dynamic.
+- Overview: balances from workspace `environment` (testnet|mainnet) via Horizon; badges show Mainnet/Testnet on wallet + each asset.
+- Helpers: `resolveWorkspaceChainEnv` / `horizonForAppEnv` in `stellarNetwork.ts`; missing NFT health label → Unknown (not silent Testnet).
+- Hosted NFT API remains `stellar:pubnet`.
+
 ## 2026-07-25 - Console CI: noble/hashes + legacy-peer-deps
 
 - After lock regen, CI build failed: `Missing "./sha256" specifier in "@noble/hashes"`

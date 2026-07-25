@@ -331,6 +331,24 @@ function buildZeros(poseidon) {
   return zeros;
 }
 
+/** Offline Poseidon root — must match zer0-pool incremental filled-subtree root. */
+function computeRootFromLeaves(leaves, poseidon, zeros) {
+  const z = zeros || buildZeros(poseidon);
+  if (!leaves.length) return z[TREE_DEPTH];
+  let level = leaves.slice();
+  for (let d = 0; d < TREE_DEPTH; d++) {
+    const next = [];
+    const width = Math.max(1, Math.ceil(level.length / 2));
+    for (let i = 0; i < width; i++) {
+      const left = level[i * 2] ?? z[d];
+      const right = level[i * 2 + 1] ?? z[d];
+      next.push(poseidon.F.toObject(poseidon([left, right])));
+    }
+    level = next;
+  }
+  return level[0];
+}
+
 function buildMerklePathFromLeaves(leaves, leafIndex, poseidon, rootHex, zeros) {
   if (leafIndex < 0 || leafIndex >= leaves.length) {
     throw new Error(`Invalid leaf index ${leafIndex} (tree has ${leaves.length} leaves)`);
@@ -340,6 +358,7 @@ function buildMerklePathFromLeaves(leaves, leafIndex, poseidon, rootHex, zeros) 
   const pathIndices = [];
   let level = leaves.slice();
   let idx = leafIndex;
+  const rootHexNorm = String(rootHex).replace(/^0x/, '').toLowerCase();
 
   for (let d = 0; d < TREE_DEPTH; d++) {
     pathIndices.push(idx & 1);
@@ -347,7 +366,8 @@ function buildMerklePathFromLeaves(leaves, leafIndex, poseidon, rootHex, zeros) 
     pathElements.push(level[siblingIdx] ?? z[d]);
 
     const next = [];
-    const width = Math.ceil(Math.max(level.length, idx + 1) / 2) || 1;
+    // Full level width (not path-index-only) — required for multi-leaf trees
+    const width = Math.max(1, Math.ceil(level.length / 2));
     for (let i = 0; i < width; i++) {
       const left = level[i * 2] ?? z[d];
       const right = level[i * 2 + 1] ?? z[d];
@@ -357,7 +377,7 @@ function buildMerklePathFromLeaves(leaves, leafIndex, poseidon, rootHex, zeros) 
     idx >>= 1;
   }
 
-  const root = BigInt('0x' + rootHex);
+  const root = BigInt('0x' + rootHexNorm);
   let cur = leaves[leafIndex];
   for (let d = 0; d < TREE_DEPTH; d++) {
     const sib = pathElements[d];
@@ -366,14 +386,62 @@ function buildMerklePathFromLeaves(leaves, leafIndex, poseidon, rootHex, zeros) 
       : poseidon.F.toObject(poseidon([sib, cur]));
   }
   if (cur !== root) {
-    throw new Error(`Merkle path mismatch: computed=${toHex32(cur)} onchain=${rootHex}`);
+    throw new Error(`Merkle path mismatch: computed=${toHex32(cur)} onchain=${rootHexNorm}`);
   }
   return {
     pathElements: pathElements.map((e) => e.toString()),
     pathIndices,
     root: root.toString(),
-    rootHex,
+    rootHex: rootHexNorm,
   };
+}
+
+/**
+ * Fetch count + all leaves + root in a consistent view.
+ * Multi-deposit pays race parallel get_commitment vs get_root across ledgers.
+ */
+async function fetchConsistentMerkleSnapshot(source, contractId, poseidon, opts = {}) {
+  const maxAttempts = opts.maxAttempts ?? 12;
+  const minCount = opts.minCount ?? 0;
+  const zeros = buildZeros(poseidon);
+  let lastErr = '';
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const count = parseSimU32(await simulateContractCall(source, contractId, 'get_commitment_count'));
+    if (count < minCount) {
+      lastErr = `waiting for deposits (count=${count} < ${minCount})`;
+      await new Promise((r) => setTimeout(r, 400 + attempt * 250));
+      continue;
+    }
+    const leaves = await fetchAllLeaves(source, contractId, count);
+    if (leaves.some((l) => l === undefined || l === null)) {
+      lastErr = 'sparse leaves from RPC';
+      await new Promise((r) => setTimeout(r, 400 + attempt * 250));
+      continue;
+    }
+    const countAfter = parseSimU32(await simulateContractCall(source, contractId, 'get_commitment_count'));
+    if (countAfter !== count) {
+      lastErr = `tree grew mid-fetch (${count}→${countAfter})`;
+      await new Promise((r) => setTimeout(r, 300 + attempt * 200));
+      continue;
+    }
+    // Root AFTER leaves so multi-deposit settles into one view
+    const rootHex = String(parseSimBytes(await simulateContractCall(source, contractId, 'get_root')))
+      .replace(/^0x/, '')
+      .toLowerCase();
+    const computedHex = toHex32(computeRootFromLeaves(leaves, poseidon, zeros));
+    if (computedHex !== rootHex) {
+      lastErr = `root mismatch computed=${computedHex} onchain=${rootHex} count=${count}`;
+      await new Promise((r) => setTimeout(r, 500 + attempt * 300));
+      continue;
+    }
+    return { count, leaves, rootHex, zeros };
+  }
+  throw new Error(
+    `Merkle snapshot inconsistent after ${maxAttempts} attempts`
+    + (lastErr ? `: ${lastErr}` : '')
+    + '. Retry pay — RPC may still be catching multi-deposit ledgers.',
+  );
 }
 
 async function merkleSnapshot(contractId, wantedCommitments = []) {
@@ -384,40 +452,52 @@ async function merkleSnapshot(contractId, wantedCommitments = []) {
     ? relayerKeypair().publicKey()
     : 'GADWIZHQJKSWTKMADYHB4DAUE74TJX47CUK4KJH3QBGURYQ4LDCSZLPQ';
 
+  const wanted = wantedCommitments || [];
+  const needles = wanted.map((c) => String(c).replace(/^0x/, '').toLowerCase().padStart(64, '0'));
+
+  // Never trust cache when proving multi-note pays (stale root after deposits)
   const cached = merkleCache.get(contractId);
   let count;
   let leaves;
   let rootHex;
-  if (cached && Date.now() - cached.ts < MERKLE_CACHE_MS) {
+  let zeros = buildZeros(poseidon);
+  const cacheOk = cached
+    && Date.now() - cached.ts < MERKLE_CACHE_MS
+    && wanted.length === 0;
+
+  if (cacheOk) {
     count = cached.count;
     leaves = cached.leaves.slice();
     rootHex = cached.rootHex;
   } else {
-    count = parseSimU32(await simulateContractCall(source, contractId, 'get_commitment_count'));
-    [leaves, rootHex] = await Promise.all([
-      fetchAllLeaves(source, contractId, count),
-      parseSimBytes(await simulateContractCall(source, contractId, 'get_root')),
-    ]);
+    const snap = await fetchConsistentMerkleSnapshot(source, contractId, poseidon, {
+      minCount: 0,
+      maxAttempts: 12,
+    });
+    count = snap.count;
+    leaves = snap.leaves;
+    rootHex = snap.rootHex;
+    zeros = snap.zeros;
     merkleCache.set(contractId, { count, leaves: leaves.slice(), rootHex, ts: Date.now() });
   }
 
-  // if cache is stale vs wanted leaves, refetch
-  const missing = (wantedCommitments || []).filter((c) => {
-    const needle = String(c).replace(/^0x/, '').toLowerCase();
-    return !leaves.some((l) => toHex32(l) === needle.padStart(64, '0'));
-  });
-  if (missing.length) {
-    count = parseSimU32(await simulateContractCall(source, contractId, 'get_commitment_count'));
-    [leaves, rootHex] = await Promise.all([
-      fetchAllLeaves(source, contractId, count),
-      parseSimBytes(await simulateContractCall(source, contractId, 'get_root')),
-    ]);
+  // Ensure every wanted commitment is present; otherwise refetch with higher minCount
+  for (let wait = 0; wait < 10; wait++) {
+    const missing = needles.filter((n) => !leaves.some((l) => toHex32(l) === n));
+    if (missing.length === 0) break;
+    const snap = await fetchConsistentMerkleSnapshot(source, contractId, poseidon, {
+      minCount: count + 1,
+      maxAttempts: 8,
+    });
+    count = snap.count;
+    leaves = snap.leaves;
+    rootHex = snap.rootHex;
+    zeros = snap.zeros;
     merkleCache.set(contractId, { count, leaves: leaves.slice(), rootHex, ts: Date.now() });
   }
 
-  const zeros = buildZeros(poseidon);
   const paths = {};
-  for (const c of wantedCommitments || []) {
+  for (const c of wanted) {
     const needle = String(c).replace(/^0x/, '').toLowerCase().padStart(64, '0');
     const leafIndex = leaves.findIndex((l) => toHex32(l) === needle);
     if (leafIndex < 0) {

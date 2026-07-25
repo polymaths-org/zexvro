@@ -38,6 +38,7 @@ export function setCachedNftHealth(health: NftServiceHealth | null) {
 
 export function nftNetworkLabel(health?: NftServiceHealth | null): string {
   const n = health?.capabilities?.network || lastNftHealth?.capabilities?.network;
+  if (!n) return 'Unknown';
   return n === 'stellar:pubnet' ? 'Mainnet' : 'Testnet';
 }
 
@@ -76,6 +77,8 @@ export function getNftNetworkPreference(): 'testnet' | 'mainnet' {
 
 export function nftExplorerBase(health?: NftServiceHealth | null): string {
   const n = health?.capabilities?.network || lastNftHealth?.capabilities?.network;
+  // Prefer mainnet explorer when health is missing (hosted API is pubnet).
+  if (!n) return 'https://stellar.expert/explorer/public';
   return n === 'stellar:pubnet'
     ? 'https://stellar.expert/explorer/public'
     : 'https://stellar.expert/explorer/testnet';

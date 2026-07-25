@@ -47,6 +47,30 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon-v2.png" />
     <link rel="manifest" href="/site.webmanifest" />
 
+    <!-- Performance: preconnect + preload LCP / fonts / service logos -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="dns-prefetch" href="https://console.zexvro.in" />
+    <link
+      rel="preload"
+      href="/fonts/GeistPixel-Circle.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link rel="preload" href="/cubes.webp" as="image" type="image/webp" />
+    <link rel="preload" href="/deploy-nfts-clicks.webp" as="image" type="image/webp" media="(min-width: 768px)" />
+    <link rel="preload" href="/mobile_statue.webp" as="image" type="image/webp" media="(max-width: 767px)" />
+    <link rel="preload" href="/services/zer0-64.png" as="image" />
+    <link rel="preload" href="/services/morph-64.png" as="image" />
+    <link rel="preload" href="/services/reqwid-64.png" as="image" />
+    <link rel="preload" href="/services/nfto-64.png" as="image" />
+    <link rel="preload" href="/services/dedsec-64.png" as="image" />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&display=swap"
+    />
+
     <!-- Open Graph — 1200×630 social card (not raw logo) -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Zexvro" />

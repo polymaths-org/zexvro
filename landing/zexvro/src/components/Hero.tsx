@@ -166,13 +166,21 @@ export const Hero: React.FC = () => {
                 transformPerspective: 1000,
               }}
             >
-              <img
-                src="/cubes.png"
-                alt=""
-                role="presentation"
-                className="w-full max-h-[48vh] md:max-h-[54vh] h-auto object-contain object-left-top"
-                onError={() => setCubesError(true)}
-              />
+              <picture>
+                <source srcSet="/cubes.webp" type="image/webp" />
+                <img
+                  src="/cubes.png"
+                  alt=""
+                  role="presentation"
+                  width={1600}
+                  height={900}
+                  decoding="async"
+                  loading="eager"
+                  fetchPriority="high"
+                  className="w-full max-h-[48vh] md:max-h-[54vh] h-auto object-contain object-left-top"
+                  onError={() => setCubesError(true)}
+                />
+              </picture>
             </motion.div>
           </motion.div>
         )}
@@ -247,22 +255,38 @@ export const Hero: React.FC = () => {
         >
           {!statueError ? (
             <>
-              <img
-                src="/mobile_statue.png"
-                alt=""
-                role="presentation"
-                className="w-full h-full object-contain object-right-center md:hidden"
-                referrerPolicy="no-referrer"
-                onError={() => setStatueError(true)}
-              />
-              <img
-                src="/deploy-nfts-clicks.png"
-                alt=""
-                role="presentation"
-                className="hidden md:block w-full h-full object-contain object-right-bottom"
-                referrerPolicy="no-referrer"
-                onError={() => setStatueError(true)}
-              />
+              <picture className="w-full h-full md:hidden">
+                <source srcSet="/mobile_statue.webp" type="image/webp" />
+                <img
+                  src="/mobile_statue.png"
+                  alt=""
+                  role="presentation"
+                  width={1200}
+                  height={1600}
+                  decoding="async"
+                  loading="eager"
+                  fetchPriority="high"
+                  className="w-full h-full object-contain object-right-center"
+                  referrerPolicy="no-referrer"
+                  onError={() => setStatueError(true)}
+                />
+              </picture>
+              <picture className="hidden md:block w-full h-full">
+                <source srcSet="/deploy-nfts-clicks.webp" type="image/webp" />
+                <img
+                  src="/deploy-nfts-clicks.png"
+                  alt=""
+                  role="presentation"
+                  width={1600}
+                  height={1200}
+                  decoding="async"
+                  loading="eager"
+                  fetchPriority="high"
+                  className="w-full h-full object-contain object-right-bottom"
+                  referrerPolicy="no-referrer"
+                  onError={() => setStatueError(true)}
+                />
+              </picture>
             </>
           ) : null}
         </motion.div>

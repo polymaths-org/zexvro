@@ -492,7 +492,7 @@ Marketing is a first-class surface for launch, demos, waitlist, and investor/pit
 | Public landing (standalone) | `landing/zexvro/` | Primary marketing site: hero, five services, team, waitlist |
 | In-app welcome | `frontend/src/marketing/` | Minimal glass welcome + brand intro before `/dashboard` |
 | Product cinema / motion | `frontend/public/marketing/` | NFT/Zer0/boot cinema clips, loaders, hero stills used inside product |
-| Presentation / pitch media | `presentation/` | Caption builds, pro/cinema edits of founder demo footage |
+| Presentation / pitch media | `presentation/` | `ppt/` · `video/` · `demo-video/` · `imp/` (scripts/captions/fonts) |
 | Brand lockups | `assets/brand/` | logo, logo2, typo-logo, brand-design |
 | Marketing kit export | `marketing.zip` | Shareable pack (brand + motion + presentation finals + copy); rebuild with docs below |
 
@@ -536,9 +536,10 @@ Portable handoff for design, social, and pitch. Contents (rebuild recipe):
 rm -rf /tmp/zexvro-marketing-kit && mkdir -p /tmp/zexvro-marketing-kit/{brand,motion,presentation,landing-dist,docs}
 cp assets/brand/* /tmp/zexvro-marketing-kit/brand/
 cp frontend/public/marketing/*.{mp4,gif,webp} /tmp/zexvro-marketing-kit/motion/ 2>/dev/null || true
-cp presentation/IMG_1817_pro.mp4 presentation/IMG_1817_pro_preview.mp4 \
-  presentation/IMG_1817_cinema_preview.mp4 presentation/*_preview_sheet.jpg \
-  presentation/img1817_transcript.json /tmp/zexvro-marketing-kit/presentation/ 2>/dev/null || true
+cp presentation/video/IMG_1817_pro.mp4 presentation/demo-video/IMG_1817_pro_preview.mp4 \
+  presentation/demo-video/IMG_1817_cinema_preview.mp4 presentation/imp/*_preview_sheet.jpg \
+  presentation/imp/transcripts/img1817_transcript.json \
+  presentation/ppt/ZEXVRO.pptx /tmp/zexvro-marketing-kit/presentation/ 2>/dev/null || true
 cp -R landing/zexvro/dist/* /tmp/zexvro-marketing-kit/landing-dist/ 2>/dev/null || true
 cp docs/marketing.md design.md README.md /tmp/zexvro-marketing-kit/docs/
 cp docs/marketing.md /tmp/zexvro-marketing-kit/README.md

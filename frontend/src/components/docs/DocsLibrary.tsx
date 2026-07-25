@@ -333,7 +333,7 @@ Content-Type: application/json
     content: (
       <div>
         <P>
-          NFTo deploys creator-owned Soroban collection contracts on Stellar testnet.
+          NFTo deploys creator-owned Soroban collection contracts on the hosted Stellar network (Mainnet in production).
           Use it for game items, drops, and primary sales with a fixed XLM price.
         </P>
         <H3>What is a collection?</H3>

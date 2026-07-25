@@ -64,3 +64,44 @@ export const OZ_CHANNELS_MAINNET = 'https://channels.openzeppelin.com/x402';
 
 export const DEFAULT_SOROBAN_RPC_TESTNET = 'https://soroban-testnet.stellar.org';
 export const DEFAULT_SOROBAN_RPC_MAINNET = 'https://mainnet.sorobanrpc.com';
+
+export const DEFAULT_HORIZON_TESTNET = 'https://horizon-testnet.stellar.org';
+export const DEFAULT_HORIZON_MAINNET = 'https://horizon.stellar.org';
+
+export function horizonForAppEnv(env: AppChainEnv): string {
+  return env === 'mainnet' ? DEFAULT_HORIZON_MAINNET : DEFAULT_HORIZON_TESTNET;
+}
+
+export function appEnvFromHorizon(url?: string): AppChainEnv {
+  const u = (url || '').trim().toLowerCase();
+  if (!u) return 'testnet';
+  if (u.includes('testnet') || u.includes('futurenet')) return 'testnet';
+  if (u.includes('horizon.stellar.org') || u.includes('pubnet') || u.includes('public')) return 'mainnet';
+  return 'testnet';
+}
+
+/** Workspace environment is canonical; then project prefs; then explicit Horizon URL. */
+export function resolveWorkspaceChainEnv(input: {
+  workspaceEnvironment?: string | null;
+  projectNetworks?: Array<string | undefined | null>;
+  horizonUrl?: string | null;
+}): AppChainEnv {
+  const ws = (input.workspaceEnvironment || '').toLowerCase().trim();
+  if (ws === 'mainnet' || ws === 'pubnet' || ws === 'public') return 'mainnet';
+  if (ws === 'testnet') return 'testnet';
+
+  for (const raw of input.projectNetworks || []) {
+    const n = String(raw || '').toLowerCase();
+    if (!n) continue;
+    if (n === 'mainnet' || n.includes('main') || n.includes('pubnet') || n.includes('public')) {
+      return 'mainnet';
+    }
+  }
+
+  if (input.horizonUrl?.trim()) return appEnvFromHorizon(input.horizonUrl);
+  return 'testnet';
+}
+
+export function balanceNetworkLabel(env: AppChainEnv): string {
+  return env === 'mainnet' ? 'Mainnet' : 'Testnet';
+}

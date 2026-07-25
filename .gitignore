@@ -58,3 +58,12 @@ services/morph/engine-src*/
 # Morph engine logo preview assets (not required at runtime)
 services/morph/engine/patches/logo-*.png
 services/morph/engine/patches/logo-screenshot.png
+
+# Local pitch media masters (keep ppt/ + imp/ in git; videos stay machine-local)
+presentation/video/
+presentation/demo-video/
+presentation/**/*.mp4
+
+# Scratch / accidental dumps
+frontend/public/marketing/a
+services/transformation-agent/

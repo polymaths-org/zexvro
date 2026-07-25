@@ -349,7 +349,7 @@ export default function CollectionStudio({
     setSaleIntent(null);
     try {
       if (!(await isWalletAvailable())) {
-        throw new Error('Connect Freighter (Testnet) as the collection owner.');
+        throw new Error(`Connect Freighter (${nftNetworkLabel(health)}) as the collection owner.`);
       }
       const ownerAddress = await getPublicKey();
       const priceAtomic = usdcToAtomic(salePrice);
@@ -420,7 +420,7 @@ export default function CollectionStudio({
     setMintIntent(null);
     try {
       if (!(await isWalletAvailable())) {
-        throw new Error('Connect Freighter (Testnet) as the minter.');
+        throw new Error(`Connect Freighter (${nftNetworkLabel(health)}) as the minter.`);
       }
       const operatorAddress = await getPublicKey();
       const recipient = mintRecipient.trim() || operatorAddress;
@@ -726,7 +726,7 @@ export default function CollectionStudio({
                 </div>
                 {collection.contractId && (
                   <a
-                    href={`${nftExplorerBase()}/contract/${collection.contractId}`}
+                    href={`${nftExplorerBase(health)}/contract/${collection.contractId}`}
                     target="_blank"
                     rel="noreferrer"
                     className="flex items-center justify-between gap-3 rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800"
@@ -769,7 +769,7 @@ export default function CollectionStudio({
                 </div>
                 <div className="flex items-center gap-2 bg-white px-3 py-2.5 dark:bg-[#050506]">
                   <ShieldCheck className={`h-4 w-4 ${health?.capabilities?.stellarConfigured ? 'text-emerald-500' : 'text-zinc-400'}`} />
-                  ${nftNetworkLabel()}
+                  {nftNetworkLabel(health)}
                 </div>
                 <div className="flex items-center gap-2 bg-white px-3 py-2.5 dark:bg-[#050506]">
                   Storage {health?.capabilities?.storageMode || '—'}
@@ -948,7 +948,7 @@ export default function CollectionStudio({
                       </span>
                       <span className="truncate font-mono text-xs text-zinc-500">{shortAddress(item.ownerAddress)}</span>
                       <a
-                        href={`${nftExplorerBase()}/tx/${item.transactionHash}`}
+                        href={`${nftExplorerBase(health)}/tx/${item.transactionHash}`}
                         target="_blank"
                         rel="noreferrer"
                         className="text-brand-blue"

@@ -629,6 +629,77 @@ function buildZeros(poseidon: any): bigint[] {
   return zeros;
 }
 
+/** Offline Poseidon root from dense leaf list (matches zer0-pool incremental tree). */
+function computeRootFromLeaves(leaves: bigint[], poseidon: any, zeros?: bigint[]): bigint {
+  const z = zeros || buildZeros(poseidon);
+  if (leaves.length === 0) return z[TREE_DEPTH];
+  let level = leaves.slice();
+  for (let d = 0; d < TREE_DEPTH; d++) {
+    const next: bigint[] = [];
+    const width = Math.max(1, Math.ceil(level.length / 2));
+    for (let i = 0; i < width; i++) {
+      const left = level[i * 2] ?? z[d];
+      const right = level[i * 2 + 1] ?? z[d];
+      next.push(poseidon.F.toObject(poseidon([left, right])));
+    }
+    level = next;
+  }
+  return level[0];
+}
+
+/**
+ * Consistent on-chain Merkle snapshot.
+ * Multi-note pays race get_root vs parallel get_commitment reads across ledgers —
+ * that yields "Merkle path mismatch: computed=… onchain=…". Always:
+ * count → leaves → recheck count → root last → verify computed root.
+ */
+async function fetchConsistentMerkleSnapshot(
+  source: string,
+  poseidon: any,
+  opts?: { minCount?: number; maxAttempts?: number },
+): Promise<{ count: number; leaves: bigint[]; rootHex: string; zeros: bigint[] }> {
+  const maxAttempts = opts?.maxAttempts ?? 10;
+  const minCount = opts?.minCount ?? 0;
+  const zeros = buildZeros(poseidon);
+  let lastErr = '';
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const count = parseSimU32(await simulateContractCall(source, 'get_commitment_count'));
+    if (count < minCount) {
+      lastErr = `waiting for deposits (count=${count} < ${minCount})`;
+      await new Promise(r => setTimeout(r, 400 + attempt * 250));
+      continue;
+    }
+    const leaves = await fetchAllLeaves(source, count);
+    if (leaves.some(l => l === undefined || l === null)) {
+      lastErr = 'sparse leaves from RPC';
+      await new Promise(r => setTimeout(r, 400 + attempt * 250));
+      continue;
+    }
+    const countAfter = parseSimU32(await simulateContractCall(source, 'get_commitment_count'));
+    if (countAfter !== count) {
+      lastErr = `tree grew mid-fetch (${count}→${countAfter})`;
+      await new Promise(r => setTimeout(r, 300 + attempt * 200));
+      continue;
+    }
+    // Root AFTER leaves so multi-deposit settles into the same view
+    const rootHex = parseSimBytes(await simulateContractCall(source, 'get_root')).replace(/^0x/, '').toLowerCase();
+    const computed = computeRootFromLeaves(leaves, poseidon, zeros);
+    const computedHex = toHex(computed);
+    if (computedHex !== rootHex) {
+      lastErr = `root mismatch computed=${computedHex} onchain=${rootHex} count=${count}`;
+      await new Promise(r => setTimeout(r, 500 + attempt * 300));
+      continue;
+    }
+    return { count, leaves, rootHex, zeros };
+  }
+  throw new Error(
+    `Merkle snapshot inconsistent after ${maxAttempts} attempts`
+    + (lastErr ? `: ${lastErr}` : '')
+    + '. Retry pay — RPC may still be catching multi-deposit ledgers.',
+  );
+}
+
 /** Build Merkle path offline from prefetched leaves (no RPC). */
 function buildMerklePathFromLeaves(
   leaves: bigint[],
@@ -645,6 +716,7 @@ function buildMerklePathFromLeaves(
   const pathIndices: number[] = [];
   let level = leaves.slice();
   let idx = leafIndex;
+  const rootHexNorm = rootHex.replace(/^0x/, '').toLowerCase();
 
   for (let d = 0; d < TREE_DEPTH; d++) {
     pathIndices.push(idx & 1);
@@ -652,7 +724,8 @@ function buildMerklePathFromLeaves(
     pathElements.push(level[siblingIdx] ?? z[d]);
 
     const next: bigint[] = [];
-    const width = Math.ceil(Math.max(level.length, idx + 1) / 2) || 1;
+    // Full level width — must not shrink to only the path index (breaks multi-leaf trees)
+    const width = Math.max(1, Math.ceil(level.length / 2));
     for (let i = 0; i < width; i++) {
       const left = level[i * 2] ?? z[d];
       const right = level[i * 2 + 1] ?? z[d];
@@ -662,7 +735,7 @@ function buildMerklePathFromLeaves(
     idx >>= 1;
   }
 
-  const root = BigInt('0x' + rootHex);
+  const root = BigInt('0x' + rootHexNorm);
   let cur = leaves[leafIndex];
   for (let d = 0; d < TREE_DEPTH; d++) {
     const sib = pathElements[d];
@@ -671,9 +744,9 @@ function buildMerklePathFromLeaves(
       : poseidon.F.toObject(poseidon([sib, cur]));
   }
   if (cur !== root) {
-    throw new Error(`Merkle path mismatch: computed=${toHex(cur)} onchain=${rootHex}`);
+    throw new Error(`Merkle path mismatch: computed=${toHex(cur)} onchain=${rootHexNorm}`);
   }
-  return { pathElements, pathIndices, root, rootHex };
+  return { pathElements, pathIndices, root, rootHex: rootHexNorm };
 }
 
 /** Fetch on-chain leaves and build Merkle path matching the contract tree. */
@@ -682,15 +755,13 @@ async function buildMerklePath(
   leafIndex: number,
   poseidon: any,
 ): Promise<{ pathElements: bigint[]; pathIndices: number[]; root: bigint; rootHex: string }> {
-  const count = parseSimU32(await simulateContractCall(source, 'get_commitment_count'));
-  if (leafIndex < 0 || leafIndex >= count) {
-    throw new Error(`Invalid leaf index ${leafIndex} (tree has ${count} leaves)`);
+  const snap = await fetchConsistentMerkleSnapshot(source, poseidon, {
+    minCount: leafIndex + 1,
+  });
+  if (leafIndex < 0 || leafIndex >= snap.count) {
+    throw new Error(`Invalid leaf index ${leafIndex} (tree has ${snap.count} leaves)`);
   }
-  const [leaves, rootHex] = await Promise.all([
-    fetchAllLeaves(source, count),
-    parseSimBytes(await simulateContractCall(source, 'get_root')),
-  ]);
-  return buildMerklePathFromLeaves(leaves, leafIndex, poseidon, rootHex);
+  return buildMerklePathFromLeaves(snap.leaves, leafIndex, poseidon, snap.rootHex, snap.zeros);
 }
 
 /* ─── Prepare + Sign + Submit ─── */
@@ -1236,7 +1307,33 @@ async function settleTier(args: {
     notes.map(n => n.commitment),
   );
 
+  // Server paths only if every note has a path that reconstructs the returned root
+  let useRemote = false;
   if (remoteMerkle) {
+    useRemote = notes.every((note) => {
+      const path = remoteMerkle.paths[note.commitment];
+      if (!path) return false;
+      try {
+        let cur = BigInt('0x' + note.commitment);
+        for (let d = 0; d < TREE_DEPTH; d++) {
+          const sib = path.pathElements[d];
+          cur = path.pathIndices[d] === 0
+            ? poseidon.F.toObject(poseidon([cur, sib]))
+            : poseidon.F.toObject(poseidon([sib, cur]));
+        }
+        const want = BigInt('0x' + (path.rootHex || remoteMerkle.rootHex).replace(/^0x/, ''));
+        return cur === want && cur === path.root;
+      } catch {
+        return false;
+      }
+    });
+    if (!useRemote) {
+      console.warn('[zk] server merkle paths failed local verify — browser consistent snapshot');
+      onProgress('Server merkle stale — rebuilding consistent snapshot…');
+    }
+  }
+
+  if (useRemote && remoteMerkle) {
     onProgress(`Prove ${count} notes in parallel (server merkle)`);
     ready = await Promise.all(notes.map(async (note, i) => {
       const path = remoteMerkle.paths[note.commitment];
@@ -1256,22 +1353,45 @@ async function settleTier(args: {
       };
     }));
   } else {
-    const treeCount = parseSimU32(await simulateContractCall(from, 'get_commitment_count'));
-    const [leaves, rootHex] = await Promise.all([
-      fetchAllLeaves(from, treeCount),
-      parseSimBytes(await simulateContractCall(from, 'get_root')),
-    ]);
-    const zeros = buildZeros(poseidon);
+    onProgress(`Consistent merkle snapshot @ ${tier.xlm} XLM (${count} notes)`);
+    // Tree may already have prior deposits — minCount from highest known leaf index
+    const minByIndex = Math.max(
+      0,
+      ...notes.map(n => (typeof n.index === 'number' && n.index >= 0 ? n.index + 1 : 0)),
+    );
+    let snap = await fetchConsistentMerkleSnapshot(from, poseidon, {
+      minCount: minByIndex,
+      maxAttempts: 12,
+    });
+    // Retry while any of our deposits are still invisible (multi-deposit ledger lag)
+    for (let wait = 0; wait < 8; wait++) {
+      const missing = notes.filter(n => !snap.leaves.some(l => toHex(l) === n.commitment));
+      if (missing.length === 0) break;
+      onProgress(`Waiting for ${missing.length} commitment(s) on-chain…`);
+      await new Promise(r => setTimeout(r, 500 + wait * 300));
+      snap = await fetchConsistentMerkleSnapshot(from, poseidon, {
+        minCount: Math.max(minByIndex, snap.count + (missing.length > 0 ? 1 : 0)),
+        maxAttempts: 8,
+      });
+    }
+    for (let i = 0; i < notes.length; i++) {
+      if (!snap.leaves.some(l => toHex(l) === notes[i].commitment)) {
+        throw new Error(
+          `Commitment not found for ${tier.xlm} XLM note ${i + 1} after consistent snapshot `
+          + `(tree count=${snap.count}). Retry pay.`,
+        );
+      }
+    }
 
     onProgress(`Prove ${count} notes in parallel @ ${tier.xlm} XLM`);
     ready = await Promise.all(notes.map(async (note, i) => {
       let leafIndex = note.index;
-      if (leafIndex < 0 || leafIndex >= leaves.length || toHex(leaves[leafIndex]) !== note.commitment) {
-        leafIndex = leaves.findIndex(l => toHex(l) === note.commitment);
+      if (leafIndex < 0 || leafIndex >= snap.leaves.length || toHex(snap.leaves[leafIndex]) !== note.commitment) {
+        leafIndex = snap.leaves.findIndex(l => toHex(l) === note.commitment);
         if (leafIndex < 0) throw new Error(`Commitment not found for ${tier.xlm} XLM note ${i + 1}`);
       }
       const { pathElements, pathIndices, root } = buildMerklePathFromLeaves(
-        leaves, leafIndex, poseidon, rootHex, zeros,
+        snap.leaves, leafIndex, poseidon, snap.rootHex, snap.zeros,
       );
       const secret = BigInt('0x' + note.secret);
       const nullifier = BigInt('0x' + note.nullifier);
@@ -1283,7 +1403,7 @@ async function settleTier(args: {
         note: { ...note, index: leafIndex },
         proof,
         nullifierHashHex: toHex(nullifierHash),
-        rootHex,
+        rootHex: snap.rootHex,
         tier,
       };
     }));
@@ -1600,17 +1720,17 @@ export async function withdraw(
   const source = resolveFundingAddress(signerAddress) || signerAddress || toAddress;
 
   let leafIndex = note.index;
-  const count = parseSimU32(await simulateContractCall(source, 'get_commitment_count'));
-  const leaves = await fetchAllLeaves(source, count);
+  const snap = await fetchConsistentMerkleSnapshot(source, poseidon, {
+    minCount: leafIndex >= 0 ? leafIndex + 1 : 1,
+  });
 
-  if (leafIndex < 0 || leafIndex >= leaves.length || toHex(leaves[leafIndex]) !== note.commitment) {
-    leafIndex = leaves.findIndex(l => toHex(l) === note.commitment);
+  if (leafIndex < 0 || leafIndex >= snap.leaves.length || toHex(snap.leaves[leafIndex]) !== note.commitment) {
+    leafIndex = snap.leaves.findIndex(l => toHex(l) === note.commitment);
     if (leafIndex < 0) throw new Error('Commitment not found on-chain');
   }
 
-  const rootHex = parseSimBytes(await simulateContractCall(source, 'get_root'));
   const { pathElements, pathIndices, root } = buildMerklePathFromLeaves(
-    leaves, leafIndex, poseidon, rootHex,
+    snap.leaves, leafIndex, poseidon, snap.rootHex, snap.zeros,
   );
 
   const secret = BigInt('0x' + note.secret);
@@ -1622,7 +1742,7 @@ export async function withdraw(
     secret, nullifier, leafIndex, pathElements, pathIndices, root, nullifierHash,
   );
 
-  const txHash = await submitWithdrawTx(toAddress, source, proofData, nullifierHashHex, rootHex);
+  const txHash = await submitWithdrawTx(toAddress, source, proofData, nullifierHashHex, snap.rootHex);
   markNoteSpent(note);
 
   return { txHash, nullifierHash: note.nullifierHash };

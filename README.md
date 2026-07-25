@@ -45,7 +45,7 @@ This repository currently holds the project foundation:
 - `frontend/` - Vite + React frontend workspace (dashboard + in-app welcome).
 - `landing/zexvro/` - standalone public landing site.
 - `frontend/public/marketing/` - product cinema and brand motion assets.
-- `presentation/` - pitch / founder-demo caption builds.
+- `presentation/` - pitch decks (`ppt/`), masters (`video/`), previews (`demo-video/`), sources (`imp/`).
 - `assets/brand/` - logo, typo logo, and brand design assets.
 - `marketing.zip` - optional local export pack (gitignored); rebuild via `context.md`.
 

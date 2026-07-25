@@ -654,7 +654,9 @@ const baseNftEnv = {
   CORS_ALLOWED_ORIGINS: corsOrigins,
   STELLAR_RPC_URL: 'https://soroban-testnet.stellar.org',
   STELLAR_NETWORK_PASSPHRASE: 'Test SDF Network ; September 2015',
-  STELLAR_USDC_CONTRACT: 'CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA',
+  // Env name is legacy; value is payment SAC. Prefer native XLM (no trustline).
+  // Mainnet XLM SAC; override with Circle USDC SAC if you need USDC checkout.
+  STELLAR_USDC_CONTRACT: 'CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA',
   NFT_PUBLIC_BASE_URL: 'https://placeholder.local',
 };
 

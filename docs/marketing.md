@@ -31,7 +31,7 @@ Shareable brand + motion + pitch pack. Rebuild `marketing.zip` from the recipe i
 | `landing/zexvro/` | Standalone landing (hero, services, team, waitlist) |
 | `frontend/src/marketing/` | In-app welcome + brand intro |
 | `frontend/public/marketing/` | Product cinema, loaders, hero still |
-| `presentation/` | Founder demo caption / cinema / pro edits |
+| `presentation/` | `ppt/` decks · `video/` masters · `demo-video/` previews · `imp/` sources |
 | `assets/brand/` | Logo lockups |
 | `design.md` → Marketing Design | Visual rules for landing vs app |
 | `context.md` → Marketing Surfaces | Product-aligned messaging + kit recipe |
@@ -43,7 +43,7 @@ zexvro-marketing-kit/
   README.md                 # this brief
   brand/                    # logo.png, logo2.png, typo-logo.png, brand-design.png
   motion/                   # cinema mp4/gif/webp for product + social
-  presentation/             # pro cut + previews + transcript json + preview sheets
+  presentation/             # video masters + demo-video previews + ppt + imp sources
   landing-dist/             # static build of landing (open index.html / host as static)
   docs/                     # design.md, marketing.md, README.md snapshots
 ```

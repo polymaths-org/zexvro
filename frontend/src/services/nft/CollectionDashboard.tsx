@@ -440,8 +440,8 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
         setLastMintTxHash(intent.autoSubmitted.transactionHash);
         setActionMessage(
           intent.tokenId === undefined
-            ? `Token minted on ${nftNetworkLabel()}.`
-            : `Token #${intent.tokenId} minted on Stellar ${nftNetworkLabel()}.`,
+            ? `Token minted on ${nftNetworkLabel(health)}.`
+            : `Token #${intent.tokenId} minted on Stellar ${nftNetworkLabel(health)}.`,
         );
       } else {
         setActionMessage(
@@ -464,7 +464,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
     setActionMessage('');
     try {
       if (!(await isWalletAvailable())) {
-        throw new Error(`Freighter is not available. Unlock Freighter, allow this site, and switch to Stellar ${nftNetworkLabel()}.`);
+        throw new Error(`Freighter is not available. Unlock Freighter, allow this site, and switch to Stellar ${nftNetworkLabel(health)}.`);
       }
       const walletAddress = await getPublicKey();
       const operatorAddress = mintOperator.trim() || mintCollection.ownerAddress;
@@ -499,8 +499,8 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
       const mintedId = result.item?.tokenId ?? tokenId;
       setActionMessage(
         mintedId === undefined
-          ? `Token signed and minted on ${nftNetworkLabel()}.`
-          : `Token #${mintedId} signed and minted on Stellar ${nftNetworkLabel()}.`,
+          ? `Token signed and minted on ${nftNetworkLabel(health)}.`
+          : `Token #${mintedId} signed and minted on Stellar ${nftNetworkLabel(health)}.`,
       );
     } catch (error) {
       reportActionError(error, setActionError);
@@ -540,7 +540,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
             ? { ...collection, primarySale: configuredSale }
             : collection,
         ));
-        setActionMessage(`Sale configuration is live on ${nftNetworkLabel()}.`);
+        setActionMessage(`Sale configuration is live on ${nftNetworkLabel(health)}.`);
         await loadRemoteData(undefined, true);
       } else {
         setActionMessage('Sale configuration transaction prepared.');
@@ -559,7 +559,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
     setActionMessage('');
     try {
       if (!(await isWalletAvailable())) {
-        throw new Error(`Freighter is not available. Unlock Freighter, allow this site, use Stellar ${nftNetworkLabel()}, or rely on sponsor auto-submit.`);
+        throw new Error(`Freighter is not available. Unlock Freighter, allow this site, use Stellar ${nftNetworkLabel(health)}, or rely on sponsor auto-submit.`);
       }
       const walletAddress = await getPublicKey();
       if (
@@ -600,7 +600,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
           status: 'confirmed',
         },
       });
-      setActionMessage(`Sale configuration signed and confirmed on ${nftNetworkLabel()}.`);
+      setActionMessage(`Sale configuration signed and confirmed on ${nftNetworkLabel(health)}.`);
       await loadRemoteData(undefined, true);
     } catch (error) {
       reportActionError(error, setActionError);
@@ -827,7 +827,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
                         <td className="px-3 py-3.5">
                           {collection.contractId ? (
                             <a
-                              href={`${nftExplorerBase()}/contract/${collection.contractId}`}
+                              href={`${nftExplorerBase(health)}/contract/${collection.contractId}`}
                               target="_blank"
                               rel="noreferrer"
                               title={collection.contractId}
@@ -1316,7 +1316,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
                   <div>
                     <span className="text-xs text-zinc-500 dark:text-zinc-400">Transaction</span>
                     <a
-                      href={`${nftExplorerBase()}/tx/${saleIntent.autoSubmitted.transactionHash}`}
+                      href={`${nftExplorerBase(health)}/tx/${saleIntent.autoSubmitted.transactionHash}`}
                       target="_blank"
                       rel="noreferrer"
                       className="mt-1 inline-flex items-center gap-1.5 font-mono text-xs text-brand-blue hover:underline"
@@ -1365,7 +1365,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
                   {atomicToUsdc(saleCollection.primarySale.priceAtomic)} XLM
                 </p>
                 <a
-                  href={`${nftExplorerBase()}/tx/${saleCollection.primarySale.transactionHash}`}
+                  href={`${nftExplorerBase(health)}/tx/${saleCollection.primarySale.transactionHash}`}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-1.5 font-mono text-xs text-brand-blue hover:underline"
@@ -1457,7 +1457,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
                   <div>
                     <span className="text-xs text-zinc-500 dark:text-zinc-400">Transaction</span>
                     <a
-                      href={`${nftExplorerBase()}/tx/${mintIntent.autoSubmitted?.transactionHash || lastMintTxHash}`}
+                      href={`${nftExplorerBase(health)}/tx/${mintIntent.autoSubmitted?.transactionHash || lastMintTxHash}`}
                       target="_blank"
                       rel="noreferrer"
                       className="mt-1 inline-flex items-center gap-1.5 font-mono text-xs text-brand-blue hover:underline"
@@ -1561,7 +1561,7 @@ export default function CollectionDashboard({ workspaceId, accessToken, onCreate
                         <td className="px-3 py-2 capitalize text-zinc-600 dark:text-zinc-300">{item.source}</td>
                         <td className="px-3 py-2">
                           <a
-                            href={`${nftExplorerBase()}/tx/${item.transactionHash}`}
+                            href={`${nftExplorerBase(health)}/tx/${item.transactionHash}`}
                             target="_blank"
                             rel="noreferrer"
                             className="inline-flex items-center gap-1 font-mono text-xs text-brand-blue hover:underline"

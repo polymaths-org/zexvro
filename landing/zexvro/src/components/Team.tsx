@@ -130,6 +130,8 @@ export const Team: React.FC = () => {
                   <img
                     src={m.img}
                     alt={`${m.name}, ${m.role} at Zexvro`}
+                    loading="lazy"
+                    decoding="async"
                     className={`absolute inset-0 h-full w-full object-cover object-center transition-opacity duration-300 ${
                       isActive ? 'opacity-0' : 'opacity-100'
                     }`}
@@ -138,6 +140,8 @@ export const Team: React.FC = () => {
                     src={m.imgHover}
                     alt=""
                     role="presentation"
+                    loading="lazy"
+                    decoding="async"
                     className={`absolute inset-0 h-full w-full object-cover object-center transition-opacity duration-300 ${
                       isActive ? 'opacity-100' : 'opacity-0'
                     }`}

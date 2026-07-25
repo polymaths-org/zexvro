@@ -1,4 +1,13 @@
 import { ServiceItem } from '../types';
+import { serviceLogoUrl } from '../lib/serviceAssets';
+
+function logos(id: string) {
+  return {
+    logo32: serviceLogoUrl(id, 32),
+    logo64: serviceLogoUrl(id, 64),
+    logo: serviceLogoUrl(id, 256),
+  };
+}
 
 /** Five MVP services from ZEXVRO context.md (A2A removed from MVP) */
 export const activeServices: ServiceItem[] = [
@@ -11,6 +20,7 @@ export const activeServices: ServiceItem[] = [
     iconName: 'ShieldCheck',
     techDetails: ['ZK proofs', 'Stealth addresses', 'Pay party', 'Compliance view-keys'],
     hologramColor: 'from-violet-500/20 via-purple-500/10 to-transparent',
+    ...logos('zer0'),
   },
   {
     id: 'morph',
@@ -21,6 +31,7 @@ export const activeServices: ServiceItem[] = [
     iconName: 'Zap',
     techDetails: ['CLI + web agent', 'Repo inspection', 'Persistent memory', 'Deploy assist'],
     hologramColor: 'from-amber-500/20 via-orange-500/10 to-transparent',
+    ...logos('morph'),
   },
   {
     id: 'reqwid',
@@ -31,6 +42,7 @@ export const activeServices: ServiceItem[] = [
     iconName: 'UserCheck',
     techDetails: ['SDK / API', 'Confidence scores', 'Appeal flow', 'Privacy model'],
     hologramColor: 'from-blue-500/20 via-indigo-500/10 to-transparent',
+    ...logos('reqwid'),
   },
   {
     id: 'nfto',
@@ -41,6 +53,7 @@ export const activeServices: ServiceItem[] = [
     iconName: 'Coins',
     techDetails: ['Soroban collections', 'USDC checkout', 'Embed SDK', 'Studio analytics'],
     hologramColor: 'from-pink-500/20 via-purple-500/10 to-transparent',
+    ...logos('nfto'),
   },
   {
     id: 'dedsec',
@@ -51,6 +64,7 @@ export const activeServices: ServiceItem[] = [
     iconName: 'CreditCard',
     techDetails: ['x402 v2', 'USDC exact', 'Replay protection', 'Edge enforcement'],
     hologramColor: 'from-emerald-500/20 via-teal-500/10 to-transparent',
+    ...logos('dedsec'),
   },
 ];
 

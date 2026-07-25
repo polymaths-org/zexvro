@@ -5,6 +5,10 @@ import { useProjectStore } from '../../stores/project';
 import { useWorkspaceStore } from '../../stores/workspace';
 import { useZer0Store } from '../../stores/zer0';
 import { serviceCatalog } from '../../data/serviceCatalog';
+import {
+  balanceNetworkLabel,
+  resolveWorkspaceChainEnv,
+} from '../../lib/stellarNetwork';
 
 function statusLabel(value: string) {
   return value.split('_').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
@@ -25,6 +29,7 @@ export default function ProjectOverview() {
   const allInstances = useProjectStore(s => s.serviceInstances);
   const workspace = useWorkspaceStore(s => s.workspaces.find(item => item.id === workspaceId));
   const zer0Pool = useZer0Store(s => s.pool);
+  const zer0HorizonUrl = useZer0Store(s => s.settings?.horizonUrl);
   const allZer0Employees = useZer0Store(s => s.employees);
 
   const goTo = (path: string) => navigate({ to: path });
@@ -73,6 +78,12 @@ export default function ProjectOverview() {
     row.enabled || ['ready', 'active', 'enabled'].includes(row.status),
   ).length;
   const mainnetPrefs = Object.values(project.serviceNetworks || {}).filter(v => v === 'mainnet').length;
+  const chainEnv = resolveWorkspaceChainEnv({
+    workspaceEnvironment: workspace?.environment || workspace?.settings?.environment,
+    projectNetworks: [project.serviceNetworks?.zer0, project.network],
+    horizonUrl: zer0HorizonUrl,
+  });
+  const chainLabel = balanceNetworkLabel(chainEnv);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -115,8 +126,8 @@ export default function ProjectOverview() {
 
       <div className="grid gap-px border-y border-zinc-200 bg-zinc-200 dark:border-zinc-800 dark:bg-zinc-800 sm:grid-cols-2 lg:grid-cols-4">
         <Metric icon={<Blocks className="h-4 w-4" />} label="Enabled services" value={String(activeServices.length)} detail={`${readyCount} ready · MVP catalog`} />
-        <Metric icon={<Wallet className="h-4 w-4" />} label="Wallet balances" value={zkTvl > 0 ? zkTvl.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—'} detail="Zer0 linked wallet · USDC/XLM/EURC" />
-        <Metric icon={<ShieldCheck className="h-4 w-4" />} label="Network prefs" value={networkLabel(project.network)} detail={mainnetPrefs > 0 ? `${mainnetPrefs} service(s) on mainnet` : 'Per-service testnet/mainnet in Settings'} />
+        <Metric icon={<Wallet className="h-4 w-4" />} label="Wallet balances" value={zkTvl > 0 ? zkTvl.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—'} detail={`Zer0 linked wallet · ${chainLabel} · USDC/XLM/EURC`} />
+        <Metric icon={<ShieldCheck className="h-4 w-4" />} label="Network prefs" value={networkLabel(project.network)} detail={mainnetPrefs > 0 ? `${mainnetPrefs} service(s) on mainnet · workspace ${chainLabel}` : `Workspace ${chainLabel} · per-service prefs in Settings`} />
         <Metric icon={<Users className="h-4 w-4" />} label="Team" value={String(workspace?.members.length || 0)} detail={`${zer0Employees.length} Zer0 payees`} />
       </div>
 

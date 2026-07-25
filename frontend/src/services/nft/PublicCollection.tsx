@@ -12,11 +12,13 @@ import BrandLoader from '../../components/BrandLoader';
 import {
   collectionLogo,
   createPublicCheckoutIntent,
+  getNftServiceHealth,
   getPublicNftCollection,
   NftApiError,
   submitPublicCheckoutIntent,
   type NftInventorySummary,
   type NftCheckoutIntent,
+  type NftServiceHealth,
   type PublicNftCollection,
   nftExplorerBase,
   nftNetworkLabel,
@@ -59,16 +61,21 @@ export default function PublicCollection() {
   const [connecting, setConnecting] = useState(false);
   const [confirmedHash, setConfirmedHash] = useState('');
   const [statusNote, setStatusNote] = useState('');
+  const [health, setHealth] = useState<NftServiceHealth | null>(null);
 
   useEffect(() => {
     if (!collectionId) return;
     const controller = new AbortController();
     setLoading(true);
     setLoadError('');
-    getPublicNftCollection(collectionId, controller.signal)
-      .then((result) => {
+    Promise.all([
+      getPublicNftCollection(collectionId, controller.signal),
+      getNftServiceHealth(controller.signal).catch(() => null),
+    ])
+      .then(([result, nextHealth]) => {
         setCollection(result.collection);
         if (result.inventory) setInventory(result.inventory);
+        if (nextHealth) setHealth(nextHealth);
       })
       .catch((error: unknown) => {
         if (!controller.signal.aborted) setLoadError(errorMessage(error));
@@ -96,7 +103,7 @@ export default function PublicCollection() {
       const available = await isWalletAvailable();
       if (!available) {
         throw new Error(
-          'Freighter not detected. Install Freighter, unlock it, set network to Testnet, allow this site, then retry.',
+          `Freighter not detected. Install Freighter, unlock it, set network to ${nftNetworkLabel(health)}, allow this site, then retry.`,
         );
       }
       const address = await getPublicKey();
@@ -152,7 +159,7 @@ export default function PublicCollection() {
       if (walletAddress !== checkoutIntent.buyerAddress) {
         throw new Error(`Connected wallet must be ${checkoutIntent.buyerAddress}`);
       }
-      const signedTransaction = await signTransaction(checkoutIntent.serializedTransaction, nftNetworkPassphrase());
+      const signedTransaction = await signTransaction(checkoutIntent.serializedTransaction, nftNetworkPassphrase(health));
       const result = await submitPublicCheckoutIntent({
         intentId: checkoutIntent.id,
         signedTransaction,
@@ -163,7 +170,7 @@ export default function PublicCollection() {
       }
       setConfirmedHash(hash);
       setCheckoutIntent({ ...result.intent, status: 'confirmed', transactionHash: hash });
-      setStatusNote('Purchase confirmed on ${nftNetworkLabel()}.');
+      setStatusNote(`Purchase confirmed on ${nftNetworkLabel(health)}.`);
     } catch (error) {
       console.error('[nft/checkout] sign', error);
       setCheckoutError(errorMessage(error));
@@ -245,13 +252,13 @@ export default function PublicCollection() {
               </div>
               <div className="mt-3 flex items-center justify-between gap-3 text-sm">
                 <span className="text-zinc-500">Network</span>
-                <span className="text-zinc-200">{nftNetworkLabel()}</span>
+                <span className="text-zinc-200">{nftNetworkLabel(health)}</span>
               </div>
               {collection.contractId && (
                 <div className="mt-3 flex items-center justify-between gap-3 text-sm">
                   <span className="text-zinc-500">Contract</span>
                   <a
-                    href={`${nftExplorerBase()}/contract/${collection.contractId}`}
+                    href={`${nftExplorerBase(health)}/contract/${collection.contractId}`}
                     target="_blank"
                     rel="noreferrer"
                     className="inline-flex items-center gap-1 font-mono text-xs text-brand-blue"
@@ -335,7 +342,7 @@ export default function PublicCollection() {
 
             {confirmedHash && (
               <a
-                href={`${nftExplorerBase()}/tx/${confirmedHash}`}
+                href={`${nftExplorerBase(health)}/tx/${confirmedHash}`}
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex w-full items-center justify-center gap-2 text-sm text-emerald-300"
@@ -348,7 +355,7 @@ export default function PublicCollection() {
         </section>
 
         <p className="mt-6 text-center text-[11px] text-zinc-600">
-          Powered by ZEXVRO · Freighter Testnet · sponsored network fees
+          Powered by ZEXVRO · Freighter {nftNetworkLabel(health)} · sponsored network fees
         </p>
       </div>
     </main>

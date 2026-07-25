@@ -1,0 +1,2458 @@
+[
+  {
+    "start": 0.11,
+    "end": 2.59,
+    "text": "Hey there, I am Paris and I am building the X-Rope",
+    "words": [
+      {
+        "start": 0.11,
+        "end": 0.65,
+        "word": " Hey"
+      },
+      {
+        "start": 0.65,
+        "end": 0.77,
+        "word": " there,"
+      },
+      {
+        "start": 1.13,
+        "end": 1.13,
+        "word": " I"
+      },
+      {
+        "start": 1.13,
+        "end": 1.17,
+        "word": " am"
+      },
+      {
+        "start": 1.17,
+        "end": 1.37,
+        "word": " Paris"
+      },
+      {
+        "start": 1.37,
+        "end": 1.87,
+        "word": " and"
+      },
+      {
+        "start": 1.87,
+        "end": 2.03,
+        "word": " I"
+      },
+      {
+        "start": 2.03,
+        "end": 2.07,
+        "word": " am"
+      },
+      {
+        "start": 2.07,
+        "end": 2.21,
+        "word": " building"
+      },
+      {
+        "start": 2.21,
+        "end": 2.35,
+        "word": " the"
+      },
+      {
+        "start": 2.35,
+        "end": 2.45,
+        "word": " X"
+      },
+      {
+        "start": 2.45,
+        "end": 2.59,
+        "word": "-Rope"
+      }
+    ]
+  },
+  {
+    "start": 2.93,
+    "end": 4.53,
+    "text": "So basically most of the start-ups",
+    "words": [
+      {
+        "start": 2.93,
+        "end": 3.17,
+        "word": " So"
+      },
+      {
+        "start": 3.17,
+        "end": 3.49,
+        "word": " basically"
+      },
+      {
+        "start": 3.49,
+        "end": 3.83,
+        "word": " most"
+      },
+      {
+        "start": 3.83,
+        "end": 3.97,
+        "word": " of"
+      },
+      {
+        "start": 3.97,
+        "end": 4.07,
+        "word": " the"
+      },
+      {
+        "start": 4.07,
+        "end": 4.23,
+        "word": " start"
+      },
+      {
+        "start": 4.23,
+        "end": 4.53,
+        "word": "-ups"
+      }
+    ]
+  },
+  {
+    "start": 5.11,
+    "end": 7.57,
+    "text": "Uh, shit, let's keep going, let's keep going",
+    "words": [
+      {
+        "start": 5.11,
+        "end": 5.47,
+        "word": " Uh,"
+      },
+      {
+        "start": 6.17,
+        "end": 6.17,
+        "word": " shit,"
+      },
+      {
+        "start": 6.35,
+        "end": 6.83,
+        "word": " let's"
+      },
+      {
+        "start": 6.83,
+        "end": 6.87,
+        "word": " keep"
+      },
+      {
+        "start": 6.87,
+        "end": 6.87,
+        "word": " going,"
+      },
+      {
+        "start": 6.99,
+        "end": 7.57,
+        "word": " let's"
+      },
+      {
+        "start": 7.57,
+        "end": 7.57,
+        "word": " keep"
+      },
+      {
+        "start": 7.57,
+        "end": 7.57,
+        "word": " going"
+      }
+    ]
+  },
+  {
+    "start": 8.85,
+    "end": 9.91,
+    "text": "Hindi, I will put this on X",
+    "words": [
+      {
+        "start": 8.85,
+        "end": 9.33,
+        "word": " Hindi,"
+      },
+      {
+        "start": 9.67,
+        "end": 9.67,
+        "word": " I"
+      },
+      {
+        "start": 9.67,
+        "end": 9.75,
+        "word": " will"
+      },
+      {
+        "start": 9.75,
+        "end": 9.75,
+        "word": " put"
+      },
+      {
+        "start": 9.75,
+        "end": 9.75,
+        "word": " this"
+      },
+      {
+        "start": 9.75,
+        "end": 9.89,
+        "word": " on"
+      },
+      {
+        "start": 9.89,
+        "end": 9.91,
+        "word": " X"
+      }
+    ]
+  },
+  {
+    "start": 11.21,
+    "end": 12.67,
+    "text": "Hey there, I am Paris",
+    "words": [
+      {
+        "start": 11.21,
+        "end": 11.69,
+        "word": " Hey"
+      },
+      {
+        "start": 11.69,
+        "end": 11.97,
+        "word": " there,"
+      },
+      {
+        "start": 12.23,
+        "end": 12.31,
+        "word": " I"
+      },
+      {
+        "start": 12.31,
+        "end": 12.43,
+        "word": " am"
+      },
+      {
+        "start": 12.43,
+        "end": 12.67,
+        "word": " Paris"
+      }
+    ]
+  },
+  {
+    "start": 13.51,
+    "end": 15.41,
+    "text": "I am 16 year old builder from Pune",
+    "words": [
+      {
+        "start": 13.51,
+        "end": 13.99,
+        "word": " I"
+      },
+      {
+        "start": 13.99,
+        "end": 14.07,
+        "word": " am"
+      },
+      {
+        "start": 14.07,
+        "end": 14.23,
+        "word": " 16"
+      },
+      {
+        "start": 14.23,
+        "end": 14.47,
+        "word": " year"
+      },
+      {
+        "start": 14.47,
+        "end": 14.71,
+        "word": " old"
+      },
+      {
+        "start": 14.71,
+        "end": 14.93,
+        "word": " builder"
+      },
+      {
+        "start": 14.93,
+        "end": 15.13,
+        "word": " from"
+      },
+      {
+        "start": 15.13,
+        "end": 15.41,
+        "word": " Pune"
+      }
+    ]
+  },
+  {
+    "start": 15.99,
+    "end": 17.25,
+    "text": "And I am building the X-Rope",
+    "words": [
+      {
+        "start": 15.99,
+        "end": 16.23,
+        "word": " And"
+      },
+      {
+        "start": 16.23,
+        "end": 16.35,
+        "word": " I"
+      },
+      {
+        "start": 16.35,
+        "end": 16.35,
+        "word": " am"
+      },
+      {
+        "start": 16.35,
+        "end": 16.51,
+        "word": " building"
+      },
+      {
+        "start": 16.51,
+        "end": 16.71,
+        "word": " the"
+      },
+      {
+        "start": 16.71,
+        "end": 16.93,
+        "word": " X"
+      },
+      {
+        "start": 16.93,
+        "end": 17.25,
+        "word": "-Rope"
+      }
+    ]
+  },
+  {
+    "start": 17.25,
+    "end": 19.07,
+    "text": "So basically what happens in the market",
+    "words": [
+      {
+        "start": 17.25,
+        "end": 17.69,
+        "word": " So"
+      },
+      {
+        "start": 17.69,
+        "end": 18.01,
+        "word": " basically"
+      },
+      {
+        "start": 18.01,
+        "end": 18.25,
+        "word": " what"
+      },
+      {
+        "start": 18.25,
+        "end": 18.35,
+        "word": " happens"
+      },
+      {
+        "start": 18.35,
+        "end": 18.75,
+        "word": " in"
+      },
+      {
+        "start": 18.75,
+        "end": 18.81,
+        "word": " the"
+      },
+      {
+        "start": 18.81,
+        "end": 19.07,
+        "word": " market"
+      }
+    ]
+  },
+  {
+    "start": 19.57,
+    "end": 20.73,
+    "text": "The website start-ups",
+    "words": [
+      {
+        "start": 19.57,
+        "end": 20.05,
+        "word": " The"
+      },
+      {
+        "start": 20.05,
+        "end": 20.37,
+        "word": " website"
+      },
+      {
+        "start": 20.37,
+        "end": 20.61,
+        "word": " start"
+      },
+      {
+        "start": 20.61,
+        "end": 20.73,
+        "word": "-ups"
+      }
+    ]
+  },
+  {
+    "start": 20.73,
+    "end": 23.11,
+    "text": "They go to individual users",
+    "words": [
+      {
+        "start": 20.73,
+        "end": 21.41,
+        "word": " They"
+      },
+      {
+        "start": 21.41,
+        "end": 21.55,
+        "word": " go"
+      },
+      {
+        "start": 21.55,
+        "end": 21.81,
+        "word": " to"
+      },
+      {
+        "start": 21.81,
+        "end": 22.57,
+        "word": " individual"
+      },
+      {
+        "start": 22.57,
+        "end": 23.11,
+        "word": " users"
+      }
+    ]
+  },
+  {
+    "start": 23.75,
+    "end": 27.11,
+    "text": "They think they will adopt the blockchain or the web services",
+    "words": [
+      {
+        "start": 23.75,
+        "end": 24.23,
+        "word": " They"
+      },
+      {
+        "start": 24.23,
+        "end": 24.57,
+        "word": " think"
+      },
+      {
+        "start": 24.57,
+        "end": 24.97,
+        "word": " they"
+      },
+      {
+        "start": 24.97,
+        "end": 25.17,
+        "word": " will"
+      },
+      {
+        "start": 25.17,
+        "end": 25.43,
+        "word": " adopt"
+      },
+      {
+        "start": 25.43,
+        "end": 25.89,
+        "word": " the"
+      },
+      {
+        "start": 25.89,
+        "end": 26.37,
+        "word": " blockchain"
+      },
+      {
+        "start": 26.37,
+        "end": 26.55,
+        "word": " or"
+      },
+      {
+        "start": 26.55,
+        "end": 26.61,
+        "word": " the"
+      },
+      {
+        "start": 26.61,
+        "end": 26.71,
+        "word": " web"
+      },
+      {
+        "start": 26.71,
+        "end": 27.11,
+        "word": " services"
+      }
+    ]
+  },
+  {
+    "start": 27.11,
+    "end": 29.47,
+    "text": "But I believe or my team believes",
+    "words": [
+      {
+        "start": 27.11,
+        "end": 27.63,
+        "word": " But"
+      },
+      {
+        "start": 27.63,
+        "end": 27.93,
+        "word": " I"
+      },
+      {
+        "start": 27.93,
+        "end": 28.15,
+        "word": " believe"
+      },
+      {
+        "start": 28.15,
+        "end": 28.73,
+        "word": " or"
+      },
+      {
+        "start": 28.73,
+        "end": 28.95,
+        "word": " my"
+      },
+      {
+        "start": 28.95,
+        "end": 29.17,
+        "word": " team"
+      },
+      {
+        "start": 29.17,
+        "end": 29.47,
+        "word": " believes"
+      }
+    ]
+  },
+  {
+    "start": 30.11,
+    "end": 31.35,
+    "text": "They will cut it",
+    "words": [
+      {
+        "start": 30.11,
+        "end": 30.59,
+        "word": " They"
+      },
+      {
+        "start": 30.59,
+        "end": 30.95,
+        "word": " will"
+      },
+      {
+        "start": 30.95,
+        "end": 31.07,
+        "word": " cut"
+      },
+      {
+        "start": 31.07,
+        "end": 31.35,
+        "word": " it"
+      }
+    ]
+  },
+  {
+    "start": 31.87,
+    "end": 36.13,
+    "text": "But we believe that the adoption starts with businesses",
+    "words": [
+      {
+        "start": 31.87,
+        "end": 32.17,
+        "word": " But"
+      },
+      {
+        "start": 32.17,
+        "end": 33.29,
+        "word": " we"
+      },
+      {
+        "start": 33.29,
+        "end": 33.61,
+        "word": " believe"
+      },
+      {
+        "start": 33.61,
+        "end": 34.31,
+        "word": " that"
+      },
+      {
+        "start": 34.31,
+        "end": 34.37,
+        "word": " the"
+      },
+      {
+        "start": 34.37,
+        "end": 35.11,
+        "word": " adoption"
+      },
+      {
+        "start": 35.11,
+        "end": 35.39,
+        "word": " starts"
+      },
+      {
+        "start": 35.39,
+        "end": 35.67,
+        "word": " with"
+      },
+      {
+        "start": 35.67,
+        "end": 36.13,
+        "word": " businesses"
+      }
+    ]
+  },
+  {
+    "start": 36.13,
+    "end": 39.09,
+    "text": "Basically when a business adopts a website or a blockchain service",
+    "words": [
+      {
+        "start": 36.13,
+        "end": 36.99,
+        "word": " Basically"
+      },
+      {
+        "start": 36.99,
+        "end": 37.33,
+        "word": " when"
+      },
+      {
+        "start": 37.33,
+        "end": 37.33,
+        "word": " a"
+      },
+      {
+        "start": 37.33,
+        "end": 37.55,
+        "word": " business"
+      },
+      {
+        "start": 37.55,
+        "end": 37.87,
+        "word": " adopts"
+      },
+      {
+        "start": 37.87,
+        "end": 37.87,
+        "word": " a"
+      },
+      {
+        "start": 37.87,
+        "end": 38.25,
+        "word": " website"
+      },
+      {
+        "start": 38.25,
+        "end": 38.47,
+        "word": " or"
+      },
+      {
+        "start": 38.47,
+        "end": 38.51,
+        "word": " a"
+      },
+      {
+        "start": 38.51,
+        "end": 38.81,
+        "word": " blockchain"
+      },
+      {
+        "start": 38.81,
+        "end": 39.09,
+        "word": " service"
+      }
+    ]
+  },
+  {
+    "start": 40.0,
+    "end": 43.74,
+    "text": "So all the millions of users who use the product...",
+    "words": [
+      {
+        "start": 40.0,
+        "end": 40.16,
+        "word": " So"
+      },
+      {
+        "start": 40.16,
+        "end": 40.44,
+        "word": " all"
+      },
+      {
+        "start": 40.44,
+        "end": 40.66,
+        "word": " the"
+      },
+      {
+        "start": 40.66,
+        "end": 41.36,
+        "word": " millions"
+      },
+      {
+        "start": 41.36,
+        "end": 41.66,
+        "word": " of"
+      },
+      {
+        "start": 41.66,
+        "end": 42.04,
+        "word": " users"
+      },
+      {
+        "start": 42.04,
+        "end": 42.66,
+        "word": " who"
+      },
+      {
+        "start": 42.66,
+        "end": 43.74,
+        "word": " use"
+      },
+      {
+        "start": 43.74,
+        "end": 43.74,
+        "word": " the"
+      },
+      {
+        "start": 43.74,
+        "end": 43.74,
+        "word": " product..."
+      }
+    ]
+  },
+  {
+    "start": 44.44,
+    "end": 46.44,
+    "text": "So basically when...",
+    "words": [
+      {
+        "start": 44.44,
+        "end": 45.0,
+        "word": " So"
+      },
+      {
+        "start": 45.0,
+        "end": 45.56,
+        "word": " basically"
+      },
+      {
+        "start": 45.56,
+        "end": 46.44,
+        "word": " when..."
+      }
+    ]
+  },
+  {
+    "start": 46.44,
+    "end": 47.32,
+    "text": "Oh shit, shit, shit...",
+    "words": [
+      {
+        "start": 46.44,
+        "end": 46.72,
+        "word": " Oh"
+      },
+      {
+        "start": 46.72,
+        "end": 47.0,
+        "word": " shit,"
+      },
+      {
+        "start": 47.16,
+        "end": 47.16,
+        "word": " shit,"
+      },
+      {
+        "start": 47.24,
+        "end": 47.32,
+        "word": " shit..."
+      }
+    ]
+  },
+  {
+    "start": 47.32,
+    "end": 48.18,
+    "text": "Let it go, let it go.",
+    "words": [
+      {
+        "start": 47.32,
+        "end": 47.5,
+        "word": " Let"
+      },
+      {
+        "start": 47.5,
+        "end": 47.54,
+        "word": " it"
+      },
+      {
+        "start": 47.54,
+        "end": 47.68,
+        "word": " go,"
+      },
+      {
+        "start": 47.68,
+        "end": 47.92,
+        "word": " let"
+      },
+      {
+        "start": 47.92,
+        "end": 48.12,
+        "word": " it"
+      },
+      {
+        "start": 48.12,
+        "end": 48.18,
+        "word": " go."
+      }
+    ]
+  },
+  {
+    "start": 49.14,
+    "end": 50.480000000000004,
+    "text": "That's why services add to their product.",
+    "words": [
+      {
+        "start": 49.14,
+        "end": 49.7,
+        "word": " That's"
+      },
+      {
+        "start": 49.7,
+        "end": 49.7,
+        "word": " why"
+      },
+      {
+        "start": 49.7,
+        "end": 49.980000000000004,
+        "word": " services"
+      },
+      {
+        "start": 49.980000000000004,
+        "end": 50.1,
+        "word": " add"
+      },
+      {
+        "start": 50.1,
+        "end": 50.1,
+        "word": " to"
+      },
+      {
+        "start": 50.1,
+        "end": 50.2,
+        "word": " their"
+      },
+      {
+        "start": 50.2,
+        "end": 50.480000000000004,
+        "word": " product."
+      }
+    ]
+  },
+  {
+    "start": 51.58,
+    "end": 54.32,
+    "text": "So millions of users who use the product",
+    "words": [
+      {
+        "start": 51.58,
+        "end": 51.980000000000004,
+        "word": " So"
+      },
+      {
+        "start": 51.980000000000004,
+        "end": 52.6,
+        "word": " millions"
+      },
+      {
+        "start": 52.6,
+        "end": 52.84,
+        "word": " of"
+      },
+      {
+        "start": 52.84,
+        "end": 53.18,
+        "word": " users"
+      },
+      {
+        "start": 53.18,
+        "end": 53.7,
+        "word": " who"
+      },
+      {
+        "start": 53.7,
+        "end": 53.8,
+        "word": " use"
+      },
+      {
+        "start": 53.8,
+        "end": 54.04,
+        "word": " the"
+      },
+      {
+        "start": 54.04,
+        "end": 54.32,
+        "word": " product"
+      }
+    ]
+  },
+  {
+    "start": 55.0,
+    "end": 57.84,
+    "text": "They get benefits without changing their daily habits.",
+    "words": [
+      {
+        "start": 55.0,
+        "end": 55.42,
+        "word": " They"
+      },
+      {
+        "start": 55.42,
+        "end": 55.46,
+        "word": " get"
+      },
+      {
+        "start": 55.46,
+        "end": 55.84,
+        "word": " benefits"
+      },
+      {
+        "start": 55.84,
+        "end": 56.68,
+        "word": " without"
+      },
+      {
+        "start": 56.68,
+        "end": 56.94,
+        "word": " changing"
+      },
+      {
+        "start": 56.94,
+        "end": 57.14,
+        "word": " their"
+      },
+      {
+        "start": 57.14,
+        "end": 57.4,
+        "word": " daily"
+      },
+      {
+        "start": 57.4,
+        "end": 57.84,
+        "word": " habits."
+      }
+    ]
+  },
+  {
+    "start": 58.379999999999995,
+    "end": 60.019999999999996,
+    "text": "There is a developer infrastructure platform",
+    "words": [
+      {
+        "start": 58.379999999999995,
+        "end": 58.54,
+        "word": " There"
+      },
+      {
+        "start": 58.54,
+        "end": 58.54,
+        "word": " is"
+      },
+      {
+        "start": 58.54,
+        "end": 58.72,
+        "word": " a"
+      },
+      {
+        "start": 58.72,
+        "end": 59.0,
+        "word": " developer"
+      },
+      {
+        "start": 59.0,
+        "end": 59.42,
+        "word": " infrastructure"
+      },
+      {
+        "start": 59.42,
+        "end": 60.019999999999996,
+        "word": " platform"
+      }
+    ]
+  },
+  {
+    "start": 60.019999999999996,
+    "end": 62.04,
+    "text": "Which is based on APIs and SDKs.",
+    "words": [
+      {
+        "start": 60.019999999999996,
+        "end": 60.519999999999996,
+        "word": " Which"
+      },
+      {
+        "start": 60.519999999999996,
+        "end": 60.58,
+        "word": " is"
+      },
+      {
+        "start": 60.58,
+        "end": 60.58,
+        "word": " based"
+      },
+      {
+        "start": 60.58,
+        "end": 60.58,
+        "word": " on"
+      },
+      {
+        "start": 60.58,
+        "end": 60.9,
+        "word": " APIs"
+      },
+      {
+        "start": 60.9,
+        "end": 61.34,
+        "word": " and"
+      },
+      {
+        "start": 61.34,
+        "end": 62.04,
+        "word": " SDKs."
+      }
+    ]
+  },
+  {
+    "start": 63.980000000000004,
+    "end": 65.62,
+    "text": "The medium is not world.",
+    "words": [
+      {
+        "start": 63.980000000000004,
+        "end": 64.53999999999999,
+        "word": " The"
+      },
+      {
+        "start": 64.53999999999999,
+        "end": 64.76,
+        "word": " medium"
+      },
+      {
+        "start": 64.76,
+        "end": 65.06,
+        "word": " is"
+      },
+      {
+        "start": 65.06,
+        "end": 65.26,
+        "word": " not"
+      },
+      {
+        "start": 65.26,
+        "end": 65.62,
+        "word": " world."
+      }
+    ]
+  },
+  {
+    "start": 66.0,
+    "end": 67.03999999999999,
+    "text": "It has become very pure Hindi.",
+    "words": [
+      {
+        "start": 66.0,
+        "end": 66.32,
+        "word": " It"
+      },
+      {
+        "start": 66.32,
+        "end": 66.36,
+        "word": " has"
+      },
+      {
+        "start": 66.36,
+        "end": 66.36,
+        "word": " become"
+      },
+      {
+        "start": 66.36,
+        "end": 66.53999999999999,
+        "word": " very"
+      },
+      {
+        "start": 66.53999999999999,
+        "end": 66.84,
+        "word": " pure"
+      },
+      {
+        "start": 66.84,
+        "end": 67.03999999999999,
+        "word": " Hindi."
+      }
+    ]
+  },
+  {
+    "start": 68.0,
+    "end": 70.02,
+    "text": "What do you do after this?",
+    "words": [
+      {
+        "start": 68.0,
+        "end": 68.64,
+        "word": " What"
+      },
+      {
+        "start": 68.64,
+        "end": 68.96000000000001,
+        "word": " do"
+      },
+      {
+        "start": 68.96000000000001,
+        "end": 68.96000000000001,
+        "word": " you"
+      },
+      {
+        "start": 68.96000000000001,
+        "end": 69.28,
+        "word": " do"
+      },
+      {
+        "start": 69.28,
+        "end": 69.72,
+        "word": " after"
+      },
+      {
+        "start": 69.72,
+        "end": 70.02,
+        "word": " this?"
+      }
+    ]
+  },
+  {
+    "start": 70.28,
+    "end": 71.22,
+    "text": "Check it out.",
+    "words": [
+      {
+        "start": 70.28,
+        "end": 70.62,
+        "word": " Check"
+      },
+      {
+        "start": 70.62,
+        "end": 71.08,
+        "word": " it"
+      },
+      {
+        "start": 71.08,
+        "end": 71.22,
+        "word": " out."
+      }
+    ]
+  },
+  {
+    "start": 71.22,
+    "end": 72.94,
+    "text": "Let it go, let it go.",
+    "words": [
+      {
+        "start": 71.22,
+        "end": 71.76,
+        "word": " Let"
+      },
+      {
+        "start": 71.76,
+        "end": 72.18,
+        "word": " it"
+      },
+      {
+        "start": 72.18,
+        "end": 72.22,
+        "word": " go,"
+      },
+      {
+        "start": 72.22,
+        "end": 72.3,
+        "word": " let"
+      },
+      {
+        "start": 72.3,
+        "end": 72.42,
+        "word": " it"
+      },
+      {
+        "start": 72.42,
+        "end": 72.94,
+        "word": " go."
+      }
+    ]
+  },
+  {
+    "start": 72.97999999999999,
+    "end": 75.32,
+    "text": "So basically, the developer infrastructure platform",
+    "words": [
+      {
+        "start": 72.97999999999999,
+        "end": 73.14,
+        "word": " So"
+      },
+      {
+        "start": 73.14,
+        "end": 73.52000000000001,
+        "word": " basically,"
+      },
+      {
+        "start": 73.66,
+        "end": 73.68,
+        "word": " the"
+      },
+      {
+        "start": 73.68,
+        "end": 73.92,
+        "word": " developer"
+      },
+      {
+        "start": 73.92,
+        "end": 74.7,
+        "word": " infrastructure"
+      },
+      {
+        "start": 74.7,
+        "end": 75.32,
+        "word": " platform"
+      }
+    ]
+  },
+  {
+    "start": 75.32,
+    "end": 78.94,
+    "text": "We use APIs and SDKs in that platform",
+    "words": [
+      {
+        "start": 75.32,
+        "end": 75.96000000000001,
+        "word": " We"
+      },
+      {
+        "start": 75.96000000000001,
+        "end": 77.18,
+        "word": " use"
+      },
+      {
+        "start": 77.18,
+        "end": 77.53999999999999,
+        "word": " APIs"
+      },
+      {
+        "start": 77.53999999999999,
+        "end": 77.78,
+        "word": " and"
+      },
+      {
+        "start": 77.78,
+        "end": 78.94,
+        "word": " SDKs"
+      },
+      {
+        "start": 78.94,
+        "end": 78.94,
+        "word": " in"
+      },
+      {
+        "start": 78.94,
+        "end": 78.94,
+        "word": " that"
+      },
+      {
+        "start": 78.94,
+        "end": 78.94,
+        "word": " platform"
+      }
+    ]
+  },
+  {
+    "start": 78.94,
+    "end": 79.97999999999999,
+    "text": "You are our...",
+    "words": [
+      {
+        "start": 78.94,
+        "end": 79.52000000000001,
+        "word": " You"
+      },
+      {
+        "start": 79.52000000000001,
+        "end": 79.68,
+        "word": " are"
+      },
+      {
+        "start": 79.68,
+        "end": 79.97999999999999,
+        "word": " our..."
+      }
+    ]
+  },
+  {
+    "start": 80.0,
+    "end": 83.3,
+    "text": "You can integrate these services in your platform without rebuilding your platform",
+    "words": [
+      {
+        "start": 80.0,
+        "end": 80.46,
+        "word": " You"
+      },
+      {
+        "start": 80.46,
+        "end": 80.46,
+        "word": " can"
+      },
+      {
+        "start": 80.46,
+        "end": 81.06,
+        "word": " integrate"
+      },
+      {
+        "start": 81.06,
+        "end": 81.06,
+        "word": " these"
+      },
+      {
+        "start": 81.06,
+        "end": 81.06,
+        "word": " services"
+      },
+      {
+        "start": 81.06,
+        "end": 81.34,
+        "word": " in"
+      },
+      {
+        "start": 81.34,
+        "end": 81.48,
+        "word": " your"
+      },
+      {
+        "start": 81.48,
+        "end": 81.9,
+        "word": " platform"
+      },
+      {
+        "start": 81.9,
+        "end": 82.26,
+        "word": " without"
+      },
+      {
+        "start": 82.26,
+        "end": 82.68,
+        "word": " rebuilding"
+      },
+      {
+        "start": 82.68,
+        "end": 82.88,
+        "word": " your"
+      },
+      {
+        "start": 82.88,
+        "end": 83.3,
+        "word": " platform"
+      }
+    ]
+  },
+  {
+    "start": 86.18,
+    "end": 90.52,
+    "text": "Our services are zero-knowledge privacy payrolls",
+    "words": [
+      {
+        "start": 86.18,
+        "end": 86.9,
+        "word": " Our"
+      },
+      {
+        "start": 86.9,
+        "end": 87.62,
+        "word": " services"
+      },
+      {
+        "start": 87.62,
+        "end": 87.92,
+        "word": " are"
+      },
+      {
+        "start": 87.92,
+        "end": 88.26,
+        "word": " zero"
+      },
+      {
+        "start": 88.26,
+        "end": 88.68,
+        "word": "-knowledge"
+      },
+      {
+        "start": 88.68,
+        "end": 89.46000000000001,
+        "word": " privacy"
+      },
+      {
+        "start": 89.46000000000001,
+        "end": 90.52,
+        "word": " payrolls"
+      }
+    ]
+  },
+  {
+    "start": 91.58,
+    "end": 95.48,
+    "text": "One click NFT deploys and there is an agent called Moff",
+    "words": [
+      {
+        "start": 91.58,
+        "end": 92.3,
+        "word": " One"
+      },
+      {
+        "start": 92.3,
+        "end": 92.5,
+        "word": " click"
+      },
+      {
+        "start": 92.5,
+        "end": 92.8,
+        "word": " NFT"
+      },
+      {
+        "start": 92.8,
+        "end": 93.2,
+        "word": " deploys"
+      },
+      {
+        "start": 93.2,
+        "end": 93.9,
+        "word": " and"
+      },
+      {
+        "start": 93.9,
+        "end": 94.46000000000001,
+        "word": " there"
+      },
+      {
+        "start": 94.46000000000001,
+        "end": 94.62,
+        "word": " is"
+      },
+      {
+        "start": 94.62,
+        "end": 94.76,
+        "word": " an"
+      },
+      {
+        "start": 94.76,
+        "end": 94.96000000000001,
+        "word": " agent"
+      },
+      {
+        "start": 94.96000000000001,
+        "end": 95.16,
+        "word": " called"
+      },
+      {
+        "start": 95.16,
+        "end": 95.48,
+        "word": " Moff"
+      }
+    ]
+  },
+  {
+    "start": 95.48,
+    "end": 97.1,
+    "text": "What does Moff do? Your terminal?",
+    "words": [
+      {
+        "start": 95.48,
+        "end": 95.64,
+        "word": " What"
+      },
+      {
+        "start": 95.64,
+        "end": 95.7,
+        "word": " does"
+      },
+      {
+        "start": 95.7,
+        "end": 95.92,
+        "word": " Moff"
+      },
+      {
+        "start": 95.92,
+        "end": 96.26,
+        "word": " do?"
+      },
+      {
+        "start": 96.42,
+        "end": 96.62,
+        "word": " Your"
+      },
+      {
+        "start": 96.62,
+        "end": 97.1,
+        "word": " terminal?"
+      }
+    ]
+  },
+  {
+    "start": 99.85,
+    "end": 103.23,
+    "text": "Damn, I am not going to say anything very clean",
+    "words": [
+      {
+        "start": 99.85,
+        "end": 100.28999999999999,
+        "word": " Damn,"
+      },
+      {
+        "start": 100.49,
+        "end": 101.15,
+        "word": " I"
+      },
+      {
+        "start": 101.15,
+        "end": 101.15,
+        "word": " am"
+      },
+      {
+        "start": 101.15,
+        "end": 101.21000000000001,
+        "word": " not"
+      },
+      {
+        "start": 101.21000000000001,
+        "end": 101.21000000000001,
+        "word": " going"
+      },
+      {
+        "start": 101.21000000000001,
+        "end": 101.35,
+        "word": " to"
+      },
+      {
+        "start": 101.35,
+        "end": 101.35,
+        "word": " say"
+      },
+      {
+        "start": 101.35,
+        "end": 102.93,
+        "word": " anything"
+      },
+      {
+        "start": 102.93,
+        "end": 102.93,
+        "word": " very"
+      },
+      {
+        "start": 102.93,
+        "end": 103.23,
+        "word": " clean"
+      }
+    ]
+  },
+  {
+    "start": 106.78,
+    "end": 110.7,
+    "text": "So basically, Zexero is a developer infrastructure platform",
+    "words": [
+      {
+        "start": 106.78,
+        "end": 107.5,
+        "word": " So"
+      },
+      {
+        "start": 107.5,
+        "end": 108.22,
+        "word": " basically,"
+      },
+      {
+        "start": 108.72,
+        "end": 109.4,
+        "word": " Zexero"
+      },
+      {
+        "start": 109.4,
+        "end": 109.52,
+        "word": " is"
+      },
+      {
+        "start": 109.52,
+        "end": 109.6,
+        "word": " a"
+      },
+      {
+        "start": 109.6,
+        "end": 109.8,
+        "word": " developer"
+      },
+      {
+        "start": 109.8,
+        "end": 110.18,
+        "word": " infrastructure"
+      },
+      {
+        "start": 110.18,
+        "end": 110.7,
+        "word": " platform"
+      }
+    ]
+  },
+  {
+    "start": 110.7,
+    "end": 114.18,
+    "text": "which provides services like zero-knowledge privacy payrolls",
+    "words": [
+      {
+        "start": 110.7,
+        "end": 111.38,
+        "word": " which"
+      },
+      {
+        "start": 111.38,
+        "end": 111.64,
+        "word": " provides"
+      },
+      {
+        "start": 111.64,
+        "end": 112.03999999999999,
+        "word": " services"
+      },
+      {
+        "start": 112.03999999999999,
+        "end": 112.56,
+        "word": " like"
+      },
+      {
+        "start": 112.56,
+        "end": 113.25999999999999,
+        "word": " zero"
+      },
+      {
+        "start": 113.25999999999999,
+        "end": 113.52000000000001,
+        "word": "-knowledge"
+      },
+      {
+        "start": 113.52000000000001,
+        "end": 113.75999999999999,
+        "word": " privacy"
+      },
+      {
+        "start": 113.75999999999999,
+        "end": 114.18,
+        "word": " payrolls"
+      }
+    ]
+  },
+  {
+    "start": 114.18,
+    "end": 119.18,
+    "text": "which allows you to pay your entire team with privacy without showing your data on public ledges",
+    "words": [
+      {
+        "start": 114.18,
+        "end": 114.32,
+        "word": " which"
+      },
+      {
+        "start": 114.32,
+        "end": 114.47999999999999,
+        "word": " allows"
+      },
+      {
+        "start": 114.47999999999999,
+        "end": 114.68,
+        "word": " you"
+      },
+      {
+        "start": 114.68,
+        "end": 114.68,
+        "word": " to"
+      },
+      {
+        "start": 114.68,
+        "end": 114.72,
+        "word": " pay"
+      },
+      {
+        "start": 114.72,
+        "end": 114.78,
+        "word": " your"
+      },
+      {
+        "start": 114.78,
+        "end": 115.14,
+        "word": " entire"
+      },
+      {
+        "start": 115.14,
+        "end": 115.52000000000001,
+        "word": " team"
+      },
+      {
+        "start": 115.52000000000001,
+        "end": 115.82,
+        "word": " with"
+      },
+      {
+        "start": 115.82,
+        "end": 116.38,
+        "word": " privacy"
+      },
+      {
+        "start": 116.38,
+        "end": 117.6,
+        "word": " without"
+      },
+      {
+        "start": 117.6,
+        "end": 117.96000000000001,
+        "word": " showing"
+      },
+      {
+        "start": 117.96000000000001,
+        "end": 118.14,
+        "word": " your"
+      },
+      {
+        "start": 118.14,
+        "end": 118.3,
+        "word": " data"
+      },
+      {
+        "start": 118.3,
+        "end": 118.44,
+        "word": " on"
+      },
+      {
+        "start": 118.44,
+        "end": 118.72,
+        "word": " public"
+      },
+      {
+        "start": 118.72,
+        "end": 119.18,
+        "word": " ledges"
+      }
+    ]
+  },
+  {
+    "start": 120.0,
+    "end": 121.9,
+    "text": "their payroll or any payments you want",
+    "words": [
+      {
+        "start": 120.0,
+        "end": 120.14,
+        "word": " their"
+      },
+      {
+        "start": 120.14,
+        "end": 120.46,
+        "word": " payroll"
+      },
+      {
+        "start": 120.46,
+        "end": 120.86,
+        "word": " or"
+      },
+      {
+        "start": 120.86,
+        "end": 121.16,
+        "word": " any"
+      },
+      {
+        "start": 121.16,
+        "end": 121.42,
+        "word": " payments"
+      },
+      {
+        "start": 121.42,
+        "end": 121.64,
+        "word": " you"
+      },
+      {
+        "start": 121.64,
+        "end": 121.9,
+        "word": " want"
+      }
+    ]
+  },
+  {
+    "start": 121.9,
+    "end": 123.98,
+    "text": "then another thing we have a MOF",
+    "words": [
+      {
+        "start": 121.9,
+        "end": 122.56,
+        "word": " then"
+      },
+      {
+        "start": 122.56,
+        "end": 122.84,
+        "word": " another"
+      },
+      {
+        "start": 122.84,
+        "end": 123.12,
+        "word": " thing"
+      },
+      {
+        "start": 123.12,
+        "end": 123.3,
+        "word": " we"
+      },
+      {
+        "start": 123.3,
+        "end": 123.48,
+        "word": " have"
+      },
+      {
+        "start": 123.48,
+        "end": 123.68,
+        "word": " a"
+      },
+      {
+        "start": 123.68,
+        "end": 123.98,
+        "word": " MOF"
+      }
+    ]
+  },
+  {
+    "start": 123.98,
+    "end": 127.58,
+    "text": "MOF is a shared AI agent",
+    "words": [
+      {
+        "start": 123.98,
+        "end": 124.4,
+        "word": " MOF"
+      },
+      {
+        "start": 124.4,
+        "end": 124.54,
+        "word": " is"
+      },
+      {
+        "start": 124.54,
+        "end": 124.72,
+        "word": " a"
+      },
+      {
+        "start": 124.72,
+        "end": 126.4,
+        "word": " shared"
+      },
+      {
+        "start": 126.4,
+        "end": 127.22,
+        "word": " AI"
+      },
+      {
+        "start": 127.22,
+        "end": 127.58,
+        "word": " agent"
+      }
+    ]
+  },
+  {
+    "start": 127.58,
+    "end": 129.62,
+    "text": "which is actually you can access it from your",
+    "words": [
+      {
+        "start": 127.58,
+        "end": 128.04,
+        "word": " which"
+      },
+      {
+        "start": 128.04,
+        "end": 128.16,
+        "word": " is"
+      },
+      {
+        "start": 128.16,
+        "end": 128.48,
+        "word": " actually"
+      },
+      {
+        "start": 128.48,
+        "end": 128.7,
+        "word": " you"
+      },
+      {
+        "start": 128.7,
+        "end": 128.86,
+        "word": " can"
+      },
+      {
+        "start": 128.86,
+        "end": 129.08,
+        "word": " access"
+      },
+      {
+        "start": 129.08,
+        "end": 129.26,
+        "word": " it"
+      },
+      {
+        "start": 129.26,
+        "end": 129.42,
+        "word": " from"
+      },
+      {
+        "start": 129.42,
+        "end": 129.62,
+        "word": " your"
+      }
+    ]
+  },
+  {
+    "start": 129.62,
+    "end": 131.46,
+    "text": "web panel or you can use it on your terminal",
+    "words": [
+      {
+        "start": 129.62,
+        "end": 130.02,
+        "word": " web"
+      },
+      {
+        "start": 130.02,
+        "end": 130.3,
+        "word": " panel"
+      },
+      {
+        "start": 130.3,
+        "end": 130.6,
+        "word": " or"
+      },
+      {
+        "start": 130.6,
+        "end": 130.96,
+        "word": " you"
+      },
+      {
+        "start": 130.96,
+        "end": 130.96,
+        "word": " can"
+      },
+      {
+        "start": 130.96,
+        "end": 130.96,
+        "word": " use"
+      },
+      {
+        "start": 130.96,
+        "end": 130.96,
+        "word": " it"
+      },
+      {
+        "start": 130.96,
+        "end": 130.96,
+        "word": " on"
+      },
+      {
+        "start": 130.96,
+        "end": 131.14,
+        "word": " your"
+      },
+      {
+        "start": 131.14,
+        "end": 131.46,
+        "word": " terminal"
+      }
+    ]
+  },
+  {
+    "start": 132.28,
+    "end": 133.96,
+    "text": "basically it can transform your whole",
+    "words": [
+      {
+        "start": 132.28,
+        "end": 132.82,
+        "word": " basically"
+      },
+      {
+        "start": 132.82,
+        "end": 133.06,
+        "word": " it"
+      },
+      {
+        "start": 133.06,
+        "end": 133.2,
+        "word": " can"
+      },
+      {
+        "start": 133.2,
+        "end": 133.52,
+        "word": " transform"
+      },
+      {
+        "start": 133.52,
+        "end": 133.68,
+        "word": " your"
+      },
+      {
+        "start": 133.68,
+        "end": 133.96,
+        "word": " whole"
+      }
+    ]
+  },
+  {
+    "start": 133.96,
+    "end": 135.04,
+    "text": "code base which is in the web 2",
+    "words": [
+      {
+        "start": 133.96,
+        "end": 134.24,
+        "word": " code"
+      },
+      {
+        "start": 134.24,
+        "end": 134.44,
+        "word": " base"
+      },
+      {
+        "start": 134.44,
+        "end": 134.62,
+        "word": " which"
+      },
+      {
+        "start": 134.62,
+        "end": 134.7,
+        "word": " is"
+      },
+      {
+        "start": 134.7,
+        "end": 134.72,
+        "word": " in"
+      },
+      {
+        "start": 134.72,
+        "end": 134.8,
+        "word": " the"
+      },
+      {
+        "start": 134.8,
+        "end": 134.84,
+        "word": " web"
+      },
+      {
+        "start": 134.84,
+        "end": 135.04,
+        "word": " 2"
+      }
+    ]
+  },
+  {
+    "start": 135.04,
+    "end": 137.26,
+    "text": "you can take it to the whole web 3",
+    "words": [
+      {
+        "start": 135.04,
+        "end": 135.94,
+        "word": " you"
+      },
+      {
+        "start": 135.94,
+        "end": 136.18,
+        "word": " can"
+      },
+      {
+        "start": 136.18,
+        "end": 136.18,
+        "word": " take"
+      },
+      {
+        "start": 136.18,
+        "end": 136.18,
+        "word": " it"
+      },
+      {
+        "start": 136.18,
+        "end": 136.22,
+        "word": " to"
+      },
+      {
+        "start": 136.22,
+        "end": 136.22,
+        "word": " the"
+      },
+      {
+        "start": 136.22,
+        "end": 136.48,
+        "word": " whole"
+      },
+      {
+        "start": 136.48,
+        "end": 137.04,
+        "word": " web"
+      },
+      {
+        "start": 137.04,
+        "end": 137.26,
+        "word": " 3"
+      }
+    ]
+  },
+  {
+    "start": 137.26,
+    "end": 139.96,
+    "text": "it can call through this extra platform",
+    "words": [
+      {
+        "start": 137.26,
+        "end": 137.88,
+        "word": " it"
+      },
+      {
+        "start": 137.88,
+        "end": 138.04,
+        "word": " can"
+      },
+      {
+        "start": 138.04,
+        "end": 138.28,
+        "word": " call"
+      },
+      {
+        "start": 138.28,
+        "end": 139.0,
+        "word": " through"
+      },
+      {
+        "start": 139.0,
+        "end": 139.36,
+        "word": " this"
+      },
+      {
+        "start": 139.36,
+        "end": 139.54,
+        "word": " extra"
+      },
+      {
+        "start": 139.54,
+        "end": 139.96,
+        "word": " platform"
+      }
+    ]
+  },
+  {
+    "start": 139.96,
+    "end": 142.12,
+    "text": "and it can call through your other",
+    "words": [
+      {
+        "start": 139.96,
+        "end": 140.62,
+        "word": " and"
+      },
+      {
+        "start": 140.62,
+        "end": 140.82,
+        "word": " it"
+      },
+      {
+        "start": 140.82,
+        "end": 140.96,
+        "word": " can"
+      },
+      {
+        "start": 140.96,
+        "end": 141.26,
+        "word": " call"
+      },
+      {
+        "start": 141.26,
+        "end": 141.78,
+        "word": " through"
+      },
+      {
+        "start": 141.78,
+        "end": 141.94,
+        "word": " your"
+      },
+      {
+        "start": 141.94,
+        "end": 142.12,
+        "word": " other"
+      }
+    ]
+  },
+  {
+    "start": 142.12,
+    "end": 143.92000000000002,
+    "text": "platforms too with MCPs and other stuff",
+    "words": [
+      {
+        "start": 142.12,
+        "end": 142.46,
+        "word": " platforms"
+      },
+      {
+        "start": 142.46,
+        "end": 142.68,
+        "word": " too"
+      },
+      {
+        "start": 142.68,
+        "end": 142.9,
+        "word": " with"
+      },
+      {
+        "start": 142.9,
+        "end": 143.34,
+        "word": " MCPs"
+      },
+      {
+        "start": 143.34,
+        "end": 143.48,
+        "word": " and"
+      },
+      {
+        "start": 143.48,
+        "end": 143.62,
+        "word": " other"
+      },
+      {
+        "start": 143.62,
+        "end": 143.92000000000002,
+        "word": " stuff"
+      }
+    ]
+  },
+  {
+    "start": 143.92000000000002,
+    "end": 146.5,
+    "text": "so basically our mission is",
+    "words": [
+      {
+        "start": 143.92000000000002,
+        "end": 144.96,
+        "word": " so"
+      },
+      {
+        "start": 144.96,
+        "end": 145.38,
+        "word": " basically"
+      },
+      {
+        "start": 145.38,
+        "end": 145.76,
+        "word": " our"
+      },
+      {
+        "start": 145.76,
+        "end": 146.04,
+        "word": " mission"
+      },
+      {
+        "start": 146.04,
+        "end": 146.5,
+        "word": " is"
+      }
+    ]
+  },
+  {
+    "start": 146.5,
+    "end": 148.56,
+    "text": "that the web 3 services",
+    "words": [
+      {
+        "start": 146.5,
+        "end": 147.1,
+        "word": " that"
+      },
+      {
+        "start": 147.1,
+        "end": 147.52,
+        "word": " the"
+      },
+      {
+        "start": 147.52,
+        "end": 148.04,
+        "word": " web"
+      },
+      {
+        "start": 148.04,
+        "end": 148.2,
+        "word": " 3"
+      },
+      {
+        "start": 148.2,
+        "end": 148.56,
+        "word": " services"
+      }
+    ]
+  },
+  {
+    "start": 148.56,
+    "end": 150.28,
+    "text": "to adopt them is",
+    "words": [
+      {
+        "start": 148.56,
+        "end": 148.94,
+        "word": " to"
+      },
+      {
+        "start": 148.94,
+        "end": 149.3,
+        "word": " adopt"
+      },
+      {
+        "start": 149.3,
+        "end": 149.54,
+        "word": " them"
+      },
+      {
+        "start": 149.54,
+        "end": 150.28,
+        "word": " is"
+      }
+    ]
+  },
+  {
+    "start": 150.28,
+    "end": 151.9,
+    "text": "to make them easy like",
+    "words": [
+      {
+        "start": 150.28,
+        "end": 150.28,
+        "word": " to"
+      },
+      {
+        "start": 150.28,
+        "end": 151.28,
+        "word": " make"
+      },
+      {
+        "start": 151.28,
+        "end": 151.42000000000002,
+        "word": " them"
+      },
+      {
+        "start": 151.42000000000002,
+        "end": 151.66,
+        "word": " easy"
+      },
+      {
+        "start": 151.66,
+        "end": 151.9,
+        "word": " like"
+      }
+    ]
+  },
+  {
+    "start": 152.32,
+    "end": 154.18,
+    "text": "you adopt a normal cloud service",
+    "words": [
+      {
+        "start": 152.32,
+        "end": 152.6,
+        "word": " you"
+      },
+      {
+        "start": 152.6,
+        "end": 152.6,
+        "word": " adopt"
+      },
+      {
+        "start": 152.6,
+        "end": 152.78,
+        "word": " a"
+      },
+      {
+        "start": 152.78,
+        "end": 153.02,
+        "word": " normal"
+      },
+      {
+        "start": 153.02,
+        "end": 153.32,
+        "word": " cloud"
+      },
+      {
+        "start": 153.32,
+        "end": 154.18,
+        "word": " service"
+      }
+    ]
+  },
+  {
+    "start": 154.18,
+    "end": 155.66,
+    "text": "or integrate it on your platform",
+    "words": [
+      {
+        "start": 154.18,
+        "end": 154.52,
+        "word": " or"
+      },
+      {
+        "start": 154.52,
+        "end": 154.82,
+        "word": " integrate"
+      },
+      {
+        "start": 154.82,
+        "end": 155.07999999999998,
+        "word": " it"
+      },
+      {
+        "start": 155.07999999999998,
+        "end": 155.14,
+        "word": " on"
+      },
+      {
+        "start": 155.14,
+        "end": 155.28,
+        "word": " your"
+      },
+      {
+        "start": 155.28,
+        "end": 155.66,
+        "word": " platform"
+      }
+    ]
+  },
+  {
+    "start": 156.8,
+    "end": 157.8,
+    "text": "thank you man",
+    "words": [
+      {
+        "start": 156.8,
+        "end": 157.36,
+        "word": " thank"
+      },
+      {
+        "start": 157.36,
+        "end": 157.6,
+        "word": " you"
+      },
+      {
+        "start": 157.6,
+        "end": 157.8,
+        "word": " man"
+      }
+    ]
+  }
+]

@@ -222,7 +222,7 @@ export default function CollectionCreate({
     setSubmitError('');
     try {
       if (!(await isWalletAvailable())) {
-        throw new Error('Install and unlock Freighter (Testnet), then allow this site.');
+        throw new Error(`Install and unlock Freighter (${nftNetworkLabel(health)}), then allow this site.`);
       }
       const address = await getPublicKey();
       setDraft((previous) => ({
@@ -601,7 +601,7 @@ export default function CollectionCreate({
             </div>
             {errors.unitPriceXlm && <p className="mt-2 text-xs text-red-500">{errors.unitPriceXlm}</p>}
             <p className="mt-3 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
-              After deploy, Freighter will ask you to activate the primary sale so buyers can purchase immediately (${nftNetworkLabel()} XLM, same unit amount).
+              After deploy, Freighter will ask you to activate the primary sale so buyers can purchase immediately ({nftNetworkLabel(health)} XLM, same unit amount).
             </p>
           </div>
         </section>
@@ -612,7 +612,7 @@ export default function CollectionCreate({
           <div className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-[#0A0A0B]">
             <h2 className="text-base font-semibold text-zinc-950 dark:text-white">Developer wallet</h2>
             <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-              This public address becomes the collection owner / creator wallet on Stellar testnet.
+              This public address becomes the collection owner / creator wallet on Stellar {nftNetworkLabel(health)}.
             </p>
             <label className="mt-4 block text-sm font-medium text-zinc-800 dark:text-zinc-200">
               Wallet address

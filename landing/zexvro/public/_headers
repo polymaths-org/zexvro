@@ -36,13 +36,35 @@
 /robots.txt
   Cache-Control: public, max-age=3600, must-revalidate
 
+# Service logos + fonts — long cache (immutable path names)
+/services/*
+  Cache-Control: public, max-age=31536000, immutable
+/fonts/*
+  Cache-Control: public, max-age=31536000, immutable
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Hero WebP (CDN edge)
+/cubes.webp
+  Cache-Control: public, max-age=604800, immutable
+  X-Robots-Tag: noindex, noimageindex
+/mobile_statue.webp
+  Cache-Control: public, max-age=604800, immutable
+  X-Robots-Tag: noindex, noimageindex
+/deploy-nfts-clicks.webp
+  Cache-Control: public, max-age=604800, immutable
+  X-Robots-Tag: noindex, noimageindex
+
 # Decorative marketing assets: keep out of Google Images when possible
 /cubes.png
   X-Robots-Tag: noindex, noimageindex
+  Cache-Control: public, max-age=604800
 /mobile_statue.png
   X-Robots-Tag: noindex, noimageindex
+  Cache-Control: public, max-age=604800
 /deploy-nfts-clicks.png
   X-Robots-Tag: noindex, noimageindex
+  Cache-Control: public, max-age=604800
 /web2.png
   X-Robots-Tag: noindex, noimageindex
 /web3.png

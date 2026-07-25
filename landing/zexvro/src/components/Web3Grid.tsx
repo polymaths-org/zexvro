@@ -3,28 +3,14 @@ import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { motion, AnimatePresence } from 'motion/react';
 import { activeServices } from '../data/services';
+import { ServiceLogo } from './ServiceLogo';
 import {
-  UserCheck,
-  Coins,
-  CreditCard,
-  Zap,
-  RefreshCw,
-  ShieldCheck,
   ChevronLeft,
   ChevronRight,
   Play,
 } from 'lucide-react';
 
 gsap.registerPlugin(ScrollTrigger);
-
-const ICONS: Record<string, React.FC<{ className?: string; size?: number }>> = {
-  UserCheck,
-  Coins,
-  CreditCard,
-  Zap,
-  RefreshCw,
-  ShieldCheck,
-};
 
 /** Spaced 2×3 grid — clear gaps, centered */
 const BUBBLE_POS = [
@@ -70,11 +56,9 @@ export const Web3Grid: React.FC = () => {
   const [brandError, setBrandError] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
   const [typed, setTyped] = useState('');
-  const typeFull = '6 unique services — just for the MVP.';
+  const typeFull = '5 unique services — just for the MVP.';
 
   const n = activeServices.length;
-  const active = activeServices[((activeIdx % n) + n) % n];
-  const ActiveIcon = ICONS[active.iconName] ?? UserCheck;
 
   useEffect(() => {
     const section = sectionRef.current;
@@ -435,6 +419,10 @@ export const Web3Grid: React.FC = () => {
                 {!brandError && (
                   <img
                     src="/logo-transparent.png"
+                    width={48}
+                    height={48}
+                    decoding="async"
+                    loading="lazy"
                     alt=""
                     className="h-10 w-10 sm:h-12 sm:w-12 md:h-16 md:w-16 object-contain"
                     onError={() => setBrandError(true)}
@@ -442,6 +430,8 @@ export const Web3Grid: React.FC = () => {
                 )}
                 <img
                   src="/wordmark-transparent.png"
+                  decoding="async"
+                  loading="lazy"
                   alt="ZEXVRO"
                   className="h-6 sm:h-7 md:h-10 object-contain"
                   onError={(e) => {
@@ -496,9 +486,7 @@ export const Web3Grid: React.FC = () => {
             ref={bubblesWrapRef}
             className="relative w-full max-w-3xl h-[280px] sm:h-[320px] md:h-[360px] overflow-visible"
           >
-            {activeServices.map((s, i) => {
-              const Icon = ICONS[s.iconName] ?? UserCheck;
-              return (
+            {activeServices.map((s, i) => (
                 <div
                   key={s.id}
                   ref={(el) => {
@@ -521,15 +509,20 @@ export const Web3Grid: React.FC = () => {
                       }}
                       className="absolute flex flex-col items-center justify-center gap-0.5"
                     >
-                      <Icon size={24} className="text-white" />
+                      <ServiceLogo
+                        id={s.id}
+                        name={s.name}
+                        size={36}
+                        state={s.id === 'morph' ? 'morph' : 'idle'}
+                        className="!rounded-full bg-transparent"
+                      />
                       <span className="font-pixel text-[7px] tracking-wider text-white/55 uppercase hidden sm:block">
                         {s.name}
                       </span>
                     </div>
                   </div>
                 </div>
-              );
-            })}
+            ))}
           </div>
 
           <p
@@ -595,11 +588,15 @@ export const Web3Grid: React.FC = () => {
               style={{ transformStyle: 'preserve-3d', perspective: '1600px' }}
             >
               {activeServices.map((s, i) => {
-                const Icon = ICONS[s.iconName] ?? UserCheck;
                 let rel = ((i - activeIdx) % n + n) % n;
                 if (rel > n / 2) rel -= n;
                 const abs = Math.abs(rel);
                 const focused = abs === 0;
+                const logoState = focused
+                  ? s.id === 'morph'
+                    ? 'morph'
+                    : 'focus'
+                  : 'idle';
 
                 return (
                   <div
@@ -618,6 +615,7 @@ export const Web3Grid: React.FC = () => {
                       }`}
                     >
                       <div className="relative aspect-[16/10] bg-gradient-to-br from-[#0a0a12] via-black to-[#0c0c18] flex items-center justify-center">
+                        <div className={`absolute inset-0 bg-gradient-to-tr ${s.hologramColor} opacity-60 pointer-events-none`} />
                         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(48,41,255,0.2),transparent_60%)]" />
                         <div
                           className="absolute inset-0 opacity-[0.08]"
@@ -637,20 +635,28 @@ export const Web3Grid: React.FC = () => {
                               transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
                               className="relative z-10 flex flex-col items-center gap-3"
                             >
+                              <ServiceLogo
+                                id={s.id}
+                                name={s.name}
+                                size={88}
+                                state={logoState}
+                                priority
+                                className="bg-black/30 border border-white/10"
+                              />
                               <button
                                 type="button"
-                                className="h-14 w-14 md:h-16 md:w-16 rounded-full border border-white/30 bg-white/15 hover:bg-white/25 flex items-center justify-center transition-all hover:scale-105 shadow-[0_0_40px_rgba(255,255,255,0.14)]"
-                                aria-label="Play demo"
+                                className="h-12 w-12 rounded-full border border-white/30 bg-white/15 hover:bg-white/25 flex items-center justify-center transition-all hover:scale-105 shadow-[0_0_40px_rgba(255,255,255,0.14)]"
+                                aria-label={`Demo ${s.name}`}
                               >
-                                <Play size={24} className="text-white ml-0.5" fill="currentColor" />
+                                <Play size={18} className="text-white ml-0.5" fill="currentColor" />
                               </button>
                               <p className="font-pixel text-[9px] tracking-[0.3em] uppercase text-white/55">
                                 Demo · {s.name}
                               </p>
                             </motion.div>
                           ) : (
-                            <div className="relative z-10 opacity-55">
-                              <Icon size={36} className="text-white/45" />
+                            <div className="relative z-10 opacity-70">
+                              <ServiceLogo id={s.id} name={s.name} size={48} state="idle" className="bg-transparent" />
                             </div>
                           )}
                         </AnimatePresence>
@@ -667,9 +673,13 @@ export const Web3Grid: React.FC = () => {
                             className="p-5 md:p-6 border-t border-white/10"
                           >
                             <div className="flex items-start gap-4">
-                              <div className="shrink-0 h-12 w-12 rounded-full border border-white/20 bg-white/10 flex items-center justify-center">
-                                <ActiveIcon size={22} className="text-white" />
-                              </div>
+                              <ServiceLogo
+                                id={s.id}
+                                name={s.name}
+                                size={48}
+                                state={s.id === 'morph' ? 'morph' : 'active'}
+                                className="shrink-0 border border-white/15 bg-white/5"
+                              />
                               <div className="min-w-0 text-left">
                                 <p className="font-pixel text-[9px] tracking-[0.28em] uppercase text-blue-200/80 mb-1.5">
                                   0{(((activeIdx % n) + n) % n) + 1} · MVP

@@ -13,6 +13,12 @@ import {
   useUIStore,
   type OverviewWidgetId,
 } from '../../stores/ui';
+import {
+  balanceNetworkLabel,
+  horizonForAppEnv,
+  resolveWorkspaceChainEnv,
+  type AppChainEnv,
+} from '../../lib/stellarNetwork';
 
 const CONVERSION_RATES: Record<'USDC' | 'XLM' | 'EURC', { rate: number; symbol: string; label: string }> = {
   USDC: { rate: 1.00, symbol: '$', label: 'USD' },
@@ -72,6 +78,48 @@ export default function WorkspaceOverview() {
   const [balancesLoading, setBalancesLoading] = useState(false);
   const [balancesError, setBalancesError] = useState<string | null>(null);
 
+  const chainEnv: AppChainEnv = useMemo(() => {
+    const wsEnv = workspace?.environment || workspace?.settings?.environment;
+    const projectNetworks = projects.flatMap((p) => [
+      p.serviceNetworks?.zer0,
+      p.network,
+    ]);
+    const storedHorizon = (settingsState as { horizonUrl?: string } | null)?.horizonUrl?.trim();
+    // Workspace env is canonical. Only honor an explicit Zer0 Horizon override when
+    // workspace env is unset (legacy workspaces).
+    if (wsEnv === 'mainnet' || wsEnv === 'testnet') {
+      return wsEnv;
+    }
+    return resolveWorkspaceChainEnv({
+      workspaceEnvironment: wsEnv,
+      projectNetworks,
+      horizonUrl: storedHorizon,
+    });
+  }, [
+    workspace?.environment,
+    workspace?.settings?.environment,
+    projects,
+    (settingsState as { horizonUrl?: string } | null)?.horizonUrl,
+  ]);
+
+  const balanceHorizonUrl = useMemo(() => {
+    const stored = (settingsState as { horizonUrl?: string } | null)?.horizonUrl?.trim();
+    const wsEnv = workspace?.environment || workspace?.settings?.environment;
+    // When workspace env is set, always query that chain (ignore stale Zer0 default testnet Horizon).
+    if (wsEnv === 'mainnet' || wsEnv === 'testnet') {
+      return horizonForAppEnv(wsEnv);
+    }
+    if (stored) return stored;
+    return horizonForAppEnv(chainEnv);
+  }, [
+    chainEnv,
+    workspace?.environment,
+    workspace?.settings?.environment,
+    (settingsState as { horizonUrl?: string } | null)?.horizonUrl,
+  ]);
+
+  const chainLabel = balanceNetworkLabel(chainEnv);
+
   const show = {
     projects: overviewWidgets.projects !== false,
     stats: overviewWidgets.stats !== false,
@@ -88,20 +136,7 @@ export default function WorkspaceOverview() {
     setBalancesLoading(true);
     setBalancesError(null);
 
-    // Prefer explicit Zer0 horizon; fall back from project-wide network preference.
-    let horizonUrl = (settingsState as { horizonUrl?: string } | null)?.horizonUrl?.trim();
-    if (!horizonUrl) {
-      const mainnetPref = projects.some(p => {
-        const n = String(p.network || '').toLowerCase();
-        const sn = p.serviceNetworks?.zer0;
-        return sn === 'mainnet' || n.includes('main');
-      });
-      horizonUrl = mainnetPref
-        ? 'https://horizon.stellar.org'
-        : 'https://horizon-testnet.stellar.org';
-    }
-
-    stellar.getPoolBalance(settingsState.walletAddress, horizonUrl)
+    stellar.getPoolBalance(settingsState.walletAddress, balanceHorizonUrl)
       .then(res => {
         if (active) {
           setBalances(res);
@@ -132,7 +167,7 @@ export default function WorkspaceOverview() {
     return () => {
       active = false;
     };
-  }, [isWalletConnected, settingsState?.walletAddress, (settingsState as { horizonUrl?: string } | null)?.horizonUrl, projects]);
+  }, [isWalletConnected, settingsState?.walletAddress, balanceHorizonUrl]);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -328,9 +363,19 @@ export default function WorkspaceOverview() {
                 <p className="mt-0.5 select-all font-mono text-xs text-zinc-500">
                   {settingsState.walletAddress}
                 </p>
+                <p className="mt-1 text-[10px] font-medium uppercase tracking-wider text-zinc-400">
+                  Balances from Stellar {chainLabel}
+                </p>
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-2">
+              <span className={`inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold ${
+                chainEnv === 'mainnet'
+                  ? 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                  : 'border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-400'
+              }`}>
+                {chainLabel}
+              </span>
               <span className="inline-flex items-center rounded-md border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
                 Connected
               </span>
@@ -344,10 +389,12 @@ export default function WorkspaceOverview() {
             </div>
           </div>
 
-          <h4 className="mb-3 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Balances</h4>
+          <h4 className="mb-3 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+            Balances · {chainLabel}
+          </h4>
           {balancesLoading ? (
             <div className="flex items-center justify-center py-6">
-              <span className="text-xs text-zinc-500">Loading balances…</span>
+              <span className="text-xs text-zinc-500">Loading {chainLabel.toLowerCase()} balances…</span>
             </div>
           ) : balancesError ? (
             <div className="rounded-md bg-rose-500/10 p-3 text-xs font-semibold text-rose-600 dark:text-rose-400">
@@ -357,12 +404,15 @@ export default function WorkspaceOverview() {
             <div className="grid gap-3 sm:grid-cols-3">
               {(['XLM', 'USDC', 'EURC'] as const).map((asset) => (
                 <div key={asset} className="rounded-md border border-zinc-100 bg-zinc-50 p-4 dark:border-zinc-900/50 dark:bg-zinc-950">
-                  <div className="text-xs text-zinc-500">{asset}</div>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-xs text-zinc-500">{asset}</div>
+                    <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-400">{chainLabel}</div>
+                  </div>
                   <div className="mt-1 text-lg font-bold text-zinc-950 dark:text-white">
                     {(balances?.[asset] || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </div>
                   <div className="mt-0.5 text-xs text-zinc-400">
-                    ~ {formatFiatConversion(balances?.[asset] || 0, asset, preferredCurrency)}
+                    ~ {formatFiatConversion(balances?.[asset] || 0, asset, preferredCurrency)} · {chainLabel}
                   </div>
                 </div>
               ))}

@@ -13,10 +13,12 @@ import BrandLoader from '../../components/BrandLoader';
 import {
   collectionLogo,
   createPublicCheckoutIntent,
+  getNftServiceHealth,
   getPublicNftCollection,
   NftApiError,
   submitPublicCheckoutIntent,
   type NftCheckoutIntent,
+  type NftServiceHealth,
   type PublicNftCollection,
   nftExplorerBase,
   nftNetworkLabel,
@@ -101,6 +103,7 @@ export default function EmbedCheckout() {
   const [submitting, setSubmitting] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [confirmedHash, setConfirmedHash] = useState('');
+  const [health, setHealth] = useState<NftServiceHealth | null>(null);
 
   const priceLabel = useMemo(() => {
     if (!collection?.primarySale) return null;
@@ -120,8 +123,14 @@ export default function EmbedCheckout() {
     }
     const controller = new AbortController();
     setLoading(true);
-    getPublicNftCollection(collectionId, controller.signal)
-      .then((result) => setCollection(result.collection))
+    Promise.all([
+      getPublicNftCollection(collectionId, controller.signal),
+      getNftServiceHealth(controller.signal).catch(() => null),
+    ])
+      .then(([result, nextHealth]) => {
+        setCollection(result.collection);
+        if (nextHealth) setHealth(nextHealth);
+      })
       .catch((err: unknown) => {
         if (!controller.signal.aborted) setLoadError(errorMessage(err));
       })
@@ -141,7 +150,7 @@ export default function EmbedCheckout() {
     setConnecting(true);
     try {
       if (!(await isWalletAvailable())) {
-        throw new Error('Install and unlock Freighter (Testnet), then allow this site.');
+        throw new Error(`Install and unlock Freighter (${nftNetworkLabel(health)}), then allow this site.`);
       }
       setBuyerAddress(await getPublicKey());
     } catch (err) {
@@ -201,7 +210,7 @@ export default function EmbedCheckout() {
       if (walletAddress !== intent.buyerAddress) {
         throw new Error('Connected wallet must match the buyer address used to prepare checkout.');
       }
-      const signedTransaction = await signTransaction(intent.serializedTransaction, nftNetworkPassphrase());
+      const signedTransaction = await signTransaction(intent.serializedTransaction, nftNetworkPassphrase(health));
       const result = await submitPublicCheckoutIntent({
         intentId: intent.id,
         signedTransaction,
@@ -310,7 +319,7 @@ export default function EmbedCheckout() {
               {priceLabel && (
                 <p className="mt-1 text-sm tabular-nums text-zinc-300">{priceLabel}</p>
               )}
-              <p className="mt-0.5 text-xs text-zinc-500">${nftNetworkLabel()} · sponsored fees</p>
+              <p className="mt-0.5 text-xs text-zinc-500">{nftNetworkLabel(health)} · sponsored fees</p>
             </div>
           </div>
 
@@ -384,7 +393,7 @@ export default function EmbedCheckout() {
 
             {confirmedHash && (
               <a
-                href={`${nftExplorerBase()}/tx/${confirmedHash}`}
+                href={`${nftExplorerBase(health)}/tx/${confirmedHash}`}
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center gap-2 text-sm text-emerald-300"

@@ -1,0 +1,97 @@
+[Script Info]
+Title: ZEXVRO Cinema Cut
+ScriptType: v4.00+
+WrapStyle: 2
+ScaledBorderAndShadow: yes
+YCbCr Matrix: TV.709
+PlayResX: 1920
+PlayResY: 1080
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: OpenBrand,Noto Sans Black,110,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,8,0,1,0,0,5,0,0,0,1
+Style: OpenTag,Noto Sans,28,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,10,0,1,0,0,5,0,0,0,1
+Style: HeroMain,Noto Sans Black,92,&H00FFFFFF,&H000000FF,&H00000000,&H90000000,-1,0,0,0,100,100,2,0,1,6,2,2,80,80,200,1
+Style: HeroSub,Noto Sans,40,&H00FFFFFF,&H000000FF,&H00000000,&H90000000,-1,0,0,0,100,100,4,0,1,4,1,2,80,80,120,1
+Style: PunchMain,Noto Sans Black,86,&H00FFFFFF,&H000000FF,&H00000000,&H90000000,-1,0,0,0,100,100,1,0,1,7,2,5,100,100,0,1
+Style: ThesisMain,Noto Sans Black,70,&H00FFFFFF,&H000000FF,&H00000000,&H90000000,-1,0,0,0,100,100,0,0,1,5,2,2,90,90,150,1
+Style: ThesisSub,Noto Sans,38,&H00FFFFFF,&H000000FF,&H00000000,&H90000000,-1,0,0,0,100,100,1,0,1,4,1,2,90,90,95,1
+Style: ListMain,Noto Sans Black,64,&H00FFFFFF,&H000000FF,&H00000000,&H90000000,-1,0,0,0,100,100,1,0,1,5,2,2,90,90,150,1
+Style: ListSub,Noto Sans,36,&H00FFFFFF,&H000000FF,&H00000000,&H90000000,-1,0,0,0,100,100,2,0,1,4,1,2,90,90,95,1
+Style: CloseMain,Noto Sans Black,88,&H00FFFFFF,&H000000FF,&H00000000,&H90000000,-1,0,0,0,100,100,2,0,1,7,2,2,80,80,190,1
+Style: CloseSub,Noto Sans Black,42,&H00FFFFFF,&H000000FF,&H00000000,&H90000000,-1,0,0,0,100,100,3,0,1,4,1,2,80,80,110,1
+Style: EndBrand,Noto Sans Black,120,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,10,0,1,0,0,5,0,0,0,1
+Style: EndUrl,Noto Sans,34,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,8,0,1,0,0,5,0,0,0,1
+Style: Micro,Noto Sans,20,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,6,0,1,2,0,7,40,40,36,1
+Style: Chapter,Noto Sans,22,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,5,0,1,2,0,9,48,48,40,1
+Style: Draw,Noto Sans,20,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1
+Style: Progress,Noto Sans,10,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,1,0,0,0,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:01.60,0:01:08.50,Micro,,0,0,0,,{\fad(500,400)\alpha&H40&}ZEXVRO  ·  FOUNDER BRIEF
+Dialogue: 0,0:00:01.60,0:00:14.80,Chapter,,0,0,0,,{\fad(250,200)\alpha&H35&}01  THESIS
+Dialogue: 0,0:00:14.80,0:00:28.40,Chapter,,0,0,0,,{\fad(250,200)\alpha&H35&}02  ADOPTION
+Dialogue: 0,0:00:28.40,0:00:42.20,Chapter,,0,0,0,,{\fad(250,200)\alpha&H35&}03  PLATFORM
+Dialogue: 0,0:00:42.20,0:00:59.20,Chapter,,0,0,0,,{\fad(250,200)\alpha&H35&}04  MORPH
+Dialogue: 0,0:00:59.20,0:01:08.50,Chapter,,0,0,0,,{\fad(250,200)\alpha&H35&}05  MISSION
+Dialogue: 0,0:00:01.60,0:01:08.50,Draw,,0,0,0,,{\an7\pos(48,72)\p1\bord0\shad0\c&HFFFFFF&\alpha&H70&}m 0 0 l 220 0 l 220 1 l 0 1{\p0}
+Dialogue: 0,0:00:01.60,0:01:08.50,Draw,,0,0,0,,{\an9\pos(1872,72)\p1\bord0\shad0\c&HFFFFFF&\alpha&H70&}m 0 0 l 180 0 l 180 1 l 0 1{\p0}
+Dialogue: 0,0:00:01.60,0:00:14.80,Progress,,0,0,0,,{\an1\pos(0,1074)\p1\bord0\shad0\c&HFFFFFF&\alpha&HC0&}m 0 0 l 1920 0 l 1920 3 l 0 3{\p0}
+Dialogue: 1,0:00:01.60,0:00:14.80,Progress,,0,0,0,,{\an1\pos(0,1074)\p1\bord0\shad0\c&HFFFFFF&\alpha&H40&}m 0 0 l 384 0 l 384 3 l 0 3{\p0}
+Dialogue: 0,0:00:14.80,0:00:28.40,Progress,,0,0,0,,{\an1\pos(0,1074)\p1\bord0\shad0\c&HFFFFFF&\alpha&HC0&}m 0 0 l 1920 0 l 1920 3 l 0 3{\p0}
+Dialogue: 1,0:00:14.80,0:00:28.40,Progress,,0,0,0,,{\an1\pos(0,1074)\p1\bord0\shad0\c&HFFFFFF&\alpha&H40&}m 0 0 l 768 0 l 768 3 l 0 3{\p0}
+Dialogue: 0,0:00:28.40,0:00:42.20,Progress,,0,0,0,,{\an1\pos(0,1074)\p1\bord0\shad0\c&HFFFFFF&\alpha&HC0&}m 0 0 l 1920 0 l 1920 3 l 0 3{\p0}
+Dialogue: 1,0:00:28.40,0:00:42.20,Progress,,0,0,0,,{\an1\pos(0,1074)\p1\bord0\shad0\c&HFFFFFF&\alpha&H40&}m 0 0 l 1152 0 l 1152 3 l 0 3{\p0}
+Dialogue: 0,0:00:42.20,0:00:59.20,Progress,,0,0,0,,{\an1\pos(0,1074)\p1\bord0\shad0\c&HFFFFFF&\alpha&HC0&}m 0 0 l 1920 0 l 1920 3 l 0 3{\p0}
+Dialogue: 1,0:00:42.20,0:00:59.20,Progress,,0,0,0,,{\an1\pos(0,1074)\p1\bord0\shad0\c&HFFFFFF&\alpha&H40&}m 0 0 l 1536 0 l 1536 3 l 0 3{\p0}
+Dialogue: 0,0:00:59.20,0:01:08.50,Progress,,0,0,0,,{\an1\pos(0,1074)\p1\bord0\shad0\c&HFFFFFF&\alpha&HC0&}m 0 0 l 1920 0 l 1920 3 l 0 3{\p0}
+Dialogue: 1,0:00:59.20,0:01:08.50,Progress,,0,0,0,,{\an1\pos(0,1074)\p1\bord0\shad0\c&HFFFFFF&\alpha&H40&}m 0 0 l 1920 0 l 1920 3 l 0 3{\p0}
+Dialogue: 3,0:00:00.00,0:00:01.80,OpenBrand,,0,0,0,,{\an5\pos(960,500)\fad(200,200)\fscx70\fscy70\fsp20\t(0,220,\fscx105\fscy105\fsp6)\t(220,320,\fscx100\fscy100\fsp8)}ZEXVRO
+Dialogue: 3,0:00:00.25,0:00:01.80,OpenTag,,0,0,0,,{\an5\pos(960,600)\fad(300,200)\alpha&H20&\fsp10\t(100,280,\alpha&H00&)}FOUNDER BRIEF
+Dialogue: 2,0:00:00.15,0:00:01.80,Draw,,0,0,0,,{\an5\pos(960,560)\fad(150,150)\p1\bord0\shad0\c&HFFFFFF&\alpha&H30&\fscx0\t(120,320,\fscx100)}m 0 0 l 180 0 l 180 2 l 0 2{\p0}
+Dialogue: 3,0:00:01.80,0:00:04.20,HeroMain,,0,0,0,,{\an2\pos(960,860)\fad(70,140)\fscx78\fscy78\t(0,110,\fscx106\fscy106)\t(110,180,\fscx100\fscy100)}PARIS
+Dialogue: 3,0:00:02.02,0:00:04.20,HeroSub,,0,0,0,,{\an2\pos(960,940)\fad(100,140)\fscx90\fscy90\t(0,120,\fscx100\fscy100)}16  ·  BUILDER  ·  PUNE
+Dialogue: 2,0:00:01.92,0:00:04.20,Draw,,0,0,0,,{\an5\pos(960,990)\fad(100,120)\p1\bord0\shad0\c&HFFFFFF&\alpha&H35&\fscx0\t(80,220,\fscx100)}m 0 0 l 140 0 l 140 3 l 0 3{\p0}
+Dialogue: 3,0:00:04.20,0:00:07.00,HeroMain,,0,0,0,,{\an2\pos(960,860)\fad(70,140)\fscx78\fscy78\t(0,110,\fscx106\fscy106)\t(110,180,\fscx100\fscy100)}BUILDING
+Dialogue: 3,0:00:04.42,0:00:07.00,HeroSub,,0,0,0,,{\an2\pos(960,940)\fad(100,140)\fscx90\fscy90\t(0,120,\fscx100\fscy100)}ZEXVRO
+Dialogue: 2,0:00:04.32,0:00:07.00,Draw,,0,0,0,,{\an5\pos(960,990)\fad(100,120)\p1\bord0\shad0\c&HFFFFFF&\alpha&H35&\fscx0\t(80,220,\fscx100)}m 0 0 l 140 0 l 140 3 l 0 3{\p0}
+Dialogue: 3,0:00:07.20,0:00:11.00,ThesisMain,,0,0,0,,{\an2\pos(960,860)\fad(70,140)\fscx90\fscy90\t(0,100,\fscx103\fscy103)\t(100,160,\fscx100\fscy100)}Most Web3 sells to users.
+Dialogue: 3,0:00:11.00,0:00:14.80,PunchMain,,0,0,0,,{\an5\pos(960,540)\fad(70,140)\fscx60\fscy60\t(0,100,\fscx112\fscy112)\t(100,180,\fscx100\fscy100)}We sell to businesses.
+Dialogue: 2,0:00:11.12,0:00:14.80,Draw,,0,0,0,,{\an5\pos(960,700)\fad(100,120)\p1\bord0\shad0\c&HFFFFFF&\alpha&H35&\fscx0\t(80,220,\fscx100)}m 0 0 l 140 0 l 140 3 l 0 3{\p0}
+Dialogue: 3,0:00:14.90,0:00:19.20,ThesisMain,,0,0,0,,{\an2\pos(960,860)\fad(70,140)\fscx90\fscy90\t(0,100,\fscx103\fscy103)\t(100,160,\fscx100\fscy100)}Adoption starts at the product.
+Dialogue: 3,0:00:19.20,0:00:24.00,PunchMain,,0,0,0,,{\an5\pos(960,540)\fad(70,140)\fscx60\fscy60\t(0,100,\fscx112\fscy112)\t(100,180,\fscx100\fscy100)}ONE INTEGRATION
+Dialogue: 3,0:00:19.42,0:00:24.00,ThesisSub,,0,0,0,,{\an5\pos(960,640)\fad(100,140)\fscx90\fscy90\t(0,120,\fscx100\fscy100)}Millions of users benefit.
+Dialogue: 2,0:00:19.32,0:00:24.00,Draw,,0,0,0,,{\an5\pos(960,700)\fad(100,120)\p1\bord0\shad0\c&HFFFFFF&\alpha&H35&\fscx0\t(80,220,\fscx100)}m 0 0 l 140 0 l 140 3 l 0 3{\p0}
+Dialogue: 3,0:00:24.00,0:00:28.40,ThesisMain,,0,0,0,,{\an2\pos(960,860)\fad(70,140)\fscx90\fscy90\t(0,100,\fscx103\fscy103)\t(100,160,\fscx100\fscy100)}No habit change.
+Dialogue: 3,0:00:24.22,0:00:28.40,ThesisSub,,0,0,0,,{\an2\pos(960,940)\fad(100,140)\fscx90\fscy90\t(0,120,\fscx100\fscy100)}Web3 under the hood.
+Dialogue: 3,0:00:28.50,0:00:33.20,HeroMain,,0,0,0,,{\an2\pos(960,860)\fad(70,140)\fscx78\fscy78\t(0,110,\fscx106\fscy106)\t(110,180,\fscx100\fscy100)}DEVELOPER INFRASTRUCTURE
+Dialogue: 3,0:00:28.72,0:00:33.20,HeroSub,,0,0,0,,{\an2\pos(960,940)\fad(100,140)\fscx90\fscy90\t(0,120,\fscx100\fscy100)}APIs  ·  SDKs  ·  tooling
+Dialogue: 2,0:00:28.62,0:00:33.20,Draw,,0,0,0,,{\an5\pos(960,990)\fad(100,120)\p1\bord0\shad0\c&HFFFFFF&\alpha&H35&\fscx0\t(80,220,\fscx100)}m 0 0 l 140 0 l 140 3 l 0 3{\p0}
+Dialogue: 3,0:00:33.20,0:00:38.00,ListMain,,0,0,0,,{\an2\pos(960,850)\fad(70,140)\fscx88\fscy88\t(0,100,\fscx102\fscy102)\t(100,160,\fscx100\fscy100)}ZK privacy payroll
+Dialogue: 3,0:00:33.42,0:00:38.00,ListSub,,0,0,0,,{\an2\pos(960,930)\fad(100,140)\fscx90\fscy90\t(0,120,\fscx100\fscy100)}NFT services  ·  and more
+Dialogue: 3,0:00:38.00,0:00:42.20,ListMain,,0,0,0,,{\an2\pos(960,850)\fad(70,140)\fscx88\fscy88\t(0,100,\fscx102\fscy102)\t(100,160,\fscx100\fscy100)}SHIP FAST
+Dialogue: 3,0:00:38.22,0:00:42.20,ListSub,,0,0,0,,{\an2\pos(960,930)\fad(100,140)\fscx90\fscy90\t(0,120,\fscx100\fscy100)}Enterprise-ready surfaces
+Dialogue: 3,0:00:42.20,0:00:46.50,HeroMain,,0,0,0,,{\an2\pos(960,860)\fad(70,140)\fscx78\fscy78\t(0,110,\fscx106\fscy106)\t(110,180,\fscx100\fscy100)}MORPH
+Dialogue: 3,0:00:42.42,0:00:46.50,HeroSub,,0,0,0,,{\an2\pos(960,940)\fad(100,140)\fscx90\fscy90\t(0,120,\fscx100\fscy100)}AI agent on machine + web
+Dialogue: 2,0:00:42.32,0:00:46.50,Draw,,0,0,0,,{\an5\pos(960,990)\fad(100,120)\p1\bord0\shad0\c&HFFFFFF&\alpha&H35&\fscx0\t(80,220,\fscx100)}m 0 0 l 140 0 l 140 3 l 0 3{\p0}
+Dialogue: 3,0:00:46.50,0:00:51.20,PunchMain,,0,0,0,,{\an5\pos(960,540)\fad(70,140)\fscx60\fscy60\t(0,100,\fscx112\fscy112)\t(100,180,\fscx100\fscy100)}WEB2  →  WEB3
+Dialogue: 3,0:00:46.72,0:00:51.20,ThesisSub,,0,0,0,,{\an5\pos(960,640)\fad(100,140)\fscx90\fscy90\t(0,120,\fscx100\fscy100)}Transforms your codebase
+Dialogue: 2,0:00:46.62,0:00:51.20,Draw,,0,0,0,,{\an5\pos(960,700)\fad(100,120)\p1\bord0\shad0\c&HFFFFFF&\alpha&H35&\fscx0\t(80,220,\fscx100)}m 0 0 l 140 0 l 140 3 l 0 3{\p0}
+Dialogue: 3,0:00:51.20,0:00:55.40,ThesisMain,,0,0,0,,{\an2\pos(960,860)\fad(70,140)\fscx90\fscy90\t(0,100,\fscx103\fscy103)\t(100,160,\fscx100\fscy100)}Agents that call tools.
+Dialogue: 3,0:00:51.42,0:00:55.40,ThesisSub,,0,0,0,,{\an2\pos(960,940)\fad(100,140)\fscx90\fscy90\t(0,120,\fscx100\fscy100)}Services that ship.
+Dialogue: 3,0:00:55.40,0:00:59.20,PunchMain,,0,0,0,,{\an5\pos(960,540)\fad(70,140)\fscx60\fscy60\t(0,100,\fscx112\fscy112)\t(100,180,\fscx100\fscy100)}Full-stack migration.
+Dialogue: 3,0:00:55.62,0:00:59.20,ThesisSub,,0,0,0,,{\an5\pos(960,640)\fad(100,140)\fscx90\fscy90\t(0,120,\fscx100\fscy100)}Without rewriting everything.
+Dialogue: 2,0:00:55.52,0:00:59.20,Draw,,0,0,0,,{\an5\pos(960,700)\fad(100,120)\p1\bord0\shad0\c&HFFFFFF&\alpha&H35&\fscx0\t(80,220,\fscx100)}m 0 0 l 140 0 l 140 3 l 0 3{\p0}
+Dialogue: 3,0:00:59.40,0:01:04.40,HeroMain,,0,0,0,,{\an2\pos(960,860)\fad(70,140)\fscx78\fscy78\t(0,110,\fscx106\fscy106)\t(110,180,\fscx100\fscy100)}MISSION
+Dialogue: 3,0:00:59.62,0:01:04.40,HeroSub,,0,0,0,,{\an2\pos(960,940)\fad(100,140)\fscx90\fscy90\t(0,120,\fscx100\fscy100)}Make Web3 as easy as a cloud API
+Dialogue: 2,0:00:59.52,0:01:04.40,Draw,,0,0,0,,{\an5\pos(960,990)\fad(100,120)\p1\bord0\shad0\c&HFFFFFF&\alpha&H35&\fscx0\t(80,220,\fscx100)}m 0 0 l 140 0 l 140 3 l 0 3{\p0}
+Dialogue: 3,0:01:04.40,0:01:08.80,CloseMain,,0,0,0,,{\an2\pos(960,820)\fad(70,140)\fscx70\fscy70\t(0,120,\fscx108\fscy108)\t(120,200,\fscx100\fscy100)}INTEGRATE ONCE.
+Dialogue: 3,0:01:04.62,0:01:08.80,CloseSub,,0,0,0,,{\an2\pos(960,910)\fad(100,140)\fscx90\fscy90\t(0,120,\fscx100\fscy100)}ADOPT EVERYWHERE.
+Dialogue: 2,0:01:04.52,0:01:08.80,Draw,,0,0,0,,{\an5\pos(960,990)\fad(100,120)\p1\bord0\shad0\c&HFFFFFF&\alpha&H35&\fscx0\t(80,220,\fscx100)}m 0 0 l 140 0 l 140 3 l 0 3{\p0}
+Dialogue: 3,0:01:08.80,0:01:12.50,EndBrand,,0,0,0,,{\an5\pos(960,500)\fad(250,400)\fscx80\fscy80\fsp16\t(0,250,\fscx100\fscy100\fsp10)}ZEXVRO
+Dialogue: 3,0:01:09.15,0:01:12.50,EndUrl,,0,0,0,,{\an5\pos(960,600)\fad(400,400)\fsp8}zexvro.com
+Dialogue: 5,0:00:14.80,0:00:14.92,Draw,,0,0,0,,{\an5\pos(960,540)\p1\bord0\shad0\c&HFFFFFF&\alpha&HA0&\t(0,80,\alpha&HFF&)}m 0 0 l 1920 0 l 1920 1080 l 0 1080{\p0}
+Dialogue: 5,0:00:28.40,0:00:28.52,Draw,,0,0,0,,{\an5\pos(960,540)\p1\bord0\shad0\c&HFFFFFF&\alpha&HA0&\t(0,80,\alpha&HFF&)}m 0 0 l 1920 0 l 1920 1080 l 0 1080{\p0}
+Dialogue: 5,0:00:42.20,0:00:42.32,Draw,,0,0,0,,{\an5\pos(960,540)\p1\bord0\shad0\c&HFFFFFF&\alpha&HA0&\t(0,80,\alpha&HFF&)}m 0 0 l 1920 0 l 1920 1080 l 0 1080{\p0}
+Dialogue: 5,0:00:59.20,0:00:59.32,Draw,,0,0,0,,{\an5\pos(960,540)\p1\bord0\shad0\c&HFFFFFF&\alpha&HA0&\t(0,80,\alpha&HFF&)}m 0 0 l 1920 0 l 1920 1080 l 0 1080{\p0}
