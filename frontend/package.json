@@ -68,5 +68,9 @@
     "typescript": "~5.8.2",
     "vite": "^6.2.3",
     "vitest": "^4.1.10"
+  },
+  "overrides": {
+    "@stellar/stellar-base": "^14.1.0",
+    "@noble/hashes": "1.8.0"
   }
 }

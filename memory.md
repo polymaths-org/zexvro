@@ -1,5 +1,13 @@
 # ZEXVRO Shared Memory
 
+## 2026-07-25 - Console CI: noble/hashes + legacy-peer-deps
+
+- After lock regen, CI build failed: `Missing "./sha256" specifier in "@noble/hashes"`
+- Fix: package.json overrides pin `@noble/hashes@1.8.0` + `@stellar/stellar-base@^14.1.0`; workflow uses `npm ci --legacy-peer-deps`
+- Verified local: npm ci + vite build green; Pages redeploy https://8e2f5a2d.zexvro-7oq.pages.dev
+- console.zexvro.in still 200
+- GH secret `CLOUDFLARE_API_TOKEN` still absent → Actions deploy step skips with warning
+
 ## 2026-07-25 - Console Pages: live deploy + CI lockfile fix
 
 - CI fail 1: `npm ci` peer ERESOLVE (`stellar-base` 13 vs wallets-kit peer 14) → bumped `@stellar/stellar-base` ^14.1.0

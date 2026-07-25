@@ -57,11 +57,8 @@ jobs:
         working-directory: frontend
         run: |
           set -euo pipefail
-          # Prefer lockfile-strict install; fall back if lock is incomplete on the runner.
-          if ! npm ci --no-fund --no-audit; then
-            echo "::warning::npm ci failed — regenerating with npm install"
-            npm install --no-fund --no-audit
-          fi
+          # legacy-peer-deps: wallets-kit / trezor peers disagree with stellar-sdk 16
+          npm ci --no-fund --no-audit --legacy-peer-deps
 
       - name: Build frontend (production)
         working-directory: frontend
