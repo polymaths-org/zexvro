@@ -29,6 +29,16 @@ type Pack = {
   zcrAmount: number;
   usdcPrice: string;
   description?: string;
+  custom?: boolean;
+  unitPriceUsdc?: number;
+};
+
+type CustomPricing = {
+  enabled: boolean;
+  min: number;
+  max: number;
+  unitPriceUsdc: number;
+  note?: string;
 };
 
 export default function WorkspaceCredits() {
@@ -43,6 +53,12 @@ export default function WorkspaceCredits() {
   const [burnsOnUse, setBurnsOnUse] = useState(false);
   const [ledger, setLedger] = useState<CreditLedgerEvent[]>([]);
   const [packs, setPacks] = useState<Pack[]>([]);
+  const [customPricing, setCustomPricing] = useState<CustomPricing>({
+    enabled: true,
+    min: 50,
+    max: 50_000,
+    unitPriceUsdc: 0.05,
+  });
   const [nftCollectionId, setNftCollectionId] = useState<string | null>(null);
   const [purchaseMode, setPurchaseMode] = useState('sandbox');
   const [loading, setLoading] = useState(true);
@@ -56,9 +72,10 @@ export default function WorkspaceCredits() {
   const [envBusy, setEnvBusy] = useState(false);
   const [buyBusy, setBuyBusy] = useState(false);
   const [buyMsg, setBuyMsg] = useState<string | null>(null);
-  /** Step 1: pick ZCR amount · Step 2: confirm USDC charge · then Freighter popup */
+  /** Step 1: pick ZCR amount · Step 2: confirm charge · then wallet popup */
   const [buyStep, setBuyStep] = useState<'select' | 'confirm'>('select');
   const [selectedPackId, setSelectedPackId] = useState<string | null>(null);
+  const [pendingCustom, setPendingCustom] = useState<Pack | null>(null);
   const [customZcrInput, setCustomZcrInput] = useState('');
 
   const load = useCallback(async () => {
@@ -78,6 +95,15 @@ export default function WorkspaceCredits() {
         setPacks(catalog.packs || []);
         setNftCollectionId(catalog.nftCollectionId || null);
         setPurchaseMode(catalog.purchaseMode || 'sandbox');
+        if (catalog.custom) {
+          setCustomPricing({
+            enabled: catalog.custom.enabled !== false,
+            min: catalog.custom.min ?? 50,
+            max: catalog.custom.max ?? 50_000,
+            unitPriceUsdc: catalog.custom.unitPriceUsdc ?? 0.05,
+            note: catalog.custom.note,
+          });
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load credits');
@@ -171,21 +197,32 @@ export default function WorkspaceCredits() {
     }
   };
 
-  const selectedPack = packs.find(p => p.id === selectedPackId) || null;
+  const selectedPack =
+    pendingCustom
+    || packs.find(p => p.id === selectedPackId)
+    || null;
 
-  const resolvePackFromCustomZcr = (raw: string): Pack | null => {
+  const quoteCustomZcr = (raw: string): Pack | null => {
     const n = Math.floor(Number(String(raw).replace(/,/g, '')));
-    if (!Number.isFinite(n) || n <= 0 || packs.length === 0) return null;
+    if (!Number.isFinite(n) || n <= 0) return null;
+    if (n < customPricing.min || n > customPricing.max) return null;
     const exact = packs.find(p => p.zcrAmount === n);
     if (exact) return exact;
-    // Nearest pack by ZCR amount (catalog SKUs only — on-chain price is pack-based).
-    return packs.reduce((best, p) =>
-      Math.abs(p.zcrAmount - n) < Math.abs(best.zcrAmount - n) ? p : best,
-    packs[0]);
+    const usdc = (n * customPricing.unitPriceUsdc).toFixed(2);
+    return {
+      id: `zcr_custom_${n}`,
+      name: 'Custom',
+      zcrAmount: n,
+      usdcPrice: usdc,
+      description: `Custom ${n.toLocaleString()} ZCR`,
+      custom: true,
+      unitPriceUsdc: customPricing.unitPriceUsdc,
+    };
   };
 
   const goToConfirm = (packId: string) => {
     if (!canWrite) return;
+    setPendingCustom(null);
     setSelectedPackId(packId);
     setBuyStep('confirm');
     setBuyMsg(null);
@@ -193,30 +230,54 @@ export default function WorkspaceCredits() {
 
   const applyCustomAmount = () => {
     const requested = Math.floor(Number(String(customZcrInput).replace(/,/g, '')));
-    const pack = resolvePackFromCustomZcr(customZcrInput);
+    if (!Number.isFinite(requested) || requested <= 0) {
+      setBuyMsg(`Enter a valid ZCR amount (${customPricing.min}–${customPricing.max.toLocaleString()}).`);
+      return;
+    }
+    if (requested < customPricing.min || requested > customPricing.max) {
+      setBuyMsg(
+        `Custom amount must be between ${customPricing.min.toLocaleString()} and ${customPricing.max.toLocaleString()} ZCR.`,
+      );
+      return;
+    }
+    const pack = quoteCustomZcr(customZcrInput);
     if (!pack) {
-      setBuyMsg('Enter a valid credit amount (e.g. 100, 500, 2000).');
+      setBuyMsg(`Enter a valid ZCR amount (${customPricing.min}–${customPricing.max.toLocaleString()}).`);
       return;
     }
     setCustomZcrInput(String(pack.zcrAmount));
-    goToConfirm(pack.id);
-    if (Number.isFinite(requested) && requested !== pack.zcrAmount) {
-      setBuyMsg(`Snapped to nearest pack: ${pack.zcrAmount.toLocaleString()} ZCR for $${pack.usdcPrice} USDC.`);
+    if (pack.custom) {
+      setPendingCustom(pack);
+      setSelectedPackId(pack.id);
+    } else {
+      setPendingCustom(null);
+      setSelectedPackId(pack.id);
     }
+    setBuyStep('confirm');
+    setBuyMsg(
+      pack.custom
+        ? `Custom ${pack.zcrAmount.toLocaleString()} ZCR · estimate $${pack.usdcPrice} (on-chain sale uses the Credit Pack primary price; ZCR granted = this amount).`
+        : null,
+    );
   };
 
   const startPayment = async () => {
-    if (!workspaceId || !canWrite || !selectedPackId) return;
-    const packId = selectedPackId;
-    const pack = packs.find(p => p.id === packId);
+    if (!workspaceId || !canWrite || !selectedPack) return;
+    const pack = selectedPack;
     setBuyBusy(true);
     setBuyMsg(null);
     try {
       // Platform returns checkout URL + collection; never grants ZCR until chain confirms.
-      const res = await workspaceApi.purchaseCreditPack(workspaceId, { packId });
+      const res = await workspaceApi.purchaseCreditPack(
+        workspaceId,
+        pack.custom
+          ? { zcrAmount: pack.zcrAmount }
+          : { packId: pack.id },
+      );
       if (res.granted) {
         setBuyMsg(res.message || `+${res.pack?.zcrAmount ?? ''} ZCR added (sandbox)`);
         setBuyStep('select');
+        setPendingCustom(null);
         await load();
         return;
       }
@@ -241,7 +302,8 @@ export default function WorkspaceCredits() {
         return;
       }
 
-      const zcrAmount = res.pack?.zcrAmount ?? pack?.zcrAmount;
+      const zcrAmount = res.pack?.zcrAmount ?? pack.zcrAmount;
+      const packId = res.pack?.id ?? pack.id;
       let checkoutOrigin = window.location.origin;
       try {
         if (res.nftCheckoutUrl) {
@@ -250,7 +312,7 @@ export default function WorkspaceCredits() {
       } catch { /* same origin */ }
 
       setBuyMsg(
-        `Opening Freighter… Charge $${res.pack?.usdcPrice ?? pack?.usdcPrice ?? '—'} USDC → +${(zcrAmount ?? 0).toLocaleString()} ZCR after confirm.`,
+        `Opening wallet checkout… +${(zcrAmount ?? 0).toLocaleString()} ZCR after on-chain confirm.`,
       );
       openNftCheckout({
         collectionId,
@@ -265,6 +327,7 @@ export default function WorkspaceCredits() {
           );
           setBuyStep('select');
           setSelectedPackId(null);
+          setPendingCustom(null);
           void load();
         },
         onError: (payload) => {
@@ -293,7 +356,7 @@ export default function WorkspaceCredits() {
             <p className="mb-1 text-xs font-medium uppercase tracking-wide text-zinc-400">Workspace</p>
             <h1 className="text-2xl font-semibold text-zinc-950 dark:text-white">Credits (ZCR)</h1>
             <p className="mt-1 max-w-xl text-sm text-zinc-500 dark:text-zinc-400">
-              Platform currency for Zexvro services. Buy with Freighter (USDC), redeem promos, track burns.
+              Platform currency for Zexvro services. Buy custom or pack amounts via wallet checkout, redeem promos, track burns.
             </p>
           </div>
           <button
@@ -378,9 +441,9 @@ export default function WorkspaceCredits() {
               <Wallet className="h-3.5 w-3.5" /> How to buy
             </div>
             <ol className="mt-3 space-y-1.5 text-[11px] text-zinc-500">
-              <li className="flex gap-2"><span className="font-semibold text-zinc-700 dark:text-zinc-300">1</span> Pick ZCR amount</li>
-              <li className="flex gap-2"><span className="font-semibold text-zinc-700 dark:text-zinc-300">2</span> Confirm USDC charge</li>
-              <li className="flex gap-2"><span className="font-semibold text-zinc-700 dark:text-zinc-300">3</span> Pay in Freighter</li>
+              <li className="flex gap-2"><span className="font-semibold text-zinc-700 dark:text-zinc-300">1</span> Pick pack or custom ZCR</li>
+              <li className="flex gap-2"><span className="font-semibold text-zinc-700 dark:text-zinc-300">2</span> Confirm amount</li>
+              <li className="flex gap-2"><span className="font-semibold text-zinc-700 dark:text-zinc-300">3</span> Pay with wallet (Freighter+)</li>
             </ol>
             <button
               type="button"
@@ -458,7 +521,7 @@ export default function WorkspaceCredits() {
               <span aria-hidden>→</span>
               <span className={buyStep === 'confirm' ? 'font-semibold text-zinc-700 dark:text-zinc-200' : ''}>2 · Pay</span>
               <span className="ml-2 normal-case tracking-normal text-zinc-500">
-                {purchaseMode === 'nft' ? 'Freighter / USDC' : 'Sandbox'}
+                {purchaseMode === 'nft' ? 'Wallet / Stellar' : 'Sandbox'}
               </span>
             </div>
           </div>
@@ -466,21 +529,22 @@ export default function WorkspaceCredits() {
             {buyStep === 'select' ? (
               <>
                 <p className="mb-4 text-xs text-zinc-500">
-                  Choose how many ZCR you need. You will see the USDC charge before the Freighter popup opens.
+                  Choose a pack or enter any custom ZCR amount ({customPricing.min.toLocaleString()}–
+                  {customPricing.max.toLocaleString()}). ZCR is granted after wallet payment confirms.
                   {nftCollectionId
                     ? ` Pack collection ${nftCollectionId.slice(0, 8)}…`
                     : ' Waiting for Credit Pack collection link.'}
                 </p>
-                {packs.length === 0 ? (
+                {packs.length === 0 && !customPricing.enabled ? (
                   <p className="text-xs text-zinc-500">No packs available.</p>
                 ) : (
                   <>
                     <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
-                      Select credit amount
+                      Pack shortcuts
                     </p>
                     <div className="grid gap-3 sm:grid-cols-3">
                       {packs.map(pack => {
-                        const isSelected = selectedPackId === pack.id;
+                        const isSelected = !pendingCustom && selectedPackId === pack.id;
                         return (
                           <button
                             key={pack.id}
@@ -499,7 +563,7 @@ export default function WorkspaceCredits() {
                               <span className="ml-1 text-sm font-medium text-zinc-400">ZCR</span>
                             </p>
                             <p className="mt-1 text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                              ${pack.usdcPrice} <span className="font-normal text-zinc-500">USDC</span>
+                              ${pack.usdcPrice} <span className="font-normal text-zinc-500">est.</span>
                             </p>
                             {pack.description ? (
                               <p className="mt-2 text-[11px] text-zinc-400">{pack.description}</p>
@@ -511,34 +575,54 @@ export default function WorkspaceCredits() {
                         );
                       })}
                     </div>
-                    <div className="mt-5 rounded-lg border border-dashed border-zinc-200 p-4 dark:border-zinc-800">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
-                        Or enter a custom amount
-                      </p>
-                      <p className="mt-1 text-[11px] text-zinc-500">
-                        Snaps to the nearest catalog pack (100 / 500 / 2000) so the USDC price matches the pack.
-                      </p>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <input
-                          type="number"
-                          min={1}
-                          step={1}
-                          value={customZcrInput}
-                          onChange={e => setCustomZcrInput(e.target.value)}
-                          placeholder="e.g. 500"
-                          disabled={!canWrite}
-                          className="h-9 w-36 rounded-lg border border-zinc-200 bg-white px-2.5 font-mono text-xs outline-none dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
-                        />
-                        <button
-                          type="button"
-                          disabled={!canWrite || !customZcrInput.trim()}
-                          onClick={applyCustomAmount}
-                          className="rounded-lg border border-zinc-200 px-3 text-xs font-medium text-zinc-700 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-200"
-                        >
-                          Use amount
-                        </button>
+                    {customPricing.enabled ? (
+                      <div className="mt-5 rounded-lg border border-dashed border-zinc-200 p-4 dark:border-zinc-800">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+                          Custom ZCR amount
+                        </p>
+                        <p className="mt-1 text-[11px] text-zinc-500">
+                          Any amount from {customPricing.min.toLocaleString()} to{' '}
+                          {customPricing.max.toLocaleString()} ZCR
+                          {customPricing.unitPriceUsdc
+                            ? ` · ~$${customPricing.unitPriceUsdc}/ZCR guide price`
+                            : ''}
+                          . Exact catalog amounts use the matching pack.
+                        </p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <input
+                            type="number"
+                            min={customPricing.min}
+                            max={customPricing.max}
+                            step={1}
+                            value={customZcrInput}
+                            onChange={e => setCustomZcrInput(e.target.value)}
+                            placeholder={`e.g. ${Math.max(customPricing.min, 250)}`}
+                            disabled={!canWrite}
+                            className="h-9 w-36 rounded-lg border border-zinc-200 bg-white px-2.5 font-mono text-xs outline-none dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
+                          />
+                          <button
+                            type="button"
+                            disabled={!canWrite || !customZcrInput.trim()}
+                            onClick={applyCustomAmount}
+                            className="rounded-lg border border-zinc-200 px-3 text-xs font-medium text-zinc-700 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-200"
+                          >
+                            Use custom amount
+                          </button>
+                        </div>
+                        {(() => {
+                          const live = quoteCustomZcr(customZcrInput);
+                          if (!live || !customZcrInput.trim()) return null;
+                          return (
+                            <p className="mt-2 text-[11px] text-zinc-500">
+                              Preview: <span className="font-semibold text-zinc-700 dark:text-zinc-200">{live.zcrAmount.toLocaleString()} ZCR</span>
+                              {' · '}
+                              ${live.usdcPrice} guide
+                              {live.custom ? ' (custom)' : ` (${live.name} pack)`}
+                            </p>
+                          );
+                        })()}
                       </div>
-                    </div>
+                    ) : null}
                   </>
                 )}
               </>
@@ -555,20 +639,27 @@ export default function WorkspaceCredits() {
                         {selectedPack.zcrAmount.toLocaleString()}
                         <span className="ml-1 text-sm font-medium text-zinc-400">ZCR</span>
                       </p>
-                      <p className="mt-0.5 text-[11px] text-zinc-400">{selectedPack.name} pack</p>
+                      <p className="mt-0.5 text-[11px] text-zinc-400">
+                        {selectedPack.custom ? 'Custom amount' : `${selectedPack.name} pack`}
+                      </p>
                     </div>
                     <div>
-                      <p className="text-xs text-zinc-500">Wallet will charge</p>
+                      <p className="text-xs text-zinc-500">Guide price</p>
                       <p className="mt-1 text-2xl font-semibold tabular-nums text-zinc-900 dark:text-white">
                         ${selectedPack.usdcPrice}
-                        <span className="ml-1 text-sm font-medium text-zinc-400">USDC</span>
+                        <span className="ml-1 text-sm font-medium text-zinc-400">est.</span>
                       </p>
-                      <p className="mt-0.5 text-[11px] text-zinc-400">Stellar · Freighter popup</p>
+                      <p className="mt-0.5 text-[11px] text-zinc-400">
+                        Stellar wallet checkout · Freighter / Albedo / xBull / more
+                      </p>
                     </div>
                   </div>
                   <p className="mt-4 text-[11px] leading-relaxed text-zinc-500">
                     ZCR is added only after the on-chain purchase confirms — not when you open checkout.
-                    Keep Freighter on the same network as the Credit Pack collection (mainnet for live packs).
+                    Switch your wallet to the same network as the Credit Pack collection (Mainnet for live packs).
+                    {selectedPack.custom
+                      ? ' Custom grants use the amount you chose; the NFT sale price is whatever the pack collection owner set on-chain.'
+                      : ''}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -577,6 +668,7 @@ export default function WorkspaceCredits() {
                     disabled={buyBusy}
                     onClick={() => {
                       setBuyStep('select');
+                      setPendingCustom(null);
                       setBuyMsg(null);
                     }}
                     className="rounded-lg border border-zinc-200 px-4 py-2 text-xs font-medium text-zinc-700 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-200"
@@ -589,7 +681,9 @@ export default function WorkspaceCredits() {
                     onClick={() => void startPayment()}
                     className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-zinc-900 px-4 py-2 text-xs font-semibold text-white disabled:opacity-40 dark:bg-white dark:text-zinc-900"
                   >
-                    {buyBusy ? 'Opening…' : `Pay $${selectedPack.usdcPrice} USDC with Freighter`}
+                    {buyBusy
+                      ? 'Opening…'
+                      : `Buy ${selectedPack.zcrAmount.toLocaleString()} ZCR with wallet`}
                   </button>
                 </div>
               </div>

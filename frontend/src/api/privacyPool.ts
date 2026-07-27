@@ -9,15 +9,13 @@
  * from the same stellar-sdk package (avoids dual-package Server hazard).
  */
 
-// @ts-ignore — snarkjs has no bundled types
-import * as snarkjs from 'snarkjs';
-import { buildPoseidon } from 'circomlibjs';
 import { signTransaction as freighterSign } from '@stellar/freighter-api';
 import {
   Contract, Networks, TransactionBuilder, Address, xdr,
   Horizon, rpc, Account, Keypair, Transaction, authorizeEntry,
 } from 'stellar-sdk';
 import { zkNotesApi, zkWorkerApi } from './api';
+import { getUserTreasurySecret } from '../lib/userTreasury';
 
 /* ─── Network (runtime — follows Zer0 Settings Horizon / Soroban) ─── */
 
@@ -237,10 +235,30 @@ const DENOMINATION_XLM = DEFAULT_TIER.xlm;
 const POOL_CONTRACT = DEFAULT_TIER.contract;
 
 /**
- * Optional testnet treasury secret for seamless multi-unit ZK (no Freighter spam).
- * Set VITE_TREASURY_SECRET in .env — never use a mainnet key here.
+ * Optional build-time ops treasury (VITE_TREASURY_SECRET) — fallback only.
+ * Prefer per-browser personal treasury from localStorage (userTreasury.ts).
+ * Never put user secrets in Zer0 settings / AWS sync.
  */
-const TREASURY_SECRET = (import.meta.env.VITE_TREASURY_SECRET || '').trim();
+const ENV_TREASURY_SECRET = (import.meta.env.VITE_TREASURY_SECRET || '').trim();
+
+function isStellarSecret(secret: string): boolean {
+  return typeof secret === 'string' && secret.startsWith('S') && secret.length >= 50;
+}
+
+/** Active auto-approve secret: personal treasury first, then env ops key. */
+export function resolveTreasurySecret(): string | null {
+  const user = getUserTreasurySecret();
+  if (user && isStellarSecret(user)) return user;
+  if (isStellarSecret(ENV_TREASURY_SECRET)) return ENV_TREASURY_SECRET;
+  return null;
+}
+
+export function treasurySourceLabel(): 'personal' | 'ops' | 'none' {
+  const user = getUserTreasurySecret();
+  if (user && isStellarSecret(user)) return 'personal';
+  if (isStellarSecret(ENV_TREASURY_SECRET)) return 'ops';
+  return 'none';
+}
 
 /* ─── Types ─── */
 
@@ -338,7 +356,11 @@ export interface WithdrawResult {
 let _poseidon: any = null;
 
 async function getPoseidon() {
-  if (!_poseidon) _poseidon = await buildPoseidon();
+  if (!_poseidon) {
+    // Lazy — keep snarkjs/circomlibjs out of the main dashboard boot chunk.
+    const { buildPoseidon } = await import('circomlibjs');
+    _poseidon = await buildPoseidon();
+  }
   return _poseidon;
 }
 
@@ -774,13 +796,14 @@ export function setForceFreighterSigning(force: boolean) {
 }
 
 export function isTreasuryKeyConfigured(): boolean {
-  return TREASURY_SECRET.startsWith('S') && TREASURY_SECRET.length >= 50;
+  return !!resolveTreasurySecret();
 }
 
 export function getTreasuryPublicKey(): string | null {
-  if (!isTreasuryKeyConfigured()) return null;
+  const secret = resolveTreasurySecret();
+  if (!secret) return null;
   try {
-    return Keypair.fromSecret(TREASURY_SECRET).publicKey();
+    return Keypair.fromSecret(secret).publicKey();
   } catch {
     return null;
   }
@@ -794,7 +817,9 @@ export function isAutoSignEnabled(): boolean {
 
 /**
  * Address that must be tx source / SAC from / deposit from.
- * Auto-sign REQUIRES treasury pubkey — signing a Freighter-sourced tx with treasury key → txBAD_AUTH.
+ *
+ * Auto-sign ON (Freighter popups OFF) → always ops treasury (no Freighter).
+ * Auto-sign OFF → Settings / pay-flow Freighter G… (popups required).
  */
 export function resolveFundingAddress(preferred?: string): string {
   if (isAutoSignEnabled()) {
@@ -802,6 +827,15 @@ export function resolveFundingAddress(preferred?: string): string {
     if (t) return t;
   }
   return (preferred || '').trim();
+}
+
+/** True when this pay will Freighter-sign (user wallet), not treasury auto-sign. */
+export function willUseFreighterSigning(_preferred?: string): boolean {
+  return !isAutoSignEnabled();
+}
+
+export function getForceFreighterSigning(): boolean {
+  return forceFreighterSigning;
 }
 
 /** Sync signing preference from persisted Zer0 settings (call on boot + settings save). */
@@ -881,14 +915,23 @@ async function prepareAndSubmit(tx: any): Promise<string> {
   const preparedTx = rpc.assembleTransaction(tx, sim).build();
 
   let signedTxXdr: string;
+  // Re-read preference each submit (Settings toggle / rehydrate can change mid-session).
+  syncSigningPreferenceFromStorage();
   if (isAutoSignEnabled()) {
-    const kp = Keypair.fromSecret(TREASURY_SECRET);
-    // Source account must be the treasury key or envelope auth fails
-    const src = preparedTx.source;
-    if (src && src !== kp.publicKey()) {
+    const secret = resolveTreasurySecret();
+    if (!secret) {
       throw new Error(
-        `Auto-sign txBAD_AUTH risk: tx source ${src.slice(0, 8)}… is not treasury ${kp.publicKey().slice(0, 8)}…. ` +
-        `Connect the treasury wallet in Settings, or enable Freighter popups.`,
+        'Auto-approve is on but no personal treasury is set. '
+          + 'Open Zer0 → Treasury, create a treasury, fund it from Freighter, then retry.',
+      );
+    }
+    const kp = Keypair.fromSecret(secret);
+    const treasuryPk = kp.publicKey();
+    const src = (preparedTx.source as string | undefined) || '';
+    if (src && src !== treasuryPk) {
+      throw new Error(
+        `Auto-approve is on but tx source is ${src.slice(0, 4)}…${src.slice(-4)} (not treasury). `
+          + 'Reload, enable Auto-approve in Settings, and fund your personal treasury in Zer0 → Treasury.',
       );
     }
     await signSorobanAuthEntries(preparedTx, kp);
@@ -897,7 +940,9 @@ async function prepareAndSubmit(tx: any): Promise<string> {
   } else {
     let signedResult;
     try {
-      signedResult = await freighterSign(preparedTx.toXDR(), { networkPassphrase: NETWORK_PASSPHRASE });
+      signedResult = await freighterSign(preparedTx.toXDR(), {
+        networkPassphrase: NETWORK_PASSPHRASE,
+      });
     } catch (e: any) {
       throw new Error(`freighterSign threw: ${e.message || e}`);
     }
@@ -932,29 +977,71 @@ async function prepareAndSubmit(tx: any): Promise<string> {
 
 /* ─── Fund pool (one SAC transfer for many notes) ─── */
 
+function shortG(address: string): string {
+  const a = (address || '').trim();
+  if (a.length < 12) return a || '(none)';
+  return `${a.slice(0, 4)}…${a.slice(-4)}`;
+}
+
+/** Spendable native ≈ balance − selling liabilities (Horizon). */
+function nativeBalancesFromAccount(account: Account): { total: number; available: number } {
+  const row = (account as any).balances?.find((b: any) => b.asset_type === 'native');
+  const total = Number(row?.balance || 0);
+  const selling = Number(row?.selling_liabilities || 0);
+  const available = Math.max(0, total - selling);
+  return { total, available };
+}
+
 /** Move total XLM into the active pool once, then deposit notes. */
 export async function fundPool(
   fromAddress: string,
   totalStroops: bigint,
 ): Promise<string> {
+  syncSigningPreferenceFromStorage();
+  const preferred = (fromAddress || '').trim();
   const from = resolveFundingAddress(fromAddress);
-  if (!from) throw new Error('No funding address (connect wallet or configure treasury auto-sign)');
+  if (!from) {
+    throw new Error(
+      isAutoSignEnabled()
+        ? 'Auto-approve is on but no personal treasury is configured. Open Zer0 → Treasury, create one, fund it, then retry.'
+        : 'No funding address — connect Freighter in Zer0 Settings, or create a personal treasury for auto-approve.',
+    );
+  }
+  // Fresh Horizon load (no stale SDK cache) for the network currently configured.
   const account = await loadAccount(from);
   // Preflight: SAC transfer spends classic native; must leave base reserve + fee buffer.
   try {
-    const nativeBal = Number(
-      (account as any).balances?.find((b: any) => b.asset_type === 'native')?.balance || 0,
-    );
+    const { total: nativeBal, available } = nativeBalancesFromAccount(account);
     const needXlm = Number(totalStroops) / STROOPS_PER_XLM;
     const required = requiredXlmForPrivatePay(needXlm);
-    if (nativeBal + 1e-9 < required) {
-      throw new Error(
-        `Not enough XLM to fund the private pool.\n`
-        + `Wallet: ${nativeBal.toFixed(4)} XLM\n`
-        + `Need ≈ ${required.toFixed(2)} XLM `
-        + `(${needXlm} for notes + ${STELLAR_BASE_RESERVE_XLM} reserve + ~${PRIVATE_PAY_FEE_BUFFER_XLM} fees).\n`
-        + 'Top up the funding wallet and retry.',
-      );
+    const net = getPrivacyPoolNetwork();
+    const netLabel = net.isTestnet ? 'Testnet' : 'Mainnet';
+    const treasury = getTreasuryPublicKey();
+    const usedTreasuryAuto =
+      isAutoSignEnabled() && !!treasury && from === treasury && (!preferred || preferred === treasury);
+
+    if (available + 1e-9 < required) {
+      const lines = [
+        'Not enough XLM to fund the private pool.',
+        `Checked: ${shortG(from)} on ${netLabel} (${net.horizonUrl.replace(/^https?:\/\//, '')})`,
+        `On-chain: ${available.toFixed(4)} XLM spendable`
+          + (nativeBal !== available ? ` (${nativeBal.toFixed(4)} total)` : ''),
+        `Need ≈ ${required.toFixed(2)} XLM `
+          + `(${needXlm} for notes + ${STELLAR_BASE_RESERVE_XLM} reserve + ~${PRIVATE_PAY_FEE_BUFFER_XLM} fees).`,
+      ];
+      if (usedTreasuryAuto) {
+        lines.push(
+          'Paying from ops treasury (auto-sign). Connect your Freighter wallet in Zer0 Settings as funding wallet '
+            + 'to use that balance instead, or top up treasury '
+            + `${shortG(from)} to ≥ ${required.toFixed(2)} XLM.`,
+        );
+      } else {
+        lines.push(
+          'If Freighter shows a higher balance, switch Freighter to the same network as Zer0 '
+            + `(${netLabel}) and confirm Settings → funding wallet is the Freighter account that holds the XLM.`,
+        );
+      }
+      throw new Error(lines.join('\n'));
     }
   } catch (e) {
     if (e instanceof Error && e.message.startsWith('Not enough XLM')) throw e;
@@ -1413,9 +1500,37 @@ async function settleTier(args: {
   for (let i = 0; i < ready.length; i++) {
     onProgress(`Withdraw ${i + 1}/${count} @ ${tier.xlm} XLM`);
     usePool(ready[i].tier);
-    lastTxHash = await submitWithdrawTx(
-      toAddress, from, ready[i].proof, ready[i].nullifierHashHex, ready[i].rootHex,
-    );
+    // Prefer precomputed proof if live root still matches; else full re-prove.
+    try {
+      const live = await fetchLiveRootHex(from);
+      if (live === ready[i].rootHex.replace(/^0x/, '').toLowerCase().padStart(64, '0')) {
+        lastTxHash = await submitWithdrawTx(
+          toAddress, from, ready[i].proof, ready[i].nullifierHashHex, ready[i].rootHex,
+        );
+      } else {
+        onProgress(`Root moved before withdraw ${i + 1} — re-proving…`);
+        lastTxHash = await proveAndWithdrawNote({
+          toAddress,
+          source: from,
+          note: ready[i].note,
+          poseidon,
+          onProgress,
+        });
+      }
+    } catch (e) {
+      if (isInvalidRootError(e)) {
+        onProgress(`InvalidRoot on withdraw ${i + 1} — re-proving…`);
+        lastTxHash = await proveAndWithdrawNote({
+          toAddress,
+          source: from,
+          note: ready[i].note,
+          poseidon,
+          onProgress,
+        });
+      } else {
+        throw e;
+      }
+    }
     markNoteSpent(ready[i].note);
   }
 
@@ -1443,6 +1558,8 @@ export async function shieldPayAmount(args: {
     batchDepositThenWithdraw?: boolean;
   };
 }): Promise<{ lastTxHash: string; notes: DepositNote[]; settledXlm: number; plan: ShieldPayPlan }> {
+  // Apply Freighter vs auto-approve before any fund/deposit/sign.
+  syncSigningPreferenceFromStorage();
   assertShieldedNetworkReady();
   const plan = planShieldPay(args.amountXlm);
   if (plan.totalNotes === 0) throw new Error('Amount must be > 0');
@@ -1578,15 +1695,24 @@ async function loadZkArtifacts(): Promise<{ wasm: Uint8Array; zkey: Uint8Array }
   }
 }
 
-/** Prefetch wasm/zkey on idle so first private pay is faster. */
+/** Prefetch wasm/zkey only when idle + after long delay (never on cold boot). */
 export function prefetchZkArtifacts(): void {
   if (typeof window === 'undefined') return;
-  const run = () => { loadZkArtifacts().catch(() => {}); };
-  if ('requestIdleCallback' in window) {
-    (window as any).requestIdleCallback(run, { timeout: 4000 });
-  } else {
-    setTimeout(run, 1500);
-  }
+  const run = () => {
+    if (document.visibilityState !== 'visible') return;
+    loadZkArtifacts().catch(() => {});
+  };
+  // 7MB of wasm/zkey — do not compete with dashboard first paint.
+  window.setTimeout(() => {
+    const ric = (window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+    }).requestIdleCallback;
+    if (typeof ric === 'function') {
+      ric(run, { timeout: 30_000 });
+    } else {
+      run();
+    }
+  }, 12_000);
 }
 
 function packGroth16Proof(proof: any): { a: string; b: string; c: string } {
@@ -1601,6 +1727,8 @@ async function generateWithdrawProofLocal(
   input: Record<string, unknown>,
 ): Promise<{ a: string; b: string; c: string }> {
   const { wasm, zkey } = await loadZkArtifacts();
+  // @ts-expect-error snarkjs has no bundled types
+  const snarkjs = await import('snarkjs');
   const { proof } = await snarkjs.groth16.fullProve(input, wasm, zkey);
   return packGroth16Proof(proof);
 }
@@ -1687,6 +1815,7 @@ async function submitWithdrawTx(
   nullifierHashHex: string,
   rootHex: string,
 ): Promise<string> {
+  const rootNorm = rootHex.replace(/^0x/, '').toLowerCase().padStart(64, '0');
   const proofMap = xdr.ScVal.scvMap([
     new xdr.ScMapEntry({ key: xdr.ScVal.scvSymbol('a'), val: scvBytesN(proofData.a) }),
     new xdr.ScMapEntry({ key: xdr.ScVal.scvSymbol('b'), val: scvBytesN(proofData.b) }),
@@ -1703,12 +1832,114 @@ async function submitWithdrawTx(
         scvAddress(toAddress),
         proofMap,
         scvBytesN(nullifierHashHex),
-        scvBytesN(rootHex),
+        scvBytesN(rootNorm),
       ),
     )
     .setTimeout(180)
     .build();
   return prepareAndSubmit(wdTx);
+}
+
+function isInvalidRootError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error || '');
+  return (
+    /Error\(Contract,\s*#6\)/i.test(msg)
+    || /InvalidRoot/i.test(msg)
+    || /invalid.?root/i.test(msg)
+  );
+}
+
+/** Live on-chain merkle root (hex, no 0x). */
+async function fetchLiveRootHex(source: string): Promise<string> {
+  return parseSimBytes(await simulateContractCall(source, 'get_root'))
+    .replace(/^0x/, '')
+    .toLowerCase()
+    .padStart(64, '0');
+}
+
+/**
+ * Prove + withdraw one note against a FRESH on-chain root.
+ * Contract #6 InvalidRoot happens when prove used root R then tree moved before withdraw.
+ */
+async function proveAndWithdrawNote(args: {
+  toAddress: string;
+  source: string;
+  note: DepositNote;
+  poseidon: any;
+  onProgress?: (label: string) => void;
+  maxAttempts?: number;
+}): Promise<string> {
+  const { toAddress, source, note, poseidon, onProgress } = args;
+  const maxAttempts = args.maxAttempts ?? 3;
+  const secret = BigInt('0x' + note.secret);
+  const nullifier = BigInt('0x' + note.nullifier);
+  const nullifierHash = poseidon.F.toObject(poseidon([nullifier]));
+  const nullifierHashHex = toHex(nullifierHash);
+  let lastErr: unknown;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      onProgress?.(
+        attempt === 1
+          ? 'Building withdraw proof against live merkle root…'
+          : `Root changed — re-proving withdraw (try ${attempt}/${maxAttempts})…`,
+      );
+      const snap = await fetchConsistentMerkleSnapshot(source, poseidon, {
+        minCount: 1,
+        maxAttempts: 8,
+      });
+      let leafIndex = note.index;
+      if (
+        leafIndex < 0
+        || leafIndex >= snap.leaves.length
+        || toHex(snap.leaves[leafIndex]) !== note.commitment
+      ) {
+        leafIndex = snap.leaves.findIndex(l => toHex(l) === note.commitment);
+        if (leafIndex < 0) throw new Error('Commitment not found on-chain for withdraw');
+      }
+      const { pathElements, pathIndices, root, rootHex } = buildMerklePathFromLeaves(
+        snap.leaves, leafIndex, poseidon, snap.rootHex, snap.zeros,
+      );
+      // Re-check root right before prove (tree can move during path build)
+      const liveBeforeProve = await fetchLiveRootHex(source);
+      if (liveBeforeProve !== rootHex) {
+        lastErr = new Error(`Root moved before prove (${rootHex.slice(0, 8)}→${liveBeforeProve.slice(0, 8)})`);
+        continue;
+      }
+      const proofData = await generateWithdrawProof(
+        secret, nullifier, leafIndex, pathElements, pathIndices, root, nullifierHash,
+      );
+      // Re-check again after prove (prove can take 10–90s)
+      const liveBeforeSubmit = await fetchLiveRootHex(source);
+      if (liveBeforeSubmit !== rootHex) {
+        lastErr = new Error(
+          `Merkle root changed during prove (InvalidRoot risk). `
+          + `Proved ${rootHex.slice(0, 12)}… live ${liveBeforeSubmit.slice(0, 12)}… — re-proving.`,
+        );
+        onProgress?.('Pool root changed during prove — re-proving…');
+        continue;
+      }
+      return await submitWithdrawTx(toAddress, source, proofData, nullifierHashHex, rootHex);
+    } catch (e) {
+      lastErr = e;
+      if (isInvalidRootError(e) && attempt < maxAttempts) {
+        onProgress?.('On-chain InvalidRoot (#6) — pool tree moved; re-proving…');
+        await new Promise(r => setTimeout(r, 400 + attempt * 200));
+        continue;
+      }
+      if (isInvalidRootError(e)) {
+        throw new Error(
+          'Private withdraw failed: InvalidRoot (contract #6). '
+          + 'The Merkle root changed between proof and submit (another deposit, or multi-note lag). '
+          + 'Retry the pay — your notes may still be unspent.',
+        );
+      }
+      throw e;
+    }
+  }
+  throw lastErr instanceof Error
+    ? lastErr
+    : new Error('Withdraw failed after root-refresh retries');
 }
 
 export async function withdraw(
@@ -1719,30 +1950,12 @@ export async function withdraw(
   const poseidon = await getPoseidon();
   const source = resolveFundingAddress(signerAddress) || signerAddress || toAddress;
 
-  let leafIndex = note.index;
-  const snap = await fetchConsistentMerkleSnapshot(source, poseidon, {
-    minCount: leafIndex >= 0 ? leafIndex + 1 : 1,
+  const txHash = await proveAndWithdrawNote({
+    toAddress,
+    source,
+    note,
+    poseidon,
   });
-
-  if (leafIndex < 0 || leafIndex >= snap.leaves.length || toHex(snap.leaves[leafIndex]) !== note.commitment) {
-    leafIndex = snap.leaves.findIndex(l => toHex(l) === note.commitment);
-    if (leafIndex < 0) throw new Error('Commitment not found on-chain');
-  }
-
-  const { pathElements, pathIndices, root } = buildMerklePathFromLeaves(
-    snap.leaves, leafIndex, poseidon, snap.rootHex, snap.zeros,
-  );
-
-  const secret = BigInt('0x' + note.secret);
-  const nullifier = BigInt('0x' + note.nullifier);
-  const nullifierHash = poseidon.F.toObject(poseidon([nullifier]));
-  const nullifierHashHex = toHex(nullifierHash);
-
-  const proofData = await generateWithdrawProof(
-    secret, nullifier, leafIndex, pathElements, pathIndices, root, nullifierHash,
-  );
-
-  const txHash = await submitWithdrawTx(toAddress, source, proofData, nullifierHashHex, snap.rootHex);
   markNoteSpent(note);
 
   return { txHash, nullifierHash: note.nullifierHash };

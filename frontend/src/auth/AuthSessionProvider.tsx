@@ -5,8 +5,10 @@ import CliActivation from '../components/auth/CliActivation';
 import {
   clearStoredSession,
   ensureValidAccessToken,
+  getAccessTokenExpiryMs,
   globalSignOut,
   isAccessTokenExpired,
+  isAuthFailure,
   persistSession,
   readStoredSession,
   type UserSession,
@@ -41,20 +43,23 @@ export function AuthSessionProvider({ children }: { children: React.ReactNode })
     return code?.toUpperCase() || null;
   }, [location.search]);
 
-  // Keep Cognito access token fresh so NFT API never sees an expired JWT.
+  // Keep Cognito access token fresh. Only update React state when the token string changes
+  // (avoid re-render loops from re-reading localStorage every interval).
   useEffect(() => {
     if (!userSession) return;
     let cancelled = false;
 
     const sync = async () => {
+      if (document.visibilityState === 'hidden') return;
       try {
-        if (isAccessTokenExpired(userSession.token)) {
-          await ensureValidAccessToken(userSession);
-          const next = readStoredSession();
-          if (!cancelled && next) setUserSession(next);
+        const before = userSession.token;
+        await ensureValidAccessToken(readStoredSession() || userSession);
+        const next = readStoredSession();
+        if (!cancelled && next && next.token !== before) {
+          setUserSession(next);
         }
-      } catch {
-        if (!cancelled) {
+      } catch (error) {
+        if (!cancelled && isAuthFailure(error)) {
           clearStoredSession();
           setUserSession(null);
         }
@@ -64,12 +69,29 @@ export function AuthSessionProvider({ children }: { children: React.ReactNode })
     void sync();
     const interval = window.setInterval(() => {
       void sync();
-    }, 5 * 60_000);
+    }, 10 * 60_000);
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void sync();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    let expTimer: number | undefined;
+    const expMs = getAccessTokenExpiryMs(userSession.token);
+    if (expMs) {
+      const delay = Math.max(60_000, expMs - Date.now() - 5 * 60_000);
+      expTimer = window.setTimeout(() => {
+        void sync();
+      }, delay);
+    }
+
     return () => {
       cancelled = true;
       window.clearInterval(interval);
+      if (expTimer) window.clearTimeout(expTimer);
+      document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [userSession]);
+  }, [userSession?.token]);
 
   useEffect(() => {
     if (!userSession) {
@@ -80,12 +102,13 @@ export function AuthSessionProvider({ children }: { children: React.ReactNode })
 
     let cancelled = false;
     const checkCliStatus = async () => {
+      if (document.visibilityState === 'hidden') return;
       try {
         let token = userSession.token;
         if (isAccessTokenExpired(token)) {
           token = await ensureValidAccessToken(userSession);
           const next = readStoredSession();
-          if (next && !cancelled) setUserSession(next);
+          if (next && !cancelled && next.token !== userSession.token) setUserSession(next);
         }
         const response = await fetch(`${API_BASE_URL}/api/memory`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -98,13 +121,13 @@ export function AuthSessionProvider({ children }: { children: React.ReactNode })
         setCliLastActive(connected && typeof data.memory?.cli_last_active === 'number'
           ? data.memory.cli_last_active
           : null);
-      } catch (error) {
-        if (!cancelled) console.error('Error checking CLI status:', error);
+      } catch {
+        /* ignore */
       }
     };
 
     void checkCliStatus();
-    const interval = window.setInterval(checkCliStatus, 5000);
+    const interval = window.setInterval(checkCliStatus, 45_000);
     return () => {
       cancelled = true;
       window.clearInterval(interval);

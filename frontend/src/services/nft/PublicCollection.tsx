@@ -12,6 +12,7 @@ import BrandLoader from '../../components/BrandLoader';
 import {
   collectionLogo,
   createPublicCheckoutIntent,
+  formatPrimarySalePrice,
   getNftServiceHealth,
   getPublicNftCollection,
   NftApiError,
@@ -24,7 +25,15 @@ import {
   nftNetworkLabel,
   nftNetworkPassphrase,
 } from './nftApi';
-import { formatWalletError, getPublicKey, isWalletAvailable, signTransaction } from './stellarWallet';
+import {
+  NFT_CHECKOUT_WALLETS,
+  connectCheckoutWallet,
+  formatWalletError,
+  getPublicKey,
+  readWalletSession,
+  signTransaction,
+  type NftCheckoutWalletId,
+} from './stellarWallet';
 
 const STELLAR_ADDRESS = /^G[A-Z2-7]{55}$/;
 
@@ -34,13 +43,6 @@ function errorMessage(error: unknown) {
   if (wallet && wallet !== 'Wallet action failed.') return wallet;
   if (error instanceof Error && error.message) return error.message;
   return 'The NFT service could not complete this request.';
-}
-
-function atomicToUsdc(value: string) {
-  const atomic = BigInt(value);
-  const whole = atomic / 10_000_000n;
-  const fraction = (atomic % 10_000_000n).toString().padStart(7, '0').replace(/0+$/, '');
-  return fraction ? `${whole.toString()}.${fraction}` : whole.toString();
 }
 
 function shortAddress(value: string) {
@@ -62,6 +64,9 @@ export default function PublicCollection() {
   const [confirmedHash, setConfirmedHash] = useState('');
   const [statusNote, setStatusNote] = useState('');
   const [health, setHealth] = useState<NftServiceHealth | null>(null);
+  const [walletProvider, setWalletProvider] = useState<NftCheckoutWalletId>(
+    () => readWalletSession()?.provider || 'freighter',
+  );
 
   useEffect(() => {
     if (!collectionId) return;
@@ -91,24 +96,24 @@ export default function PublicCollection() {
     [collection],
   );
 
-  const priceLabel = useMemo(() => {
-    if (!collection?.primarySale) return null;
-    return `${atomicToUsdc(collection.primarySale.priceAtomic)} XLM`;
-  }, [collection]);
+  const priceLabel = useMemo(
+    () => formatPrimarySalePrice(collection?.primarySale, health),
+    [collection, health],
+  );
 
-  const connectBuyerWallet = async () => {
+  const connectBuyerWallet = async (provider: NftCheckoutWalletId = walletProvider) => {
     setCheckoutError('');
     setConnecting(true);
+    setWalletProvider(provider);
     try {
-      const available = await isWalletAvailable();
-      if (!available) {
-        throw new Error(
-          `Freighter not detected. Install Freighter, unlock it, set network to ${nftNetworkLabel(health)}, allow this site, then retry.`,
-        );
-      }
-      const address = await getPublicKey();
-      setBuyerAddress(address);
-      setStatusNote('Wallet connected.');
+      const session = await connectCheckoutWallet(provider, nftNetworkPassphrase(health));
+      setBuyerAddress(session.address);
+      setWalletProvider(session.provider);
+      setStatusNote(
+        session.kitWalletName
+          ? `${session.kitWalletName} connected.`
+          : `${session.provider} connected.`,
+      );
     } catch (error) {
       console.error('[nft/checkout] connect', error);
       setCheckoutError(errorMessage(error));
@@ -283,15 +288,26 @@ export default function PublicCollection() {
               />
             </label>
 
-            <button
-              type="button"
-              disabled={connecting}
-              onClick={() => void connectBuyerWallet()}
-              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-zinc-700 text-sm font-medium text-zinc-200 transition hover:border-zinc-500 hover:text-white disabled:opacity-60"
-            >
-              {connecting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
-              Connect Freighter
-            </button>
+            <div className="grid grid-cols-2 gap-2">
+              {NFT_CHECKOUT_WALLETS.map((wallet) => (
+                <button
+                  key={wallet.id}
+                  type="button"
+                  disabled={connecting}
+                  onClick={() => void connectBuyerWallet(wallet.id)}
+                  className={`inline-flex h-11 flex-col items-center justify-center rounded-md border px-2 text-center transition disabled:opacity-60 ${
+                    walletProvider === wallet.id && buyerAddress
+                      ? 'border-white/40 bg-white/10 text-white'
+                      : 'border-zinc-700 text-zinc-200 hover:border-zinc-500 hover:text-white'
+                  }`}
+                >
+                  <span className="text-sm font-medium">
+                    {connecting && walletProvider === wallet.id ? 'Connecting…' : wallet.label}
+                  </span>
+                  <span className="text-[10px] text-zinc-500">{wallet.hint}</span>
+                </button>
+              ))}
+            </div>
 
             {checkoutError && (
               <div className="flex gap-2 rounded-md border border-red-500/25 bg-red-500/5 p-3 text-sm text-red-300">
@@ -355,7 +371,7 @@ export default function PublicCollection() {
         </section>
 
         <p className="mt-6 text-center text-[11px] text-zinc-600">
-          Powered by ZEXVRO · Freighter {nftNetworkLabel(health)} · sponsored network fees
+          Powered by ZEXVRO · {nftNetworkLabel(health)} · Freighter / Albedo / xBull / more · sponsored fees
         </p>
       </div>
     </main>

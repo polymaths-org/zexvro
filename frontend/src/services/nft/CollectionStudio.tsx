@@ -167,6 +167,9 @@ export default function CollectionStudio({
       if (signal?.aborted) return;
       setHealth(healthResult);
       setCollection(found);
+      if (found.primarySale?.priceAtomic) {
+        setSalePrice(atomicToUsdc(found.primarySale.priceAtomic));
+      }
       try {
         const inventory = await listCollectionItems({
           collectionId: found.id,

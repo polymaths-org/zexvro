@@ -22,8 +22,8 @@ type CognitoTokenResponse = {
 };
 
 const SESSION_STORAGE_KEY = 'zexvro_user_session';
-/** Refresh a bit before Cognito access-token expiry (default ~1h). */
-const ACCESS_TOKEN_SKEW_MS = 60_000;
+/** Refresh well before access-token expiry so tab resumes never force a re-login. */
+const ACCESS_TOKEN_SKEW_MS = 5 * 60_000;
 
 function decodeJwtPayload(token?: string): Record<string, unknown> {
   if (!token) return {};
@@ -306,9 +306,29 @@ export async function globalSignOut(accessToken?: string) {
  * Exchange a Cognito refresh token for a new access (+ id) token.
  * Refresh tokens are long-lived; access tokens expire in ~1 hour.
  */
+export function isAuthFailure(error: unknown): boolean {
+  if (error instanceof CognitoAuthError) {
+    const t = (error.cognitoType || '').toLowerCase();
+    return (
+      t.includes('notauthorized')
+      || t.includes('usernotfound')
+      || t.includes('invalidparameter')
+      || t.includes('tokenrevoked')
+    );
+  }
+  const msg = error instanceof Error ? error.message.toLowerCase() : String(error || '').toLowerCase();
+  return (
+    msg.includes('not authorized')
+    || msg.includes('refresh token')
+    || msg.includes('token has been revoked')
+    || msg.includes('invalid refresh')
+    || msg.includes('session has no refresh token')
+  );
+}
+
 export async function refreshSessionTokens(session: UserSession): Promise<UserSession> {
   if (!session.refreshToken) {
-    throw new Error('Session has no refresh token. Sign in again.');
+    throw new CognitoAuthError('Session has no refresh token. Sign in again.', 'NotAuthorizedException');
   }
 
   const data = await cognitoRequest<CognitoTokenResponse>('InitiateAuth', {
@@ -320,12 +340,12 @@ export async function refreshSessionTokens(session: UserSession): Promise<UserSe
   });
 
   if (data.ChallengeName) {
-    throw new Error(`Cognito challenge required: ${data.ChallengeName}`);
+    throw new CognitoAuthError(`Cognito challenge required: ${data.ChallengeName}`, data.ChallengeName);
   }
 
   const accessToken = data.AuthenticationResult?.AccessToken;
   if (!accessToken) {
-    throw new Error('Cognito did not return an access token on refresh.');
+    throw new CognitoAuthError('Cognito did not return an access token on refresh.', 'NotAuthorizedException');
   }
 
   const idToken = data.AuthenticationResult?.IdToken || session.idToken;
@@ -348,13 +368,14 @@ let refreshInFlight: Promise<UserSession> | null = null;
 /**
  * Return a usable Cognito **access** token for API calls (NFT dashboard, etc.).
  * Refreshes automatically when expired or near expiry.
+ * Only clears storage on definitive auth failures (not network blips).
  */
 export async function ensureValidAccessToken(
   session?: UserSession | null,
 ): Promise<string> {
   const current = session || readStoredSession();
   if (!current?.token) {
-    throw new Error('Not signed in. Sign in to use the NFT dashboard.');
+    throw new CognitoAuthError('Not signed in.', 'NotAuthorizedException');
   }
 
   if (!isAccessTokenExpired(current.token)) {
@@ -363,7 +384,7 @@ export async function ensureValidAccessToken(
 
   if (!current.refreshToken) {
     clearStoredSession();
-    throw new Error('Access token expired. Sign in again.');
+    throw new CognitoAuthError('Access token expired. Sign in again.', 'NotAuthorizedException');
   }
 
   if (!refreshInFlight) {
@@ -372,6 +393,13 @@ export async function ensureValidAccessToken(
     });
   }
 
-  const refreshed = await refreshInFlight;
-  return refreshed.token;
+  try {
+    const refreshed = await refreshInFlight;
+    return refreshed.token;
+  } catch (error) {
+    if (isAuthFailure(error)) {
+      clearStoredSession();
+    }
+    throw error;
+  }
 }

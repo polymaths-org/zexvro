@@ -459,6 +459,12 @@ export default function WorkspaceOverview() {
             title="Zer0"
             description="Private payments and funding wallet"
           />
+          <QuickAction
+            onClick={() => goTo(`/dashboard/w/${workspaceId}/zer0/treasury`)}
+            icon={<Wallet className="h-5 w-5" />}
+            title="Treasury"
+            description="Personal auto-approve wallet · fund from Freighter"
+          />
         </div>
       )}
 

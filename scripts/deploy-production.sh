@@ -141,7 +141,25 @@ export VITE_APP_URL="$APP_URL"
 export VITE_NFT_API_URL="$NFT_URL"
 export VITE_DEPIN_API_URL="$DEPIN_URL"
 export VITE_AGENT_AUTH_API_URL="$GATE_URL"
+# Zer0 auto-approve (no Freighter popups) needs treasury secret baked into the Vite build.
+# Load from shell or root .env if present — never commit the secret.
+if [[ -z "${VITE_TREASURY_SECRET:-}" && -f "$ROOT/.env" ]]; then
+  # shellcheck disable=SC1090
+  set -a
+  # Only pull the one key to avoid clobbering other exports
+  _ts="$(grep -E '^[[:space:]]*VITE_TREASURY_SECRET=' "$ROOT/.env" | tail -1 | sed 's/^[^=]*=//' | tr -d '"' | tr -d "'")"
+  set +a
+  if [[ -n "${_ts:-}" ]]; then
+    export VITE_TREASURY_SECRET="$_ts"
+  fi
+  unset _ts
+fi
 echo "  VITE_AGENT_AUTH_API_URL=$VITE_AGENT_AUTH_API_URL"
+if [[ -n "${VITE_TREASURY_SECRET:-}" ]]; then
+  echo "  VITE_TREASURY_SECRET=set (Zer0 auto-approve enabled in this build)"
+else
+  echo "  WARN: VITE_TREASURY_SECRET unset — Zer0 auto-approve will fall back to Freighter popups"
+fi
 npm run build
 
 echo "==> 4) Deploy Cloudflare Pages ($PAGES_PROJECT)"

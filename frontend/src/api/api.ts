@@ -164,19 +164,34 @@ export const workspaceApi = {
         zcrAmount: number;
         usdcPrice: string;
         description?: string;
+        custom?: boolean;
       }>;
       nftCollectionId?: string | null;
       purchaseMode: string;
       currency: string;
       paymentAsset: string;
+      custom?: {
+        enabled: boolean;
+        min: number;
+        max: number;
+        unitPriceUsdc: number;
+        note?: string;
+      };
     }>('/api/credits/packs'),
   purchaseCreditPack: (
     id: string,
-    body: { packId: string; nftOnly?: boolean; ref?: string },
+    body: { packId?: string; zcrAmount?: number; nftOnly?: boolean; ref?: string; sandbox?: boolean },
   ) =>
     api.post<{
       status: string;
-      pack: { id: string; name: string; zcrAmount: number; usdcPrice: string };
+      pack: {
+        id: string;
+        name: string;
+        zcrAmount: number;
+        usdcPrice: string;
+        custom?: boolean;
+        unitPriceUsdc?: number;
+      };
       nftCheckoutUrl?: string | null;
       nftCollectionId?: string | null;
       granted: boolean;

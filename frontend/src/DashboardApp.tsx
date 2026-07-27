@@ -377,8 +377,8 @@ export default function DashboardApp() {
       }
     };
 
-    checkCliStatus();
-    const interval = setInterval(checkCliStatus, 5000);
+    void checkCliStatus();
+    const interval = setInterval(checkCliStatus, 45_000);
     return () => clearInterval(interval);
   }, [userSession]);
 

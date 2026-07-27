@@ -1081,38 +1081,46 @@ export default function Zer0Settings() {
         {activeTab === 'security' && (
           <div className="space-y-6">
             <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 p-4 space-y-3">
-              <h3 className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">Transaction signing (debug)</h3>
+              <h3 className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">
+                Auto-approve (no Freighter popups)
+              </h3>
               <p className="text-[11px] text-zinc-500 leading-relaxed">
-                Choose how private ZK transactions are signed. Use Freighter popups when debugging failures;
-                use auto-sign for multi-XLM pays without dozens of confirms (testnet ops key only).
+                Auto-approve signs private ZK fund/deposit/withdraw with the ops treasury key — no Freighter windows.
+                Turn it off to pay from your connected Freighter wallet (popups required).
               </p>
               <div className="flex items-center justify-between p-3 rounded-lg border border-zinc-200 dark:border-zinc-700">
                 <div className="min-w-0 pr-3">
                   <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 block">
-                    {(local.preferFreighterSigning ?? true) ? 'Freighter popups ON' : 'Freighter popups OFF (auto-sign)'}
+                    {(local.preferFreighterSigning ?? true)
+                      ? 'Auto-approve OFF · Freighter popups'
+                      : 'Auto-approve ON · no Freighter popups'}
                   </span>
                   <span className="text-[10px] text-zinc-400 block mt-0.5">
                     {(local.preferFreighterSigning ?? true)
-                      ? 'Every fund / deposit / withdraw asks Freighter — best for debugging'
+                      ? 'Pays from your Settings funding wallet — Freighter must approve each step'
                       : isTreasuryKeyConfigured()
-                        ? 'Treasury key signs in the background — no Freighter windows'
-                         : 'Auto-sign is not configured for this workspace (ops treasury key missing)'}
+                        ? 'Pays from ops treasury in the background — fund that G… on-chain'
+                        : 'Treasury key missing from this site build — popups will still open'}
                   </span>
                 </div>
                 <button
                   type="button"
+                  aria-label="Toggle auto-approve"
                   onClick={() => {
-                    const next = !(local.preferFreighterSigning ?? true);
-                    setLocal(l => ({ ...l, preferFreighterSigning: next }));
-                    setForceFreighterSigning(next);
-                    updateSettings({ preferFreighterSigning: next });
+                    // preferFreighter true = popups; false = auto-approve
+                    const nextPreferFreighter = !(local.preferFreighterSigning ?? true);
+                    setLocal(l => ({ ...l, preferFreighterSigning: nextPreferFreighter }));
+                    setForceFreighterSigning(nextPreferFreighter);
+                    updateSettings({ preferFreighterSigning: nextPreferFreighter });
                   }}
                   className={`relative h-5 w-9 rounded-full transition-colors shrink-0 ${
-                    (local.preferFreighterSigning ?? true) ? 'bg-blue-500' : 'bg-zinc-300 dark:bg-zinc-700'
+                    !(local.preferFreighterSigning ?? true)
+                      ? 'bg-emerald-500'
+                      : 'bg-zinc-300 dark:bg-zinc-700'
                   }`}
                 >
                   <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${
-                    (local.preferFreighterSigning ?? true) ? 'left-[18px]' : 'left-0.5'
+                    !(local.preferFreighterSigning ?? true) ? 'left-[18px]' : 'left-0.5'
                   }`} />
                 </button>
               </div>
@@ -1121,14 +1129,24 @@ export default function Zer0Settings() {
                   ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
                   : 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
               }`}>
-                Active mode: {isAutoSignEnabled() ? 'Auto-sign (no popups)' : 'Freighter popups'}
-                {isTreasuryKeyConfigured() ? ' · treasury key present' : ' · no treasury key'}
+                Active mode: {isAutoSignEnabled() ? 'Auto-approve / auto-sign (no Freighter popups)' : 'Freighter popups'}
+                {isTreasuryKeyConfigured() ? ' · treasury key present' : ' · no treasury key in this build'}
               </div>
               {isAutoSignEnabled() && getTreasuryPublicKey() && (
                 <p className="text-[10px] text-zinc-500 leading-relaxed">
-                  Auto-sign spends from treasury{' '}
+                  Auto-approve pays from treasury{' '}
                   <span className="font-mono text-zinc-700 dark:text-zinc-300">{getTreasuryPublicKey()}</span>
-                  {' '}— Settings wallet is ignored for private pays while auto-sign is on.
+                  {' '}— manage & fund under Zer0 → Treasury (personal key preferred over ops fallback).
+                </p>
+              )}
+              {!(local.preferFreighterSigning ?? true) && !isTreasuryKeyConfigured() && (
+                <p className="text-[10px] text-amber-600 dark:text-amber-400 leading-relaxed">
+                  Auto-approve needs a personal treasury. Open Zer0 → Treasury, create one, fund it from Freighter, then retry.
+                </p>
+              )}
+              {(local.preferFreighterSigning ?? true) && (
+                <p className="text-[10px] text-zinc-500 leading-relaxed">
+                  Prefer Freighter popups while debugging. For no-popup pays: create + fund personal treasury, then turn Auto-approve ON.
                 </p>
               )}
             </div>

@@ -62,7 +62,7 @@ function emptyDraft(): NftCollectionDraft {
     description: '',
     coverName: '',
     royaltyBps: 0,
-    unitPriceXlm: '1',
+    unitPriceXlm: '',
     ownerAddress: DEFAULT_OWNER,
     royaltyRecipient: DEFAULT_OWNER,
   };
@@ -291,7 +291,7 @@ export default function CollectionCreate({
 
       // Activate primary sale so public checkout "Prepare purchase" is enabled immediately.
       // Keep mission brief on screen while Freighter signs — launch plays only after everything succeeds.
-      const priceAtomic = unitPriceToAtomicUsdc(draft.unitPriceXlm || '1');
+      const priceAtomic = unitPriceToAtomicUsdc(draft.unitPriceXlm || '');
       let nextSaleWarning = '';
       if (created.status === 'live' && priceAtomic) {
         try {

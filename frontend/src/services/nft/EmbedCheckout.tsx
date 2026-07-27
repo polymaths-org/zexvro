@@ -13,6 +13,7 @@ import BrandLoader from '../../components/BrandLoader';
 import {
   collectionLogo,
   createPublicCheckoutIntent,
+  formatPrimarySalePrice,
   getNftServiceHealth,
   getPublicNftCollection,
   NftApiError,
@@ -24,7 +25,15 @@ import {
   nftNetworkLabel,
   nftNetworkPassphrase,
 } from './nftApi';
-import { formatWalletError, getPublicKey, isWalletAvailable, signTransaction } from './stellarWallet';
+import {
+  NFT_CHECKOUT_WALLETS,
+  connectCheckoutWallet,
+  formatWalletError,
+  getPublicKey,
+  readWalletSession,
+  signTransaction,
+  type NftCheckoutWalletId,
+} from './stellarWallet';
 
 const STELLAR_ADDRESS = /^G[A-Z2-7]{55}$/;
 
@@ -67,13 +76,6 @@ function postToOpener(
   );
 }
 
-function atomicToUsdc(value: string) {
-  const atomic = BigInt(value);
-  const whole = atomic / 10_000_000n;
-  const fraction = (atomic % 10_000_000n).toString().padStart(7, '0').replace(/0+$/, '');
-  return fraction ? `${whole.toString()}.${fraction}` : whole.toString();
-}
-
 /**
  * Hosted embed/popup checkout for third-party web games.
  * Route: /nft/embed/checkout?collectionId=...
@@ -104,11 +106,14 @@ export default function EmbedCheckout() {
   const [connecting, setConnecting] = useState(false);
   const [confirmedHash, setConfirmedHash] = useState('');
   const [health, setHealth] = useState<NftServiceHealth | null>(null);
+  const [walletProvider, setWalletProvider] = useState<NftCheckoutWalletId>(
+    () => readWalletSession()?.provider || 'freighter',
+  );
 
-  const priceLabel = useMemo(() => {
-    if (!collection?.primarySale) return null;
-    return `${atomicToUsdc(collection.primarySale.priceAtomic)} XLM`;
-  }, [collection]);
+  const priceLabel = useMemo(
+    () => formatPrimarySalePrice(collection?.primarySale, health),
+    [collection, health],
+  );
 
   const logo = useMemo(
     () => (collection ? collectionLogo(collection) : ''),
@@ -145,14 +150,14 @@ export default function EmbedCheckout() {
     window.close();
   };
 
-  const connectWallet = async () => {
+  const connectWallet = async (provider: NftCheckoutWalletId = walletProvider) => {
     setError('');
     setConnecting(true);
+    setWalletProvider(provider);
     try {
-      if (!(await isWalletAvailable())) {
-        throw new Error(`Install and unlock Freighter (${nftNetworkLabel(health)}), then allow this site.`);
-      }
-      setBuyerAddress(await getPublicKey());
+      const session = await connectCheckoutWallet(provider, nftNetworkPassphrase(health));
+      setBuyerAddress(session.address);
+      setWalletProvider(session.provider);
     } catch (err) {
       const message = errorMessage(err);
       setError(message);
@@ -334,15 +339,26 @@ export default function EmbedCheckout() {
                 className="mt-2 w-full rounded-md border border-zinc-800 bg-[#050506] px-3 py-2.5 font-mono text-xs text-white outline-none focus:border-brand-blue"
               />
             </label>
-            <button
-              type="button"
-              disabled={connecting}
-              onClick={() => void connectWallet()}
-              className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md border border-zinc-800 text-sm text-zinc-300 hover:border-zinc-700 hover:text-white disabled:opacity-60"
-            >
-              {connecting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
-              Connect Freighter
-            </button>
+            <div className="grid grid-cols-2 gap-2">
+              {NFT_CHECKOUT_WALLETS.map((wallet) => (
+                <button
+                  key={wallet.id}
+                  type="button"
+                  disabled={connecting}
+                  onClick={() => void connectWallet(wallet.id)}
+                  className={`inline-flex h-10 flex-col items-center justify-center rounded-md border px-2 text-center disabled:opacity-60 ${
+                    walletProvider === wallet.id && buyerAddress
+                      ? 'border-white/40 bg-white/10 text-white'
+                      : 'border-zinc-800 text-zinc-300 hover:border-zinc-600 hover:text-white'
+                  }`}
+                >
+                  <span className="text-xs font-medium">
+                    {connecting && walletProvider === wallet.id ? 'Connecting…' : wallet.label}
+                  </span>
+                  <span className="text-[10px] text-zinc-500">{wallet.hint}</span>
+                </button>
+              ))}
+            </div>
 
             {intent && (
               <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm text-emerald-200">

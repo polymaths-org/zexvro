@@ -649,6 +649,94 @@ def _credit_pack_catalog():
     ]
 
 
+def _credit_unit_price_usdc():
+    """USD per ZCR for custom amounts (env override)."""
+    try:
+        raw = (os.environ.get("ZCR_UNIT_PRICE_USDC") or "0.05").strip()
+        price = float(raw)
+        if price <= 0:
+            return 0.05
+        return price
+    except Exception:
+        return 0.05
+
+
+def _credit_custom_bounds():
+    try:
+        min_zcr = int((os.environ.get("ZCR_CUSTOM_MIN") or "50").strip() or "50")
+    except Exception:
+        min_zcr = 50
+    try:
+        max_zcr = int((os.environ.get("ZCR_CUSTOM_MAX") or "50000").strip() or "50000")
+    except Exception:
+        max_zcr = 50000
+    min_zcr = max(1, min_zcr)
+    max_zcr = max(min_zcr, max_zcr)
+    return min_zcr, max_zcr
+
+
+def _format_usdc_price(amount: float) -> str:
+    return f"{amount:.2f}"
+
+
+def _resolve_credit_purchase(body):
+    """
+    Resolve pack or custom ZCR purchase.
+    Returns (pack_dict, error_response_or_None).
+    """
+    packs = {p["id"]: p for p in _credit_pack_catalog()}
+    pack_id = (body.get("packId") or "").strip()
+    raw_amount = body.get("zcrAmount")
+    if raw_amount is None or raw_amount == "":
+        raw_amount = body.get("amount")
+
+    if pack_id and pack_id in packs and (raw_amount is None or raw_amount == ""):
+        return packs[pack_id], None
+
+    # Custom amount path (or packId custom + zcrAmount).
+    if raw_amount is not None and raw_amount != "":
+        try:
+            zcr_amount = int(float(str(raw_amount).replace(",", "").strip()))
+        except Exception:
+            return None, respond(400, {
+                "error": "invalid_amount",
+                "error_description": "zcrAmount must be a positive integer",
+            })
+        min_zcr, max_zcr = _credit_custom_bounds()
+        if zcr_amount < min_zcr or zcr_amount > max_zcr:
+            return None, respond(400, {
+                "error": "invalid_amount",
+                "error_description": f"zcrAmount must be between {min_zcr} and {max_zcr}",
+                "min": min_zcr,
+                "max": max_zcr,
+            })
+        # Prefer catalog SKU when amount matches exactly (same on-chain pack collection).
+        exact = next((p for p in packs.values() if int(p["zcrAmount"]) == zcr_amount), None)
+        if exact:
+            return exact, None
+        unit = _credit_unit_price_usdc()
+        usdc = round(zcr_amount * unit, 2)
+        return {
+            "id": f"zcr_custom_{zcr_amount}",
+            "name": "Custom",
+            "zcrAmount": zcr_amount,
+            "usdcPrice": _format_usdc_price(usdc),
+            "description": f"Custom {zcr_amount} ZCR at ${unit:.4g}/ZCR",
+            "custom": True,
+            "unitPriceUsdc": unit,
+        }, None
+
+    if pack_id:
+        return None, respond(400, {
+            "error": "invalid_pack",
+            "error_description": "Unknown packId",
+        })
+    return None, respond(400, {
+        "error": "invalid_pack",
+        "error_description": "Provide packId or zcrAmount",
+    })
+
+
 def scan_all_workspaces():
     """Paginated full table scan of workspaces."""
     items = []
@@ -1825,12 +1913,21 @@ def lambda_handler(event, context):
     # Credit pack catalog (platform currency purchase SKUs)
     elif path == "/api/credits/packs" and http_method == "GET":
         packs = _credit_pack_catalog()
+        min_zcr, max_zcr = _credit_custom_bounds()
+        unit = _credit_unit_price_usdc()
         return respond(200, {
             "packs": packs,
             "nftCollectionId": (os.environ.get("ZCR_NFT_COLLECTION_ID") or "").strip() or None,
             "purchaseMode": "nft" if (os.environ.get("ZCR_NFT_COLLECTION_ID") or "").strip() else "sandbox",
             "currency": "ZCR",
-            "paymentAsset": "USDC",
+            "paymentAsset": "XLM",
+            "custom": {
+                "enabled": True,
+                "min": min_zcr,
+                "max": max_zcr,
+                "unitPriceUsdc": unit,
+                "note": "Custom ZCR is granted after NFT checkout; on-chain sale price is the collection primary sale (owner-set).",
+            },
         })
 
     # Purchase credit pack — ALWAYS opens NFT wallet checkout (no instant grant).
@@ -1852,15 +1949,16 @@ def lambda_handler(event, context):
         _, role_err = require_workspace_role(workspace, username, _SETTINGS_WRITE_ROLES, email=caller_email)
         if role_err:
             return role_err
-        pack_id = (body.get("packId") or "").strip()
-        packs = {p["id"]: p for p in _credit_pack_catalog()}
-        pack = packs.get(pack_id)
-        if not pack:
-            return respond(400, {"error": "invalid_pack", "error_description": "Unknown packId"})
+        pack, pack_err = _resolve_credit_purchase(body or {})
+        if pack_err:
+            return pack_err
+        pack_id = str(pack.get("id") or "").strip()
         collection_id = (os.environ.get("ZCR_NFT_COLLECTION_ID") or "").strip()
         # Optional per-pack override: ZCR_NFT_COLLECTION_ID_ZCR_100 etc.
-        pack_env_key = f"ZCR_NFT_COLLECTION_ID_{pack_id.upper()}"
-        collection_id = (os.environ.get(pack_env_key) or collection_id or "").strip()
+        # Custom amounts always use the default credit collection.
+        if not pack.get("custom"):
+            pack_env_key = f"ZCR_NFT_COLLECTION_ID_{pack_id.upper()}"
+            collection_id = (os.environ.get(pack_env_key) or collection_id or "").strip()
         frontend = (os.environ.get("FRONTEND_URL") or "https://console.zexvro.in").rstrip("/")
 
         if not collection_id:
@@ -1881,7 +1979,7 @@ def lambda_handler(event, context):
             "zcrAmount": str(pack["zcrAmount"]),
             "packId": pack_id,
         })
-        # Hosted wallet checkout popup (Freighter sign → Stellar pay → ZCR grant)
+        # Hosted wallet checkout popup (wallet sign → Stellar pay → ZCR grant)
         nft_checkout_url = f"{frontend}/nft/embed/checkout?{q}"
 
         # Explicit opt-in only (never default): founders/dev testing without chain.
@@ -1899,7 +1997,12 @@ def lambda_handler(event, context):
                     actor_id=username,
                     actor_email=caller_email,
                     ref=ref,
-                    meta={"packId": pack_id, "mode": "sandbox_explicit"},
+                    meta={
+                        "packId": pack_id,
+                        "mode": "sandbox_explicit",
+                        "custom": bool(pack.get("custom")),
+                        "zcrAmount": int(pack["zcrAmount"]),
+                    },
                     tx_type="topup",
                 )
             except Exception as exc:

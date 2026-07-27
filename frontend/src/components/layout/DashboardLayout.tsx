@@ -359,11 +359,14 @@ export default function DashboardLayout() {
       try {
         await ensureValidAccessToken(stored);
         if (cancelled) return;
-        setUserSession(readStoredSession());
+        setUserSession(readStoredSession() || stored);
       } catch {
         if (cancelled) return;
-        clearStoredSession();
-        setUserSession(null);
+        // Keep local session on transient network errors so a flaky boot
+        // does not force re-login; only wipe when storage was cleared by auth failure.
+        const still = readStoredSession();
+        if (still) setUserSession(still);
+        else setUserSession(null);
       } finally {
         if (!cancelled) setAuthReady(true);
       }
@@ -517,47 +520,50 @@ export default function DashboardLayout() {
     }
   }, [theme]);
 
-  // Keep Cognito access token fresh for NFT dashboard + API calls.
+  // Keep Cognito access token fresh — only setState when JWT string changes.
   useEffect(() => {
     if (!userSession) return;
     let cancelled = false;
     const sync = async () => {
+      if (document.visibilityState === 'hidden') return;
       try {
-        if (isAccessTokenExpired(userSession.token)) {
-          await ensureValidAccessToken(userSession);
-          const next = readStoredSession();
-          if (!cancelled && next) setUserSession(next);
-        }
+        const before = userSession.token;
+        await ensureValidAccessToken(readStoredSession() || userSession);
+        const next = readStoredSession();
+        if (!cancelled && next && next.token !== before) setUserSession(next);
       } catch {
-        if (!cancelled) {
-          clearStoredSession();
-          setUserSession(null);
-        }
+        if (!cancelled && !readStoredSession()) setUserSession(null);
       }
     };
     void sync();
     const interval = window.setInterval(() => {
       void sync();
-    }, 5 * 60_000);
+    }, 10 * 60_000);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void sync();
+    };
+    document.addEventListener('visibilitychange', onVisible);
     return () => {
       cancelled = true;
       window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [userSession]);
+  }, [userSession?.token]);
 
-  // CLI status check
+  // CLI status check (slow — was 5s and hammered Lambda + main thread)
   useEffect(() => {
     if (!userSession || !SHOULD_CHECK_CLI_STATUS) return;
     const check = async () => {
+      if (document.visibilityState === 'hidden') return;
       try {
         let token = userSession.token;
         if (isAccessTokenExpired(token)) {
           token = await ensureValidAccessToken(userSession);
           const next = readStoredSession();
-          if (next) setUserSession(next);
+          if (next && next.token !== userSession.token) setUserSession(next);
         }
         const response = await fetch(`${API_BASE_URL}/api/memory`, {
-          headers: { 'Authorization': `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` },
         });
         if (response.ok) {
           const data = await response.json();
@@ -570,10 +576,10 @@ export default function DashboardLayout() {
         }
       } catch { /* ignore */ }
     };
-    check();
-    const interval = setInterval(check, 5000);
+    void check();
+    const interval = setInterval(check, 45_000);
     return () => clearInterval(interval);
-  }, [userSession]);
+  }, [userSession?.token]);
 
   // Initialize AWS Sync listeners once on mount
   useEffect(() => {
@@ -583,12 +589,13 @@ export default function DashboardLayout() {
   // Live sync: workspaces + projects (poll). Roster merge never shrinks on pull.
   useEffect(() => {
     if (!userSession) return;
-    pullFromAWS();
+    void pullFromAWS();
     const interval = setInterval(() => {
-      pullFromAWS();
-    }, 15000);
+      if (document.visibilityState === 'hidden') return;
+      void pullFromAWS();
+    }, 60_000);
     return () => clearInterval(interval);
-  }, [userSession]);
+  }, [userSession?.token]);
 
   // On workspace switch: load projects + roster once (Team page does its own slower poll)
   useEffect(() => {

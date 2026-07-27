@@ -1,5 +1,89 @@
 # ZEXVRO Shared Memory
 
+## 2026-07-27 - Pre-push summary (Paris)
+
+- Service or area: Zer0 + console + NFTo + credits + README
+- Files changed: `README.md`, `frontend/src/api/privacyPool.ts`, `frontend/src/lib/userTreasury.ts`, `frontend/src/components/zer0/Zer0Treasury.tsx`, `frontend/src/components/zer0/Zer0Settings.tsx`, `frontend/src/auth/AuthSessionProvider.tsx`, `frontend/src/auth/cognito.ts`, `frontend/src/main.tsx`, `frontend/src/services/nft/*`, `frontend/src/components/workspace/WorkspaceCredits.tsx`, `frontend/src/api/api.ts`, `scratch_lambda/lambda_function.py`, `.env.example`, `services/nft-service/mainnet-wasm.env`, `scripts/deploy-production.sh`, `scripts/deploy-nft-depin-aws.mjs`
+- Summary:
+  - Polished and prepared working-tree for push: Zer0 personal treasury + auto-approve fixes, console performance/session hardening, NFTo mainnet native-XLM default, multi-wallet checkout, ZCR custom amounts, sponsor auth-fix refresh.
+  - Added evaluators-facing **Recent changes** and **Team + contact** sections to `README.md` with platform URLs, repo, email, and team aliases.
+  - Verified frontend with `npm run lint:frontend` (tsc --noEmit clean) and `npm run build:frontend` (Vite build succeeded; only pre-existing dynamic-import chunk warnings).
+  - Scanned diff for hardcoded secrets: only env-driven references and already-known demo keys (no new real credentials). No `.env` staged.
+- Decisions:
+  - Accepted - README grows a stable "Recent changes" + contact block before major handoffs so evaluators can orient without reading the full memory file.
+- Follow-ups:
+  - Redeploy console Pages after push for live Zer0/performance fixes; redeploy Lambda/App Runner for ZCR/custom purchase amounts and NFT mainnet XLM defaults.
+  - Nabil / platform to fix old Dynamo primary sale records that still point to testnet/USDC payment tokens.
+- Blockers: None.
+- Verification: `git status --short` 27 items; `npm run lint:frontend`; `npm run build:frontend`.
+
+## 2026-07-26 - Personal treasury (per-browser auto-approve)
+
+- New Zer0 tab **Treasury** (`/zer0/treasury`): generate/import local S-key, fund from Freighter funding wallet, enable auto-approve.
+- Secret only in `localStorage` key `zexvro_user_treasury_v1` (never AWS settings).
+- `privacyPool.resolveTreasurySecret()`: personal → env `VITE_TREASURY_SECRET` ops fallback.
+- Overview quick action → Treasury. Deploy console FE to use.
+
+## 2026-07-26 - Zer0 auto-approve restored
+
+- User: “auto approve doesn’t work” (Freighter still popups / wrong wallet).
+- Fix: auto-approve ON ⇒ always fund+sign treasury (ignore Settings Freighter G…); sync pref every pay/submit; Settings UI labeled Auto-approve; deploy-production passes `VITE_TREASURY_SECRET` from root `.env` into Vite build.
+- Toggle: Zer0 → Settings → Security → Auto-approve ON (emerald). Needs treasury funded + secret in Pages build.
+
+## 2026-07-26 - Zer0 withdraw InvalidRoot (Contract #6)
+
+- Error: `HostError: Error(Contract, #6)` on `withdraw` for 10 XLM pool `CC5H2MOI…`.
+- Meaning: `PoolError::InvalidRoot` — proof public root ≠ live `get_root` (tree moved during prove, or multi-note lag).
+- Fix: before withdraw compare live root; on mismatch / #6 re-snapshot + re-prove (up to 3×). Clearer user error.
+- Deploy console FE for fix; retry pay (notes may still be unspent).
+
+## 2026-07-26 - Zer0 funding: connected Freighter wins over treasury
+
+- User had ~14 XLM in Freighter but error checked treasury GADW… (7.5 XLM) with auto-sign.
+- Final rule: if Settings funding G… ≠ treasury → always fund+sign that Freighter wallet. Auto-sign only if funding empty or === treasury.
+- Why two wallets existed: auto-sign needs `VITE_TREASURY_SECRET` (app can sign); Freighter never shares secret so needs popup.
+
+## 2026-07-26 - Platform hang / heavy CPU on load
+
+- Symptom: console hangs, data not loading, high CPU on Firefox/Brave.
+- Causes: boot imported privacyPool→snarkjs+circomlibjs; prefetched 7MB zkey; CLI poll 5s; AWS pull 15s; session refresh setState every tick → re-render loops.
+- Fix: main.tsx defers Zer0/ZK work 2.5s; lazy snarkjs/circomlibjs; zkey prefetch ≥12s idle; CLI 45s; AWS pull 60s + skip when tab hidden; session setState only when JWT changes.
+- Deploy console Pages for this to go live.
+
+## 2026-07-26 - Zer0 private fund: wrong wallet balance (6.6 vs Freighter 13.5)
+
+- Symptom: `Not enough XLM… Wallet: 6.6045` while Freighter shows ~13.56 for 10 XLM private pay.
+- Cause: `resolveFundingAddress` always used **treasury auto-sign G…** when `VITE_TREASURY_SECRET` present, ignoring connected Freighter funding wallet.
+- Fix: prefer connected wallet when set; auto-sign only if preferred empty or equals treasury; `prepareAndSubmit` Freighter-signs when source ≠ treasury; error lists address + Mainnet/Testnet Horizon.
+- FE deploy needed for fix. Workaround without deploy: Zer0 Settings → Prefer Freighter signing ON, or top up treasury to ≥ required.
+
+## 2026-07-26 - Lambda redeploy + Cognito session stick + stale NFT sales
+
+- Lambda `zexvro-agent-backend` redeployed (custom ZCR purchase API live); packs smoke 200 with `custom` bounds.
+- Cognito app client `7qmkq33si9qk8pgo6ebi3qantm`: Access/Id **24h**, Refresh **3650 days** (was 60 min / 5 days) — stops re-login on revisit after ~1h.
+- FE session: refresh on focus/visibility; only clear storage on real auth failure (not network blips). Deploy console Pages manually for FE.
+- **All 20 Dynamo primary sales still wrong payment SAC** (0 on mainnet XLM). Critical:
+  - ZCR pack `c516b900-…` → mainnet **USDC** `CCW67TS…` (trustline fail)
+  - Credit Pack `fe1969df-…` → testnet USDC
+  - Rest: testnet XLM or testnet USDC
+- Cannot silently flip Dynamo — on-chain `set_sale_config` must be re-signed by owner with server payment = mainnet XLM. Owners: open Studio → Sale → re-activate at desired price (Freighter mainnet).
+
+## 2026-07-26 - NFT checkout mainnet + multi-wallet + custom ZCR
+
+- Service: NFTo checkout + platform ZCR (Nabil credits / Paris shell touchpoints)
+- Intent: fix buyer trustline/mainnet pain, client-defined sale price display, multi-wallet connect, real custom ZCR amounts
+- Live `/health` already: `stellar:pubnet` + payment SAC mainnet XLM `CAS3J7GY…` (no USDC trustline for new sales)
+- Fixes:
+  - Checkout UI shows `formatPrimarySalePrice` from collection `priceAtomic` + payment token (not hardcoded “1 XLM”)
+  - Create draft no longer defaults unit price to `1`; studio hydrates sale field from live primary sale
+  - Multi-wallet on public + embed checkout: Freighter / Albedo / xBull / Others (kit); session + kit `signAuthEntry`
+  - Deploy template + `mainnet-wasm.env` payment SAC = native XLM; deploy script RPC/passphrase = mainnet
+  - Trustline error copy: re-activate sale if on-chain token still old USDC
+  - ZCR: `POST .../credits/purchase` accepts `zcrAmount` custom (50–50k, `$0.05/ZCR` guide via `ZCR_UNIT_PRICE_USDC`); packs still shortcuts; FE custom no longer snaps-only
+- Files: `stellarWallet.ts`, `EmbedCheckout.tsx`, `PublicCollection.tsx`, `nftApi.ts`, `WorkspaceCredits.tsx`, `api.ts`, `lambda_function.py`, deploy/env docs
+- Ops still required for old collections: owner re-activates primary sale after payment SAC cutover; Lambda redeploy for custom ZCR API
+- Note: custom ZCR grant amount is client/server intent; on-chain NFT sale price remains collection primary sale (not dynamic per custom ZCR yet)
+
 ## 2026-07-25 - presentation/ folder reorg
 
 - Layout: `ppt/` · `video/` · `demo-video/` · `imp/` (+ README).

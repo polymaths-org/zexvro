@@ -149,7 +149,7 @@ export function simulationFailureToApiError(error: unknown): ApiError | undefine
     return new ApiError(
       422,
       'buyer_missing_trustline',
-      'The buyer wallet cannot transfer the payment token (missing trustline, balance entry, or wrong network). Switch Freighter to the same network as the collection (Mainnet or Testnet), fund native XLM for XLM sales, or add a trustline and balance for SAC assets such as USDC.',
+      'The buyer wallet cannot transfer the payment token (missing trustline, balance entry, or wrong network). Switch your wallet to the same network as the collection (Mainnet or Testnet). For XLM sales fund native XLM; for SAC assets (e.g. USDC) add a trustline and balance. If the collection still sells an old token, the owner must re-activate primary sale so on-chain payment matches the current server token.',
       { simulationError: message },
     )
   }

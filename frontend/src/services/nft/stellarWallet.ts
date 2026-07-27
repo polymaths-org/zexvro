@@ -1,6 +1,21 @@
 import freighterApi from '@stellar/freighter-api';
 import { Address, TransactionBuilder } from '@stellar/stellar-sdk';
 import { AssembledTransaction } from '@stellar/stellar-sdk/contract';
+import {
+  STELLAR_TESTNET_PASSPHRASE as NET_TESTNET_PASSPHRASE,
+  STELLAR_PUBLIC_PASSPHRASE as NET_PUBLIC_PASSPHRASE,
+  DEFAULT_SOROBAN_RPC_TESTNET,
+  DEFAULT_SOROBAN_RPC_MAINNET,
+  isTestnetPassphrase,
+} from '../../lib/stellarNetwork';
+import { getStellarWalletsKit } from '../../api/stellarWalletsKit';
+import type { WalletProvider } from '../../api/walletConnect';
+import {
+  connectAlbedo,
+  connectFreighter,
+  connectXBull,
+} from '../../api/walletConnect';
+import { connectWithWalletsKit } from '../../api/stellarWalletsKit';
 
 export class StellarWalletError extends Error {
   readonly code: string;
@@ -12,21 +27,63 @@ export class StellarWalletError extends Error {
   }
 }
 
-import {
-  STELLAR_TESTNET_PASSPHRASE as NET_TESTNET_PASSPHRASE,
-  STELLAR_PUBLIC_PASSPHRASE as NET_PUBLIC_PASSPHRASE,
-  DEFAULT_SOROBAN_RPC_TESTNET,
-  DEFAULT_SOROBAN_RPC_MAINNET,
-  isTestnetPassphrase,
-} from '../../lib/stellarNetwork';
-
 const TESTNET_PASSPHRASE = NET_TESTNET_PASSPHRASE;
 const PUBLIC_PASSPHRASE = NET_PUBLIC_PASSPHRASE;
 const FREIGHTER_INSTALL_URL = 'https://www.freighter.app/';
+const SESSION_KEY = 'zexvro_nft_wallet_session';
+
+export type NftCheckoutWalletId = 'freighter' | 'albedo' | 'xbull' | 'kit';
+
+export type NftWalletSession = {
+  address: string;
+  provider: NftCheckoutWalletId;
+  kitWalletId?: string;
+  kitWalletName?: string;
+  network: 'TESTNET' | 'PUBLIC';
+};
+
 function placeholderRpcForPassphrase(networkPassphrase: string): string {
   return isTestnetPassphrase(networkPassphrase)
     ? DEFAULT_SOROBAN_RPC_TESTNET
     : DEFAULT_SOROBAN_RPC_MAINNET;
+}
+
+function networkFromPassphrase(networkPassphrase: string): 'TESTNET' | 'PUBLIC' {
+  return isTestnetPassphrase(networkPassphrase) ? 'TESTNET' : 'PUBLIC';
+}
+
+export function readWalletSession(): NftWalletSession | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as NftWalletSession;
+    if (!parsed?.address || !parsed?.provider) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function writeWalletSession(session: NftWalletSession | null): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (!session) sessionStorage.removeItem(SESSION_KEY);
+    else sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function clearWalletSession(): void {
+  writeWalletSession(null);
+}
+
+function mapProvider(provider: WalletProvider): NftCheckoutWalletId {
+  if (provider === 'freighter' || provider === 'albedo' || provider === 'xbull' || provider === 'kit') {
+    return provider;
+  }
+  return 'freighter';
 }
 
 type PreparedAssembledJson = {
@@ -208,11 +265,7 @@ export async function assertWalletNetwork(
   }
 }
 
-export async function getPublicKey(): Promise<string> {
-  if (typeof window === 'undefined') {
-    throw new StellarWalletError('wallet_unavailable', 'Wallet APIs are only available in the browser.');
-  }
-
+async function getFreighterPublicKey(): Promise<string> {
   const connected = await freighterApi.isConnected();
   throwIfFreighterError(
     connected,
@@ -226,7 +279,6 @@ export async function getPublicKey(): Promise<string> {
     );
   }
 
-  // requestAccess prompts allow-list + returns the active public key when approved.
   const access = await freighterApi.requestAccess();
   throwIfFreighterError(
     access,
@@ -234,11 +286,9 @@ export async function getPublicKey(): Promise<string> {
     'Freighter did not grant access. Approve this site in the Freighter popup and try again.',
   );
   if (access.address?.trim()) {
-    // Do not force Testnet here — callers pass passphrase on sign for mainnet/testnet.
     return access.address.trim();
   }
 
-  // Fallback if requestAccess returned empty but site was previously allowed.
   const allowed = await freighterApi.isAllowed();
   if (!allowed.isAllowed) {
     const set = await freighterApi.setAllowed();
@@ -256,11 +306,183 @@ export async function getPublicKey(): Promise<string> {
     'Freighter did not return a public key.',
   );
   if (addressResult.address?.trim()) {
-    // Caller should assert network with the intended passphrase before signing.
     return addressResult.address.trim();
   }
 
   throw new StellarWalletError('wallet_address_failed', 'Freighter did not return a public key.');
+}
+
+/**
+ * Connect a checkout wallet. Freighter is default; Albedo / xBull / kit cover other options.
+ */
+export async function connectCheckoutWallet(
+  provider: NftCheckoutWalletId = 'freighter',
+  networkPassphrase: string = TESTNET_PASSPHRASE,
+): Promise<NftWalletSession> {
+  if (typeof window === 'undefined') {
+    throw new StellarWalletError('wallet_unavailable', 'Wallet APIs are only available in the browser.');
+  }
+  const network = networkFromPassphrase(networkPassphrase);
+
+  try {
+    if (provider === 'freighter') {
+      // Prefer freighter-api path (requestAccess + network assert later on sign).
+      let address = '';
+      try {
+        address = await getFreighterPublicKey();
+      } catch {
+        const via = await connectFreighter(network);
+        address = via.publicKey;
+      }
+      const session: NftWalletSession = { address, provider: 'freighter', network };
+      writeWalletSession(session);
+      return session;
+    }
+
+    if (provider === 'albedo') {
+      const via = await connectAlbedo(network);
+      const session: NftWalletSession = {
+        address: via.publicKey,
+        provider: 'albedo',
+        network,
+      };
+      writeWalletSession(session);
+      return session;
+    }
+
+    if (provider === 'xbull') {
+      const via = await connectXBull(network);
+      const session: NftWalletSession = {
+        address: via.publicKey,
+        provider: 'xbull',
+        network,
+      };
+      writeWalletSession(session);
+      return session;
+    }
+
+    const via = await connectWithWalletsKit(network);
+    const session: NftWalletSession = {
+      address: via.publicKey,
+      provider: mapProvider(via.provider),
+      kitWalletId: via.kitWalletId,
+      kitWalletName: via.kitWalletName,
+      network,
+    };
+    writeWalletSession(session);
+    return session;
+  } catch (error) {
+    if (error instanceof StellarWalletError) throw error;
+    throw new StellarWalletError(
+      'wallet_connect_failed',
+      error instanceof Error ? error.message : 'Could not connect wallet.',
+    );
+  }
+}
+
+export async function getPublicKey(): Promise<string> {
+  if (typeof window === 'undefined') {
+    throw new StellarWalletError('wallet_unavailable', 'Wallet APIs are only available in the browser.');
+  }
+
+  const session = readWalletSession();
+  if (session?.address) {
+    // Re-confirm Freighter still owns the key when that was the last provider.
+    if (session.provider === 'freighter') {
+      try {
+        const current = await getFreighterPublicKey();
+        if (current !== session.address) {
+          const next = { ...session, address: current };
+          writeWalletSession(next);
+          return current;
+        }
+      } catch {
+        // fall through to freighter-only connect
+      }
+    } else if (session.kitWalletId || session.provider === 'albedo' || session.provider === 'xbull' || session.provider === 'kit') {
+      return session.address;
+    }
+  }
+
+  const address = await getFreighterPublicKey();
+  writeWalletSession({
+    address,
+    provider: 'freighter',
+    network: 'TESTNET',
+  });
+  return address;
+}
+
+function asSignedAuthEntryString(value: unknown): string {
+  if (typeof value === 'string' && value.trim()) return value;
+  if (value instanceof Uint8Array) {
+    // Buffer / Uint8Array from some wallets — encode as base64 if not already stringy
+    if (typeof Buffer !== 'undefined') {
+      return Buffer.from(value).toString('base64');
+    }
+    let binary = '';
+    value.forEach((b) => {
+      binary += String.fromCharCode(b);
+    });
+    return btoa(binary);
+  }
+  if (value && typeof value === 'object' && 'toString' in value) {
+    const s = String(value);
+    if (s && s !== '[object Object]') return s;
+  }
+  throw new StellarWalletError('wallet_sign_failed', 'Wallet returned an empty authorization entry.');
+}
+
+async function signAuthEntryWithSession(
+  entryXdr: string,
+  networkPassphrase: string,
+  address: string,
+  session: NftWalletSession | null,
+): Promise<{ signedAuthEntry: string; signerAddress?: string }> {
+  const useKit =
+    session
+    && session.provider !== 'freighter'
+    && (session.kitWalletId || session.provider === 'albedo' || session.provider === 'xbull' || session.provider === 'kit');
+
+  if (useKit && session) {
+    const network = networkFromPassphrase(networkPassphrase);
+    const kit = getStellarWalletsKit(network);
+    if (session.kitWalletId) kit.setWallet(session.kitWalletId);
+    else if (session.provider === 'albedo') kit.setWallet('albedo');
+    else if (session.provider === 'xbull') kit.setWallet('xbull');
+    try {
+      const signed = await kit.signAuthEntry(entryXdr, {
+        networkPassphrase,
+        address,
+      });
+      if (!signed.signedAuthEntry) {
+        throw new StellarWalletError('wallet_sign_failed', 'Wallet did not return a signed authorization entry.');
+      }
+      return {
+        signedAuthEntry: asSignedAuthEntryString(signed.signedAuthEntry),
+        signerAddress: signed.signerAddress || address,
+      };
+    } catch (error) {
+      if (error instanceof StellarWalletError) throw error;
+      throw new StellarWalletError(
+        'wallet_sign_failed',
+        error instanceof Error ? error.message : 'Wallet could not sign the authorization entry.',
+      );
+    }
+  }
+
+  const signed = await freighterApi.signAuthEntry(entryXdr, {
+    networkPassphrase,
+    address,
+  });
+  throwIfFreighterError(signed, 'wallet_sign_failed', 'Freighter could not sign the authorization entry.');
+  if (!signed.signedAuthEntry) {
+    throw new StellarWalletError('wallet_sign_failed', 'Freighter did not return a signed authorization entry.');
+  }
+  return {
+    signedAuthEntry: asSignedAuthEntryString(signed.signedAuthEntry),
+    signerAddress: signed.signerAddress || address,
+  };
 }
 
 export async function signTransaction(
@@ -274,40 +496,40 @@ export async function signTransaction(
     throw new StellarWalletError('wallet_invalid_transaction', 'No prepared transaction is available to sign.');
   }
 
-  const connected = await freighterApi.isConnected();
-  throwIfFreighterError(
-    connected,
-    'wallet_unavailable',
-    `Freighter is not available in this browser. Install Freighter (${FREIGHTER_INSTALL_URL}), unlock it, and allow this site.`,
-  );
-  if (!connected.isConnected) {
-    throw new StellarWalletError(
+  const session = readWalletSession();
+  const useFreighter = !session || session.provider === 'freighter';
+
+  if (useFreighter) {
+    const connected = await freighterApi.isConnected();
+    throwIfFreighterError(
+      connected,
       'wallet_unavailable',
-      `Freighter is not available in this browser. Install Freighter (${FREIGHTER_INSTALL_URL}), unlock it, enable it for this site, and use the same browser profile as the extension.`,
+      `Freighter is not available in this browser. Install Freighter (${FREIGHTER_INSTALL_URL}), unlock it, and allow this site.`,
     );
+    if (!connected.isConnected) {
+      throw new StellarWalletError(
+        'wallet_unavailable',
+        `Freighter is not available in this browser. Install Freighter (${FREIGHTER_INSTALL_URL}), unlock it, enable it for this site, and use the same browser profile as the extension.`,
+      );
+    }
+    const allowed = await freighterApi.isAllowed();
+    if (!allowed.isAllowed) {
+      await freighterApi.requestAccess();
+    }
+    await assertWalletNetwork(networkPassphrase);
   }
-
-  // Ensure site is allowed before sign prompt.
-  const allowed = await freighterApi.isAllowed();
-  if (!allowed.isAllowed) {
-    await freighterApi.requestAccess();
-  }
-
-  // Fail fast on wrong Freighter network (skill UX checklist).
-  await assertWalletNetwork(networkPassphrase);
 
   let address: string | undefined;
   try {
-    address = await getPublicKey();
+    address = session?.address || (await getPublicKey());
   } catch (error) {
-    // Network mismatch from getPublicKey must surface; other address issues can still prompt.
     if (error instanceof StellarWalletError && error.code === 'wallet_network_mismatch') {
       throw error;
     }
   }
 
   const network = isTestnetPassphrase(networkPassphrase) ? 'TESTNET' : 'PUBLIC';
-  
+
   let txIsJSON = false;
   try {
     JSON.parse(serializedTransaction);
@@ -330,8 +552,6 @@ export async function signTransaction(
         );
       }
 
-      // Client.fromJSON validates that options.contractId matches the envelope.
-      // Extract the real target from the prepared XDR instead of using a placeholder.
       const target = extractInvokeContractTarget(parsed.tx, networkPassphrase);
       const method = parsed.method || target.method;
       if (method !== target.method) {
@@ -359,18 +579,12 @@ export async function signTransaction(
       await tx.signAuthEntries({
         address,
         signAuthEntry: async (entryXdr: string, opts?: { networkPassphrase?: string; address?: string }) => {
-          const signed = await freighterApi.signAuthEntry(entryXdr, {
-            networkPassphrase: opts?.networkPassphrase || networkPassphrase,
-            address: opts?.address || address,
-          });
-          throwIfFreighterError(signed, 'wallet_sign_failed', 'Freighter could not sign the authorization entry.');
-          if (!signed.signedAuthEntry) {
-            throw new StellarWalletError('wallet_sign_failed', 'Freighter did not return a signed authorization entry.');
-          }
-          return {
-            signedAuthEntry: signed.signedAuthEntry,
-            signerAddress: signed.signerAddress || address,
-          };
+          return signAuthEntryWithSession(
+            entryXdr,
+            opts?.networkPassphrase || networkPassphrase,
+            opts?.address || address,
+            session,
+          );
         },
       });
       return tx.toJSON();
@@ -379,6 +593,29 @@ export async function signTransaction(
       throw new StellarWalletError(
         'wallet_sign_failed',
         error instanceof Error ? error.message : 'Failed to sign authorization entries.',
+      );
+    }
+  }
+
+  if (!useFreighter && session) {
+    const kit = getStellarWalletsKit(networkFromPassphrase(networkPassphrase));
+    if (session.kitWalletId) kit.setWallet(session.kitWalletId);
+    else if (session.provider === 'albedo') kit.setWallet('albedo');
+    else if (session.provider === 'xbull') kit.setWallet('xbull');
+    try {
+      const signed = await kit.signTransaction(serializedTransaction, {
+        networkPassphrase,
+        ...(address ? { address } : {}),
+      });
+      if (!signed.signedTxXdr?.trim()) {
+        throw new StellarWalletError('wallet_sign_failed', 'Wallet did not return a signed transaction.');
+      }
+      return signed.signedTxXdr.trim();
+    } catch (error) {
+      if (error instanceof StellarWalletError) throw error;
+      throw new StellarWalletError(
+        'wallet_sign_failed',
+        error instanceof Error ? error.message : 'Wallet could not sign the transaction.',
       );
     }
   }
@@ -404,6 +641,17 @@ export function formatWalletError(error: unknown): string {
   if (error instanceof Error && error.message.trim()) return error.message;
   return 'Wallet action failed.';
 }
+
+export const NFT_CHECKOUT_WALLETS: Array<{
+  id: NftCheckoutWalletId;
+  label: string;
+  hint: string;
+}> = [
+  { id: 'freighter', label: 'Freighter', hint: 'Browser extension' },
+  { id: 'albedo', label: 'Albedo', hint: 'Web wallet' },
+  { id: 'xbull', label: 'xBull', hint: 'Extension' },
+  { id: 'kit', label: 'Others', hint: 'Lobstr, Rabet, Hana…' },
+];
 
 export const STELLAR_TESTNET_PASSPHRASE = TESTNET_PASSPHRASE;
 export const STELLAR_PUBLIC_PASSPHRASE = PUBLIC_PASSPHRASE;

@@ -652,8 +652,9 @@ const baseNftEnv = {
   COGNITO_USER_POOL_ID: 'us-east-1_vyONcitBD',
   COGNITO_CLIENT_ID: '7qmkq33si9qk8pgo6ebi3qantm',
   CORS_ALLOWED_ORIGINS: corsOrigins,
-  STELLAR_RPC_URL: 'https://soroban-testnet.stellar.org',
-  STELLAR_NETWORK_PASSPHRASE: 'Test SDF Network ; September 2015',
+  // Hosted App Runner is mainnet (matches live /health). Local testnet uses root .env.
+  STELLAR_RPC_URL: 'https://mainnet.sorobanrpc.com',
+  STELLAR_NETWORK_PASSPHRASE: 'Public Global Stellar Network ; September 2015',
   // Env name is legacy; value is payment SAC. Prefer native XLM (no trustline).
   // Mainnet XLM SAC; override with Circle USDC SAC if you need USDC checkout.
   STELLAR_USDC_CONTRACT: 'CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA',

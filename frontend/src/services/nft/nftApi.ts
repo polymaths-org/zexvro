@@ -84,6 +84,49 @@ export function nftExplorerBase(health?: NftServiceHealth | null): string {
     : 'https://stellar.expert/explorer/testnet';
 }
 
+/** Native XLM / Circle USDC SAC ids — match server payment token. */
+const XLM_SACS = new Set([
+  'CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA',
+  'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC',
+]);
+const USDC_SACS = new Set([
+  'CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75',
+  'CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA',
+]);
+
+export function atomicToPaymentDisplay(value: string): string {
+  try {
+    const atomic = BigInt(value);
+    const whole = atomic / 10_000_000n;
+    const fraction = (atomic % 10_000_000n).toString().padStart(7, '0').replace(/0+$/, '');
+    return fraction ? `${whole.toString()}.${fraction}` : whole.toString();
+  } catch {
+    return value;
+  }
+}
+
+/** Label for primary-sale payment token (client-configured amount uses this asset). */
+export function paymentAssetLabel(
+  paymentTokenAddress?: string | null,
+  health?: NftServiceHealth | null,
+): string {
+  const token =
+    (paymentTokenAddress || '').trim()
+    || (health?.capabilities?.paymentTokenAddress || lastNftHealth?.capabilities?.paymentTokenAddress || '').trim();
+  if (!token) return 'XLM';
+  if (XLM_SACS.has(token)) return 'XLM';
+  if (USDC_SACS.has(token)) return 'USDC';
+  return 'token';
+}
+
+export function formatPrimarySalePrice(
+  sale?: { priceAtomic: string; paymentTokenAddress?: string } | null,
+  health?: NftServiceHealth | null,
+): string | null {
+  if (!sale?.priceAtomic) return null;
+  return `${atomicToPaymentDisplay(sale.priceAtomic)} ${paymentAssetLabel(sale.paymentTokenAddress, health)}`;
+}
+
 export interface NftMediaAsset {
   cid: string;
   uri: string;

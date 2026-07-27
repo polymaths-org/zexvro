@@ -1,13 +1,14 @@
 import { Link, Outlet, useParams, useRouterState } from '@tanstack/react-router';
 import {
   LayoutDashboard, Wallet, SendHorizontal, History, ShieldCheck,
-  Settings, ChevronLeft, BookOpen, Banknote, Eye, Ghost,
+  Settings, ChevronLeft, Banknote, Eye, Ghost, Vault, BookOpen,
 } from 'lucide-react';
 import { useZer0Store } from '../../stores/zer0';
 
 const ZER0_NAV = [
   { id: 'overview', path: 'zer0', label: 'Overview', icon: LayoutDashboard },
   { id: 'people', path: 'zer0/people', label: 'Wallets directory', icon: Wallet },
+  { id: 'treasury', path: 'zer0/treasury', label: 'Treasury', icon: Vault },
   { id: 'pay', path: 'zer0/pay', label: 'Send payment', icon: SendHorizontal },
   { id: 'payroll', path: 'zer0/payroll', label: 'Payment runs', icon: Banknote },
   { id: 'history', path: 'zer0/history', label: 'Payment ledger', icon: History },

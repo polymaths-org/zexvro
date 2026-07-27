@@ -23,6 +23,7 @@ import Zer0Proofs from '../components/zer0/Zer0Proofs';
 import Zer0Settings from '../components/zer0/Zer0Settings';
 import Zer0DataPreview from '../components/zer0/Zer0DataPreview';
 import Zer0Stealth from '../components/zer0/Zer0Stealth';
+import Zer0Treasury from '../components/zer0/Zer0Treasury';
 import PlaceholderScreen from '../components/PlaceholderScreen';
 import Services from '../components/services/Services';
 import AgentStudio from '../components/dashboard/AgentStudio';
@@ -349,6 +350,12 @@ const wsZer0PeopleRoute = createRoute({
   component: Zer0People,
 });
 
+const wsZer0TreasuryRoute = createRoute({
+  getParentRoute: () => wsZer0LayoutRoute,
+  path: 'treasury',
+  component: Zer0Treasury,
+});
+
 const wsZer0PayRoute = createRoute({
   getParentRoute: () => wsZer0LayoutRoute,
   path: 'pay',
@@ -499,6 +506,12 @@ const projectZer0PeopleRoute = createRoute({
   getParentRoute: () => projectZer0LayoutRoute,
   path: 'people',
   component: Zer0People,
+});
+
+const projectZer0TreasuryRoute = createRoute({
+  getParentRoute: () => projectZer0LayoutRoute,
+  path: 'treasury',
+  component: Zer0Treasury,
 });
 
 const projectZer0PayRoute = createRoute({
@@ -718,6 +731,7 @@ const routeTree = rootRoute.addChildren([
     wsZer0LayoutRoute.addChildren([
       wsZer0DashboardRoute,
       wsZer0PeopleRoute,
+      wsZer0TreasuryRoute,
       wsZer0PayRoute,
       wsZer0HistoryRoute,
       wsZer0PayrollRoute,
@@ -743,6 +757,7 @@ const routeTree = rootRoute.addChildren([
     projectZer0LayoutRoute.addChildren([
       projectZer0DashboardRoute,
       projectZer0PeopleRoute,
+      projectZer0TreasuryRoute,
       projectZer0PayRoute,
       projectZer0HistoryRoute,
       projectZer0PayrollRoute,
