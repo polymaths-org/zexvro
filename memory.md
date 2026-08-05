@@ -1,5 +1,82 @@
 # ZEXVRO Shared Memory
 
+## 2026-08-05 - ZEXVRO Labs: admin hashtag editor + toast notifications + reactive save buttons (Paris)
+
+- **Admin hashtag editor.** Field in the lab admin **Details** tab (formerly "Tags (comma separated)" plain input) is now a chip-based hashtag editor: blue `#tag` chips with an X to remove, Enter/comma commits a tag (strips leading `#`), Backspace removes the last chip when the input is empty, blur auto-commits, duplicates de-duped case-insensitively. State was `tags: string` (comma-joined) → now `tags: string[]` + `tagInput`. `saveDetails` sends `tags` as the array directly. Hashtags render as `#tag` (blue) in `LabDetailsView.tsx`; the `Tag` UI component (`src/components/ui/Badge.tsx`) already prefixes `#`.
+- **Toast notification system (new).** `src/components/ui/Toaster.tsx`: `toast(message, type)` module-level fn + `useToast()` context + animated `ToastProvider` (framer-motion `enter slide/scale, exit slide-right`, spring 420/30, auto-dismiss 3.2s, top-right, keeps last 4, manual dismiss). Mounted in `App.tsx` wrapping `<Shell/>`.
+- **Toasts fired from state handlers** in `src/state/labs.tsx` (`handleCreateLab/Update/Delete`, `handleUpdateBadge/Create/Delete`, `handleUpdateSubmission`) — they now `.then()` the api call and toast **"Lab saved"/"Lab deleted"/"Badge created"/"Submission approved"** on success or "Failed to …" (error) on failure. (Handlers already optimistic-update local state; the api call result now drives the toast.)
+- **SaveButton component (new).** `src/components/admin/SaveButton.tsx`: idle → "Saving…" (spinner, disabled, `cursor-wait`) → "Saved ✓" (green, 1.6s) → idle. `whileTap` scale, disabled-while-busy prevents double-submit. Used for all four lab-manager save buttons (Details/Content/Access/Credentials) and the AdminPanel create-draft button.
+- **Delete confirmations:** lab-manager header Delete is now a 2-step inline arm ("Delete" → "Confirm delete?" red, auto-disarm after 3s) instead of `window.confirm`; the admin labs-table delete icon keeps `window.confirm` (extra safety). Deletion+update already had `window.confirm` for the manage-panel Delete; now both paths confirm.
+- tsc + `vite build` clean. Deployed (`build` fixed at 9 in health; new bundle `index-B27vWf-v.js` confirmed live on fresh commit): verified new-feature markers present in deployed JS. 
+- **Redirect Button content element (new).** New `LabTaskType 'redirect'` + `redirectUrl`/`buttonColor` fields on `LabTask` (`types.ts`). New `RedirectElement` in `src/components/ui/ContentElements.tsx`: a bordered card with optional heading (title) + optional blurb (description) + a colored CTA button that opens `redirectUrl` in a new tab (default color `#2563eb`, no-op if URL empty). Registered in `renderContentElement`. Admin **Content** editor: new "Redirect Button" entry in the element-type dropdown (`ELEMENT_TYPES`) with **Redirect URL** + **Button color** fields (native color picker + hex text input). Deployed (bundle `index-Dvxzig0r.js`): verified "Redirect Button"/"Open link" markers live.
+
+## 2026-08-05 - ZEXVRO Labs: Firestore backend + real URL routing (Paris)
+
+- **Persisted the admin saves (root fix for "can't save from admin panel").** Root cause of the earlier failure was the disk being 100% full (`ENOSPC` on Cloudflare writes / local build) — freed ~33G via `npm cache clean --force`. The backend itself is now being swapped from AWS DynamoDB → **Firebase Firestore**, per user's decision ("use firebase for user data, labs progress, labs data admin panel and more").
+- **Real URL routing, not tab-only.** New `labs/src/lib/router.tsx` (pathname → `Route` union), `labs/src/pages/*` (HomePage, LabsPage, LabDetailsPage, RunnerPage, VerifyPage, ProfilePage, PublicProfilePage, PathsPage, CertificatesPage, OperationsPage, AdminPage, NotFoundPage), thin `App.tsx` that switches on the route, `labs/src/state/labs.tsx` (LabsProvider context), `Sidebar.onNavigate` + `Header` wiring. Clean paths: `/home`, `/labs`, `/labs/:slug` (lab details), `/labs/manage`, `/runner/:id`, `/verify/:number`, `/u/:username`, `/admin`, `/admin/:tab`, `/operations`, `/certificates`, `/paths`, `/profile`. `public/_redirects` SPA fallback added so deep links resolve in prod (Pages Functions under `/api` and `/auth` take priority and still return JSON).
+- **Firebase Auth** (FirebaseUI-free, direct SDK): `npm i firebase@latest`; `src/lib/firebase.ts` (initializeApp for `labs-zexvro`, `getAuth`, `githubProvider` w/ `user:email` scope, `googleProvider`, email/password sign-in/up, `resolveUser` reads/creates the Firestore `users/${uid}` doc on first login, `onAuthChange`, `getIdToken(true)` for fresh tokens). `src/components/LoginModal.tsx` signs in via Firebase and returns the host app the `currentUser`.
+- **Token-attaching API client:** `lib/api.ts` now prepends `Authorization: Bearer <fresh ID token>` to every request.
+- **Server-side token verification (stateless, no service account needed for AUTH):** `functions/_shared.ts` `verifyFirebaseToken(token, env)` validates via the identitytoolkit `accounts:lookup` REST endpoint using only `FIREBASE_API_KEY`; `authenticate()` prefers the Firebase Bearer token, falls back to the legacy GitHub cookie session. Added `checkRateLimit(env, key, limit, window)` sliding-window rate limiter (anon exempt, in-memory).
+- **`functions/api/[[path]].ts` rewritten** (health build → 8): every `/api/*` route is auth-guarded (`requireUser`) + rate-limited, and lab reads go through `sanitizeLab(lab, isAdmin)` which strips `expectedFlag/expectedOutput/verificationCommand/accessCode/password/editors` for non-admins so task answers / access codes never leak to learners. `Cache-Control: no-store` on everything.
+- **`src/backend/store.ts` gains `FirestoreStore`** (server-side, pure fetch + WebCrypto, works under workerd `nodejs_compat`): RS256 self-signed JWT → `oauth2.googleapis.com/token` (grant_type jwt-bearer) → Firestore REST `v1/{projects/…}/databases/(default)/documents`. Full `LabsStore` impl (labs, badges, users, certificates, progress@`progress/{uid}/labs/{labId}`, submissions). `createStore` selects `firestore` by default (from `LABS_STATE_BACKEND`), falls back to `MemoryStore` if the service-account JSON is missing. DynamoStore still present but no longer the default.
+- **`wrangler.jsonc`:** `LABS_STATE_BACKEND: firestore`, added `FIREBASE_API_KEY` var (public web API key from user). AWS vars kept as secrets (unused now).
+- **`firestore.rules` written** (server-managed `labs/badges/certificates/submissions` admin-only via API; `users/${uid}` self-create/update, update blocked from escalating role to admin; `progress/${uid}/labs/*` owner + admin; `certificates`/`submissions` allow a signed-in user to `create` only with `status=='issued'`/`'pending'`). `firestore.indexes.json` added (slug/createdAt, certificateNumber/issuedAt, users/username).
+- Verified locally: `tsc --noEmit` clean, `vite build` clean.
+- **DEPLOYED + VERIFIED (prod, `labs.zexvro.in`):** set the three Pages secrets `FIREBASE_PROJECT_ID` (=`labs-zexvro`), `FIREBASE_CLIENT_EMAIL` (=`firebase-adminsdk-fbsvc@labs-zexvro.iam.gserviceaccount.com`), `FIREBASE_PRIVATE_KEY` (PEM from `labs/labs-zexvro-firebase-adminsdk-fbsvc-40d0bc5017.json`; file gitignored, never commit). Health endpoint now reports `backend: firestore`; `/api/labs` returns real Firestore data (empty on fresh DB). First two secret-writes had a shell-scoping bug that stored EMPTY values → worker silently fell back to MemoryStore (sample labs showed up); re-set them and redeployed. Firestore service-account write/read/delete round-trip proven (200/200/200) via `firestore.googleapis.com` REST. Temp health diagnostics removed. **Outstanding:** seed the Firestore `labs`/`badges` collections (admin panel "add lab" works; the DB is empty so nothing shows until then).
+
+## 2026-08-05 - ZEXVRO Labs: shareable routing + repo submissions + credential canvas (Paris)
+
+- Removed the role toggle from the header (`Header` no longer takes `onToggleRole`; deleted orphan `handleToggleRole` in `App.tsx`).
+- Shareable deep links now work end-to-end:
+  - `labs/src/lib/router.ts`: history-based router (`/lab/<slug>`, `/verify/<number>`, `/u/<username>`, else app shell) + `navigate/shareUrl/labUrl/verifyUrl/profileUrl`.
+  - `App.tsx`: `useAppRoute`; `/lab/<slug>` resolves the lab (re-runs once `labs` sync) → LabDetailsView; `/verify/<number>` renders a standalone `VerifyView` (no app chrome); `/u/<username>` fetches `/api/users/:username` into `sharedProfile`; 404 states for unknown lab/user.
+  - Backend routes added in `functions/api/[[path]].ts`: `GET /api/certificates/verify/:number` (public), `GET /api/users/:username` (public), `GET /api/admin/users`, `POST/PUT /api/submissions`. Health build → 7.
+  - `store.ts`: `findUserByUsername`, `findCertificateByNumber`, `listCertificates`, `listUsers`, `listSubmissions`, `saveSubmission`, `updateSubmission` (Memory + Dynamo). MemoryStore now seeds the guest user so `/u/guest` resolves in demo; Dynamo `listLabs` seeds `sampleLabs`+`sampleBadges` into an empty table.
+  - `handleLabCompleted` now POSTs the issued certificate to `/api/certificates` so its `/verify/<number>` link resolves publicly.
+  - Share buttons: Lab details page (copy `/lab/<slug>`), Profile page (copy `/u/<username>`); certificate rows link to `/verify/<number>`.
+- Lab details page rebuilt (square 1:1 banner on the left, title/meta/CTA on the right): access state pill (Open/Locked/Closed/Draft), XP/duration/badge chips, meta strip, "What you'll learn", curriculum outline per page, sticky Start CTA, Share link.
+- `labProgress` wired through the runner (`LabProgressSidebar` replaces the main sidebar while a lab runs: progress bar, timer, per-page task states, exit) — from earlier session, confirmed intact.
+
+## 2026-08-05 - ZEXVRO Labs: backend on Cloudflare Pages Functions + login fix + CMS (Morph)
+
+- Root cause of login error: the `labs` Cloudflare Pages project deployed ONLY the static `dist/`. Every `/api/*` and `/auth/callback` returned `index.html`, so the client's `fetch(...).json()` threw `Unexpected token '<', "<!doctype"`.
+- Fix (no App Runner, keeps AWS DynamoDB): ported the Express backend into Cloudflare Pages Functions on the same origin and redeployed the `labs` Pages project.
+  - `labs/functions/api/[[path]].ts` — all `/api/*` routes (health, auth/me, auth/logout, auth/github/url, labs CRUD, badges, certificates, verify-task, ai/*).
+  - `labs/functions/auth/callback.ts` — GitHub OAuth callback at `/auth/callback`.
+  - `labs/functions/_shared.ts` — config/store/session/json helpers; `functions/global.d.ts` for `PagesFunction` lint types.
+  - `labs/wrangler.jsonc` — pages_build_output_dir, `nodejs_compat`, vars (LABS_STATE_BACKEND=dynamo, region, table, admin logins, APP_URL).
+  - `labs/public/_redirects` — added then REMOVED (caused infinite-loop warning; SPA is tab-based at `/`).
+  - store.ts: `DynamoStore` + `createStore` accept a `StoreConfig` (`backend/region/tableName/credentials/useFetchHandler`); uses `@smithy/fetch-http-handler` so AWS SDK runs in workerd. Cryptography runs under `nodejs_compat`.
+  - All API responses now send `Cache-Control: no-store` to prevent stale HTML from the old static deploy.
+- Deployed Secrets (Cloudflare Pages `labs` project): `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `LABS_SESSION_SECRET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`.
+- Security: avoided putting ROOT AWS keys in Cloudflare. Created scoped IAM user `zexvro-labs-pages` (DynamoDB-only policy `zexvro-labs-pages-dynamo` on table `zexvro-labs`) and used its keys in the Pages secrets.
+- Verified live: `/api/health`, `/api/auth/me`, `/api/auth/github/url`, `/api/labs` all return JSON; `/api/labs` reads real DynamoDB; `/auth/callback` routes correctly.
+- Login "always failed" report: probed GitHub exchange → `bad_verification_code` = creds are VALID; the user's pasted code was already consumed (one-time use). Added temporary error diagnostics to the callback failure page. User should retry with a FRESH authorize click.
+- Removed all dummy seed labs: deleted the 4 `LAB#*`/`SLUG#*` items I had seeded into `zexvro-labs`; removed the startup seed block in `server.ts` + the `sampleLabs` import; App defaults `labs` to `[]`.
+- UI/CMS changes:
+  - LoginModal simplified (kept ZEXVRO logo, terse copy, single GitHub button).
+  - Sidebar: removed badge bubbles, added `h-px` divider lines between nav items.
+  - Catalog/Dashboard lab cards: added 1:1 `bannerUrl` image header, removed Featured/difficulty pill bubbles, show `Unlimited` when no time limit.
+  - types.ts: `LabTask.type` ('task'|'heading'|'text'|'code' + `language`); `Lab` gains `bannerUrl`, `accessCode`, `timeLimitMinutes` (null=infinite).
+  - AdminPanel: banner upload (downscaled to 512x512 square JPEG data URL), access-code field, time-limit toggle (Unlimited/Timed + minutes), Content Elements builder (add Heading/Text/Code/Task; type selector + per-type fields).
+  - LabRunner: renders elements by type (heading/text/code/task), completion counts only verifiable tasks, timer uses `timeLimitMinutes` with Unlimited.
+  - App.tsx: access-code gate modal before entering a gated lab.
+- Verified: `tsc --noEmit` clean, `vite build` clean, deployed to the `labs` Pages project.
+
+## 2026-08-05 - ZEXVRO Labs: OAuth secrets stored, Dynamo seed, verified (Morph)
+
+- Scope clarified by user: Labs is a **static content player** (headings, text, checkboxes, code blocks) — no heavy execution/sandbox on our side. AWS stays as backend (DynamoDB for progress, Secrets Manager for OAuth). App Runner/docker compute is NOT a goal; do not build execution infra.
+- Stored GitHub OAuth app `labs.zexvro` credentials in Secrets Manager (`us-east-1`, acct `290294660486`):
+  - `zexvro/github/client-id` = `Ov23liJVFT9Ndu72RBkU`
+  - `zexvro/github/client-secret` = (provided by user, stored only in Secrets Manager — never in git)
+  - `zexvro/labs/session` already existed.
+- Wired `import 'dotenv/config'` into `labs/server.ts` (dep was present but unused) so `.env` is honored; created gitignored `labs/.env` (local dev, points at real GitHub app + Dynamo backend).
+- Added idempotent startup seed in `server.ts` for Dynamo backend: if `listLabs()` returns empty, it writes `sampleLabs` into `zexvro-labs` (DynamoStore has no built-in seed; MemoryStore already pre-seeded). `listBadges` already falls back to `sampleBadges` when table empty.
+- Verified locally (`node dist/server.mjs`, port 3210, Dynamo backend): `/api/health` ok, `/api/auth/me` → `{authenticated:false}`, `/api/auth/github/url` builds correct authorize URL, `/api/labs` returns the 4 seeded AWS labs, and a minted signed cookie with login `zexvro` returns `authenticated:true` role `admin`.
+- `npm run build` clean (vite + esbuild ESM `dist/server.mjs`).
+- Follow-ups: real browser GitHub login still needs a human click; DNS `labs.zexvro.in` → hosting (App Runner infra already exists but is NOT a priority per user). Secrets already deployed via `deploy-labs-apprunner.mjs` referencing the ARNs.
+- Note: `landing/zexvro/` changes in git status (App.tsx, Preloader, gif/mp4) are another assignee's work — left untouched.
+
 ## 2026-07-27 - Pre-push summary (Paris)
 
 - Service or area: Zer0 + console + NFTo + credits + README
@@ -1682,3 +1759,75 @@ Use `None` for empty fields. Do not delete fields.
 - **REQWID**: off-chain only — no chain toggle (documented in Project Settings).
 - NFT collection WASM mainnet upload blocked: deployer `TxInsufficientBalance` (~15 XLM left). Ops: fund more + `stellar contract upload` → set `NFT_COLLECTION_WASM_HASH` + mainnet sponsor on App Runner.
 - Verification: depin config tests 14/14; frontend `tsc --noEmit` clean.
+
+## 2026-08-05 (late) - ZEXVRO Labs: GitHub OAuth finally working (Morph)
+
+- Chased the remaining login failure through several builds. Root resolves to TWO Worker-specific issues, now both fixed (build 6 live):
+  1. GitHub OAuth **token** endpoint rejects a JSON request body. Switched the exchange (`functions/auth/callback.ts`) to `application/x-www-form-urlencoded` via `URLSearchParams`. (Mirrored in local `server.ts`.)
+  2. GitHub REST API **requires a `User-Agent` header**; Cloudflare Workers send none by default, so `/user` and `/user/emails` returned HTTP 403 text "Request forbidden by administrative rules... make sure your request has a User-Agent header." Added `User-Agent: zexvro-labs`.
+- Hardened `callback.ts`: every GitHub response is now read as text then try-`JSON.parse`d; failures throw `ctx (HTTP NNN): non-JSON response (starts: ...)` so the failure page shows the exact step + raw body. Steps: token exchange, `user`, `user/emails`.
+- `/api/health` now returns a `build` counter (5, 6) so we can confirm the newest Pages bundle is live after each deploy.
+- Note on testing: once you've authorized the app, GitHub auto-redirects the popup to `/auth/callback`; **reloading the popup re-sends the same one-time code → "invalid/expired token"**. Each test must be a fresh "Continue with GitHub" click. Login not yet confirmed end-to-end after the User-Agent fix — VERIFY TOMORROW.
+- Open threads (deferred by user to tomorrow): many UX/product improvements to Labs; nothing committed to git yet.
+
+## TODO (Paris) - Labs backlog for next session
+- Remove "Console" view + AI Mentor from Labs surface. (high)
+- Remove other dummy/unwanted UI (parity with Paris' global UI cleanup). (med)
+- Improve overall GUI: polish, layout, spacing, consistency. (med)
+- Fix checkbox interaction in Lab View (tasks/checklist). (high)
+- Improve lab management + access control (CRUD + who sees/edits). (high)
+- Submission states + submission access management. (high)
+- Certificate editor (templates + per-lab certs). (med)
+- Badge editor (create/edit + grant rules). (med)
+- Module maker (group labs into modules). (med)
+- More content elements + GUI improvements in lab builder. (med)
+- VERIFY GitHub OAuth end-to-end (User-Agent fix, build 6) before new feature work.
+
+## EVENING SESSION — full Labs rebuild plan (Paris + Claude split)
+- Contract (from user): **Claude = frontend/UI/operations + client logic**. **Paris = backend integration** (Pages Functions, DynamoDB, sessions, subs, credentials). todo.md lives at `labs/todo.md`.
+- NOTE re-scoped: ZEXVRO Labs is **web3-only** education. No non-web3 content, no "AI Mentor"-style extras. All labs/modules/certs/badges are web3.
+- Concrete asks queued (in priority order):
+  1. Remove "Console"/Interactive Cloud Shell window + AI Mentor tabs from LabRunner (`src/components/LabRunnerView.tsx`).
+  2. Center layout; cooler fonts; ~larger readable sizes; add blue + grey accent shades to elements/buttons (update `src/index.css` theme).
+  3. Code element: collapsed-by-default, expandable, copy button, styled.
+  4. Lab details page opening on card click (timing, enrolled count, status locked/open) — Catalog/Dashboard cards currently call `handleStartLab` directly.
+  5. Require login before any lab (auth gate) — currently only access-code gates gated labs.
+  6. Admin panel → single "Management" entry with tabs: Labs, Operations, Users, + more (currently AdminPanel.tsx is one flat view).
+  7. In Labs tab, per-lab "Manage" → Lab Management panel with:
+     - Overview analytics (enrolled, completed, etc.)
+     - Details editor (logo/name/description, timing: none/duration, password: none/pin, more)
+     - Content editor (multi-page labs; password/flag-style checkboxes options; more elements: images, YouTube embed, etc.)
+     - Access management (who can edit/lab)
+     - Credentials editor (badges + certificates, canvas-like, vars `{username}`, QR verify image, `{labname}`, colors/images)
+  8. Credential verification system (share on LinkedIn, anyone can verify).
+  9. Profiles page.
+  - Types to extend: Lab pages (multi-page), LabTask variants (password/flag checkboxes), CertificateTemplate/Badge editors, Module.
+  - Backend shapes exist for labs/subs/templates/modules in `src/types.ts` (§4-§6 blocks) — Paris to wire endpoints in `functions/api/[[path]].ts`.
+
+## 2026-08-05 (late, 2nd pass) - Labs rebuild: UI/UX + admin management panel (Paris/Morph)
+- **Theme**: blue + grey accent palette (`--zexvro-blue*`, `.btn-primary-blue` gradient, `.text-blue-accent`, `.glow-blue`, `.panel-blue`) added to `src/index.css`; base font bumped to 16px; blue focus rings + blue-grey scrollbar; primary Button now blue gradient (`ui/Button.tsx`).
+- **LabRunnerView rewritten**: Console window + AI Mentor removed; centered max-w-3xl content; real checkbox toggles for tasks (persist via `POST /api/labs/:id/progress`); task flagType `checkbox|flag|code` with flag input + verify; multi-page support (`Lab.pages`); blue progress bar; completion modal.
+- **Code element** (`ui/ContentElements.tsx`): collapsed by default, expand button, copy button, line numbers, blue accents.
+- **Lab details page** (`LabDetailsView.tsx`): cards now open details (not direct start) — banner, duration/unlimited, XP, enrolled, completions, status open/locked/closed/draft, Start CTA. `getLabAccessState()` exported.
+- **Login gate**: starting any lab while logged out opens GitHub login, then resumes the pending lab. Access code = `lab.password || lab.accessCode`.
+- **Admin panel restructured** (`AdminPanel.tsx`): Management Panel with tabs Overview / Labs / Operations / Users / Credentials. Labs tab has per-lab **Manage** → `LabManagerPanel` (`components/admin/LabManagerPanel.tsx`) with sub-tabs: Overview (enrolled/completions/rate analytics), Details (banner upload, name, description, time none/duration, pin none/pin, status draft/live/closed), Content (multi-page editor, page titles, element palette incl image/YouTube/callout/accordion/table/steps/divider, flagType per task, move/delete), Access (editors list), Credentials (link badge + grant rule).
+- **Credentials editor** (`components/admin/CredentialsEditor.tsx`): badge list/create/edit with icon/color/XP/grant-rule + live preview; certificate template preview with vars `{username}` `{labname}` `{date}` + QR note.
+- **Profile page** (`ProfileView.tsx` + sidebar "My Profile"): hero/avatar, level/stats, earned badges, certificates with verify links, share profile.
+- Types: added `LabPage`, `LabTask.flagType/expectedFlag`, `Lab.pages/password/enrolledCount/editors`, `Badge.awardOn`.
+- Build: `tsc --noEmit` clean, `vite build` ok, deployed (Pages). `/api/health`, `/api/labs` verified live.
+- **Still TODO**: full canvas-style certificate editor (drag/resize, uploaded logo + QR verify image), real credential verification route, backend wiring for pages/progress/editors persistence (`functions/api/[[path]].ts` currently stores labs; pages/progress endpoints exist partially), Users tab persistence, Operations deep view.
+
+## 2026-08-06 - Routing fix + backend seed + Skill Quests removal (Paris)
+- **ROOT CAUSE of "clicks don't navigate"**: `src/state/labs.tsx` had `const [paths] = useState<LearningPath[]>(sampleLearningPaths)` which SHADOWED the imported `paths` from `lib/router`. Every `navigate(paths.x)` in `goToTab`/handlers received `undefined` (verified via CDP: pushState called with `push:UNDEFINED`). Fixed by renaming the local state to `learningPaths` and exposing it as `paths` in the context value.
+- **Backend was empty**: Firestore had no data (`/api/labs` → `{labs:[]}`), so the UI fell back to `sampleLabs`. Wrote `scripts/seed-firestore.mjs` (reuses the store's JWT+REST Firestore auth; run with `npx tsx scripts/seed-firestore.mjs [--wipe]`). Seeded 4 labs + 5 badges into the live `labs-zexvro` project. `/api/labs` now returns real catalog.
+- **Removed "Skill Quests" feature** (user request): deleted `paths` from `ActiveTab` union, removed the sidebar item, the Dashboard "View Skill Quests" button + the whole "Skill Quests & Learning Pathways" preview section, removed `/paths` route kind + `paths.quests` from router, deleted `PathsPage.tsx` + `LearningPathsView.tsx`, dropped `learningPaths` state + `paths` context field, removed `sampleLearningPaths` + `LearningPath` import from mockData. `/paths` now 404s.
+- Verified live via CDP on labs.zexvro.in: sidebar = Dashboard/Explore Labs/Progress & Badges/My Profile (no Skill Quests); clicking Explore Labs → `/labs` (renders "Solidity Fundamentals" from backend), Dashboard → `/home`, `/paths` → 404 page.
+- Build: `tsc --noEmit` clean, `vite build` ok, deployed to Pages (`labs` project).
+
+## 2026-08-06 (2) - Fix admin lab update/delete (Paris)
+- **Root cause 1 (update 409)**: `FirestoreStore.writeDoc` used `POST /collection?documentId=` which ONLY creates — updating an existing doc returns 409. Changed `fsWrite` to use `PATCH /collection/<id>` (upsert) in `src/backend/store.ts`. Verified: PATCH update 200, delete 200, restore 200 against real Firestore.
+- **Root cause 2 (auth 403)**: Paris's Firestore `users` doc had `role:"student"` and github `paris_nilesh_kulkarni` wasn't in `LABS_ADMIN_GITHUB_LOGINS` (`zexvro`), so the backend's `isAdmin()` returned false → update/delete returned 403. Granted admin via the Firestore user doc (`users/4mJMRK4CVdez8gx8Wy3oMb40tx23.role = "admin"`) — the documented bootstrap path in firestore.rules.
+- **Root cause 3 (frontend resurrect)**: app booted `labs` state from `sampleLabs`, and the backend-sync guard `data.labs.length > 0` ignored an empty backend — so admin-deleted labs "came back" on reload (sampleLabs merged over). Fixed in `src/state/labs.tsx`: bootstrap `labs` from `loadLocalDB()`, and apply backend `labs` whenever `data.labs` is present (not only when non-empty).
+- **Seed script** `scripts/seed-firestore.mjs` was also using POST; switched to PATCH upsert so re-seeding is idempotent. Verified `Done: 9 docs written` without dupes.
+- Verified deployed: `/api/health` = `{build:9}`, `/api/labs` = 4 labs, `/api/badges` = 5. Cached health — always cache-bust with `?cb=` to check build number.
+- Build: `tsc --noEmit` clean, deployed to Pages (`labs`).

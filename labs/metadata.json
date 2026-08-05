@@ -1,0 +1,6 @@
+{
+  "name": "Zexvro Labs",
+  "description": "Interactive cloud skills & hands-on lab learning platform with student progress, certificates, badges, and admin lab builder.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

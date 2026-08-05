@@ -1,0 +1,184 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --zexvro-blue: #3b82f6;
+    --zexvro-blue-bright: #60a5fa;
+    --zexvro-blue-deep: #1d4ed8;
+    --zexvro-blue-soft: rgba(59, 130, 246, 0.12);
+    --zexvro-blue-glow: rgba(59, 130, 246, 0.35);
+    --zexvro-grey-1: #f4f4f5;
+    --zexvro-grey-3: #a1a1aa;
+    --zexvro-grey-5: #52525b;
+    --zexvro-grey-7: #3f3f46;
+    --zexvro-grey-9: #18181b;
+  }
+
+  html {
+    font-size: 16px;
+  }
+
+  body {
+    font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+    background-color: #050505;
+    color: #f4f4f5;
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Keyboard-accessible focus states (blue accent) */
+  *:focus-visible {
+    outline: 2px solid var(--zexvro-blue-bright);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+.font-display {
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+.font-heading {
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+.font-mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Blue + grey accent utilities */
+.text-blue-accent { color: var(--zexvro-blue-bright); }
+.text-blue-deep { color: var(--zexvro-blue); }
+.bg-blue-accent { background-color: var(--zexvro-blue); }
+.bg-blue-soft { background-color: var(--zexvro-blue-soft); }
+.border-blue-accent { border-color: var(--zexvro-blue); }
+.ring-blue-accent { --tw-ring-color: var(--zexvro-blue); }
+.glow-blue { box-shadow: 0 0 24px var(--zexvro-blue-glow); }
+
+/* Primary action button: cool blue gradient */
+.btn-primary-blue {
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 55%, #60a5fa 100%);
+  color: #fff;
+  border: 1px solid rgba(96, 165, 250, 0.4);
+}
+.btn-primary-blue:hover {
+  filter: brightness(1.1);
+  box-shadow: 0 4px 20px var(--zexvro-blue-glow);
+}
+
+/* Subtle blue-tinted panels */
+.panel-blue {
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0.08) 0%, rgba(5, 5, 5, 0) 60%);
+}
+
+/* Custom monochrome animations */
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(800%); }
+}
+
+@keyframes confirmPop {
+  0% { transform: scale(0.85); opacity: 0; }
+  50% { transform: scale(1.08); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes monochromeGlow {
+  0%, 100% { border-color: rgba(59, 130, 246, 0.15); box-shadow: 0 0 12px rgba(59, 130, 246, 0.05); }
+  50% { border-color: rgba(96, 165, 250, 0.5); box-shadow: 0 0 25px rgba(59, 130, 246, 0.15); }
+}
+
+@keyframes radarSweep {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes fadeIn {
+  0% { opacity: 0; transform: translateY(6px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  0% { opacity: 0; transform: translateY(12px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-scanline {
+  animation: scanline 6s linear infinite;
+}
+
+.animate-confirm {
+  animation: confirmPop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.animate-radar {
+  animation: radarSweep 4s linear infinite;
+}
+
+.monochrome-glow {
+  animation: monochromeGlow 3s ease-in-out infinite;
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+.animate-slideUp {
+  animation: slideUp 0.4s ease-out forwards;
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, #18181b 25%, #27272a 50%, #18181b 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* Skeleton loading placeholder */
+.skeleton {
+  background: linear-gradient(90deg, #18181b 25%, #27272a 50%, #18181b 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: 0.75rem;
+}
+
+/* Sleek blue-grey scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #050505;
+}
+::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #52525b;
+}
+
+/* Hide scrollbar for filter pill rows */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Print styles for certificates */
+@media print {
+  body {
+    background-color: white !important;
+    color: black !important;
+  }
+  .print\\:hidden {
+    display: none !important;
+  }
+}

@@ -1,0 +1,6 @@
+# SPA deep-link fallback for clean routes (/home, /labs/:slug, /admin, /runner/:id, ...).
+# Cloudflare Pages Functions (under /api and /auth) always take priority over
+# these rules, so their JSON responses are never rewritten to index.html.
+/api/*   /api/:splat   200
+/auth/*  /auth/:splat  200
+/*       /index.html   200

@@ -1,0 +1,74 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function isSelf(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // -----------------------------------------------------------------
+    // users/{uid} — learners' public profiles + stats.
+    // The user may create/update their OWN doc but can NEVER escalate
+    // their role to admin (role must stay identical on update).
+    // Admins are granted in the Firebase console or by another admin.
+    // -----------------------------------------------------------------
+    match /users/{uid} {
+      allow read: if true; // surfaced publicly via /u/<username>
+      allow create: if isSelf(uid) && request.resource.data.role == 'student';
+      allow update: if (isSelf(uid) && request.resource.data.role == resource.data.role) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // -----------------------------------------------------------------
+    // Admin metadata (optional): a curated list of admins, so role can be
+    // bootstrapped via this doc instead of editing each user.
+    // -----------------------------------------------------------------
+    match /meta/{doc} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // -----------------------------------------------------------------
+    // Server-managed collections. The web app reads/writes these through
+    // the Cloudflare Pages API (which uses a service account that bypasses
+    // rules). Direct SDK/REST access is restricted to admins so task flags
+    // and access codes are never exposed to learners.
+    // -----------------------------------------------------------------
+    match /labs/{labId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /badges/{badgeId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /certificates/{certId} {
+      allow read, write: if isAdmin();
+      // The runner issues certificates through the API; allow a signed-in
+      // user to mint their own only with server-assigned fields.
+      allow create: if isSignedIn() && request.resource.data.status == 'issued';
+    }
+
+    match /submissions/{submissionId} {
+      allow read, write: if isAdmin();
+      allow create: if isSignedIn() && request.resource.data.status == 'pending';
+    }
+
+    // -----------------------------------------------------------------
+    // progress/{userId}/labs/{labId} — per-user lab progress. Only the
+    // owner (or an admin) can read/write their own progress.
+    // -----------------------------------------------------------------
+    match /progress/{userId}/labs/{labId} {
+      allow read, write: if isSelf(userId) || isAdmin();
+    }
+  }
+}

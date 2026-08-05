@@ -1,0 +1,685 @@
+import React, { useState, useEffect } from 'react';
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Clock,
+  Zap,
+  HelpCircle,
+  Send,
+  Loader2,
+  Check,
+  Flag,
+  ShieldCheck,
+  Award,
+  ChevronRight,
+  Terminal,
+  GitFork,
+  ExternalLink,
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import confetti from 'canvas-confetti';
+import { Lab, LabTask, LabPage, User, LabRunProgress, Submission } from '../types';
+import { renderContentElement, CodeBlockElement } from './ui/ContentElements';
+
+interface LabRunnerViewProps {
+  lab: Lab;
+  user: User;
+  progress?: LabRunProgress;
+  onProgressChange: (patch: Partial<LabRunProgress>) => void;
+  onExitLab: () => void;
+  onLabCompleted: (lab: Lab, xpEarned: number) => void;
+  onAddSubmission?: (submission: Submission) => void;
+}
+
+export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
+  lab,
+  user,
+  progress,
+  onProgressChange,
+  onExitLab,
+  onLabCompleted,
+  onAddSubmission,
+}) => {
+  const [verifyingTaskId, setVerifyingTaskId] = useState<string | null>(null);
+  const [flagInputs, setFlagInputs] = useState<Record<string, string>>({});
+  const [flagErrors, setFlagErrors] = useState<Record<string, string>>({});
+  const [repoInputs, setRepoInputs] = useState<Record<string, string>>({});
+  const [repoSubmitted, setRepoSubmitted] = useState<Record<string, boolean>>({});
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
+
+  const completedTaskIds = progress?.completedTaskIds || [];
+
+  const hasTimeLimit = !!lab.timeLimitMinutes;
+  const [timeLeftSeconds, setTimeLeftSeconds] = useState<number | null>(
+    progress?.timeLeftSeconds != null ? progress.timeLeftSeconds : lab.timeLimitMinutes ? lab.timeLimitMinutes * 60 : null,
+  );
+
+  const pages: LabPage[] = (lab.pages && lab.pages.length > 0) ? lab.pages : [];
+  const singleElements: LabTask[] = pages.length === 0 ? lab.tasks : [];
+
+  const currentPageId = progress?.currentPageId || pages[0]?.id || null;
+  const activePage = pages.find((p) => p.id === currentPageId) || null;
+  const visibleElements = activePage ? activePage.elements : singleElements;
+
+  const verifiableTasks = (pages.length ? pages.flatMap((p) => p.elements) : lab.tasks).filter(
+    (t) => (t.type || 'task') === 'task',
+  );
+  const completionPercent =
+    verifiableTasks.length === 0
+      ? 100
+      : Math.round((completedTaskIds.length / verifiableTasks.length) * 100);
+
+  useEffect(() => {
+    if (!hasTimeLimit) return;
+    const timer = setInterval(() => {
+      setTimeLeftSeconds((prev) => {
+        if (prev === null || prev <= 0) return prev;
+        const next = prev - 1;
+        onProgressChange({ timeLeftSeconds: next });
+        return next;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [hasTimeLimit]);
+
+  const triggerConfetti = () => {
+    confetti({
+      particleCount: 120,
+      spread: 75,
+      origin: { y: 0.6 },
+      colors: ['#3b82f6', '#60a5fa', '#93c5fd', '#ffffff', '#dbeafe'],
+    });
+  };
+
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const setTaskCompleted = (taskId: string, completed: boolean) => {
+    const next = completed
+      ? completedTaskIds.includes(taskId)
+        ? completedTaskIds
+        : [...completedTaskIds, taskId]
+      : completedTaskIds.filter((id) => id !== taskId);
+    onProgressChange({ completedTaskIds: next });
+
+    if (completed && next.length === verifiableTasks.length && verifiableTasks.length > 0) {
+      triggerConfetti();
+      setTimeout(() => setShowCompletionModal(true), 500);
+    }
+  };
+
+  const handleVerifyFlag = (task: LabTask) => {
+    const answer = (flagInputs[task.id] || '').trim();
+    if (!task.expectedFlag) return;
+    const correct = answer.toLowerCase() === task.expectedFlag.trim().toLowerCase();
+    if (correct) {
+      setFlagErrors((prev) => ({ ...prev, [task.id]: '' }));
+      setTaskCompleted(task.id, true);
+    } else {
+      setFlagErrors((prev) => ({ ...prev, [task.id]: 'Incorrect flag. Check the lab content and try again.' }));
+    }
+  };
+
+  const handleVerifyCode = async (task: LabTask) => {
+    setVerifyingTaskId(task.id);
+    try {
+      const response = await fetch('/api/verify-task', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          labId: lab.id,
+          taskId: task.id,
+          userCommand: flagInputs[task.id] || '',
+          flag: flagInputs[task.id] || '',
+          codeContent: task.expectedOutput ? task.expectedOutput : '',
+        }),
+      });
+      const data = await response.json();
+      if (data.passed) {
+        setTaskCompleted(task.id, true);
+      } else {
+        setFlagErrors((prev) => ({
+          ...prev,
+          [task.id]: data.log || 'Verification failed. Check the expected output.',
+        }));
+      }
+    } catch {
+      setFlagErrors((prev) => ({
+        ...prev,
+        [task.id]: 'Could not reach the verification service. Try again.',
+      }));
+    } finally {
+      setVerifyingTaskId(null);
+    }
+  };
+
+  const handleSubmitRepo = (task: LabTask) => {
+    const url = (repoInputs[task.id] || '').trim();
+    if (!url) {
+      setFlagErrors((prev) => ({ ...prev, [task.id]: 'Paste your repository link first.' }));
+      return;
+    }
+    const submission: Submission = {
+      id: `sub_${Date.now()}`,
+      labId: lab.id,
+      userId: user.id,
+      userName: user.name || user.username,
+      labTitle: lab.title,
+      status: 'pending',
+      submittedAt: new Date().toISOString(),
+      repoUrl: url,
+      type: 'repo',
+    };
+    onAddSubmission?.(submission);
+    fetch('/api/submissions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ labId: lab.id, labTitle: lab.title, repoUrl: url, type: 'repo' }),
+    }).catch(() => {});
+    setRepoSubmitted((prev) => ({ ...prev, [task.id]: true }));
+    setTaskCompleted(task.id, true);
+  };
+
+  const renderTaskCard = (task: LabTask, idx: number) => {
+    const isDone = completedTaskIds.includes(task.id);
+    const flagType = task.flagType || 'checkbox';
+
+    return (
+      <motion.div
+        layout
+        key={task.id}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.2 }}
+        className={`p-5 rounded-2xl border transition-all ${
+          isDone
+            ? 'bg-zinc-900/60 border-blue-900'
+            : 'bg-zinc-950 border-zinc-800 hover:border-zinc-600'
+        }`}
+      >
+        <div className="flex items-start gap-3">
+          {/* Real checkbox */}
+          <motion.button
+            role="checkbox"
+            aria-checked={isDone}
+            aria-label={`Mark task complete: ${task.title}`}
+            onClick={() => setTaskCompleted(task.id, !isDone)}
+            whileTap={{ scale: 0.85 }}
+            className={`mt-0.5 w-6 h-6 shrink-0 rounded-lg border-2 flex items-center justify-center transition-all ${
+              isDone
+                ? 'bg-blue-600 border-blue-600 text-white'
+                : 'border-zinc-600 hover:border-blue-400 text-transparent'
+            }`}
+          >
+            <motion.span
+              initial={false}
+              animate={{ scale: isDone ? 1 : 0 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+            >
+              <Check className="h-4 w-4" strokeWidth={3} />
+            </motion.span>
+          </motion.button>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h4 className={`text-sm font-bold font-heading ${isDone ? 'text-zinc-500 line-through' : 'text-white'}`}>
+                {task.title}
+              </h4>
+              <span className="px-2 py-0.5 bg-blue-soft border border-blue-900/50 text-blue-accent text-[10px] font-mono font-bold rounded-md uppercase">
+                {flagType === 'flag' ? 'Flag' : flagType === 'code' ? 'Code' : 'Step'}
+              </span>
+              {isDone && (
+                <motion.span
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  className="text-[10px] bg-blue-600 text-white font-mono font-bold px-2 py-0.5 rounded-md uppercase"
+                >
+                  Done
+                </motion.span>
+              )}
+            </div>
+            <p className="text-sm text-zinc-300 mt-1.5 leading-relaxed">{task.description}</p>
+
+            {task.hint && (
+              <div className="mt-3 p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl text-xs text-zinc-400 flex items-start gap-2 font-mono">
+                <HelpCircle className="h-3.5 w-3.5 text-blue-accent shrink-0 mt-0.5" />
+                <div>
+                  <span className="text-white font-bold">Hint: </span>
+                  <span>{task.hint}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Flag input for 'flag' type */}
+            {flagType === 'flag' && !isDone && (
+              <div className="mt-3 flex items-center gap-2">
+                <div className="flex-1 flex items-center gap-2 bg-black border border-zinc-800 rounded-xl px-3 py-2 font-mono">
+                  <Flag className="h-3.5 w-3.5 text-blue-accent shrink-0" />
+                  <input
+                    type="text"
+                    value={flagInputs[task.id] || ''}
+                    onChange={(e) => setFlagInputs((prev) => ({ ...prev, [task.id]: e.target.value }))}
+                    onKeyDown={(e) => e.key === 'Enter' && handleVerifyFlag(task)}
+                    placeholder="Enter the flag / secret answer"
+                    className="flex-1 bg-transparent text-sm text-white placeholder-zinc-600 focus:outline-none"
+                  />
+                </div>
+                <button
+                  onClick={() => handleVerifyFlag(task)}
+                  className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-extrabold rounded-xl flex items-center gap-1.5 font-heading"
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  Check
+                </button>
+              </div>
+            )}
+
+            {/* Code output input for 'code' type */}
+            {flagType === 'code' && !isDone && (
+              <div className="mt-3 flex items-center gap-2">
+                <div className="flex-1 flex items-center gap-2 bg-black border border-zinc-800 rounded-xl px-3 py-2 font-mono">
+                  <Terminal className="h-3.5 w-3.5 text-blue-accent shrink-0" />
+                  <input
+                    type="text"
+                    value={flagInputs[task.id] || ''}
+                    onChange={(e) => setFlagInputs((prev) => ({ ...prev, [task.id]: e.target.value }))}
+                    onKeyDown={(e) => e.key === 'Enter' && handleVerifyCode(task)}
+                    placeholder="Paste command / expected output"
+                    className="flex-1 bg-transparent text-sm text-white placeholder-zinc-600 focus:outline-none"
+                  />
+                </div>
+                <button
+                  onClick={() => handleVerifyCode(task)}
+                  disabled={verifyingTaskId === task.id}
+                  className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-extrabold rounded-xl flex items-center gap-1.5 font-heading"
+                >
+                  {verifyingTaskId === task.id ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <ShieldCheck className="h-3.5 w-3.5" />
+                  )}
+                  Verify
+                </button>
+              </div>
+            )}
+
+            {/* Plain checkbox task: show a check button too */}
+            {flagType === 'checkbox' && !isDone && task.verificationCommand && (
+              <button
+                onClick={() => setTaskCompleted(task.id, true)}
+                className="mt-3 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 text-xs font-extrabold rounded-xl flex items-center gap-1.5 font-heading"
+              >
+                <CheckCircle2 className="h-3.5 w-3.5 text-blue-accent" />
+                Mark Complete
+              </button>
+            )}
+
+            {/* Repo submission */}
+            {flagType === 'repo' && !isDone && !repoSubmitted[task.id] && (
+              <div className="mt-3 space-y-2">
+                <div className="flex items-center gap-2 bg-black border border-zinc-800 rounded-xl px-3 py-2 font-mono">
+                  <GitFork className="h-3.5 w-3.5 text-blue-accent shrink-0" />
+                  <input
+                    type="text"
+                    value={repoInputs[task.id] || ''}
+                    onChange={(e) => setRepoInputs((prev) => ({ ...prev, [task.id]: e.target.value }))}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSubmitRepo(task)}
+                    placeholder={task.repoHint || 'https://github.com/you/your-project'}
+                    className="flex-1 bg-transparent text-sm text-white placeholder-zinc-600 focus:outline-none"
+                  />
+                </div>
+                <button
+                  onClick={() => handleSubmitRepo(task)}
+                  className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-extrabold rounded-xl flex items-center gap-1.5 font-heading"
+                >
+                  <GitFork className="h-3.5 w-3.5" />
+                  Connect & Submit Repo
+                </button>
+              </div>
+            )}
+
+            {flagErrors[task.id] && (
+              <p className="mt-2 text-xs text-red-400 font-mono flex items-center gap-1.5">
+                <ShieldCheck className="h-3 w-3" />
+                {flagErrors[task.id]}
+              </p>
+            )}
+          </div>
+        </div>
+      </motion.div>
+    );
+  };
+
+  const renderRepoElement = (task: LabTask) => {
+    const isDone = completedTaskIds.includes(task.id) || repoSubmitted[task.id];
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        className={`p-5 rounded-2xl border transition-all ${
+          isDone ? 'bg-zinc-900/60 border-blue-900' : 'bg-zinc-950 border-zinc-800'
+        }`}
+      >
+        <div className="flex items-start gap-3">
+          <div className="mt-0.5 w-6 h-6 shrink-0 rounded-lg bg-blue-600 text-white flex items-center justify-center">
+            <GitFork className="h-3.5 w-3.5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h4 className="text-sm font-bold text-white font-heading">{task.title || 'Submit your repository'}</h4>
+              <span className="px-2 py-0.5 bg-blue-soft border border-blue-900/50 text-blue-accent text-[10px] font-mono font-bold rounded-md uppercase">
+                Repo
+              </span>
+            </div>
+            <p className="text-sm text-zinc-300 mt-1.5 leading-relaxed">{task.description}</p>
+
+            {!isDone ? (
+              <div className="mt-3 space-y-2">
+                <div className="flex items-center gap-2 bg-black border border-zinc-800 rounded-xl px-3 py-2 font-mono">
+                  <GitFork className="h-3.5 w-3.5 text-blue-accent shrink-0" />
+                  <input
+                    type="text"
+                    value={repoInputs[task.id] || ''}
+                    onChange={(e) => setRepoInputs((prev) => ({ ...prev, [task.id]: e.target.value }))}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSubmitRepo(task)}
+                    placeholder={task.repoHint || 'https://github.com/you/your-project'}
+                    className="flex-1 bg-transparent text-sm text-white placeholder-zinc-600 focus:outline-none"
+                  />
+                </div>
+                <button
+                  onClick={() => handleSubmitRepo(task)}
+                  className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-extrabold rounded-xl flex items-center gap-1.5 font-heading"
+                >
+                  <GitFork className="h-3.5 w-3.5" />
+                  Connect & Submit Repo
+                </button>
+              </div>
+            ) : (
+              <div className="mt-3 flex items-center gap-2 text-sm text-emerald-400 font-mono">
+                <CheckCircle2 className="h-4 w-4" />
+                <span>Repository submitted for review.</span>
+                {repoInputs[task.id] && (
+                  <a
+                    href={repoInputs[task.id]}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="ml-1 text-blue-accent hover:text-white flex items-center gap-1"
+                  >
+                    <ExternalLink className="h-3 w-3" /> view
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </motion.div>
+    );
+  };
+
+  const renderElement = (el: LabTask, idx: number) => {
+    const elType = el.type || 'task';
+
+    if (elType === 'repo') return renderRepoElement(el);
+    if (elType === 'heading') {
+      return (
+        <div key={el.id} className="pt-2">
+          <h4 className="text-xl font-extrabold text-white font-heading">{el.title}</h4>
+          {el.description && el.description !== el.title && (
+            <p className="text-sm text-zinc-400 mt-1 leading-relaxed">{el.description}</p>
+          )}
+        </div>
+      );
+    }
+    if (elType === 'text') {
+      return (
+        <div key={el.id} className="py-1">
+          <p className="text-[15px] text-zinc-200 leading-relaxed">
+            {el.title && <span className="font-bold text-white">{el.title} </span>}
+            {el.description}
+          </p>
+        </div>
+      );
+    }
+    if (elType === 'code') {
+      return <div key={el.id}><CodeBlockElement task={el} /></div>;
+    }
+
+    const rendered = renderContentElement(el);
+    if (rendered && elType !== 'task') {
+      return <div key={el.id}>{rendered}</div>;
+    }
+
+    return renderTaskCard(el, idx);
+  };
+
+  return (
+    <div className="flex flex-col h-[calc(100vh-57px)] bg-black text-zinc-100 overflow-hidden font-sans">
+      {/* Top Workbench Navbar */}
+      <div className="bg-zinc-950 border-b border-zinc-800 px-4 py-3 flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-3 min-w-0">
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={onExitLab}
+            className="p-2 hover:bg-zinc-900 text-zinc-400 hover:text-white rounded-lg transition-colors flex items-center gap-1.5 text-sm font-mono font-bold"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span className="hidden sm:inline">Exit</span>
+          </motion.button>
+          <div className="h-5 w-[1px] bg-zinc-800" />
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="px-2 py-0.5 bg-blue-soft border border-blue-900/60 text-blue-accent text-[11px] font-mono font-bold rounded-md uppercase">
+              {lab.category}
+            </span>
+            <h2 className="text-base font-bold text-white truncate max-w-xs sm:max-w-md font-heading">
+              {lab.title}
+            </h2>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4 shrink-0">
+          <div className="hidden md:flex items-center gap-2 font-mono text-xs">
+            <span className="text-zinc-400 font-bold">Progress:</span>
+            <div className="w-28 h-2 bg-zinc-900 border border-zinc-800 rounded-full overflow-hidden">
+              <motion.div
+                className="h-full bg-gradient-to-r from-blue-600 to-sky-400 transition-all duration-500"
+                animate={{ width: `${completionPercent}%` }}
+              />
+            </div>
+            <span className="text-white font-bold">{completionPercent}%</span>
+          </div>
+
+          <div className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-xl font-mono text-sm text-zinc-200 font-bold">
+            <Clock className="h-4 w-4 text-blue-accent" />
+            {hasTimeLimit ? <span>{formatTime(timeLeftSeconds || 0)}</span> : <span>Unlimited</span>}
+          </div>
+
+          <motion.button
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.97 }}
+            onClick={() => {
+              onLabCompleted(lab, lab.xpReward);
+              onExitLab();
+            }}
+            className="px-4 py-2 btn-primary-blue text-white font-extrabold text-sm rounded-xl transition-all shadow-md flex items-center gap-1.5 font-heading"
+          >
+            <CheckCircle2 className="h-4 w-4" />
+            <span>Submit Lab</span>
+          </motion.button>
+        </div>
+      </div>
+
+      {/* Centered content column */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+          {/* Lab intro card */}
+          <div className="panel-blue bg-zinc-950 border border-zinc-800 p-5 sm:p-6 rounded-2xl space-y-3">
+            <h3 className="text-lg font-bold text-white font-heading">Lab Overview</h3>
+            <p className="text-[15px] text-zinc-300 leading-relaxed">{lab.description}</p>
+            <div className="pt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm font-mono text-zinc-400 font-bold">
+              <span>Author: {lab.author}</span>
+              <span className="flex items-center gap-1 text-blue-accent">
+                <Zap className="h-4 w-4" />+ {lab.xpReward} XP
+              </span>
+              <span>
+                {lab.timeLimitMinutes ? `${lab.timeLimitMinutes} min` : 'No time limit'}
+              </span>
+            </div>
+          </div>
+
+          {/* Page tabs */}
+          {pages.length > 1 && (
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+              {pages.map((page, i) => {
+                const active = page.id === currentPageId;
+                return (
+                  <button
+                    key={page.id}
+                    onClick={() => onProgressChange({ currentPageId: page.id })}
+                    className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-all font-heading flex items-center gap-2 ${
+                      active
+                        ? 'bg-blue-600 text-white shadow-md'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800'
+                    }`}
+                  >
+                    <span className="text-xs">{i + 1}</span>
+                    {page.title || `Page ${i + 1}`}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Animated page content */}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentPageId || 'single'}
+              initial={{ opacity: 0, x: 24 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -24 }}
+              transition={{ duration: 0.25, ease: 'easeOut' }}
+            >
+              {/* Page title as heading */}
+              {activePage && (
+                <div>
+                  <h3 className="text-2xl font-black text-white font-heading">{activePage.title || 'Lab Content'}</h3>
+                  <div className="h-px bg-zinc-800 mt-3" />
+                </div>
+              )}
+
+              {/* Elements */}
+              <div className="space-y-4 mt-4">
+                {visibleElements.map((el, idx) => renderElement(el, idx))}
+
+                {visibleElements.length === 0 && (
+                  <div className="text-center py-12 text-zinc-500 text-sm font-mono">
+                    This lab has no content yet.
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </AnimatePresence>
+
+          {/* Next page navigation */}
+          {pages.length > 1 && activePage && (
+            <div className="flex items-center justify-between pt-2 border-t border-zinc-800">
+              {(() => {
+                const pageIdx = pages.findIndex((p) => p.id === currentPageId);
+                const next = pages[pageIdx + 1];
+                const prev = pages[pageIdx - 1];
+                return (
+                  <>
+                    {prev ? (
+                      <motion.button
+                        whileTap={{ scale: 0.97 }}
+                        onClick={() => onProgressChange({ currentPageId: prev.id })}
+                        className="flex items-center gap-1 text-sm text-zinc-400 hover:text-white font-bold font-mono"
+                      >
+                        <ChevronRight className="h-4 w-4 rotate-180" />
+                        Previous
+                      </motion.button>
+                    ) : <span />}
+                    <span className="text-xs font-mono text-zinc-500">
+                      Page {pageIdx + 1} of {pages.length}
+                    </span>
+                    {next ? (
+                      <motion.button
+                        whileHover={{ scale: 1.03 }}
+                        whileTap={{ scale: 0.97 }}
+                        onClick={() => onProgressChange({ currentPageId: next.id })}
+                        className="flex items-center gap-1 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-xl font-mono"
+                      >
+                        Next: {next.title}
+                        <motion.span
+                          animate={{ x: [0, 4, 0] }}
+                          transition={{ repeat: Infinity, duration: 1.2 }}
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </motion.span>
+                      </motion.button>
+                    ) : (
+                      <button
+                        onClick={() => onLabCompleted(lab, lab.xpReward)}
+                        className="flex items-center gap-1 px-4 py-2 btn-primary-blue text-white text-sm font-bold rounded-xl font-mono"
+                      >
+                        <CheckCircle2 className="h-4 w-4" />
+                        Finish Lab
+                      </button>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Completion Celebration Modal */}
+      <AnimatePresence>
+        {showCompletionModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 22 }}
+              className="relative w-full max-w-lg bg-zinc-950 border border-blue-900 rounded-3xl p-8 text-center shadow-[0_0_50px_rgba(59,130,246,0.25)]"
+            >
+              <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-sky-400 text-white rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce font-extrabold shadow-lg">
+                <Award className="h-8 w-8" />
+              </div>
+
+              <span className="text-xs font-mono font-bold text-white uppercase tracking-widest bg-blue-600 px-3 py-1 rounded-md">
+                LAB COMPLETED • {completionPercent}% SCORE
+              </span>
+
+              <h2 className="text-2xl font-black text-white mt-4 font-heading">{lab.title}</h2>
+              <p className="text-sm text-zinc-300 mt-2">
+                Congratulations {user.name}! You earned <span className="text-blue-accent font-extrabold font-mono">+{lab.xpReward} XP</span>
+                and unlocked your official ZEXVRO Web3 credential.
+              </p>
+
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => {
+                  onLabCompleted(lab, lab.xpReward);
+                  setShowCompletionModal(false);
+                  onExitLab();
+                }}
+                className="mt-6 w-full py-3 btn-primary-blue text-white font-extrabold text-base rounded-xl transition-all shadow-xl font-heading"
+              >
+                Claim Badge & View Dashboard
+              </motion.button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
