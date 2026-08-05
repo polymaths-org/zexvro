@@ -1,5 +1,19 @@
 # ZEXVRO Shared Memory
 
+## 2026-08-06 - ZEXVRO Labs: fix black-screen on /labs + visible catalog for logged-out visitors (Paris)
+
+- **Root cause of the black screen + "can't see labs when logged out".** User reported `/labs` crashing after ~1s (React unmounting → black) and no labs visible for logged-out visitors in Chrome/Firefox.
+  - Backend (`/api/labs`) was actually returning data fine without auth (HTTP 200). The tricky part: the user's real lab (`lab_1785875580396`, "Midnight Builder Challenge") in Firestore was missing `title`, `description`, `tags`, `category`, `difficulty`, `isPublished`, `status`, `featured`, `xpReward` — only `slug/pages/createdAt/id/tasks` were stored. So the catalog card rendered blank.
+  - **Crash** (in the browser console): `Uncaught TypeError: Cannot read properties of undefined (reading 'toLowerCase')` inside an `Array.filter` on `$ /labs`. Both `CatalogView` (catalog filter + card `lab.tags.slice(0,3)`) and `DashboardView` (card `lab.tags.slice`) assumed `lab.title`/`description`/`tags`/`category`/`difficulty` always existed. A partially-saved lab blew up React → whole app unmounted → pitch-black page.
+  - Also noisy: `/api/admin/users` fetched unconditionally on every page load → 401 for logged-out viewers (+ the endpoint is auth-guarded, NOT wide open; the client was just calling it needlessly).
+- **Fixes (bundle `index-CNdbJZ3N.js`):**
+  - `src/lib/persistence.ts`: added `sanitizeLab()` / `sanitizeLabs()` → enforce `title=id` fallback, `description=''`, `tags=[]`, `category='Smart Contracts'`, `difficulty='Introductory'`. Applied to both `loadLocalDB()` hydration and server `/api/labs` fetch (`sanitizeLabs(data.labs)` in `src/state/labs.tsx`).
+  - `CatalogView.tsx && DashboardView.tsx`: card render + filter now null-safe (optional chaining, `Array.isArray(lab.tags)` guard).
+  - `src/state/labs.tsx`: `fetchUsers()` gated behind `user.role === 'admin'` so guests no longer hit `/api/admin/users`.
+- **Patched the data in Firestore directly** (`/tmp/opencode/patch-lab.mjs`, REST PATCH with per-field `updateMask.fieldPaths`): set `title:'Midnight Builder Challenge'`, `description`, `category:'ZK & Privacy'`, `difficulty:'Advanced'`, `tags`, `isPublished:true`, `status:'published'`, `featured:true`, `xpReward:500`, `completions:0` on `labs/lab_1785875580396`. Verified live: `/api/labs` returns the populated lab, and it now shows in `featuredLabs` (home) + the `/labs` catalog for logged-out visitors.
+- Verified prod bundle byte-identical to local build. Deployed to `labs.zexvro.in`. Committed `564e5bf`, pushed. (Also earlier `e6f8a62` was the null-safe filter + admin-gate fix; both now live.) User should hard-refresh (`Ctrl+Shift+R`) / incognito to bust the old `index-D_58mC50.js` / `index-Bax3dunm.js` cached bundles.
+- **NOT DONE / NOTE:** the lab card for the patched lab has no `bannerUrl`, so it renders the dotted placeholder — fine. No migration made to auto-upgrade other existing Firestore lab docs; `sanitizeLab` covers rendering at the client regardless.
+
 ## 2026-08-06 - ZEXVRO Labs: GitHub-only login, click-based profile menu, upsert save, badge image, purge dummy seeding (Paris)
 
 - **GitHub-only login.** `src/components/LoginModal.tsx` rewritten to keep ONLY GitHub OAuth (`signInWithGithub` + `resolveUser`). Removed Google/email modes, the `Mail`/`KeyRound` icon paths, `signInWithGoogle`, `signInWithEmail`, and mode toggling. Button now reads "Continue with GitHub".
