@@ -158,8 +158,10 @@ export function LabsProvider({ children }: { children: React.ReactNode }) {
       .finally(() => setTimeout(() => setIsLoading(false), 300));
   }, []);
 
-  // Fetch platform users for the admin Users tab.
+  // Fetch platform users for the admin Users tab — only when the viewer is an
+  // admin. Non-admins / visitors should never hit the admin users endpoint.
   useEffect(() => {
+    if (user.role !== 'admin') return;
     api
       .fetchUsers()
       .then((data) => {
@@ -169,7 +171,7 @@ export function LabsProvider({ children }: { children: React.ReactNode }) {
       })
       .catch(() => setUsers([user]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [user.role]);
 
   const handleProgressChange = useCallback((labId: string, patch: Partial<LabRunProgress>) => {
     setLabProgress((prev) => ({

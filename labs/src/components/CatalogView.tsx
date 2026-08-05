@@ -61,10 +61,11 @@ export const CatalogView: React.FC<CatalogViewProps> = ({
 
   // Filter labs
   const filteredLabs = labs.filter((lab) => {
-    const matchesSearch = 
-      lab.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      lab.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      lab.tags.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase()));
+    const q = searchQuery.toLowerCase();
+    const title = lab.title?.toLowerCase() ?? '';
+    const description = lab.description?.toLowerCase() ?? '';
+    const tags = Array.isArray(lab.tags) ? lab.tags.filter(Boolean).map((t) => t.toLowerCase()) : [];
+    const matchesSearch = !q || title.includes(q) || description.includes(q) || tags.some((t) => t.includes(q));
 
     const matchesCategory = selectedCategory === 'All' || lab.category === selectedCategory;
     const matchesDifficulty = selectedDifficulty === 'All' || lab.difficulty === selectedDifficulty;
