@@ -10,6 +10,7 @@ import {
   PanelLeftOpen,
   Award,
   Zap,
+  Lock,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Lab, LabRunProgress } from '../types';
@@ -41,6 +42,20 @@ export const LabProgressSidebar: React.FC<LabProgressSidebarProps> = ({
 
   const completedIds = progress?.completedTaskIds || [];
   const currentPageId = progress?.currentPageId || pages[0]?.id || null;
+
+  const ruleLocks: Record<string, boolean> = {};
+  if (Array.isArray(lab.rules)) {
+    for (const rule of lab.rules) {
+      if (rule.type !== 'unlock-next-page-on-task') continue;
+      const sourceIdx = pages.findIndex((p) => p.id === rule.sourcePageId);
+      const target = pages[sourceIdx + 1];
+      if (!target) continue;
+      if (!completedIds.includes(rule.sourceTaskId)) {
+        ruleLocks[target.id] = true;
+      }
+    }
+  }
+  const isPageLocked = (pageId: string) => !!ruleLocks[pageId];
 
   const allTasks = pages.length
     ? pages.flatMap((p) => p.elements)
@@ -166,25 +181,30 @@ export const LabProgressSidebar: React.FC<LabProgressSidebarProps> = ({
                 ) : (
                   pages.map((page, i) => {
                     const isActive = page.id === currentPageId;
+                    const locked = isPageLocked(page.id);
                     const pageTasks = page.elements.filter((e) => (e.type || 'task') === 'task');
                     const pageDone = pageTasks.filter((t) => completedIds.includes(t.id)).length;
                     return (
                       <div key={page.id}>
                         <button
-                          onClick={() => onSelectPage(page.id)}
+                          onClick={() => !locked && onSelectPage(page.id)}
+                          disabled={locked}
+                          title={locked ? 'Complete the task on the previous page to unlock this page' : undefined}
                           className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-xs font-bold transition-all border ${
                             isActive
                               ? 'bg-zinc-900 border-blue-800 text-white'
+                              : locked
+                              ? 'border-transparent text-zinc-600 cursor-not-allowed opacity-70'
                               : 'border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900/60'
                           }`}
                         >
                           <span className={`w-5 h-5 rounded-lg flex items-center justify-center text-[10px] font-mono font-black shrink-0 ${
-                            isActive ? 'bg-blue-600 text-white' : 'bg-zinc-800 text-zinc-400'
+                            isActive ? 'bg-blue-600 text-white' : locked ? 'bg-zinc-900 text-zinc-600' : 'bg-zinc-800 text-zinc-400'
                           }`}>
-                            {i + 1}
+                            {locked ? <Lock className="h-3 w-3" /> : i + 1}
                           </span>
                           <span className="truncate flex-1 text-left">{page.title || `Page ${i + 1}`}</span>
-                          {pageTasks.length > 0 && (
+                          {!locked && pageTasks.length > 0 && (
                             <span className={`text-[10px] font-mono ${pageDone === pageTasks.length ? 'text-emerald-400' : 'text-zinc-500'}`}>
                               {pageDone}/{pageTasks.length}
                             </span>

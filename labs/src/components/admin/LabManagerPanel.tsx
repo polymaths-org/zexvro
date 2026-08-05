@@ -20,8 +20,10 @@ import {
   Tag,
   X,
   Infinity as InfinityIcon,
+  Unlock,
+  GitBranch,
 } from 'lucide-react';
-import { Lab, LabPage, LabTask, LabTaskType, LabCategory, LabDifficulty, Badge } from '../../types';
+import { Lab, LabPage, LabTask, LabTaskType, LabCategory, LabDifficulty, Badge, LabRule } from '../../types';
 import { CredentialCanvas } from './CredentialCanvas';
 import { SaveButton } from './SaveButton';
 
@@ -34,7 +36,7 @@ interface LabManagerPanelProps {
   onBack: () => void;
 }
 
-type SubTab = 'overview' | 'details' | 'content' | 'access' | 'credentials';
+type SubTab = 'overview' | 'details' | 'content' | 'access' | 'credentials' | 'rules';
 
 const ELEMENT_TYPES: { type: LabTaskType; label: string }[] = [
   { type: 'heading', label: 'Heading' },
@@ -97,6 +99,9 @@ export const LabManagerPanel: React.FC<LabManagerPanelProps> = ({
   // --- Credentials state ---
   const [badgeId, setBadgeId] = useState(lab.badgeId || badges[0]?.id || '');
   const [awardOn, setAwardOn] = useState('completion');
+
+  // --- Rules state ---
+  const [rules, setRules] = useState<LabRule[]>(lab.rules || []);
 
   useEffect(() => {
     if (pages.length > 0 && !activePageId) setActivePageId(pages[0].id);
@@ -274,12 +279,36 @@ export const LabManagerPanel: React.FC<LabManagerPanelProps> = ({
     });
   };
 
+  const saveRules = () => {
+    onUpdateLab(lab.id, { rules: rules.filter((r) => r.sourcePageId && r.sourceTaskId) });
+  };
+
+  const addRule = () => {
+    const firstPage = pages[0];
+    const firstTask = firstPage?.elements.find((e) => (e.type || 'task') === 'task');
+    setRules((prev) => [
+      ...prev,
+      {
+        id: `rule_${Date.now()}`,
+        type: 'unlock-next-page-on-task',
+        sourcePageId: firstPage?.id || '',
+        sourceTaskId: firstTask?.id || '',
+      },
+    ]);
+  };
+
+  const updateRule = (id: string, patch: Partial<LabRule>) =>
+    setRules((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+
+  const removeRule = (id: string) => setRules((prev) => prev.filter((r) => r.id !== id));
+
   const tabMeta: { id: SubTab; label: string; icon: React.ReactNode }[] = [
     { id: 'overview', label: 'Overview', icon: <BarChart3 className="h-4 w-4" /> },
     { id: 'details', label: 'Details', icon: <FileText className="h-4 w-4" /> },
     { id: 'content', label: 'Content', icon: <LayoutList className="h-4 w-4" /> },
     { id: 'access', label: 'Access', icon: <Users className="h-4 w-4" /> },
     { id: 'credentials', label: 'Credentials', icon: <Award className="h-4 w-4" /> },
+    { id: 'rules', label: 'Rules', icon: <Unlock className="h-4 w-4" /> },
   ];
 
   const enrolled = lab.enrolledCount ?? lab.completions ?? 0;
@@ -304,7 +333,7 @@ export const LabManagerPanel: React.FC<LabManagerPanelProps> = ({
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => onPreviewLab({ ...lab, pages })}
+              onClick={() => onPreviewLab({ ...lab, pages, rules: rules.filter((r) => r.sourcePageId && r.sourceTaskId) })}
               className="px-3.5 py-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 text-xs font-extrabold rounded-xl flex items-center gap-1.5 font-heading"
             >
               <Eye className="h-4 w-4" />
@@ -734,6 +763,113 @@ export const LabManagerPanel: React.FC<LabManagerPanelProps> = ({
             badgeName={badges.find((b) => b.id === badgeId)?.name || lab.badgeName || 'Skill Badge'}
             labName={lab.title}
           />
+        </div>
+      )}
+
+      {/* RULES */}
+      {subTab === 'rules' && (
+        <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-6 space-y-5">
+          <div>
+            <h3 className="text-sm font-bold text-white font-heading flex items-center gap-2">
+              <GitBranch className="h-4 w-4 text-blue-accent" />
+              Progression Rules
+            </h3>
+            <p className="text-xs text-zinc-500 font-mono mt-1">
+              Gate how learners move through the lab. Example: a page stays locked until a chosen task is completed.
+            </p>
+          </div>
+
+          {rules.length === 0 && (
+            <p className="text-xs font-mono text-zinc-500 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3">
+              No rules yet. Add one to unlock a page only after a task is checked.
+            </p>
+          )}
+
+          <div className="space-y-4">
+            {rules.map((rule, idx) => {
+              const sourcePage = pages.find((p) => p.id === rule.sourcePageId);
+              const sourceTasks =
+                pages.find((p) => p.id === rule.sourcePageId)?.elements.filter((e) => (e.type || 'task') === 'task') || [];
+              const targetPageIndex = pages.findIndex((p) => p.id === rule.sourcePageId);
+              const targetPage = pages[targetPageIndex + 1];
+              return (
+                <div key={rule.id} className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-mono font-bold text-blue-accent uppercase">Rule {idx + 1}</span>
+                    <button onClick={() => removeRule(rule.id)} className="px-2.5 py-1 text-xs font-mono font-bold text-red-300 bg-red-950/50 border border-red-800 rounded-lg hover:bg-red-900">
+                      Remove
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-mono text-zinc-400 mb-1">Page containing the task</label>
+                      <select
+                        value={rule.sourcePageId}
+                        onChange={(e) => {
+                          const pid = e.target.value;
+                          const rel = pages.find((p) => p.id === pid);
+                          const firstTask = rel?.elements.find((el) => (el.type || 'task') === 'task');
+                          updateRule(rule.id, { sourcePageId: pid, sourceTaskId: firstTask?.id || '' });
+                        }}
+                        className={inputCls}
+                      >
+                        <option value="">Select page…</option>
+                        {pages.map((p, i) => (
+                          <option key={p.id} value={p.id}>Page {i + 1} · {p.title || 'Untitled'}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-mono text-zinc-400 mb-1">Task that unlocks it</label>
+                      <select
+                        value={rule.sourceTaskId}
+                        onChange={(e) => updateRule(rule.id, { sourceTaskId: e.target.value })}
+                        disabled={!sourcePage || sourceTasks.length === 0}
+                        className={inputCls}
+                      >
+                        <option value="">Select task…</option>
+                        {sourceTasks.map((t) => (
+                          <option key={t.id} value={t.id}>{t.title || 'Untitled task'}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <p className="text-xs font-mono text-zinc-400 flex items-center gap-1.5">
+                    <Unlock className="h-3.5 w-3.5 text-emerald-400" />
+                    {!sourcePage
+                      ? 'Pick a page to configure this rule.'
+                      : sourceTasks.length === 0
+                      ? 'This page has no Task checkboxes — add one in the Content tab first.'
+                      : targetPage
+                      ? <>After <span className="text-white font-bold">{sourceTasks.find((t) => t.id === rule.sourceTaskId)?.title || 'the task'}</span> is completed, unlocks <span className="text-white font-bold">Page {targetPageIndex + 2} · {targetPage.title}</span>.</>
+                      : <>After the task is completed, this unlocks the next page (has no page after it).</>}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+
+          <button
+            onClick={addRule}
+            disabled={pages.length < 2}
+            className="px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-extrabold rounded-xl flex items-center gap-1.5 font-heading disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <PlusCircle className="h-4 w-4" />
+            Add Rule
+          </button>
+          {pages.length < 2 && (
+            <p className="text-[11px] font-mono text-amber-300 bg-amber-950/40 border border-amber-800 rounded-xl px-3 py-2">
+              You need at least 2 pages to add an unlock-next-page rule. Add pages in the Content tab.
+            </p>
+          )}
+
+          {rules.length > 0 && (
+            <div className="pt-2 border-t border-zinc-800">
+              <SaveButton onSave={(done) => { saveRules(); done(); }} label="Save Rules" className="w-full" />
+            </div>
+          )}
         </div>
       )}
     </div>

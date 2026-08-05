@@ -1,5 +1,20 @@
 # ZEXVRO Shared Memory
 
+## 2026-08-06 - ZEXVRO Labs: progression Rules tab (unlock page after task), runner UI polish (Paris)
+
+- **New "Rules" tab in lab management** (`src/components/admin/LabManagerPanel.tsx`, SubTab `'rules'`): a rule of type `unlock-next-page-on-task` locks the page right after a chosen source page until a chosen Task checkbox on it is checked. Model in `src/types.ts`: `LabRule { id, type: LabRuleType, sourcePageId, sourceTaskId, label? }`, `LabRuleType = 'unlock-next-page-on-task'`, `Lab.rules?: LabRule[]`.
+  - UI: per-rule Page select + Task select (task dropdown disables if source page has no Task elements; amber hint to add one in Content tab; Add Rule disabled below 2 pages; auto-derived preview line "After [task] completed, unlocks Page N · title"; Remove; Save Rules writes filtered rules `{ rules: ... }` via `onUpdateLab`).
+  - **Enforcement in both the runner and the side progress rail:**
+    - `src/components/LabRunnerView.tsx`: computes `ruleLocks` (`{ [targetPageId]: true }` when its source task is not in `completedTaskIds`) + `isPageLocked(pageId)`. Page tabs disabled + show a `Lock` icon when locked; the "Next" button becomes a grayed locked pill instead of navigating. Since it recomputes from `completedTaskIds` every render, checking the gating task instantly unlocks the next page.
+    - `src/components/LabProgressSidebar.tsx`: mirrors `ruleLocks`/`isPageLocked` (shared logic, uses `completedIds`), page-click guarded + lock icon in the page number chip.
+    - Preview now passes `rules` too: `onPreviewLab({ ...lab, pages, rules })`.
+- **Runner UI/Header cleanup per user request:**
+  - Top search bar hidden while inside a lab: `Header` gained a `hideSearch?: boolean` prop; `App.tsx` passes `hideSearch={inRunner}`. (Only the centered search is hidden — profile/branding stay; search is only hidden on desktop UX so it doesn't collapse.)
+  - Runner content column widened `max-w-3xl → `max-w-5xl` so it fills the screen instead of leaving big side gaps.
+  - Intro card only on the **first page**; shows the 1:1 `bannerUrl` square on the left, and the description is clamped to 4 lines (`line-clamp-4`) instead of the whole description on every page.
+  - Tile cards in `CatalogView` + `DashboardView` already render the 1:1 `aspect-square` banner (verified — nothing to change there).
+- Verified tsc clean + build clean; deployed to prod (bundle `index-C0-SdcuK.js`), anonymous `/api/labs` still returns exactly 1 published lab. Packaged + pushed with this entry.
+
 ## 2026-08-06 - ZEXVRO Labs: draft gating, image link+upload, badge celebration, enforce tasks (Paris)
 
 - **Draft labs now gated to admins/editors only.** Before this, drafts (status `draft` / `isPublished:false`) rendered for everyone (dimmed in catalog + direct-link details). Now:

@@ -15,6 +15,7 @@ import {
   Terminal,
   GitFork,
   ExternalLink,
+  Lock,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
@@ -56,6 +57,22 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
 
   const pages: LabPage[] = (lab.pages && lab.pages.length > 0) ? lab.pages : [];
   const singleElements: LabTask[] = pages.length === 0 ? lab.tasks : [];
+
+  // Compute per-page locked state from progression rules. A page is locked if
+  // any unlock-next-page rule targets it and its source task isn't completed.
+  const ruleLocks: Record<string, boolean> = {};
+  if (Array.isArray(lab.rules)) {
+    for (const rule of lab.rules) {
+      if (rule.type !== 'unlock-next-page-on-task') continue;
+      const sourceIdx = pages.findIndex((p) => p.id === rule.sourcePageId);
+      const target = pages[sourceIdx + 1];
+      if (!target) continue;
+      if (!completedTaskIds.includes(rule.sourceTaskId)) {
+        ruleLocks[target.id] = true;
+      }
+    }
+  }
+  const isPageLocked = (pageId: string) => !!ruleLocks[pageId];
 
   const currentPageId = progress?.currentPageId || pages[0]?.id || null;
   const activePage = pages.find((p) => p.id === currentPageId) || null;
@@ -525,40 +542,65 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
         </div>
       </div>
 
-      {/* Centered content column */}
+      {/* Centered content column — wider so the lab fills the screen, not thin gaps */}
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
-          {/* Lab intro card */}
-          <div className="panel-blue bg-zinc-950 border border-zinc-800 p-5 sm:p-6 rounded-2xl space-y-3">
-            <h3 className="text-lg font-bold text-white font-heading">Lab Overview</h3>
-            <p className="text-[15px] text-zinc-300 leading-relaxed">{lab.description}</p>
-            <div className="pt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm font-mono text-zinc-400 font-bold">
-              <span>Author: {lab.author}</span>
-              <span className="flex items-center gap-1 text-blue-accent">
-                <Zap className="h-4 w-4" />+ {lab.xpReward} XP
-              </span>
-              <span>
-                {lab.timeLimitMinutes ? `${lab.timeLimitMinutes} min` : 'No time limit'}
-              </span>
-            </div>
-          </div>
+        <div className="max-w-5xl mx-auto px-4 sm:px-8 py-6 sm:py-8 space-y-6">
+          {/* Lab intro card — shown only on the first page, with the 1:1 banner */}
+          {(() => {
+            const pageIdx = pages.findIndex((p) => p.id === currentPageId);
+            const isFirstPage = pageIdx <= 0;
+            return isFirstPage ? (
+              <div className="panel-blue bg-zinc-950 border border-zinc-800 p-5 sm:p-6 rounded-2xl flex flex-col sm:flex-row gap-5">
+                <div className="w-full sm:w-40 lg:w-48 shrink-0">
+                  <div className="aspect-square w-full rounded-xl overflow-hidden bg-zinc-900 border border-zinc-800">
+                    {lab.bannerUrl ? (
+                      <img src={lab.bannerUrl} alt={lab.title} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-[radial-gradient(#3b82f6_1px,transparent_1px)] [background-size:20px_20px] opacity-20" />
+                    )}
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-lg font-bold text-white font-heading">Lab Overview</h3>
+                  <p className="text-[15px] text-zinc-300 leading-relaxed mt-2 whitespace-pre-line line-clamp-4">
+                    {lab.description}
+                  </p>
+                  <div className="pt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm font-mono text-zinc-400 font-bold">
+                    <span>Author: {lab.author}</span>
+                    <span className="flex items-center gap-1 text-blue-accent">
+                      <Zap className="h-4 w-4" />+ {lab.xpReward} XP
+                    </span>
+                    <span>
+                      {lab.timeLimitMinutes ? `${lab.timeLimitMinutes} min` : 'No time limit'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ) : null;
+          })()}
 
           {/* Page tabs */}
           {pages.length > 1 && (
             <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
               {pages.map((page, i) => {
                 const active = page.id === currentPageId;
+                const locked = isPageLocked(page.id);
                 return (
                   <button
                     key={page.id}
-                    onClick={() => onProgressChange({ currentPageId: page.id })}
+                    onClick={() => !locked && onProgressChange({ currentPageId: page.id })}
+                    disabled={locked}
+                    title={locked ? 'Complete the task on the previous page to unlock this page' : undefined}
                     className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-all font-heading flex items-center gap-2 ${
                       active
                         ? 'bg-blue-600 text-white shadow-md'
+                        : locked
+                        ? 'bg-zinc-950 text-zinc-600 border border-zinc-800 cursor-not-allowed opacity-70'
                         : 'bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800'
                     }`}
                   >
                     <span className="text-xs">{i + 1}</span>
+                    {locked ? <Lock className="h-3 w-3" /> : null}
                     {page.title || `Page ${i + 1}`}
                   </button>
                 );
@@ -603,6 +645,7 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
                 const pageIdx = pages.findIndex((p) => p.id === currentPageId);
                 const next = pages[pageIdx + 1];
                 const prev = pages[pageIdx - 1];
+                const nextLocked = next ? isPageLocked(next.id) : false;
                 return (
                   <>
                     {prev ? (
@@ -619,20 +662,30 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
                       Page {pageIdx + 1} of {pages.length}
                     </span>
                     {next ? (
-                      <motion.button
-                        whileHover={{ scale: 1.03 }}
-                        whileTap={{ scale: 0.97 }}
-                        onClick={() => onProgressChange({ currentPageId: next.id })}
-                        className="flex items-center gap-1 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-xl font-mono"
-                      >
-                        Next: {next.title}
-                        <motion.span
-                          animate={{ x: [0, 4, 0] }}
-                          transition={{ repeat: Infinity, duration: 1.2 }}
+                      nextLocked ? (
+                        <div
+                          className="flex items-center gap-1 px-4 py-2 bg-zinc-900 text-zinc-500 border border-zinc-800 text-sm font-bold rounded-xl font-mono cursor-not-allowed"
+                          title="Complete the task on this page to unlock the next"
                         >
-                          <ChevronRight className="h-4 w-4" />
-                        </motion.span>
-                      </motion.button>
+                          <Lock className="h-4 w-4" />
+                          {next.title}
+                        </div>
+                      ) : (
+                        <motion.button
+                          whileHover={{ scale: 1.03 }}
+                          whileTap={{ scale: 0.97 }}
+                          onClick={() => onProgressChange({ currentPageId: next.id })}
+                          className="flex items-center gap-1 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-xl font-mono"
+                        >
+                          Next: {next.title}
+                          <motion.span
+                            animate={{ x: [0, 4, 0] }}
+                            transition={{ repeat: Infinity, duration: 1.2 }}
+                          >
+                            <ChevronRight className="h-4 w-4" />
+                          </motion.span>
+                        </motion.button>
+                      )
                     ) : (
                       <button
                         onClick={() => onLabCompleted(lab, lab.xpReward)}

@@ -118,6 +118,7 @@ function Shell() {
         onLogout={handleLogout}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
+        hideSearch={inRunner}
       />
 
       <div className="flex flex-1 overflow-hidden">

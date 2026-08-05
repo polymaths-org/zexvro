@@ -80,6 +80,20 @@ export interface LabPage {
   elements: LabTask[];
 }
 
+// Progression rules gate how a learner moves through the lab pages.
+// Currently supported: unlock the NEXT page once a chosen task is completed.
+export type LabRuleType = 'unlock-next-page-on-task';
+
+export interface LabRule {
+  id: string;
+  type: LabRuleType;
+  // The task that must be completed to satisfy this rule.
+  sourcePageId: string; // page containing the gating task
+  sourceTaskId: string; // the task that must be checked
+  // Optional human-friendly label (auto-derived in the editor).
+  label?: string;
+}
+
 export interface Lab {
   id: string;
   title: string;
@@ -112,6 +126,7 @@ export interface Lab {
   completions?: number; // number of completions
   enrolledCount?: number; // number of enrolled learners
   editors?: string[]; // GitHub usernames allowed to edit/manage this lab
+  rules?: LabRule[]; // progression rules (e.g. unlock next page after a task)
   credential?: LabCredential; // per-lab badge + certificate design
 }
 
