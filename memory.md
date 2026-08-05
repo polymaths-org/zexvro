@@ -1,5 +1,16 @@
 # ZEXVRO Shared Memory
 
+## 2026-08-06 - NEXT-DAY CHECKLIST (Labs, assigned to Paris) — park these, pick up tomorrow
+
+- [ ] **Fix credentials system** — the credential/certificate flow (per-lab `credential`, `CredentialCanvas`/`CredentialsEditor`, badge/cert image upload) needs an end-to-end review + fix.
+- [ ] **Fix Badges distribution** — badge awarding/metrics distribution is broken/incomplete; make badges actually get distributed on completion.
+- [ ] **Fix checks on tasks** — task checking/verification in the runner needs a fix (likely related to progress %, completion detection, or how checks persist).
+- [ ] **Fix bit of UI** — general UI polish pass (determine exact items when starting).
+- [ ] **Fix user enrolling and submissions** — enrollment + submission flow for learners is incomplete/broken; wire it up.
+- [ ] **Lab Open Graph preview** — when a lab link is pasted into WhatsApp, Slack, etc., it should show the lab **banner + title/info** as a rich link card. Needs `index.html` meta/OG tags (og:title, og:image=bannerUrl, og:description, twitter cards) per-lab — likely a dynamic `og:` renderer or a per-lab fast route.
+
+JIRA-park: no parallel backlog; this IS the assigned remaining work for Jean tomorrow.
+
 ## 2026-08-06 - ZEXVRO Labs: progression Rules tab (unlock page after task), runner UI polish (Paris)
 
 - **New "Rules" tab in lab management** (`src/components/admin/LabManagerPanel.tsx`, SubTab `'rules'`): a rule of type `unlock-next-page-on-task` locks the page right after a chosen source page until a chosen Task checkbox on it is checked. Model in `src/types.ts`: `LabRule { id, type: LabRuleType, sourcePageId, sourceTaskId, label? }`, `LabRuleType = 'unlock-next-page-on-task'`, `Lab.rules?: LabRule[]`.
