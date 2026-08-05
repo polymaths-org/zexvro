@@ -14,7 +14,7 @@ import {
   LabRunProgress,
 } from '../types';
 import { api } from '../lib/api';
-import { loadLocalDB, saveLocalDB, mergeLabs } from '../lib/persistence';
+import { loadLocalDB, saveLocalDB, mergeLabs, sanitizeLabs } from '../lib/persistence';
 import { navigate, paths } from '../lib/router';
 import { toast } from '../components/ui/Toaster';
 import {
@@ -151,7 +151,7 @@ export function LabsProvider({ children }: { children: React.ReactNode }) {
       .fetchLabs()
       .then((data) => {
         if (data?.labs) {
-          setLabs((prev) => mergeLabs(data.labs!, loadLocalDB()?.labs));
+          setLabs((prev) => mergeLabs(sanitizeLabs(data.labs), loadLocalDB()?.labs));
         }
       })
       .catch(() => {})

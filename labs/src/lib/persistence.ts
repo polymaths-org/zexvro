@@ -22,7 +22,11 @@ export function loadLocalDB(): LocalDB | null {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
-    return JSON.parse(raw) as LocalDB;
+    const db = JSON.parse(raw) as LocalDB;
+    if (Array.isArray(db.labs)) {
+      db.labs = sanitizeLabs(db.labs);
+    }
+    return db;
   } catch {
     return null;
   }
@@ -51,6 +55,25 @@ export function clearLocalDB(): void {
   } catch {
     /* ignore */
   }
+}
+
+// Normalize a possibly-malformed lab into something every render path can
+// handle safely. Prevents partial / legacy records (missing title, tags,
+// category, difficulty) from crashing the catalog or rendering as blanks.
+export function sanitizeLab(lab: Lab): Lab {
+  return {
+    ...lab,
+    title: typeof lab.title === 'string' && lab.title.trim() ? lab.title : lab.id,
+    description: typeof lab.description === 'string' ? lab.description : '',
+    tags: Array.isArray(lab.tags) ? lab.tags.filter(Boolean) : [],
+    category: lab.category ?? 'Smart Contracts',
+    difficulty: lab.difficulty ?? 'Introductory',
+  };
+}
+
+export function sanitizeLabs(labs: Lab[]): Lab[] {
+  if (!Array.isArray(labs)) return [];
+  return labs.filter((l) => l && typeof l.id === 'string').map(sanitizeLab);
 }
 
 // Merge local state over the server/mock baseline.

@@ -298,15 +298,15 @@ export const CatalogView: React.FC<CatalogViewProps> = ({
           </div>
 
           <h3 className="text-base font-bold text-white group-hover:text-zinc-200 transition-colors line-clamp-2 font-heading">
-            {lab.title}
+            {lab.title ?? lab.id}
           </h3>
 
           <p className="text-xs text-zinc-400 mt-2 line-clamp-2 leading-relaxed">
-            {lab.description}
+            {lab.description ?? ''}
           </p>
 
           <div className="flex flex-wrap gap-1.5 mt-3">
-            {lab.tags.slice(0, 3).map((tag) => (
+            {(Array.isArray(lab.tags) ? lab.tags.filter(Boolean) : []).slice(0, 3).map((tag: string) => (
               <Tag key={tag}>{tag}</Tag>
             ))}
           </div>
