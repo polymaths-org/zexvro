@@ -77,7 +77,17 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
       const user = await authenticate(ctx.request, env);
       const admin = isAdmin(user, env);
       const labs = await store.listLabs();
-      return json({ labs: admin ? labs : labs.map((l: Lab) => sanitizeLab(l, false)) });
+      // Drafts / unpublished labs are visible only to admins and the lab's
+      // listed editors (by GitHub username). Everyone else sees published labs.
+      const visible = admin
+        ? labs
+        : labs.filter((l: any) => {
+            const isDraft = l.status === 'draft' || l.isPublished === false;
+            if (!isDraft) return true;
+            const editors = Array.isArray(l.editors) ? l.editors.map((e: string) => e.toLowerCase()) : [];
+            return user ? editors.includes(user.username?.toLowerCase()) : false;
+          });
+      return json({ labs: visible.map((l: Lab) => sanitizeLab(l, false)) });
     }
 
     if (path === '/labs' && method === 'POST') {
@@ -106,6 +116,10 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
         const admin = isAdmin(user, env);
         const lab = await store.getLab(idOrSlug);
         if (!lab) return json({ error: 'Lab not found' }, 404);
+        const isDraft = lab.status === 'draft' || lab.isPublished === false;
+        const editors = Array.isArray(lab.editors) ? lab.editors.map((e: string) => e.toLowerCase()) : [];
+        const privileged = admin || (user ? editors.includes(user.username?.toLowerCase()) : false);
+        if (isDraft && !privileged) return json({ error: 'Lab not found' }, 404);
         return json({ lab: sanitizeLab(lab, admin) });
       }
       const user = await requireUser(ctx.request, env);

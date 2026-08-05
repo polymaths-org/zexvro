@@ -14,7 +14,7 @@ import {
   LabRunProgress,
 } from '../types';
 import { api } from '../lib/api';
-import { loadLocalDB, saveLocalDB, mergeLabs, sanitizeLabs } from '../lib/persistence';
+import { loadLocalDB, saveLocalDB, mergeLabs, sanitizeLabs, canViewLab } from '../lib/persistence';
 import { navigate, paths } from '../lib/router';
 import { toast } from '../components/ui/Toaster';
 import {
@@ -28,6 +28,7 @@ interface LabsContextValue {
   user: User;
   setUser: (updater: User | ((prev: User) => User)) => void;
   labs: Lab[];
+  visibleLabs: Lab[];
   badges: Badge[];
   certificates: Certificate[];
   submissions: Submission[];
@@ -407,6 +408,7 @@ export function LabsProvider({ children }: { children: React.ReactNode }) {
     user,
     setUser,
     labs,
+    visibleLabs: labs.filter((l) => canViewLab(l, user)),
     badges,
     certificates,
     submissions,

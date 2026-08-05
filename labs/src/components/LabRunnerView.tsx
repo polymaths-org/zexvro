@@ -105,8 +105,23 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
       : completedTaskIds.filter((id) => id !== taskId);
     onProgressChange({ completedTaskIds: next });
 
+    if (completed) {
+      // Small burst on every task checked so the learner FEELS the effect
+      // without leaving the lab.
+      confetti({
+        particleCount: 30,
+        spread: 55,
+        startVelocity: 25,
+        origin: { y: 0.75 },
+        colors: ['#3b82f6', '#60a5fa', '#ffffff'],
+        disableForReducedMotion: true,
+      });
+    }
+
     if (completed && next.length === verifiableTasks.length && verifiableTasks.length > 0) {
       triggerConfetti();
+      // Show the badge-earned celebration WITHOUT leaving the lab — the
+      // learner can keep working or claim their badge when ready.
       setTimeout(() => setShowCompletionModal(true), 500);
     }
   };
@@ -635,7 +650,7 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
         </div>
       </div>
 
-      {/* Completion Celebration Modal */}
+      {/* Completion Celebration Modal — shows the earned badge without exiting */}
       <AnimatePresence>
         {showCompletionModal && (
           <motion.div
@@ -651,31 +666,46 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
               className="relative w-full max-w-lg bg-zinc-950 border border-blue-900 rounded-3xl p-8 text-center shadow-[0_0_50px_rgba(59,130,246,0.25)]"
             >
               <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-sky-400 text-white rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce font-extrabold shadow-lg">
-                <Award className="h-8 w-8" />
+                {lab.badgeIconUrl ? (
+                  <img src={lab.badgeIconUrl} alt={lab.badgeName || 'Badge'} className="w-10 h-10 object-cover rounded-full" />
+                ) : (
+                  <Award className="h-8 w-8" />
+                )}
               </div>
 
               <span className="text-xs font-mono font-bold text-white uppercase tracking-widest bg-blue-600 px-3 py-1 rounded-md">
-                LAB COMPLETED • {completionPercent}% SCORE
+                {lab.badgeName ? `${lab.badgeName} UNLOCKED` : 'LAB COMPLETED'} • {completionPercent}% SCORE
               </span>
 
               <h2 className="text-2xl font-black text-white mt-4 font-heading">{lab.title}</h2>
               <p className="text-sm text-zinc-300 mt-2">
-                Congratulations {user.name}! You earned <span className="text-blue-accent font-extrabold font-mono">+{lab.xpReward} XP</span>
-                and unlocked your official ZEXVRO Web3 credential.
+                You finished every task! You earned{' '}
+                <span className="text-blue-accent font-extrabold font-mono">+{lab.xpReward} XP</span>
+                {lab.badgeName ? <> and unlocked the <span className="text-white font-bold">{lab.badgeName}</span> badge</> : null}.
               </p>
 
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => {
-                  onLabCompleted(lab, lab.xpReward);
-                  setShowCompletionModal(false);
-                  onExitLab();
-                }}
-                className="mt-6 w-full py-3 btn-primary-blue text-white font-extrabold text-base rounded-xl transition-all shadow-xl font-heading"
-              >
-                Claim Badge & View Dashboard
-              </motion.button>
+              <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setShowCompletionModal(false)}
+                  className="py-3 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 font-extrabold text-sm rounded-xl transition-all font-heading"
+                >
+                  Keep Working
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => {
+                    onLabCompleted(lab, lab.xpReward);
+                    setShowCompletionModal(false);
+                    onExitLab();
+                  }}
+                  className="py-3 btn-primary-blue text-white font-extrabold text-sm rounded-xl transition-all shadow-xl font-heading"
+                >
+                  Claim Badge & Exit
+                </motion.button>
+              </div>
             </motion.div>
           </motion.div>
         )}

@@ -5,7 +5,7 @@ import { useLabs } from '../state/labs';
 export const HomePage: React.FC = () => {
   const {
     user,
-    labs,
+    labs: visibleLabs,
     badges,
     certificates,
     handleStartLab,
@@ -16,7 +16,7 @@ export const HomePage: React.FC = () => {
   return (
     <DashboardView
       user={user}
-      labs={labs}
+      labs={visibleLabs}
       badges={badges}
       certificates={certificates}
       onStartLab={handleStartLab}

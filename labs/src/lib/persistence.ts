@@ -76,6 +76,19 @@ export function sanitizeLabs(labs: Lab[]): Lab[] {
   return labs.filter((l) => l && typeof l.id === 'string').map(sanitizeLab);
 }
 
+// A lab is "draft" (unpublished) when status is draft or isPublished is false.
+// Only admins and the lab's listed editors (by username) may see drafts.
+export function isDraftLab(lab: Lab): boolean {
+  return lab.status === 'draft' || lab.isPublished === false;
+}
+
+export function canViewLab(lab: Lab, user?: { role?: string; username?: string } | null): boolean {
+  if (!isDraftLab(lab)) return true;
+  if (user?.role === 'admin') return true;
+  const editors = Array.isArray(lab.editors) ? lab.editors.map((e) => e.toLowerCase()) : [];
+  return !!user?.username && editors.includes(user.username.toLowerCase());
+}
+
 // Merge local state over the server/mock baseline.
 export function mergeLabs(base: Lab[], local?: Lab[]): Lab[] {
   if (!local || local.length === 0) return base;

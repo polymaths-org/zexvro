@@ -5,7 +5,7 @@ import { navigate, paths } from '../lib/router';
 
 export const LabsPage: React.FC = () => {
   const {
-    labs,
+    labs: visibleLabs,
     user,
     handleStartLab,
     handleOpenDetails,
@@ -15,7 +15,7 @@ export const LabsPage: React.FC = () => {
 
   return (
     <CatalogView
-      labs={labs}
+      labs={visibleLabs}
       onStartLab={handleStartLab}
       onOpenDetails={handleOpenDetails}
       user={user}

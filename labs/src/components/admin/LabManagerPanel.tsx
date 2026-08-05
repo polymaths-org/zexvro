@@ -88,6 +88,7 @@ export const LabManagerPanel: React.FC<LabManagerPanelProps> = ({
       : [{ id: 'page_1', title: 'Introduction', elements: lab.tasks || [] }],
   );
   const [activePageId, setActivePageId] = useState<string>('');
+  const [taskWarning, setTaskWarning] = useState('');
 
   // --- Access editor state ---
   const [editors, setEditors] = useState<string[]>(lab.editors || []);
@@ -141,6 +142,17 @@ export const LabManagerPanel: React.FC<LabManagerPanelProps> = ({
   };
 
   const saveDetails = () => {
+    if (status === 'published') {
+      const taskCount = pages.reduce(
+        (n, p) => n + p.elements.filter((e) => (e.type || 'task') === 'task').length,
+        0,
+      );
+      if (taskCount === 0) {
+        setTaskWarning('You cannot publish a lab with no tasks. Add at least one Task checkbox in the Content tab first.');
+        return;
+      }
+    }
+    setTaskWarning('');
     onUpdateLab(lab.id, {
       title,
       description,
@@ -172,6 +184,7 @@ export const LabManagerPanel: React.FC<LabManagerPanelProps> = ({
   };
 
   const addElement = (type: LabTaskType) => {
+    if (type === 'task') setTaskWarning('');
     setPages((prev) =>
       prev.map((p) =>
         p.id === activePageId
@@ -226,8 +239,18 @@ export const LabManagerPanel: React.FC<LabManagerPanelProps> = ({
     );
   };
 
-  const saveContent = () => {
+  const saveContent = (): boolean => {
+    const taskCount = pages.reduce(
+      (n, p) => n + p.elements.filter((e) => (e.type || 'task') === 'task').length,
+      0,
+    );
+    if (taskCount === 0) {
+      setTaskWarning('Every lab needs at least one Task checkbox so learners can track progress.');
+      return false;
+    }
+    setTaskWarning('');
     onUpdateLab(lab.id, { pages });
+    return true;
   };
 
   const addEditor = () => {
@@ -375,15 +398,28 @@ export const LabManagerPanel: React.FC<LabManagerPanelProps> = ({
             </div>
             <div>
               <p className="text-xs font-mono text-zinc-400 mb-1 font-bold">Lab Logo / Banner</p>
-              <label className="cursor-pointer px-3.5 py-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-xl text-xs font-bold text-zinc-200 transition-colors inline-block">
-                Upload
-                <input type="file" accept="image/*" className="hidden" onChange={handleBannerUpload} />
-              </label>
-              {bannerUrl && (
-                <button onClick={() => setBannerUrl('')} className="ml-3 text-[11px] font-mono text-zinc-500 hover:text-white underline">
-                  Remove
-                </button>
-              )}
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <label className="cursor-pointer px-3.5 py-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-xl text-xs font-bold text-zinc-200 transition-colors inline-block">
+                    <ImagePlus className="h-3.5 w-3.5 inline-block mr-1" />
+                    Upload
+                    <input type="file" accept="image/*" className="hidden" onChange={handleBannerUpload} />
+                  </label>
+                  {bannerUrl && (
+                    <button onClick={() => setBannerUrl('')} className="text-[11px] font-mono text-zinc-500 hover:text-white underline">
+                      Remove
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    value={bannerUrl.startsWith('data:') ? '' : bannerUrl}
+                    onChange={(e) => setBannerUrl(e.target.value)}
+                    placeholder="...or paste an image URL"
+                    className={inputCls}
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
@@ -506,6 +542,12 @@ export const LabManagerPanel: React.FC<LabManagerPanelProps> = ({
             </div>
           </div>
 
+          {taskWarning && (
+            <p className="text-[11px] font-mono text-amber-300 bg-amber-950/40 border border-amber-800 rounded-xl px-3 py-2 mb-3">
+              {taskWarning}
+            </p>
+          )}
+
           <SaveButton onSave={(done) => { saveDetails(); done(); }} label="Save Details" className="w-full" />
         </div>
       )}
@@ -589,7 +631,17 @@ export const LabManagerPanel: React.FC<LabManagerPanelProps> = ({
               )}
             </div>
 
-            <SaveButton onSave={(done) => { saveContent(); done(); }} label="Save Content" className="w-full" />
+            {taskWarning && (
+              <p className="text-[11px] font-mono text-amber-300 bg-amber-950/40 border border-amber-800 rounded-xl px-3 py-2 mb-3">
+                {taskWarning}
+              </p>
+            )}
+
+            <SaveButton
+              onSave={(done) => { saveContent(); done(); }}
+              label="Save Content"
+              className="w-full"
+            />
           </div>
         </div>
       )}
@@ -751,6 +803,15 @@ const ElementEditor: React.FC<{
 }> = ({ el, idx, count, onChange, onRemove, onMove }) => {
   const type = el.type || 'task';
   const [open, setOpen] = useState(true);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const uploadImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => onChange({ imageUrl: String(reader.result) });
+    reader.readAsDataURL(file);
+  };
 
   return (
     <div className="bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden">
@@ -889,8 +950,29 @@ const ElementEditor: React.FC<{
           {type === 'image' && (
             <div>
               <label className="block text-[11px] font-mono text-zinc-400 mb-1">Image URL</label>
-              <input value={el.imageUrl || ''} onChange={(e) => onChange({ imageUrl: e.target.value })} className={inputCls} />
-              <label className="block text-[11px] font-mono text-zinc-400 mb-1 mt-2">Caption</label>
+              <div className="flex items-center gap-2">
+                <input
+                  value={el.imageUrl || ''}
+                  onChange={(e) => onChange({ imageUrl: e.target.value })}
+                  placeholder="https://example.com/image.png or upload below"
+                  className={inputCls}
+                />
+                <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={uploadImage} />
+                <button
+                  onClick={() => fileRef.current?.click()}
+                  className="shrink-0 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 text-xs font-extrabold rounded-xl flex items-center gap-1.5 font-heading"
+                >
+                  <ImagePlus className="h-3.5 w-3.5" />
+                  Upload
+                </button>
+              </div>
+              {el.imageUrl && (
+                <div className="mt-2 flex items-center gap-2">
+                  <img src={el.imageUrl} alt="preview" className="h-14 w-14 rounded-lg object-cover border border-zinc-800" />
+                  <span className="text-[10px] font-mono text-zinc-500">{el.imageUrl.startsWith('data:') ? 'Uploaded file' : 'Linked image'}</span>
+                </div>
+              )}
+              <label className="block text-[11px] font-mono text-zinc-400 mb-1 mt-3">Caption</label>
               <input value={el.imageCaption || ''} onChange={(e) => onChange({ imageCaption: e.target.value })} className={inputCls} />
             </div>
           )}
