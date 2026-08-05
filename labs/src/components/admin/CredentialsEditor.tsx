@@ -45,6 +45,7 @@ export const CredentialsEditor: React.FC<CredentialsEditorProps> = ({
   const [newName, setNewName] = useState('');
   const [newColor, setNewColor] = useState('#3b82f6');
   const [newIcon, setNewIcon] = useState('Award');
+  const [newImage, setNewImage] = useState('');
 
   const handleCreate = () => {
     if (!newName.trim()) return;
@@ -55,11 +56,26 @@ export const CredentialsEditor: React.FC<CredentialsEditorProps> = ({
       category: 'Smart Contracts',
       iconName: newIcon,
       color: newColor,
+      imageUrl: newImage || undefined,
       xpBonus: 100,
       awardOn: 'completion',
     });
     setNewName('');
+    setNewImage('');
   };
+
+  const toDataUrl = (file: File, cb: (url: string) => void) => {
+    const reader = new FileReader();
+    reader.onload = () => cb(String(reader.result));
+    reader.readAsDataURL(file);
+  };
+
+  const badgeVisual = (badge: Badge) =>
+    badge.imageUrl ? (
+      <img src={badge.imageUrl} alt={badge.name} className="w-full h-full object-cover" />
+    ) : (
+      <>{BADGE_ICONS[badge.iconName] || <Award className="h-6 w-6" />}</>
+    );
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -82,10 +98,10 @@ export const CredentialsEditor: React.FC<CredentialsEditorProps> = ({
                 }`}
               >
                 <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0"
+                  className="w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 overflow-hidden"
                   style={{ backgroundColor: badge.color }}
                 >
-                  {BADGE_ICONS[badge.iconName] || <Award className="h-6 w-6" />}
+                  {badgeVisual(badge)}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold text-white truncate">{badge.name}</p>
@@ -121,32 +137,55 @@ export const CredentialsEditor: React.FC<CredentialsEditorProps> = ({
             placeholder="Badge name (e.g. Solidity Master)"
             className="w-full bg-black border border-zinc-800 rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-blue-500"
           />
-          <div className="flex items-center gap-2">
-            <div className="flex gap-1.5">
-              {ICON_OPTIONS.map((icon) => (
-                <button
-                  key={icon}
-                  onClick={() => setNewIcon(icon)}
-                  className={`w-8 h-8 rounded-lg border flex items-center justify-center text-[10px] font-mono font-bold ${
-                    newIcon === icon ? 'border-blue-500 bg-blue-soft text-blue-accent' : 'border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white'
-                  }`}
-                >
-                  {icon.slice(0, 1)}
-                </button>
-              ))}
+            <div className="flex items-center gap-2">
+              <div className="flex gap-1.5">
+                {ICON_OPTIONS.map((icon) => (
+                  <button
+                    key={icon}
+                    onClick={() => setNewIcon(icon)}
+                    className={`w-8 h-8 rounded-lg border flex items-center justify-center text-[10px] font-mono font-bold ${
+                      newIcon === icon ? 'border-blue-500 bg-blue-soft text-blue-accent' : 'border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    {icon.slice(0, 1)}
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-1.5 ml-auto">
+                {COLOR_SWATCHES.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setNewColor(c)}
+                    className={`w-7 h-7 rounded-lg border-2 ${newColor === c ? 'border-white' : 'border-transparent'}`}
+                    style={{ backgroundColor: c }}
+                    title={c}
+                  />
+                ))}
+              </div>
             </div>
-            <div className="flex gap-1.5 ml-auto">
-              {COLOR_SWATCHES.map((c) => (
-                <button
-                  key={c}
-                  onClick={() => setNewColor(c)}
-                  className={`w-7 h-7 rounded-lg border-2 ${newColor === c ? 'border-white' : 'border-transparent'}`}
-                  style={{ backgroundColor: c }}
-                  title={c}
+            <div className="flex items-center gap-2">
+              <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-xl text-xs font-bold text-zinc-200 transition-colors">
+                <ImagePlus className="h-3.5 w-3.5" />
+                {newImage ? 'Change image' : 'Upload badge image'}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) toDataUrl(file, (url) => setNewImage(url));
+                  }}
                 />
-              ))}
+              </label>
+              {newImage && (
+                <>
+                  <img src={newImage} alt="badge preview" className="h-8 w-8 rounded-lg object-cover border border-zinc-700" />
+                  <button onClick={() => setNewImage('')} className="text-[11px] font-mono text-zinc-500 hover:text-white underline">
+                    Clear
+                  </button>
+                </>
+              )}
             </div>
-          </div>
           <button
             onClick={handleCreate}
             className="w-full py-2.5 btn-primary-blue text-white text-sm font-extrabold rounded-xl flex items-center justify-center gap-2 font-heading"
@@ -211,6 +250,33 @@ export const CredentialsEditor: React.FC<CredentialsEditorProps> = ({
             </div>
 
             <div>
+              <label className="block text-[11px] font-mono text-zinc-400 mb-1">Badge image (optional — overrides icon/color)</label>
+              <div className="flex items-center gap-2">
+                <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-xl text-xs font-bold text-zinc-200 transition-colors">
+                  <ImagePlus className="h-3.5 w-3.5" />
+                  {selected.imageUrl ? 'Change image' : 'Upload image'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) toDataUrl(file, (url) => onUpdateBadge(selected.id, { imageUrl: url }));
+                    }}
+                  />
+                </label>
+                {selected.imageUrl && (
+                  <button
+                    onClick={() => onUpdateBadge(selected.id, { imageUrl: undefined })}
+                    className="text-[11px] font-mono text-zinc-500 hover:text-white underline"
+                  >
+                    Remove image
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div>
               <label className="block text-[11px] font-mono text-zinc-400 mb-1">Color</label>
               <div className="flex gap-2">
                 {COLOR_SWATCHES.map((c) => (
@@ -229,10 +295,10 @@ export const CredentialsEditor: React.FC<CredentialsEditorProps> = ({
               <p className="text-[11px] font-mono text-zinc-400 mb-2">Live preview</p>
               <div className="flex items-center gap-4 bg-black border border-zinc-800 rounded-2xl p-4">
                 <div
-                  className="w-16 h-16 rounded-2xl flex items-center justify-center text-white shadow-lg"
+                  className="w-16 h-16 rounded-2xl flex items-center justify-center text-white shadow-lg overflow-hidden"
                   style={{ backgroundColor: selected.color, boxShadow: `0 0 24px ${selected.color}55` }}
                 >
-                  {BADGE_ICONS[selected.iconName] || <Award className="h-8 w-8" />}
+                  {badgeVisual(selected)}
                 </div>
                 <div>
                   <p className="text-base font-black text-white font-heading">{selected.name}</p>

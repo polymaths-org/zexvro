@@ -1,9 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import {
   initialUser,
-  sampleBadges,
   sampleCertificates,
-  sampleLabs,
   sampleSubmissions,
 } from '../data/mockData';
 import {
@@ -72,13 +70,16 @@ const LabsContext = createContext<LabsContextValue | null>(null);
 export function LabsProvider({ children }: { children: React.ReactNode }) {
   const [user, setUserState] = useState<User>(initialUser);
   // Bootstrap from the persisted store when present so admin edits (including
-  // deletions) survive reload — sampleLabs is only a first-run fallback and
-  // must never resurrect labs the admin deleted.
+  // deletions) survive reload — start EMPTY on a fresh browser. Dummy/sample
+  // labs must never be shown to users; only the real backend catalog.
   const [labs, setLabs] = useState<Lab[]>(() => {
     const local = loadLocalDB();
-    return local?.labs ? local.labs : sampleLabs;
+    return local?.labs ? local.labs : [];
   });
-  const [badges, setBadges] = useState<Badge[]>(sampleBadges);
+  const [badges, setBadges] = useState<Badge[]>(() => {
+    const local = loadLocalDB();
+    return local?.badges ? local.badges : [];
+  });
   const [certificates, setCertificates] = useState<Certificate[]>(sampleCertificates);
   const [submissions, setSubmissions] = useState<Submission[]>(sampleSubmissions);
   const [users, setUsers] = useState<User[]>([]);

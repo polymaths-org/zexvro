@@ -157,6 +157,7 @@ export interface Badge {
   category: LabCategory;
   iconName: string; // Lucide icon or custom SVG identifier
   color: string;
+  imageUrl?: string; // custom badge image (overrides icon/color)
   earnedAt?: string;
   xpBonus: number;
   awardOn?: string; // 'completion' | 'page:N' — when the badge is granted

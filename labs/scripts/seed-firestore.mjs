@@ -3,9 +3,12 @@
 // service-account JSON and writes through the Firestore REST API exactly like
 // functions/_shared.ts does at runtime.
 //
-//   node scripts/seed-firestore.mjs [--service-account path.json] [--wipe]
+//   node scripts/seed-firestore.mjs [--service-account path.json] [--wipe] [--samples]
 //
-// --wipe  clears existing docs in the seeded collections first (idempotent re-seed).
+// --wipe     clears existing docs in the seeded collections first (idempotent re-seed).
+// --samples  ALSO (re)writes the demo catalog (sampleLabs/sampleBadges). Without this
+//            flag the script only wipes/inspects — it will NOT reintroduce dummy labs or
+//            badges. Use --samples only on a dev/scratch project, never prod.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -159,22 +162,25 @@ async function main() {
     await deleteCollection(token, 'badges');
   }
 
-  let count = 0;
-  for (const lab of sampleLabs) {
-    const doc = { ...lab };
-    if (!doc.slug) doc.slug = lab.title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    await writeDoc(token, 'labs', lab.id, doc);
-    count++;
-    console.log(`  lab ${lab.id} (${lab.title})`);
+  const includeSamples = args.includes('--samples');
+  if (includeSamples) {
+    let count = 0;
+    for (const lab of sampleLabs) {
+      const doc = { ...lab };
+      if (!doc.slug) doc.slug = lab.title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      await writeDoc(token, 'labs', lab.id, doc);
+      count++;
+      console.log(`  lab ${lab.id} (${lab.title})`);
+    }
+    for (const badge of sampleBadges) {
+      await writeDoc(token, 'badges', badge.id, badge);
+      count++;
+      console.log(`  badge ${badge.id} (${badge.name})`);
+    }
+    console.log(`\nDone: ${count} sample docs written.`);
+  } else {
+    console.log('\nNo data written. Pass --samples to re-seed the demo catalog (not recommended for prod).');
   }
-
-  for (const badge of sampleBadges) {
-    await writeDoc(token, 'badges', badge.id, badge);
-    count++;
-    console.log(`  badge ${badge.id} (${badge.name})`);
-  }
-
-  console.log(`\nDone: ${count} docs written.`);
 }
 
 main().catch((e) => {

@@ -10,7 +10,7 @@ import {
   DynamoDBDocumentClient,
 } from '@aws-sdk/lib-dynamodb';
 import { Lab, Badge, Certificate, User, UserLabProgress, Submission } from '../types';
-import { sampleLabs, sampleBadges, sampleSubmissions, initialUser } from '../data/mockData';
+import { sampleSubmissions, initialUser } from '../data/mockData';
 
 // Single-table DynamoDB store for ZEXVRO Labs following repo conventions.
 //   Lab:        pk LAB#<id>            sk META   gsi1pk SLUG#<slug>  gsi1sk LAB
@@ -68,8 +68,10 @@ function stripKeys<T>(item: Record<string, unknown>): T {
 // In-memory fallback (dev / no AWS creds)
 // ---------------------------------------------------------------------------
 export class MemoryStore implements LabsStore {
-  private labs: Lab[] = [...sampleLabs];
-  private badges: Badge[] = [...sampleBadges];
+  // Starts empty — dummy/sample data must never surface to users. Real labs
+  // come from Firestore; memory is only a dev fallback with user-created data.
+  private labs: Lab[] = [];
+  private badges: Badge[] = [];
   private users = new Map<string, User>([[initialUser.id, initialUser]]);
   private certs = new Map<string, Certificate[]>();
   private progress = new Map<string, Map<string, UserLabProgress>>();
@@ -204,40 +206,7 @@ export class DynamoStore implements LabsStore {
       }),
     );
     const items = (out.Items ?? []).map((i) => stripKeys<Lab>(i as Record<string, unknown>));
-    if (items.length === 0 && !this.seeded) {
-      await this.seedDefaults();
-      const out2 = await this.client.send(
-        new ScanCommand({
-          TableName: this.tableName,
-          FilterExpression: 'entityType = :lab',
-          ExpressionAttributeValues: { ':lab': 'lab' },
-        }),
-      );
-      return (out2.Items ?? [])
-        .map((i) => stripKeys<Lab>(i as Record<string, unknown>))
-        .sort((a, b) => (a.createdAt > b.createdAt ? -1 : 1));
-    }
     return items.sort((a, b) => (a.createdAt > b.createdAt ? -1 : 1));
-  }
-
-  // First boot on an empty table: seed the Web3 lab catalog + badge roster so a
-  // fresh AWS backend actually serves content.
-  private async seedDefaults(): Promise<void> {
-    this.seeded = true;
-    for (const lab of sampleLabs) await this.putLabItem(lab);
-    for (const badge of sampleBadges) {
-      await this.client.send(
-        new PutCommand({
-          TableName: this.tableName,
-          Item: {
-            pk: `BADGE#${badge.id}`,
-            sk: 'META',
-            entityType: 'badge',
-            ...badge,
-          },
-        }),
-      );
-    }
   }
 
   async getLab(idOrSlug: string): Promise<Lab | undefined> {
@@ -341,8 +310,8 @@ export class DynamoStore implements LabsStore {
         ExpressionAttributeValues: { ':badge': 'badge' },
       }),
     );
-    if ((out.Items ?? []).length === 0) return sampleBadges;
-    return (out.Items ?? []).map((i) => stripKeys<Badge>(i as Record<string, unknown>));
+    const items = (out.Items ?? []).map((i) => stripKeys<Badge>(i as Record<string, unknown>));
+    return items;
   }
 
   async createBadge(badge: Badge): Promise<Badge> {
@@ -747,14 +716,13 @@ export class FirestoreStore implements LabsStore {
 
   async updateLab(id: string, patch: Partial<Lab>): Promise<Lab | undefined> {
     const existing = await this.getLab(id);
-    if (!existing) return undefined;
     const updated: Lab = {
-      ...existing,
+      ...(existing || ({ id, createdAt: new Date().toISOString().split('T')[0] } as Lab)),
       ...patch,
-      id: existing.id,
-      slug: patch.slug ?? existing.slug,
+      id: existing?.id ?? id,
+      slug: patch.slug ?? existing?.slug ?? id,
       updatedAt: new Date().toISOString().split('T')[0],
-    };
+    } as Lab;
     await this.writeDoc('labs', updated.id, updated as unknown as Record<string, unknown>);
     return updated;
   }

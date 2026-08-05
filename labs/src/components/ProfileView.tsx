@@ -126,10 +126,14 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, badges, certific
             {earned.map((badge) => (
               <div key={badge.id} className="bg-zinc-950 border border-zinc-800 rounded-2xl p-5 text-center">
                 <div
-                  className="w-14 h-14 mx-auto rounded-2xl flex items-center justify-center text-white mb-3"
+                  className="w-14 h-14 mx-auto rounded-2xl flex items-center justify-center text-white mb-3 overflow-hidden"
                   style={{ backgroundColor: badge.color, boxShadow: `0 0 20px ${badge.color}44` }}
                 >
-                  <Award className="h-7 w-7" />
+                  {badge.imageUrl ? (
+                    <img src={badge.imageUrl} alt={badge.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <Award className="h-7 w-7" />
+                  )}
                 </div>
                 <p className="text-sm font-bold text-white">{badge.name}</p>
                 <p className="text-[11px] font-mono text-zinc-500 mt-1">+{badge.xpBonus} XP</p>
