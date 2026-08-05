@@ -1,5 +1,19 @@
 # ZEXVRO Shared Memory
 
+## 2026-08-06 - ZEXVRO Labs: draft gating, image link+upload, badge celebration, enforce tasks (Paris)
+
+- **Draft labs now gated to admins/editors only.** Before this, drafts (status `draft` / `isPublished:false`) rendered for everyone (dimmed in catalog + direct-link details). Now:
+  - Server (`functions/api/[[path]].ts`): `GET /labs` filters drafts out for non-privileged users; `GET /labs/:id` returns 404 for non-privileged. Privileged = `isAdmin` OR the request user's `username` is in `lab.editors` (lowercased usernames).
+  - Client: `src/lib/persistence.ts` gained `isDraftLab(lab)` + `canViewLab(lab, user)`; `src/state/labs.tsx` now exposes `visibleLabs = labs.filter(l => canViewLab(l, user))`. `LabsPage`/`HomePage`/`LabDetailsPage` use `visibleLabs` (Admin/Runner keep raw `labs`). Direct `/labs/:slug` to a draft from a non-admin → 404 page. (There's no `editors` role in the User model yet — editor username matching uses the existing `Lab.editors` GitHub-username list.)
+- **Lab image = BOTH link + upload.** `src/components/admin/LabManagerPanel.tsx`:
+  - Details tab banner: added a URL input next to the Upload button ("...or paste an image URL"), keeps `handleBannerUpload` data-URL path + Remove.
+  - Content tab Image element: `ImageElementEditor` gained a hidden file input + "Upload" button beside the URL field, with a small preview and an "Uploaded file / Linked image" hint.
+- **Badge-earned celebration WITHOUT exiting the lab.** `src/components/LabRunnerView.tsx`:
+  - Confetti burst now fires on EVERY task check (30 particles) so the effect lands as they check.
+  - The full-completion modal (was: single "Claim Badge & View Dashboard" button that always exited) now shows the lab badge image (`lab.badgeIconUrl`, else `Award` icon), "KEEP WORKING" (dismiss, stay in lab) + "Claim Badge & Exit". Badge name shown.
+- **Every lab needs ≥1 task.** `LabManagerPanel` blocks publishing (`saveDetails` when status==='published'` with 0 tasks) and blocks `saveContent` with 0 tasks, showing an inline amber warning. `addElement('task')` clears it. Reason: runner progress % is derived purely from checked Task checkboxes, so a taskless lab has undefined progress.
+- Verified: tsc clean, build clean, deployed to prod (bundle `index-lG0zJbhb.js`, byte-identical, confirmed markers). Anonymous `/api/labs` returns only published labs (0 draft leaks). Committed `c0d400a`, pushed. Prod domain now serves it; hard-refresh to bypass stale cache.
+
 ## 2026-08-06 - ZEXVRO Labs: fix black-screen on /labs + visible catalog for logged-out visitors (Paris)
 
 - **Root cause of the black screen + "can't see labs when logged out".** User reported `/labs` crashing after ~1s (React unmounting → black) and no labs visible for logged-out visitors in Chrome/Firefox.
