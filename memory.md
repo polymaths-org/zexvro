@@ -1,5 +1,9 @@
 # ZEXVRO Shared Memory
 
+## 2026-08-06 - ZEXVRO Labs: lab-details completion state (Paris)
+
+Prod bundle `index-Da4yIcjd.js`. After a lab is submitted (`user.completedLabIds`), the lab details page now shows the completed state instead of Resume Lab: the CTA header reads "Lab completed / Certificate & badge earned", the button is disabled, reads **"Lab Completed"** with a check icon, and shows "You've already submitted this lab — re-taking it is not allowed." (`LabDetailsView.tsx`).
+
 ## 2026-08-06 - ZEXVRO Labs: credential canvas upgrades, enroll flow, one-way tasks, lab submission lock, details polish (Paris)
 
 Prod bundle `index-4vdKnAMX.js`. All items from the user's credential/lab-flow request:
