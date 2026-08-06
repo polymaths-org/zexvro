@@ -4,7 +4,7 @@ import { useLabs } from '../state/labs';
 import { navigate, paths } from '../lib/router';
 
 export const LabDetailsPage: React.FC<{ slug: string }> = ({ slug }) => {
-  const { labs, user, users, handleStartLab } = useLabs();
+  const { labs, user, users, handleStartLab, handleReenroll } = useLabs();
   const lab = labs.find((l) => l.slug === slug || l.id === slug);
 
   // Learners enrolled in this lab (top 5 rendered in the details sidebar).
@@ -38,6 +38,7 @@ export const LabDetailsPage: React.FC<{ slug: string }> = ({ slug }) => {
       enrolledLearners={enrolledLearners}
       onBack={() => navigate(paths.labs)}
       onStartLab={handleStartLab}
+      onReenroll={handleReenroll}
     />
   );
 };

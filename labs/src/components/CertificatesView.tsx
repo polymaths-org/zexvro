@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Certificate, Badge, User, Lab } from '../types';
-import { VerifyQR } from './VerifyQR';
+import { deriveBadges } from '../lib/badges';
 import { CertificatePreview } from './CertificatePreview';
 
 interface CertificatesViewProps {
@@ -22,10 +22,11 @@ interface CertificatesViewProps {
 export const CertificatesView: React.FC<CertificatesViewProps> = ({
   user,
   certificates,
-  badges,
+  badges: catalogBadges,
   labs = [],
 }) => {
   const [selectedCert, setSelectedCert] = useState<Certificate | null>(null);
+  const badges = labs.length > 0 ? deriveBadges(labs, user) : catalogBadges;
 
   const handlePrintCert = () => {
     window.print();
@@ -156,9 +157,16 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
               >
                 <div className="w-full">
                   <div className="mx-auto mb-3 relative w-16 h-16 overflow-hidden rounded-2xl border border-zinc-700"
-                    style={{
-                      background: design?.backgroundImage ? `url("${design.backgroundImage}") center/cover no-repeat` : design?.background || badge.color,
-                    }}
+                    style={
+                      design?.backgroundImage
+                        ? {
+                            backgroundImage: `url("${design.backgroundImage}")`,
+                            backgroundSize: design.bgSize === 'contain' ? 'contain' : 'cover',
+                            backgroundPosition: `${design.bgPosX ?? 50}% ${design.bgPosY ?? 50}%`,
+                            backgroundRepeat: 'no-repeat',
+                          }
+                        : { background: design?.background || badge.color }
+                    }
                   >
                     {design?.elements ? (
                       design.elements
@@ -231,52 +239,18 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
               </button>
             </div>
 
-            {/* Certificate Canvas Content */}
-            <div className="space-y-6 pt-4">
-              <div className="flex items-center justify-center gap-3">
-                <img src="/brand/logo.png" alt="ZEXVRO" className="h-8 w-8 object-contain" />
-                <span className="text-2xl font-black text-white tracking-widest font-heading">
-                  ZEXVRO <span className="text-zinc-400">LABS</span>
-                </span>
-              </div>
-
-              <div className="space-y-1">
-                <p className="text-xs font-mono font-bold text-white tracking-widest uppercase">
-                  OFFICIAL CERTIFICATE OF COMPLETION
-                </p>
-                <p className="text-[11px] text-zinc-500 font-mono">Verification ID: {selectedCert.certificateNumber}</p>
-              </div>
-
-              <p className="text-xs text-zinc-400 italic">This is to certify that</p>
-
-              <h2 className="text-3xl sm:text-4xl font-black text-white py-1 font-heading">
-                {selectedCert.studentName}
-              </h2>
-
-              <p className="text-xs text-zinc-400 max-w-lg mx-auto">
-                has successfully demonstrated proficiency and completed all hands-on cloud verification tasks for
-              </p>
-
-              <div className="p-4 bg-zinc-950 border border-zinc-700 rounded-2xl max-w-xl mx-auto">
-                <h3 className="text-base sm:text-lg font-bold text-white font-heading">
-                  {selectedCert.labTitle}
-                </h3>
-                <span className="text-xs font-mono text-zinc-400">{selectedCert.category}</span>
-              </div>
-
-              <div className="pt-8 flex items-end justify-between max-w-xl mx-auto border-t border-zinc-800 text-left font-mono">
-                <div>
-                  <p className="text-xs font-bold text-white">{selectedCert.instructorName}</p>
-                  <p className="text-[10px] text-zinc-500">Certification Authority</p>
-                  <p className="text-[10px] text-zinc-400 mt-1">Issued: {selectedCert.issuedAt}</p>
-                </div>
-
-                <div className="flex flex-col items-center">
-                  <div className="p-2 bg-white rounded-lg">
-                    <VerifyQR value={`${window.location.origin}/verify/${selectedCert.certificateNumber}`} size={56} />
-                  </div>
-                  <span className="text-[9px] text-zinc-500 mt-1">Scan to Verify</span>
-                </div>
+            {/* Issued certificate rendered from the design (image, not canvas) */}
+            <div className="pt-4">
+              <CertificatePreview
+                design={selectedCert.design}
+                studentName={selectedCert.studentName}
+                labTitle={selectedCert.labTitle}
+                issuedAt={selectedCert.issuedAt}
+                certNumber={selectedCert.certificateNumber}
+              />
+              <div className="flex items-center justify-center gap-2 mt-4 text-[11px] font-mono text-zinc-500">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                <span>Verification ID: {selectedCert.certificateNumber}</span>
               </div>
             </div>
           </div>

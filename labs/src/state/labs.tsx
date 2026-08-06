@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import {
   initialUser,
-  sampleBadges,
   sampleCertificates,
   sampleSubmissions,
 } from '../data/mockData';
@@ -50,6 +49,7 @@ interface LabsContextValue {
 
   goToTab: (tab: ActiveTab) => void;
   handleStartLab: (lab: Lab) => void;
+  handleReenroll: (lab: Lab) => void;
   handleOpenDetails: (lab: Lab) => void;
   handleConfirmAccess: () => void;
   handleExitLab: () => void;
@@ -81,9 +81,10 @@ export function LabsProvider({ children }: { children: React.ReactNode }) {
   });
   const [badges, setBadges] = useState<Badge[]>(() => {
     const local = loadLocalDB();
-    // Seed the badge catalog so learners can actually earn badges even on a
-    // fresh browser. The backend catalog (if any) overrides on fetch.
-    return local?.badges && local.badges.length > 0 ? local.badges : sampleBadges;
+    // The learner-facing badge catalog is derived from each lab's credential
+    // design (see deriveBadges); this list holds any explicit admin badges.
+    // No dummy/sample badges are seeded.
+    return local?.badges && local.badges.length > 0 ? local.badges : [];
   });
   const [certificates, setCertificates] = useState<Certificate[]>(sampleCertificates);
   const [submissions, setSubmissions] = useState<Submission[]>(sampleSubmissions);
@@ -200,13 +201,37 @@ export function LabsProvider({ children }: { children: React.ReactNode }) {
     api
       .fetchUsers()
       .then((data) => {
-        const list = data?.users as User[];
-        if (list && list.length > 0) setUsers(list);
-        else setUsers([user]);
+        const list = (data?.users as User[]) || [];
+        // Backend returns only users who have a Firestore profile doc. Merge in
+        // every user that has interacted (submissions) so the admin sees the
+        // full roster, plus the current admin if missing.
+        setUsers((prev) => {
+          const seen = new Map<string, User>();
+          [...list, ...submissions, ...prev].forEach((s) => {
+            const uid = (s as Submission)?.userId || (s as User)?.id;
+            if (!uid) return;
+            const isSubmission = !(s as User)?.username && !(s as User)?.name;
+            seen.set(uid, {
+              id: uid,
+              name: (s as User)?.name || (s as Submission)?.userName || 'Learner',
+              username: (s as User)?.username || '',
+              email: (s as User)?.email || '',
+              avatarUrl: (s as User)?.avatarUrl || '',
+              role: (s as User)?.role || 'student',
+              githubConnected: isSubmission ? false : (s as User)?.githubConnected || false,
+              xp: (s as User)?.xp || 0,
+              completedLabsCount: (s as User)?.completedLabsCount || 0,
+              startedLabIds: (s as User)?.startedLabIds || [],
+              completedLabIds: (s as User)?.completedLabIds || [],
+            } as User);
+          });
+          if (!seen.has(user.id)) seen.set(user.id, user);
+          return [...seen.values()];
+        });
       })
       .catch(() => setUsers([user]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user.role]);
+  }, [user.role, user.id, submissions]);
 
   const handleProgressChange = useCallback((labId: string, patch: Partial<LabRunProgress>) => {
     setLabProgress((prev) => ({
@@ -294,6 +319,25 @@ export function LabsProvider({ children }: { children: React.ReactNode }) {
       api.enrollLab(lab.id).catch(() => {});
     },
     [user.githubConnected],
+  );
+
+  // Re-enroll: clears the saved run progress for a completed lab so the user
+  // can retake it (certificate/badge stay earned).
+  const handleReenroll = useCallback(
+    (lab: Lab) => {
+      setActiveLab(lab);
+      navigate(paths.runner(lab.id));
+      setLabProgress((prev) => ({
+        ...prev,
+        [lab.id]: {
+          currentPageId: lab.pages?.[0]?.id || null,
+          timeLeftSeconds: lab.timeLimitMinutes ? lab.timeLimitMinutes * 60 : null,
+          completedTaskIds: [],
+          startedAt: new Date().toISOString(),
+        },
+      }));
+    },
+    [],
   );
 
   const handleOpenDetails = useCallback((lab: Lab) => {
@@ -533,6 +577,7 @@ export function LabsProvider({ children }: { children: React.ReactNode }) {
     setSearchQuery,
     goToTab,
     handleStartLab,
+    handleReenroll,
     handleOpenDetails,
     handleConfirmAccess,
     handleExitLab,

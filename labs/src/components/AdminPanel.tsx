@@ -497,26 +497,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           </span>
                         </td>
                         <td className="p-3 text-right whitespace-nowrap">
-                          {open && onUpdateSubmission ? (
-                            <div className="flex items-center justify-end gap-1.5">
-                              <button
-                                onClick={() => onUpdateSubmission(s.id, 'passed')}
-                                className="px-2.5 py-1 bg-emerald-950 border border-emerald-800 text-emerald-300 rounded-lg text-[10px] font-bold hover:bg-emerald-900 transition-colors flex items-center gap-1"
-                              >
-                                <CheckCircle2 className="h-3 w-3" /> Pass
-                              </button>
-                              <button
-                                onClick={() => onUpdateSubmission(s.id, 'rejected')}
-                                className="px-2.5 py-1 bg-red-950 border border-red-800 text-red-300 rounded-lg text-[10px] font-bold hover:bg-red-900 transition-colors flex items-center gap-1"
-                              >
-                                <XCircle className="h-3 w-3" /> Reject
-                              </button>
-                            </div>
-                          ) : (
-                            <span className="text-[10px] font-mono text-zinc-500">
-                              {s.reviewedBy ? `by ${s.reviewedBy}` : '—'}
-                            </span>
-                          )}
+                          <span className="text-[10px] font-mono text-zinc-500">
+                            {s.reviewedBy ? `by ${s.reviewedBy}` : 'View-only'}
+                          </span>
                           {s.reviewNote && (
                             <p className="text-[10px] text-zinc-500 mt-1 italic">{s.reviewNote}</p>
                           )}

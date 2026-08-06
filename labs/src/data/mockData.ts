@@ -14,54 +14,10 @@ export const initialUser: User = {
   githubConnected: false,
 };
 
-// Default badge roster — earned client-side only after task verification.
-export const sampleBadges: Badge[] = [
-  {
-    id: 'badge_solidity_dev',
-    name: 'Solidity Developer',
-    description: 'Wrote, compiled, and deployed a verified smart contract to a testnet using Hardhat or Foundry.',
-    category: 'Smart Contracts',
-    iconName: 'Code2',
-    color: 'from-zinc-300 to-zinc-500',
-    xpBonus: 250,
-  },
-  {
-    id: 'badge_defi_architect',
-    name: 'DeFi Architect',
-    description: 'Built and tested a decentralized exchange (AMM) with liquidity pools and swap mechanics.',
-    category: 'DeFi Protocols',
-    iconName: 'ArrowLeftRight',
-    color: 'from-purple-500 to-indigo-600',
-    xpBonus: 350,
-  },
-  {
-    id: 'badge_nft_creator',
-    name: 'NFT Creator',
-    description: 'Minted an ERC-721 NFT collection with metadata, provenance, and marketplace listing.',
-    category: 'NFTs & Digital Assets',
-    iconName: 'Palette',
-    color: 'from-pink-500 to-rose-600',
-    xpBonus: 300,
-  },
-  {
-    id: 'badge_zk_engineer',
-    name: 'ZK Engineer',
-    description: 'Constructed and verified a zero-knowledge proof circuit using Circom and SnarkJS.',
-    category: 'ZK & Privacy',
-    iconName: 'ShieldCheck',
-    color: 'from-emerald-500 to-teal-600',
-    xpBonus: 400,
-  },
-  {
-    id: 'badge_dao_governor',
-    name: 'DAO Governor',
-    description: 'Deployed a DAO governance system with proposal creation, voting, and on-chain execution.',
-    category: 'DAOs & Governance',
-    iconName: 'Vote',
-    color: 'from-amber-500 to-orange-600',
-    xpBonus: 300,
-  },
-];
+// No dummy badge catalog — the earnable badges come ONLY from the per-lab
+// credential designs made in the admin Credential tab. Badges are derived at
+// render time from each lab's `credential.badge` (see lib/badges.ts).
+export const sampleBadges: Badge[] = [];
 
 export const sampleCertificates: Certificate[] = [];
 

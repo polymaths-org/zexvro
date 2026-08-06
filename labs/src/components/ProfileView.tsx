@@ -13,7 +13,8 @@ import {
   BadgeCheck,
   ExternalLink,
 } from 'lucide-react';
-import { User, Badge, Certificate } from '../types';
+import { User, Badge, Certificate, Lab } from '../types';
+import { deriveBadges } from '../lib/badges';
 import { StatusBadge } from './ui/Badge';
 import { shareUrl, profileUrl, verifyUrl } from '../lib/router';
 
@@ -21,6 +22,7 @@ interface ProfileViewProps {
   user: User;
   badges: Badge[];
   certificates: Certificate[];
+  labs?: Lab[];
 }
 
 const getLevel = (xp: number) => {
@@ -31,9 +33,9 @@ const getLevel = (xp: number) => {
   return { level: 1, title: 'Web3 Novice', next: 500, progress: (xp / 500) * 100 };
 };
 
-export const ProfileView: React.FC<ProfileViewProps> = ({ user, badges, certificates }) => {
+export const ProfileView: React.FC<ProfileViewProps> = ({ user, badges, certificates, labs = [] }) => {
   const levelInfo = getLevel(user.xp);
-  const earned = badges.filter((b) => b.earnedAt);
+  const earned = (labs.length > 0 ? deriveBadges(labs, user) : badges).filter((b) => b.earnedAt);
 
   const [copied, setCopied] = React.useState(false);
   const copyProfileLink = async () => {

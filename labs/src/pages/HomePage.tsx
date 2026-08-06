@@ -6,7 +6,6 @@ export const HomePage: React.FC = () => {
   const {
     user,
     labs: visibleLabs,
-    badges,
     certificates,
     handleStartLab,
     handleOpenDetails,
@@ -17,7 +16,6 @@ export const HomePage: React.FC = () => {
     <DashboardView
       user={user}
       labs={visibleLabs}
-      badges={badges}
       certificates={certificates}
       onStartLab={handleStartLab}
       onOpenDetails={handleOpenDetails}

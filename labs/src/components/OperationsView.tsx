@@ -11,7 +11,11 @@ import {
   XCircle,
   AlertCircle,
   Loader2,
-  RefreshCw
+  RefreshCw,
+  Eye,
+  X,
+  ExternalLink,
+  Calendar
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Submission, Lab, SubmissionStatus } from '../types';
@@ -41,6 +45,7 @@ export const OperationsView: React.FC<OperationsViewProps> = ({
   const [filterStatus, setFilterStatus] = useState<SubmissionStatus | 'all'>('all');
   const [filterLab, setFilterLab] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedSub, setSelectedSub] = useState<Submission | null>(null);
 
   const filteredSubmissions = submissions.filter(s => {
     const matchesStatus = filterStatus === 'all' || s.status === filterStatus;
@@ -240,25 +245,12 @@ export const OperationsView: React.FC<OperationsViewProps> = ({
                       <td className="p-3 text-white font-bold">{sub.score ?? '—'}</td>
                       <td className="p-3 text-zinc-400">{new Date(sub.submittedAt).toLocaleDateString()}</td>
                       <td className="p-3 text-right">
-                        {(sub.status === 'pending' || sub.status === 'for_review') && onUpdateSubmission && (
-                          <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              onClick={() => onUpdateSubmission(sub.id, 'passed')}
-                              className="px-2 py-1 bg-emerald-950 border border-emerald-800 text-emerald-300 rounded-lg text-[10px] font-bold hover:bg-emerald-900 transition-colors"
-                            >
-                              Pass
-                            </button>
-                            <button
-                              onClick={() => onUpdateSubmission(sub.id, 'rejected')}
-                              className="px-2 py-1 bg-red-950 border border-red-800 text-red-300 rounded-lg text-[10px] font-bold hover:bg-red-900 transition-colors"
-                            >
-                              Reject
-                            </button>
-                          </div>
-                        )}
-                        {sub.reviewNote && (
-                          <p className="text-[10px] text-zinc-500 mt-1 text-right italic">{sub.reviewNote}</p>
-                        )}
+                        <button
+                          onClick={() => setSelectedSub(sub)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900 border border-zinc-700 text-zinc-200 text-[10px] font-bold rounded-lg hover:bg-zinc-800 hover:border-zinc-500 transition-colors"
+                        >
+                          <Eye className="h-3.5 w-3.5" /> View details
+                        </button>
                       </td>
                     </tr>
                   );
@@ -268,6 +260,66 @@ export const OperationsView: React.FC<OperationsViewProps> = ({
           </div>
         )}
       </div>
+
+      {/* Submission detail modal (view-only — no pass/reject) */}
+      {selectedSub && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
+          <div className="relative w-full max-w-lg bg-zinc-950 border border-zinc-700 rounded-3xl p-6 sm:p-8">
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <StatusBadge variant={statusConfig[selectedSub.status].variant} icon={statusConfig[selectedSub.status].icon}>
+                    {statusConfig[selectedSub.status].label}
+                  </StatusBadge>
+                  <span className="text-[10px] font-mono text-zinc-500">{selectedSub.type || 'lab'}</span>
+                </div>
+                <h2 className="text-lg font-black text-white font-heading">{selectedSub.labTitle || selectedSub.labId}</h2>
+                <p className="text-xs text-zinc-400">{selectedSub.userName || selectedSub.userId}</p>
+              </div>
+              <button
+                onClick={() => setSelectedSub(null)}
+                className="p-2 text-zinc-400 hover:text-white bg-zinc-900 rounded-xl shrink-0"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <dl className="space-y-3 text-sm">
+              <Row label="Student" value={selectedSub.userName || selectedSub.userId} />
+              <Row label="Lab" value={selectedSub.labTitle || selectedSub.labId} />
+              <Row label="Lab ID" value={selectedSub.labId} mono />
+              <Row label="Score" value={selectedSub.score != null ? String(selectedSub.score) : '—'} />
+              <Row label="Submitted" value={new Date(selectedSub.submittedAt).toLocaleString()} />
+              <Row label="Submission ID" value={selectedSub.id} mono />
+              {selectedSub.reviewedBy && <Row label="Reviewed by" value={selectedSub.reviewedBy} />}
+              {selectedSub.reviewNote && (
+                <div className="flex justify-between gap-4 items-start">
+                  <dt className="text-zinc-500 font-mono text-[11px] uppercase tracking-widest font-bold shrink-0">Note</dt>
+                  <dd className="text-zinc-200 text-right font-mono text-xs whitespace-pre-wrap">{selectedSub.reviewNote}</dd>
+                </div>
+              )}
+            </dl>
+
+            {selectedSub.repoUrl && (
+              <a
+                href={selectedSub.repoUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-5 inline-flex items-center gap-2 px-4 py-2 bg-white text-black text-xs font-extrabold rounded-xl hover:bg-zinc-200 transition-colors"
+              >
+                <ExternalLink className="h-3.5 w-3.5" /> View submission link
+              </a>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
+const Row: React.FC<{ label: string; value: string; mono?: boolean }> = ({ label, value, mono }) => (
+  <div className="flex justify-between gap-4">
+    <dt className="text-zinc-500 font-mono text-[11px] uppercase tracking-wider font-bold">{label}</dt>
+    <dd className={`text-zinc-200 text-xs text-right ${mono ? 'font-mono' : 'font-bold'}`}>{value || '—'}</dd>
+  </div>
+);

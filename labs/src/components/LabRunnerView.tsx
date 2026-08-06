@@ -173,32 +173,39 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
   };
 
   const handleVerifyCode = async (task: LabTask) => {
+    const output = (flagInputs[task.id] || '').trim();
+    if (!output) {
+      setFlagErrors((prev) => ({ ...prev, [task.id]: 'Paste your code/output first.' }));
+      return;
+    }
+    // Code tasks accept whatever the learner shares — no strict output match.
+    // The output is recorded as a submission so admins can review it.
     setVerifyingTaskId(task.id);
     try {
-      const response = await fetch('/api/verify-task', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          labId: lab.id,
-          taskId: task.id,
-          userCommand: flagInputs[task.id] || '',
-          flag: flagInputs[task.id] || '',
-          codeContent: flagInputs[task.id] || '',
-        }),
+      const submission: Submission = {
+        id: `sub_${Date.now()}`,
+        labId: lab.id,
+        userId: user.id,
+        userName: user.name || user.username,
+        labTitle: lab.title,
+        status: 'for_review',
+        score: 0,
+        submittedAt: new Date().toISOString(),
+        reviewNote: `Output shared: ${output.slice(0, 200)}${output.length > 200 ? '…' : ''}`,
+        type: 'lab',
+      };
+      onAddSubmission?.(submission);
+      await api.createSubmission({
+        labId: lab.id,
+        labTitle: lab.title,
+        reviewNote: output.slice(0, 400),
+        status: 'for_review',
       });
-      const data = await response.json();
-      if (data.passed) {
-        setTaskCompleted(task.id, true);
-      } else {
-        setFlagErrors((prev) => ({
-          ...prev,
-          [task.id]: data.log || 'Verification failed. Check the expected output.',
-        }));
-      }
+      setTaskCompleted(task.id, true);
     } catch {
       setFlagErrors((prev) => ({
         ...prev,
-        [task.id]: 'Could not reach the verification service. Try again.',
+        [task.id]: 'Could not save your submission. Try again.',
       }));
     } finally {
       setVerifyingTaskId(null);
@@ -337,7 +344,7 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
                     value={flagInputs[task.id] || ''}
                     onChange={(e) => setFlagInputs((prev) => ({ ...prev, [task.id]: e.target.value }))}
                     onKeyDown={(e) => e.key === 'Enter' && handleVerifyCode(task)}
-                    placeholder="Paste command / expected output"
+                    placeholder="Share your code / command output"
                     className="flex-1 bg-transparent text-sm text-white placeholder-zinc-600 focus:outline-none"
                   />
                 </div>
@@ -349,9 +356,9 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
                   {verifyingTaskId === task.id ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   ) : (
-                    <ShieldCheck className="h-3.5 w-3.5" />
+                    <Send className="h-3.5 w-3.5" />
                   )}
-                  Verify
+                  Submit
                 </button>
               </div>
             )}

@@ -17,6 +17,7 @@ import {
   GraduationCap,
   ListChecks,
   Target,
+  RotateCcw,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Lab, User } from '../types';
@@ -29,6 +30,7 @@ interface LabDetailsViewProps {
   enrolledLearners?: User[];
   onBack: () => void;
   onStartLab: (lab: Lab) => void;
+  onReenroll?: (lab: Lab) => void;
 }
 
 export type LabAccessState = 'open' | 'locked' | 'closed' | 'draft';
@@ -40,7 +42,7 @@ export const getLabAccessState = (lab: Lab): LabAccessState => {
   return 'open';
 };
 
-export const LabDetailsView: React.FC<LabDetailsViewProps> = ({ lab, user, enrolledLearners, onBack, onStartLab }) => {
+export const LabDetailsView: React.FC<LabDetailsViewProps> = ({ lab, user, enrolledLearners, onBack, onStartLab, onReenroll }) => {
   const state = getLabAccessState(lab);
   const enrolled = lab.enrolledCount ?? lab.completions ?? 0;
   const isAdmin = user.role === 'admin';
@@ -328,22 +330,32 @@ export const LabDetailsView: React.FC<LabDetailsViewProps> = ({ lab, user, enrol
             </p>
           )}
 
-          <Button
-            variant={isCompleted ? 'secondary' : 'primary'}
-            size="lg"
-            fullWidth
-            disabled={isCompleted || state === 'closed'}
-            icon={isCompleted ? <Check className="h-4 w-4" /> : <Play className="h-4 w-4 fill-current" />}
-            onClick={() => onStartLab(lab)}
-          >
-            {isCompleted
-              ? 'Lab Completed'
-              : state === 'locked' ? 'Enter Access Code' : isEnrolled ? 'Resume Lab' : 'Enroll'}
-          </Button>
+          {isCompleted ? (
+            <Button
+              variant="primary"
+              size="lg"
+              fullWidth
+              icon={<RotateCcw className="h-4 w-4" />}
+              onClick={() => onReenroll?.(lab)}
+            >
+              Re-enroll & Retake Lab
+            </Button>
+          ) : (
+            <Button
+              variant="primary"
+              size="lg"
+              fullWidth
+              disabled={state === 'closed'}
+              icon={<Play className="h-4 w-4 fill-current" />}
+              onClick={() => onStartLab(lab)}
+            >
+              {state === 'locked' ? 'Enter Access Code' : isEnrolled ? 'Resume Lab' : 'Enroll'}
+            </Button>
+          )}
 
           {isCompleted && (
             <p className="text-xs text-zinc-500 font-mono text-center text-emerald-400">
-              You've already submitted this lab — re-taking it is not allowed.
+              You already earned the certificate & badge. Re-enrolling restarts the lab so you can retake it.
             </p>
           )}
 

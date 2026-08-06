@@ -18,7 +18,8 @@ import {
   TrendingUp
 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { User, Lab, Badge, Certificate } from '../types';
+import { User, Lab, Certificate } from '../types';
+import { deriveBadges } from '../lib/badges';
 import { Card } from './ui/Card';
 import { StatusBadge, Tag } from './ui/Badge';
 import { Button } from './ui/Button';
@@ -27,7 +28,6 @@ import { EmptyState } from './ui/EmptyState';
 interface DashboardViewProps {
   user: User;
   labs: Lab[];
-  badges: Badge[];
   certificates: Certificate[];
   onStartLab: (lab: Lab) => void;
   onOpenDetails: (lab: Lab) => void;
@@ -46,14 +46,14 @@ const getLevel = (xp: number) => {
 export const DashboardView: React.FC<DashboardViewProps> = ({
   user,
   labs,
-  badges,
   certificates,
   onStartLab,
   onOpenDetails,
   onNavigateTab,
 }) => {
   const featuredLabs = labs.filter((l) => l.featured || l.isPublished).slice(0, 3);
-  const earnedBadgesCount = badges.filter((b) => b.earnedAt).length;
+  const derivedBadges = deriveBadges(labs, user);
+  const earnedBadgesCount = derivedBadges.filter((b) => b.earnedAt).length;
   const levelInfo = getLevel(user.xp);
 
   return (
@@ -202,7 +202,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </button>
           </div>
           <div className="flex gap-3 overflow-x-auto scrollbar-none pb-1">
-            {badges.filter(b => b.earnedAt).slice(0, 4).map(badge => (
+            {derivedBadges.filter(b => b.earnedAt).slice(0, 4).map(badge => (
               <div key={badge.id} className="shrink-0 bg-zinc-950 border border-zinc-600 rounded-2xl p-4 flex items-center gap-3 min-w-[200px]">
                 <div className="w-10 h-10 bg-white text-black rounded-xl flex items-center justify-center shrink-0">
                   <Award className="h-5 w-5" />

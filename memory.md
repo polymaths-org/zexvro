@@ -1,5 +1,18 @@
 # ZEXVRO Shared Memory
 
+## 2026-08-06 - ZEXVRO Labs: real badge catalog, credential editor crop controls, cert image rendering, re-enroll, ops view-only, code tasks, full user roster (Paris)
+
+Prod bundle `index-BBOYsxam.js`. Batch 2 of the learner/admin cleanup:
+
+- **Badges now come from the credential tab, not a dummy catalog.** Removed the 6 sample `Solidity Developer`/`DeFi Architect`/... dummy badges (`mockData.ts` `sampleBadges` is now `[]`; `state/labs.tsx` no longer seeds them). New `src/lib/badges.ts`: `deriveBadges(labs, user)` builds the earnable badge list from each lab's `credential.badge` design (`id: lab_<labId>`, name from `credential.badgeName || lab.badgeName`, earned when `user.completedLabIds` includes the lab). `DashboardView`, `CertificatesView`, `ProfileView` consume it (public profile falls back to the badges prop).
+- **Credential editor crop controls.** `LabCredential` gains `bgSize? ('cover'|'contain')`, `bgPosX?`, `bgPosY?`, `bgZoom?` on both badge + certificate. New `BgControls` panel (Fill/Fit toggle, X/Y position sliders, Zoom 50–300%) shows under the bg upload once an image is set; the canvas renders the bg as an inner layer (not a container transform, so blocks don't scale). Image blocks now get Size + Replace image + Remove image controls in the property panel. `CertificatePreview` and the badge tiles render the same size/pos/zoom.
+- **Issued cert view is now the real design image.** The CertificatesView modal previously hand-built a hardcoded "Certificate Canvas Content" layout (logo + static text + QR) which caused sizing issues. It now renders the actual `CertificatePreview` from `cert.design` (consistent 16:9 image) plus the verification ID. Removed the now-unused `VerifyQR` import there.
+- **Re-enroll button.** Completed labs in `LabDetailsView` now show a "Re-enroll & Retake Lab" primary button (new `onReenroll` prop → `handleReenroll` in `state/labs.tsx`), which resets that lab's `labProgress` and reopens the runner. Cert/badge stay earned.
+- **Operations submissions are view-only.** Removed Pass/Reject buttons from `OperationsView` and `AdminPanel`; a "View details" modal shows status, lab, score, submitted time, reviewer, note, and repo link.
+- **Flag vs code tasks.** `flag` tasks still strict-match `expectedFlag`. `code` tasks no longer call `/api/verify-task` — they accept whatever the learner shares, record it as a `for_review` submission (output in `reviewNote`), and mark the task done (button now "Submit").
+- **Admin Users shows the full roster.** The admin Users effect merges backend `users` docs with every user that has a submission plus the current admin (deduped by id), instead of falling back to `[user]`.
+- Verified: tsc clean, build clean, deployed; prod bundle confirmed live on `labs.zexvro.in`.
+
 ## 2026-08-06 - ZEXVRO Labs: lab-details completion state (Paris)
 
 Prod bundle `index-Da4yIcjd.js`. After a lab is submitted (`user.completedLabIds`), the lab details page now shows the completed state instead of Resume Lab: the CTA header reads "Lab completed / Certificate & badge earned", the button is disabled, reads **"Lab Completed"** with a check icon, and shows "You've already submitted this lab — re-taking it is not allowed." (`LabDetailsView.tsx`).

@@ -157,6 +157,10 @@ export interface LabCredential {
   badge?: {
     background: string;
     backgroundImage?: string; // optional uploaded image behind the badge
+    bgSize?: 'cover' | 'contain'; // how the bg image fills the canvas (default cover)
+    bgPosX?: number; // 0-100, background position X
+    bgPosY?: number; // 0-100, background position Y
+    bgZoom?: number; // 0.5-3 scale multiplier for the bg image
     accent: string;
     icon: string; // icon key
     dotgrid?: boolean;
@@ -165,6 +169,10 @@ export interface LabCredential {
   certificate?: {
     background: string;
     backgroundImage?: string; // optional uploaded image behind the certificate
+    bgSize?: 'cover' | 'contain';
+    bgPosX?: number;
+    bgPosY?: number;
+    bgZoom?: number;
     borderColor: string;
     accent: string;
     logoUrl?: string;
@@ -181,6 +189,8 @@ export interface Badge {
   iconName: string; // Lucide icon or custom SVG identifier
   color: string;
   imageUrl?: string; // custom badge image (overrides icon/color)
+  background?: string; // badge bg color from credential design
+  backgroundImage?: string; // badge bg image from credential design
   earnedAt?: string;
   xpBonus: number;
   awardOn?: string; // 'completion' | 'page:N' — when the badge is granted

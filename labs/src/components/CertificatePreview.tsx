@@ -45,11 +45,20 @@ export const CertificatePreview: React.FC<CertificatePreviewProps> = ({
 }) => {
   const d = design && design.elements && design.elements.length > 0 ? design : fallbackDesign;
 
+  const bgStyle: React.CSSProperties = d.backgroundImage
+    ? {
+        backgroundImage: `url("${d.backgroundImage}")`,
+        backgroundSize: d.bgSize === 'contain' ? 'contain' : 'cover',
+        backgroundPosition: `${d.bgPosX ?? 50}% ${d.bgPosY ?? 50}%`,
+        backgroundRepeat: 'no-repeat',
+      }
+    : { background: d.background };
+
   return (
     <div
       className="relative w-full rounded-2xl overflow-hidden aspect-[16/9] border-2 select-none"
       style={{
-        background: d.backgroundImage ? `url("${d.backgroundImage}") center / cover no-repeat` : d.background,
+        ...bgStyle,
         borderColor: d.borderColor,
       }}
     >

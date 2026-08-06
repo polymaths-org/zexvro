@@ -75,12 +75,62 @@ const defaultCert = (): NonNullable<LabCredential['certificate']> => ({
   ],
 });
 
-const replaceVars = (text: string, badgeName: string, labName: string) =>
+  const replaceVars = (text: string, badgeName: string, labName: string) =>
   (text || '')
     .replaceAll('{username}', 'Alex Learner')
     .replaceAll('{labname}', labName || 'ZEXVRO Lab')
     .replaceAll('{badgename}', badgeName || 'Skill Badge')
     .replaceAll('{date}', new Date().toLocaleDateString());
+
+const BgControls: React.FC<{
+  bg: NonNullable<LabCredential['badge']>;
+  onPatch: (p: Partial<NonNullable<LabCredential['badge']>>) => void;
+}> = ({ bg, onPatch }) => {
+  return (
+    <div className="space-y-2.5 pt-2 border-t border-zinc-800">
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] font-mono text-zinc-500 font-bold">Fit</span>
+        <div className="flex rounded-lg overflow-hidden border border-zinc-700">
+          {(['cover', 'contain'] as const).map((s) => (
+            <button
+              key={s}
+              onClick={() => onPatch({ bgSize: s })}
+              className={`px-2.5 py-1 text-[10px] font-bold font-mono transition-colors ${(bg.bgSize || 'cover') === s ? 'bg-blue-600 text-white' : 'bg-zinc-900 text-zinc-400 hover:text-white'}`}
+            >
+              {s === 'cover' ? 'Fill' : 'Fit'}
+            </button>
+          ))}
+        </div>
+      </div>
+      {(['bgPosX', 'bgPosY'] as const).map((key) => (
+        <div key={key} className="flex items-center gap-2">
+          <span className="w-8 text-[10px] font-mono text-zinc-500 font-bold">{key === 'bgPosX' ? 'X' : 'Y'}</span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={bg[key] ?? 50}
+            onChange={(e) => onPatch({ [key]: Number(e.target.value) } as Partial<NonNullable<LabCredential['badge']>>)}
+            className="flex-1 accent-blue-600"
+          />
+          <span className="text-[10px] font-mono text-zinc-500 w-6 text-right">{bg[key] ?? 50}</span>
+        </div>
+      ))}
+      <div className="flex items-center gap-2">
+        <span className="w-8 text-[10px] font-mono text-zinc-500 font-bold">Zoom</span>
+        <input
+          type="range"
+          min={50}
+          max={300}
+          value={Math.round((bg.bgZoom ?? 1) * 100)}
+          onChange={(e) => onPatch({ bgZoom: Number(e.target.value) / 100 })}
+          className="flex-1 accent-blue-600"
+        />
+        <span className="text-[10px] font-mono text-zinc-500 w-6 text-right">{Math.round((bg.bgZoom ?? 1) * 100)}%</span>
+      </div>
+    </div>
+  );
+};
 
 export const CredentialCanvas: React.FC<CredentialCanvasProps> = ({
   value,
@@ -299,19 +349,13 @@ export const CredentialCanvas: React.FC<CredentialCanvasProps> = ({
     ? `radial-gradient(${badge.accent}33 1px, transparent 1px)`
     : undefined;
   const isBadge = selectedKind === 'badge';
-  const activeBgImage = isBadge ? badgeBackgroundImage : certBackgroundImage;
-  const canvasBg =
-    activeBgImage
-      ? `url("${activeBgImage}") center / cover no-repeat`
-      : undefined;
-  const canvasBgStyle: React.CSSProperties =
-    canvasBg
-      ? { background: canvasBg }
-      : {
-          background: isBadge ? badge.background : cert.background,
-          backgroundImage: isBadge ? badgeBg : undefined,
-          backgroundSize: isBadge ? '24px 24px' : undefined,
-        };
+  const activeBg = isBadge ? badge : cert;
+  const activeBgImage = (isBadge ? badgeBackgroundImage : certBackgroundImage) || undefined;
+  const canvasBgStyle: React.CSSProperties = {
+    background: isBadge ? badge.background : cert.background,
+    backgroundImage: isBadge && !activeBgImage ? badgeBg : undefined,
+    backgroundSize: isBadge && !activeBgImage ? '24px 24px' : undefined,
+  };
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -351,6 +395,18 @@ export const CredentialCanvas: React.FC<CredentialCanvasProps> = ({
           )}
           {selectedKind === 'cert' && (
             <div className="absolute inset-0 rounded-2xl border-2 pointer-events-none" style={{ borderColor: cert.borderColor }} />
+          )}
+          {activeBgImage && (
+            <div
+              className="absolute inset-0 bg-no-repeat"
+              style={{
+                backgroundImage: `url("${activeBgImage}")`,
+                backgroundSize: activeBg.bgSize === 'contain' ? 'contain' : 'cover',
+                backgroundPosition: `${activeBg.bgPosX ?? 50}% ${activeBg.bgPosY ?? 50}%`,
+                transform: activeBg.bgZoom && activeBg.bgZoom !== 1 ? `scale(${activeBg.bgZoom})` : undefined,
+                zIndex: 0,
+              }}
+            />
           )}
           {(selectedKind === 'badge' ? badge.elements : cert.elements).map(renderBlock)}
           <div className="absolute bottom-2 right-2 px-2 py-1 bg-black/60 border border-zinc-700 rounded-lg text-[9px] font-mono text-zinc-400 flex items-center gap-1 pointer-events-none">
@@ -455,6 +511,9 @@ export const CredentialCanvas: React.FC<CredentialCanvasProps> = ({
                 </button>
               )}
             </div>
+            {badge.backgroundImage && (
+              <BgControls bg={badge} onPatch={(p) => patch('badge', (d) => ({ ...d, ...p }) as any)} />
+            )}
             </>
           ) : (
             <div className="space-y-3">
@@ -508,6 +567,9 @@ export const CredentialCanvas: React.FC<CredentialCanvasProps> = ({
                   </button>
                 )}
               </div>
+              {cert.backgroundImage && (
+                <BgControls bg={cert} onPatch={(p) => patch('cert', (d) => ({ ...d, ...p }) as any)} />
+              )}
             </div>
           )}
         </div>
@@ -617,6 +679,43 @@ export const CredentialCanvas: React.FC<CredentialCanvasProps> = ({
                   <option value="circle">Circle</option>
                   <option value="hex">Hex</option>
                 </select>
+              </div>
+            )}
+
+            {selected.kind === 'image' && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-mono text-zinc-500 mb-1 font-bold">Size</label>
+                    <input
+                      type="number"
+                      value={selected.size}
+                      onChange={(e) => updateElement(selectedKind, selected.id, { size: Number(e.target.value) || 40 })}
+                      className="w-full bg-black border border-zinc-800 rounded-xl px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+                <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-xl text-xs font-bold text-zinc-200">
+                  <ImagePlus className="h-3.5 w-3.5" /> Replace image
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      readImage(e.target.files?.[0], (url) =>
+                        updateElement(selectedKind, selected.id, { imageUrl: url }),
+                      );
+                    }}
+                  />
+                </label>
+                {selected.imageUrl && (
+                  <button
+                    onClick={() => updateElement(selectedKind, selected.id, { imageUrl: '' })}
+                    className="text-[11px] font-mono text-zinc-500 hover:text-red-400 underline"
+                  >
+                    Remove image
+                  </button>
+                )}
               </div>
             )}
 
