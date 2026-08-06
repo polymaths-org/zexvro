@@ -45,6 +45,7 @@ export const LabDetailsView: React.FC<LabDetailsViewProps> = ({ lab, user, enrol
   const enrolled = lab.enrolledCount ?? lab.completions ?? 0;
   const isAdmin = user.role === 'admin';
   const isEnrolled = (user.startedLabIds || []).includes(lab.id);
+  const isCompleted = (user.completedLabIds || []).includes(lab.id);
   const [copied, setCopied] = useState(false);
 
   const copyLabLink = async () => {
@@ -305,10 +306,14 @@ export const LabDetailsView: React.FC<LabDetailsViewProps> = ({ lab, user, enrol
             </div>
             <div>
               <p className="text-sm font-bold text-white font-heading">
-                {state === 'open' ? 'Ready to start' : state === 'locked' ? 'Requires access code' : state === 'closed' ? 'Lab closed' : 'Not published yet'}
+                {isCompleted
+                  ? 'Lab completed'
+                  : state === 'open' ? 'Ready to start' : state === 'locked' ? 'Requires access code' : state === 'closed' ? 'Lab closed' : 'Not published yet'}
               </p>
               <p className="text-xs text-zinc-500 font-mono">
-                {state === 'open'
+                {isCompleted
+                  ? 'Certificate & badge earned'
+                  : state === 'open'
                   ? 'Begin this hands-on web3 lab now'
                   : state === 'locked'
                   ? 'An access code is required to enter'
@@ -324,17 +329,25 @@ export const LabDetailsView: React.FC<LabDetailsViewProps> = ({ lab, user, enrol
           )}
 
           <Button
-            variant="primary"
+            variant={isCompleted ? 'secondary' : 'primary'}
             size="lg"
             fullWidth
-            disabled={state === 'closed'}
-            icon={<Play className="h-4 w-4 fill-current" />}
+            disabled={isCompleted || state === 'closed'}
+            icon={isCompleted ? <Check className="h-4 w-4" /> : <Play className="h-4 w-4 fill-current" />}
             onClick={() => onStartLab(lab)}
           >
-            {state === 'locked' ? 'Enter Access Code' : isEnrolled ? 'Resume Lab' : 'Enroll'}
+            {isCompleted
+              ? 'Lab Completed'
+              : state === 'locked' ? 'Enter Access Code' : isEnrolled ? 'Resume Lab' : 'Enroll'}
           </Button>
 
-          {state === 'locked' && (
+          {isCompleted && (
+            <p className="text-xs text-zinc-500 font-mono text-center text-emerald-400">
+              You've already submitted this lab — re-taking it is not allowed.
+            </p>
+          )}
+
+          {!isCompleted && state === 'locked' && (
             <p className="text-xs text-zinc-500 font-mono text-center">
               You will be asked for the code after clicking Enroll.
             </p>
