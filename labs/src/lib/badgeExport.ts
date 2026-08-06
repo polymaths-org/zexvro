@@ -1,8 +1,8 @@
 import { LabCredential } from '../types';
 
 // Renders a skill badge to a crisp square PNG at native resolution so the
-// learner can download/share the actual badge image. Layout mirrors the badge
-// art shown in the gallery (background + centered white award glyph).
+// learner can download/share the actual badge image. The badge's background
+// image IS the badge — exported as-is, no extra glyphs.
 
 const SIZE = 1024;
 
@@ -48,40 +48,6 @@ function drawBackground(
   }
 }
 
-function drawBadgeGlyph(ctx: CanvasRenderingContext2D, badge: BadgeArt) {
-  const accent = badge.color || '#3b82f6';
-  const cx = SIZE / 2;
-  const cy = SIZE / 2;
-
-  // Soft accent ring behind the glyph
-  ctx.save();
-  ctx.shadowColor = accent;
-  ctx.shadowBlur = SIZE * 0.12;
-  ctx.fillStyle = accent;
-  ctx.globalAlpha = 0.18;
-  ctx.beginPath();
-  ctx.arc(cx, cy, SIZE * 0.34, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-
-  // White ribbon award (lucide "award") centered
-  ctx.fillStyle = '#ffffff';
-  const s = SIZE / 96;
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.scale(s, s);
-  ctx.translate(-48, -48);
-  ctx.beginPath();
-  ctx.arc(48, 34, 24, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  const ribbon = new Path2D(
-    'M61.9 50.5 L68 88 L48 76 L28 88 L34.1 50.5',
-  );
-  ctx.fill(ribbon);
-  ctx.restore();
-}
-
 export async function exportBadgePng(badge: BadgeArt): Promise<string> {
   const canvas = document.createElement('canvas');
   canvas.width = SIZE;
@@ -99,7 +65,6 @@ export async function exportBadgePng(badge: BadgeArt): Promise<string> {
   }
 
   drawBackground(ctx, bg, badge);
-  drawBadgeGlyph(ctx, badge);
 
   return canvas.toDataURL('image/png');
 }

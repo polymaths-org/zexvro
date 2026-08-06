@@ -1,5 +1,9 @@
 # ZEXVRO Shared Memory
 
+## 2026-08-06 - ZEXVRO Labs: badge export/display show original image, no fake glyph (Paris)
+
+Prod bundle `index-CiaprXdg.js`. The "INTO the Midnight SPPU" badge uses a real backgroundImage (579KB) with 0 icon elements, but three places overlaid fake white award glyphs on top: `badgeExport.ts` drew an accent circle + ribbon via `drawBadgeGlyph` (now deleted), `BadgeArt.tsx` always drew `ICONS[badge.icon]` over the image (now only renders icon for color-only badges), and `CertificatesView` gallery drew an Award overlay in the `design.elements` icon branch (now shows backgroundImage as-is). Downloads/issued badges now show the admin's original image untouched. tsc+build clean, deployed, bundle confirmed live.
+
 ## 2026-08-06 - ZEXVRO Labs: flag/code tasks can't be hand-checked until verified (Paris)
 
 Prod bundle `index-BUd0NaHM.js`. In `LabRunnerView.tsx` the task checkbox no longer completes flag/code tasks by hand — clicking does nothing for `flagType === 'flag'`/`'code'` (checkbox rendered `cursor-not-allowed opacity-60`); those tasks only complete when `handleVerifyFlag` / `handleVerifyCode` accept the submitted flag/output. Plain checkbox and repo tasks unchanged. tsc + build clean, deployed, bundle confirmed live.

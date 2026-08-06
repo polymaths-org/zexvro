@@ -225,46 +225,34 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
                 }`}
               >
                 <div className="w-full">
-                  <div className="mx-auto mb-3 relative w-28 h-28 overflow-hidden rounded-2xl border border-zinc-700"
-                    style={
-                      design?.backgroundImage || badge.backgroundImage
-                        ? {
-                            backgroundImage: `url("${design?.backgroundImage || badge.backgroundImage}")`,
-                            backgroundSize: design?.bgSize === 'contain' ? 'contain' : 'cover',
-                            backgroundPosition: `${design?.bgPosX ?? 50}% ${design?.bgPosY ?? 50}%`,
-                            backgroundRepeat: 'no-repeat',
-                          }
-                        : { background: design?.background || badge.background || badge.color }
-                    }
-                  >
-                    {design?.elements ? (
-                      design.elements
-                        .filter((e) => e.kind === 'icon')
-                        .map((e) => (
-                          <div
-                            key={e.id}
-                            className="absolute inset-0 flex items-center justify-center"
-                            style={{ color: '#fff' }}
-                          >
-                            <Award className="w-12 h-12" style={{ opacity: isEarned ? 1 : 0.4 }} />
-                          </div>
-                        ))
-                    ) : badge.imageUrl ? (
-                      <img
-                        src={badge.imageUrl}
-                        alt={badge.name}
-                        className={`w-full h-full object-cover ${isEarned ? '' : 'grayscale opacity-40'}`}
-                      />
-                    ) : (
-                      <div
-                        className={`w-full h-full flex items-center justify-center ${
-                          isEarned ? 'bg-white text-black' : 'bg-zinc-900 text-zinc-600'
-                        }`}
-                      >
-                        <Award className="h-12 w-12" />
-                      </div>
-                    )}
-                  </div>
+                <div className="mx-auto mb-3 relative w-28 h-28 overflow-hidden rounded-2xl border border-zinc-700"
+                  style={
+                    design?.backgroundImage || badge.backgroundImage
+                      ? {
+                          backgroundImage: `url("${design?.backgroundImage || badge.backgroundImage}")`,
+                          backgroundSize: design?.bgSize === 'contain' ? 'contain' : 'cover',
+                          backgroundPosition: `${design?.bgPosX ?? 50}% ${design?.bgPosY ?? 50}%`,
+                          backgroundRepeat: 'no-repeat',
+                        }
+                      : { background: design?.background || badge.background || badge.color }
+                  }
+                >
+                  {design?.backgroundImage || badge.backgroundImage ? null : badge.imageUrl ? (
+                    <img
+                      src={badge.imageUrl}
+                      alt={badge.name}
+                      className={`w-full h-full object-cover ${isEarned ? '' : 'grayscale opacity-40'}`}
+                    />
+                  ) : (
+                    <div
+                      className={`w-full h-full flex items-center justify-center ${
+                        isEarned ? 'bg-white text-black' : 'bg-zinc-900 text-zinc-600'
+                      }`}
+                    >
+                      <Award className="h-12 w-12" />
+                    </div>
+                  )}
+                </div>
 
                   <h4 className="text-xs font-bold text-white line-clamp-1 font-heading">{badge.name}</h4>
                   <p className="text-[10px] text-zinc-400 mt-1 line-clamp-2">{badge.description}</p>
