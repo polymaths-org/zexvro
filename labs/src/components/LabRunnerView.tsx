@@ -167,15 +167,25 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
     }
   };
 
-  const handleVerifyFlag = (task: LabTask) => {
+  const handleVerifyFlag = async (task: LabTask) => {
     const answer = (flagInputs[task.id] || '').trim();
-    if (!task.expectedFlag) return;
-    const correct = answer.toLowerCase() === task.expectedFlag.trim().toLowerCase();
-    if (correct) {
-      setFlagErrors((prev) => ({ ...prev, [task.id]: '' }));
-      setTaskCompleted(task.id, true);
-    } else {
-      setFlagErrors((prev) => ({ ...prev, [task.id]: 'Incorrect flag. Check the lab content and try again.' }));
+    if (!answer) {
+      setFlagErrors((prev) => ({ ...prev, [task.id]: 'Enter the flag / secret answer first.' }));
+      return;
+    }
+    setVerifyingTaskId(task.id);
+    try {
+      const result = await api.verifyTask({ labId: lab.id, taskId: task.id, flag: answer });
+      if (!result) {
+        setFlagErrors((prev) => ({ ...prev, [task.id]: 'Could not verify. Please try again.' }));
+      } else if (result.passed) {
+        setFlagErrors((prev) => ({ ...prev, [task.id]: '' }));
+        setTaskCompleted(task.id, true);
+      } else {
+        setFlagErrors((prev) => ({ ...prev, [task.id]: 'Incorrect flag. Check the lab content and try again.' }));
+      }
+    } finally {
+      setVerifyingTaskId(null);
     }
   };
 
@@ -341,10 +351,15 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
                 </div>
                 <button
                   onClick={() => handleVerifyFlag(task)}
-                  className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-extrabold rounded-xl flex items-center gap-1.5 font-heading"
+                  disabled={verifyingTaskId === task.id}
+                  className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-extrabold rounded-xl flex items-center gap-1.5 font-heading disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  <Send className="h-3.5 w-3.5" />
-                  Check
+                  {verifyingTaskId === task.id ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Send className="h-3.5 w-3.5" />
+                  )}
+                  {verifyingTaskId === task.id ? 'Checking…' : 'Check'}
                 </button>
               </div>
             )}
@@ -530,8 +545,8 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
   return (
     <div className="flex flex-col h-[calc(100vh-57px)] bg-black text-zinc-100 overflow-hidden font-sans">
       {/* Top Workbench Navbar */}
-      <div className="bg-zinc-950 border-b border-zinc-800 px-4 py-3 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-3 min-w-0">
+      <div className="bg-zinc-950 border-b border-zinc-800 px-3 sm:px-4 py-3 flex items-center justify-between shrink-0 gap-2">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <motion.button
             whileTap={{ scale: 0.95 }}
             onClick={onExitLab}
@@ -540,18 +555,18 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
             <ArrowLeft className="h-4 w-4" />
             <span className="hidden sm:inline">Exit</span>
           </motion.button>
-          <div className="h-5 w-[1px] bg-zinc-800" />
+          <div className="hidden sm:block h-5 w-[1px] bg-zinc-800" />
           <div className="flex items-center gap-2 min-w-0">
-            <span className="px-2 py-0.5 bg-blue-soft border border-blue-900/60 text-blue-accent text-[11px] font-mono font-bold rounded-md uppercase">
+            <span className="hidden md:inline-block px-2 py-0.5 bg-blue-soft border border-blue-900/60 text-blue-accent text-[11px] font-mono font-bold rounded-md uppercase">
               {lab.category}
             </span>
-            <h2 className="text-base font-bold text-white truncate max-w-xs sm:max-w-md font-heading">
+            <h2 className="text-sm sm:text-base font-bold text-white truncate max-w-[40vw] sm:max-w-xs md:max-w-md font-heading">
               {lab.title}
             </h2>
           </div>
         </div>
 
-        <div className="flex items-center gap-4 shrink-0">
+        <div className="flex items-center gap-2 sm:gap-4 shrink-0">
           <div className="hidden md:flex items-center gap-2 font-mono text-xs">
             <span className="text-zinc-400 font-bold">Progress:</span>
             <div className="w-28 h-2 bg-zinc-900 border border-zinc-800 rounded-full overflow-hidden">
@@ -563,7 +578,7 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
             <span className="text-white font-bold">{completionPercent}%</span>
           </div>
 
-          <div className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-xl font-mono text-sm text-zinc-200 font-bold">
+          <div className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 px-2.5 sm:px-3 py-1.5 rounded-xl font-mono text-xs sm:text-sm text-zinc-200 font-bold">
             <Clock className="h-4 w-4 text-blue-accent" />
             {hasTimeLimit ? <span>{formatTime(timeLeftSeconds || 0)}</span> : <span>Unlimited</span>}
           </div>
@@ -574,7 +589,7 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
-                className="px-3 py-2 bg-amber-950/60 border border-amber-800 rounded-xl text-amber-200 text-xs font-mono font-bold"
+                className="hidden sm:block px-3 py-2 bg-amber-950/60 border border-amber-800 rounded-xl text-amber-200 text-xs font-mono font-bold"
               >
                 Complete all tasks ({verifiableTasks.length - completedTaskIds.length} left) to earn your certificate & badge.
               </motion.div>
@@ -593,10 +608,10 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
                 setTimeout(() => setShowIncompleteHint(false), 3200);
               }
             }}
-            className="px-4 py-2 btn-primary-blue text-white font-extrabold text-sm rounded-xl transition-all shadow-md flex items-center gap-1.5 font-heading"
+            className="px-2.5 sm:px-4 py-2 btn-primary-blue text-white font-extrabold text-xs sm:text-sm rounded-xl transition-all shadow-md flex items-center gap-1 sm:gap-1.5 font-heading"
           >
             <CheckCircle2 className="h-4 w-4" />
-            <span>Submit Lab</span>
+            <span className="hidden sm:inline">Submit Lab</span>
           </motion.button>
         </div>
       </div>
@@ -640,7 +655,7 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
 
           {/* Page tabs */}
           {pages.length > 1 && (
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none -mx-4 sm:mx-0 px-4 sm:px-0">
               {pages.map((page, i) => {
                 const active = page.id === currentPageId;
                 const locked = isPageLocked(page.id);
@@ -650,7 +665,7 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
                     onClick={() => !locked && onProgressChange({ currentPageId: page.id })}
                     disabled={locked}
                     title={locked ? 'Complete the task on the previous page to unlock this page' : undefined}
-                    className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-all font-heading flex items-center gap-2 ${
+                    className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all font-heading flex items-center gap-1.5 sm:gap-2 ${
                       active
                         ? 'bg-blue-600 text-white shadow-md'
                         : locked
@@ -658,9 +673,9 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
                         : 'bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800'
                     }`}
                   >
-                    <span className="text-xs">{i + 1}</span>
+                    <span className="text-[10px] sm:text-xs">{i + 1}</span>
                     {locked ? <Lock className="h-3 w-3" /> : null}
-                    {page.title || `Page ${i + 1}`}
+                    <span className="max-w-[28vw] sm:max-w-none truncate">{page.title || `Page ${i + 1}`}</span>
                   </button>
                 );
               })}
@@ -699,7 +714,7 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
 
           {/* Next page navigation */}
           {pages.length > 1 && activePage && (
-            <div className="flex items-center justify-between pt-4 mt-8 border-t border-zinc-800">
+            <div className="flex items-center justify-between gap-2 pt-4 mt-8 border-t border-zinc-800">
               {(() => {
                 const pageIdx = pages.findIndex((p) => p.id === currentPageId);
                 const next = pages[pageIdx + 1];
@@ -711,32 +726,34 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
                       <motion.button
                         whileTap={{ scale: 0.97 }}
                         onClick={() => onProgressChange({ currentPageId: prev.id })}
-                        className="flex items-center gap-1 text-sm text-zinc-400 hover:text-white font-bold font-mono"
+                        className="flex items-center gap-1 text-xs sm:text-sm text-zinc-400 hover:text-white font-bold font-mono px-2 sm:px-0 py-2"
                       >
                         <ChevronRight className="h-4 w-4 rotate-180" />
-                        Previous
+                        <span className="hidden sm:inline">Previous</span>
                       </motion.button>
                     ) : <span />}
-                    <span className="text-xs font-mono text-zinc-500">
+                    <span className="text-[10px] sm:text-xs font-mono text-zinc-500">
                       Page {pageIdx + 1} of {pages.length}
                     </span>
                     {next ? (
                       nextLocked ? (
                         <div
-                          className="flex items-center gap-1 px-4 py-2 bg-zinc-900 text-zinc-500 border border-zinc-800 text-sm font-bold rounded-xl font-mono cursor-not-allowed"
+                          className="flex items-center gap-1 px-3 sm:px-4 py-2 bg-zinc-900 text-zinc-500 border border-zinc-800 text-xs sm:text-sm font-bold rounded-xl font-mono cursor-not-allowed"
                           title="Complete the task on this page to unlock the next"
                         >
                           <Lock className="h-4 w-4" />
-                          {next.title}
+                          <span className="hidden sm:inline">{next.title}</span>
+                          <span className="sm:hidden">Next</span>
                         </div>
                       ) : (
                         <motion.button
                           whileHover={{ scale: 1.03 }}
                           whileTap={{ scale: 0.97 }}
                           onClick={() => onProgressChange({ currentPageId: next.id })}
-                          className="flex items-center gap-1 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-xl font-mono"
+                          className="flex items-center gap-1 px-3 sm:px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-sm font-bold rounded-xl font-mono"
                         >
-                          Next: {next.title}
+                          <span className="hidden sm:inline">Next: {next.title}</span>
+                          <span className="sm:hidden">Next</span>
                           <motion.span
                             animate={{ x: [0, 4, 0] }}
                             transition={{ repeat: Infinity, duration: 1.2 }}
@@ -754,10 +771,11 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
                             setTimeout(() => setShowIncompleteHint(false), 3200);
                           }
                         }}
-                        className="flex items-center gap-1 px-4 py-2 btn-primary-blue text-white text-sm font-bold rounded-xl font-mono"
+                        className="flex items-center gap-1 px-3 sm:px-4 py-2 btn-primary-blue text-white text-xs sm:text-sm font-bold rounded-xl font-mono"
                       >
                         <CheckCircle2 className="h-4 w-4" />
-                        Finish Lab
+                        <span className="hidden sm:inline">Finish Lab</span>
+                        <span className="sm:hidden">Finish</span>
                       </button>
                     )}
                   </>
@@ -781,7 +799,7 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
               initial={{ scale: 0.9, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               transition={{ type: 'spring', stiffness: 300, damping: 22 }}
-              className="relative w-full max-w-lg bg-zinc-950 border border-blue-900 rounded-3xl p-8 text-center shadow-[0_0_50px_rgba(59,130,246,0.25)]"
+              className="relative w-full max-w-lg bg-zinc-950 border border-blue-900 rounded-3xl p-5 sm:p-8 text-center shadow-[0_0_50px_rgba(59,130,246,0.25)]"
             >
               <div className="w-16 h-16 rounded-full overflow-hidden mx-auto mb-4 shadow-lg ring-2 ring-blue-500/50">
                 {lab.credential?.badge ? (

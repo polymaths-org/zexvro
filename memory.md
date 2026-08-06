@@ -1,5 +1,12 @@
 # ZEXVRO Shared Memory
 
+## 2026-08-06 - ZEXVRO Labs: flag Check button dead for students, mobile lab UI, Nabil+Zexvro admins (Paris)
+
+Prod bundle `index-BDVotegv.js`.
+- **Flag Check bug (root cause)**: `handleVerifyFlag` compared the answer against `task.expectedFlag` client-side, but `sanitizeLab` strips `expectedFlag` (and other sensitive keys) for non-admin users, so `if (!task.expectedFlag) return;` silently no-oped — the Check button looked broken (user noticed on Brave). Fixed by calling the existing server `/api/verify-task` endpoint (added `api.verifyTask` in `src/lib/api.ts`) which holds the real expectedFlag server-side; button now async with `Checking…` spinner and a friendly "Enter the flag first" message on empty input.
+- **Mobile lab UI**: `LabProgressSidebar` now `hidden md:flex` (was a 288px sidebar eating phones). Runner top navbar compacted on mobile (category badge md+, title `max-w-[40vw]`, timer smaller, Submit Lab icon-only on xs, hint hidden on mobile). Page tabs overflow-x with truncation, Next/Prev nav uses short "Next"/"Finish" labels + arrow on mobile. Completion modal `p-5 sm:p-8`.
+- **Admins**: set Nabil (`A6pNW...`) and Zexvro (`N3jvy...`) to `admin` role directly in Firestore (admin = full permissions).
+
 ## 2026-08-06 - ZEXVRO Labs: lab UI breathing room + scroll-to-top on page change (Paris)
 
 Prod bundle `index-sC9jLbhy.js`. In `LabRunnerView.tsx`: added a `scrollRef` on the content column + a `useEffect([currentPageId])` that scrolls to top (instant) when the page changes, so moving Next/Prev starts at the top of the new page. Increased spacing: outer column `space-y-6→8`/`py-8→10`, elements `space-y-4→5` and `mt-4→6` moved to a `mb-6` on the page title, task cards `p-5→p-5 sm:p-6` + `gap-3→gap-3 sm:gap-4`, flag/code/repo inputs and hints `mt-3→4` with `py-2→py-2.5`, next-nav `pt-2→pt-4 mt-8`. tsc+build clean, deployed, bundle confirmed live.

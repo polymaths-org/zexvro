@@ -63,4 +63,10 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify(patch),
     }),
+
+  verifyTask: (input: { labId: string; taskId: string; flag?: string; codeContent?: string }) =>
+    request<{ passed: boolean; log: string; taskId: string; xpAwarded: number }>('/api/verify-task', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
 };

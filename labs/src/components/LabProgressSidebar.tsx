@@ -106,7 +106,7 @@ export const LabProgressSidebar: React.FC<LabProgressSidebarProps> = ({
 
   return (
     <aside
-      className={`${collapsed ? 'w-16' : 'w-72'} bg-zinc-950 border-r border-zinc-800 flex flex-col shrink-0 min-h-[calc(100vh-57px)] transition-all duration-300`}
+      className={`hidden md:flex ${collapsed ? 'w-16' : 'w-72'} bg-zinc-950 border-r border-zinc-800 flex-col shrink-0 min-h-[calc(100vh-57px)] transition-all duration-300`}
     >
       {/* Top bar */}
       <div className="p-3 space-y-3">
