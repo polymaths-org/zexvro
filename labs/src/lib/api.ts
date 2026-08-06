@@ -33,6 +33,8 @@ export const api = {
     request<{ lab: Lab }>('/api/labs', { method: 'POST', body: JSON.stringify(lab) }),
   updateLab: (id: string, patch: Partial<Lab>) =>
     request<{ lab: Lab }>(`/api/labs/${id}`, { method: 'PUT', body: JSON.stringify(patch) }),
+  enrollLab: (id: string) =>
+    request<{ success: boolean; enrolledCount: number }>(`/api/labs/${id}/enroll`, { method: 'POST' }),
   deleteLab: (id: string) =>
     request<{ success: boolean }>(`/api/labs/${id}`, { method: 'DELETE' }),
 

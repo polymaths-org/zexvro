@@ -108,6 +108,18 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
       return json({ success: true, lab: sanitizeLab(newLab, isAdmin(user, env)) }, 201);
     }
 
+    const enrollMatch = path.match(/^\/labs\/([^/]+)\/enroll$/);
+    if (enrollMatch && method === 'POST') {
+      const user = await requireUser(ctx.request, env);
+      if (!user) return json({ error: 'Unauthorized' }, 401);
+      const throttle = throttled(mutateKey('enroll', user), 10, 60_000);
+      if (throttle) return throttle;
+      const lab = await store.getLab(decodeURIComponent(enrollMatch[1]));
+      if (!lab) return json({ error: 'Lab not found' }, 404);
+      await store.updateLab(lab.id, { enrolledCount: (lab.enrolledCount || 0) + 1 });
+      return json({ success: true, enrolledCount: (lab.enrolledCount || 0) + 1 });
+    }
+
     const labMatch = path.match(/^\/labs\/([^/]+)$/);
     if (labMatch) {
       const idOrSlug = decodeURIComponent(labMatch[1]);
@@ -284,19 +296,30 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
       const cmd = (userCommand || '').trim().toLowerCase();
       const reqCmd = (task.verificationCommand || '').trim().toLowerCase();
 
+      const norm = (s: string) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+      const expectedOut = norm(task.expectedOutput);
+
       let isPassed = false;
       let logMessage = '';
       if (task.expectedFlag && flag != null) {
-        isPassed = String(flag).trim().toLowerCase() === String(task.expectedFlag).trim().toLowerCase();
+        isPassed = norm(flag) === norm(task.expectedFlag);
         logMessage = isPassed
           ? '[CHECK PASSED] Flag verified.'
           : '[CHECK FAILED] Incorrect flag. Re-check the lab content.';
       } else if (reqCmd && cmd.includes(reqCmd)) {
-        isPassed = true;
-        logMessage = `[CHECK PASSED] Command executed: "${userCommand}".\n${task.expectedOutput || 'SUCCESS'}`;
-      } else if (codeContent && codeContent.length > 10) {
-        isPassed = true;
-        logMessage = '[CHECK PASSED] Code structure verified successfully.';
+        // Command contains the expected keyword AND (if an expected output is
+        // pinned) the submitted output matches it. Never accept leftover tokens.
+        const outputOk = expectedOut ? cmd.includes(expectedOut) : true;
+        isPassed = outputOk;
+        logMessage = isPassed
+          ? `[CHECK PASSED] Command executed: "${userCommand}".\n${task.expectedOutput || 'SUCCESS'}`
+          : '[CHECK FAILED] Output did not match the expected result.';
+      } else if (expectedOut && cmd.length > 0) {
+        // Code task: submitted output must match the pinned expected output.
+        isPassed = cmd.includes(expectedOut) || expectedOut.includes(cmd);
+        logMessage = isPassed
+          ? '[CHECK PASSED] Code/output verified successfully.'
+          : `[CHECK FAILED] Expected: "${task.expectedOutput}". Your input did not match.`;
       } else {
         isPassed = false;
         logMessage = `[CHECK FAILED] Expected command keyword: "${task.verificationCommand || 'correct execution'}"`;

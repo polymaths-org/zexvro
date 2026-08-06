@@ -1,5 +1,18 @@
 # ZEXVRO Shared Memory
 
+## 2026-08-06 - ZEXVRO Labs: fixed task checks, badges, credentials, enrollment, submissions, lab OG previews (Paris)
+
+Cleared today's checklist (was parked in the entry below). All deployed, prod bundle `index-DnS3isCd.js`.
+
+- **FIXED — task checks were faked.** Two bugs:
+  - The runner sent `codeContent: task.expectedOutput` — it leaked the answer AND made the server's old `codeContent.length > 10` branch auto-pass ANY code task. Client now sends the learner's real input (`flagInputs[task.id]`) instead.
+  - Server (`functions/api/[[path]].ts` `/verify-task`) no longer blanket-passes strings >10 chars. It normalizes + compares against `expectedFlag` / `verificationCommand` / `expectedOutput` and only passes on a real match. `LabRunnerView` "Submit Lab" (header) and "Finish Lab" (bottom) now require 100% completion before awarding XP/certificate; otherwise an amber inline hint "Complete all tasks (N left)…" shows (never wrongly celebrates).
+- **Fixed — badges distribution.** `state/labs.tsx` seeds the catalog from `sampleBadges` on a fresh browser (was empty → a lab's `badgeId` matched nothing → badge could never be earned). On completion, the badge is marked `earnedAt` (once) AND its `xpBonus` is added to the user's XP. A new sync effect fetches the backend badge catalog + the user's certs/submissions when signed in so earned badges/certs aren't lost across devices.
+- **Fixed — credentials.** Cert issuance is now deduped: no second certificate for the same `studentId + labTitle`, no random-collision-prone 3-digit number (uses `Date.now()`), and matches the firestore rule by setting `status: 'issued'` (added to `Certificate` type). Only one issuance path.
+- **Fixed — user enrolling + submissions.** New server endpoint `POST /api/labs/:id/enroll` (any signed-in user, rate-limited) increments the lab's `enrolledCount` into Firestore — `PUT /labs/:id` was admin-only so learners couldn't bump it. `handleStartLab` now tracks the user's `startedLabIds` (new optional field on `User`) and fires the enroll call.
+- **Fixed — lab OG previews (WhatsApp/Slack/Telegram).** New Pages Function `functions/labs/[slug].ts`. For crawler user-agents it serves a small HTML card with `og:title / og:description / og:image (banner when it's an http(s) URL; data: URLs are skipped since crawlers can't fetch them) / twitter:card` + a rendered preview; real browsers get the normal SPA `index.html` from `env.ASSETS`. Description truncated to 200 chars. Tested: crawler UA returns og tags, browser UA returns the SPA. Prod confirmed at `labs.zexvro.in/labs/<slug>`.
+- Note: the lab's banner is currently a **data: URL** from the editor uploader, so its OG card has no image. If the user wants the WhatsApp preview to carry the banner image, they must set a hosted `https://` banner URL (either in the Details tab's URL input, or the editor needs to upload to storage instead of storing a data: URL).
+
 ## 2026-08-06 - NEXT-DAY CHECKLIST (Labs, assigned to Paris) — park these, pick up tomorrow
 
 - [ ] **Fix credentials system** — the credential/certificate flow (per-lab `credential`, `CredentialCanvas`/`CredentialsEditor`, badge/cert image upload) needs an end-to-end review + fix.

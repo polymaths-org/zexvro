@@ -47,6 +47,7 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
   const [repoInputs, setRepoInputs] = useState<Record<string, string>>({});
   const [repoSubmitted, setRepoSubmitted] = useState<Record<string, boolean>>({});
   const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const [showIncompleteHint, setShowIncompleteHint] = useState(false);
 
   const completedTaskIds = progress?.completedTaskIds || [];
 
@@ -166,7 +167,7 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
           taskId: task.id,
           userCommand: flagInputs[task.id] || '',
           flag: flagInputs[task.id] || '',
-          codeContent: task.expectedOutput ? task.expectedOutput : '',
+          codeContent: flagInputs[task.id] || '',
         }),
       });
       const data = await response.json();
@@ -527,12 +528,30 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
             {hasTimeLimit ? <span>{formatTime(timeLeftSeconds || 0)}</span> : <span>Unlimited</span>}
           </div>
 
+          <AnimatePresence>
+            {showIncompleteHint && (
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                className="px-3 py-2 bg-amber-950/60 border border-amber-800 rounded-xl text-amber-200 text-xs font-mono font-bold"
+              >
+                Complete all tasks ({verifiableTasks.length - completedTaskIds.length} left) to earn your certificate & badge.
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           <motion.button
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.97 }}
             onClick={() => {
-              onLabCompleted(lab, lab.xpReward);
-              onExitLab();
+              if (completionPercent >= 100) {
+                onLabCompleted(lab, lab.xpReward);
+                onExitLab();
+              } else {
+                setShowIncompleteHint(true);
+                setTimeout(() => setShowIncompleteHint(false), 3200);
+              }
             }}
             className="px-4 py-2 btn-primary-blue text-white font-extrabold text-sm rounded-xl transition-all shadow-md flex items-center gap-1.5 font-heading"
           >
@@ -688,7 +707,13 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
                       )
                     ) : (
                       <button
-                        onClick={() => onLabCompleted(lab, lab.xpReward)}
+                        onClick={() => {
+                          if (completionPercent >= 100) onLabCompleted(lab, lab.xpReward);
+                          else {
+                            setShowIncompleteHint(true);
+                            setTimeout(() => setShowIncompleteHint(false), 3200);
+                          }
+                        }}
                         className="flex items-center gap-1 px-4 py-2 btn-primary-blue text-white text-sm font-bold rounded-xl font-mono"
                       >
                         <CheckCircle2 className="h-4 w-4" />

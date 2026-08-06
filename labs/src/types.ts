@@ -11,6 +11,7 @@ export interface User {
   streakDays: number;
   completedLabsCount: number;
   githubConnected: boolean;
+  startedLabIds?: string[]; // labs the user has enrolled/started
 }
 
 export type LabDifficulty = 'Introductory' | 'Intermediate' | 'Advanced';
@@ -189,6 +190,7 @@ export interface Certificate {
   verificationUrl: string;
   qrCodeUrl?: string;
   instructorName: string;
+  status?: string; // 'issued' etc. (server-assigned field for firestore rules)
   design?: NonNullable<LabCredential['certificate']>;
 }
 

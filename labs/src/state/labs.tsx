@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import {
   initialUser,
+  sampleBadges,
   sampleCertificates,
   sampleSubmissions,
 } from '../data/mockData';
@@ -79,7 +80,9 @@ export function LabsProvider({ children }: { children: React.ReactNode }) {
   });
   const [badges, setBadges] = useState<Badge[]>(() => {
     const local = loadLocalDB();
-    return local?.badges ? local.badges : [];
+    // Seed the badge catalog so learners can actually earn badges even on a
+    // fresh browser. The backend catalog (if any) overrides on fetch.
+    return local?.badges && local.badges.length > 0 ? local.badges : sampleBadges;
   });
   const [certificates, setCertificates] = useState<Certificate[]>(sampleCertificates);
   const [submissions, setSubmissions] = useState<Submission[]>(sampleSubmissions);
@@ -158,6 +161,30 @@ export function LabsProvider({ children }: { children: React.ReactNode }) {
       .catch(() => {})
       .finally(() => setTimeout(() => setIsLoading(false), 300));
   }, []);
+
+  // Sync badges, subscriptions, and certificates from the backend so the
+  // learner's earned badges / issued certs are not lost across devices.
+  useEffect(() => {
+    if (!user.githubConnected) return;
+    api
+      .fetchBadges()
+      .then((data) => data?.badges && data.badges.length > 0 && setBadges(data.badges))
+      .catch(() => {});
+
+    api
+      .fetchSubmissions()
+      .then((data) => {
+        if (data?.submissions && data.submissions.length > 0 && user.role === 'admin') {
+          setSubmissions(data.submissions);
+        }
+      })
+      .catch(() => {});
+
+    api.fetchCertificates().then((data) => {
+      if (data?.certificates && data.certificates.length > 0) setCertificates(data.certificates);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user.githubConnected, user.role]);
 
   // Fetch platform users for the admin Users tab — only when the viewer is an
   // admin. Non-admins / visitors should never hit the admin users endpoint.
@@ -245,6 +272,19 @@ export function LabsProvider({ children }: { children: React.ReactNode }) {
           },
         };
       });
+      // Record enrollment once per user + lab: bump the lab's enrolled count
+      // and the user's started-labs list so stats survive reload.
+      setLabs((prev) =>
+        prev.map((l) =>
+          l.id === lab.id ? { ...l, enrolledCount: (l.enrolledCount || 0) + 1 } : l,
+        ),
+      );
+      setUser((prev) => {
+        const started = new Set(prev.startedLabIds || []);
+        started.add(lab.id);
+        return { ...prev, startedLabIds: [...started] };
+      });
+      api.enrollLab(lab.id).catch(() => {});
     },
     [user.githubConnected],
   );
@@ -281,38 +321,50 @@ export function LabsProvider({ children }: { children: React.ReactNode }) {
 
   const handleLabCompleted = useCallback(
     (lab: Lab, xpEarned: number) => {
-      setUser((prev) => ({
-        ...prev,
-        xp: prev.xp + xpEarned,
-        completedLabsCount: prev.completedLabsCount + 1,
-      }));
+      const now = new Date();
+      const earnedBadge = lab.badgeId ? badges.find((b) => b.id === lab.badgeId) : null;
 
-      if (lab.badgeId) {
+      let badgeXp = 0;
+      if (earnedBadge && !earnedBadge.earnedAt) {
+        badgeXp = earnedBadge.xpBonus || 0;
         setBadges((prev) =>
           prev.map((b) =>
-            b.id === lab.badgeId ? { ...b, earnedAt: new Date().toISOString().split('T')[0] } : b,
+            b.id === lab.badgeId ? { ...b, earnedAt: now.toISOString().split('T')[0] } : b,
           ),
         );
       }
 
-      const newCertNumber = `ZEXVRO-CERT-2026-${Math.floor(100 + Math.random() * 900)}`;
-      const newCert: Certificate = {
-        id: `cert_${Date.now()}`,
-        certificateNumber: newCertNumber,
-        studentId: user.id,
-        studentName: user.name,
-        labTitle: lab.title,
-        category: lab.category,
-        issuedAt: new Date().toISOString().split('T')[0],
-        verificationUrl: `https://labs.zexvro.in/verify/${newCertNumber}`,
-        instructorName: 'Zexvro Certification Board',
-        design: lab.credential?.certificate,
-      };
+      setUser((prev) => ({
+        ...prev,
+        xp: prev.xp + xpEarned + badgeXp,
+        completedLabsCount: prev.completedLabsCount + 1,
+      }));
 
-      setCertificates((prev) => [newCert, ...prev]);
-      api.createCertificate(newCert);
+      // Dedupe certificate issuance — never mint a second cert for the same
+      // student + lab, and never when the lab has no publishable credential.
+      const alreadyCertified = certificates.some(
+        (c) => c.studentId === user.id && c.labTitle === lab.title,
+      );
+      if (!alreadyCertified) {
+        const newCertNumber = `ZEXVRO-CERT-2026-${Date.now()}`;
+        const newCert: Certificate = {
+          id: `cert_${Date.now()}`,
+          certificateNumber: newCertNumber,
+          studentId: user.id,
+          studentName: user.name,
+          labTitle: lab.title,
+          category: lab.category,
+          issuedAt: now.toISOString().split('T')[0],
+          verificationUrl: `https://labs.zexvro.in/verify/${newCertNumber}`,
+          instructorName: 'Zexvro Certification Board',
+          status: 'issued',
+          design: lab.credential?.certificate,
+        };
+        setCertificates((prev) => [newCert, ...prev]);
+        api.createCertificate(newCert);
+      }
     },
-    [user.id, user.name],
+    [user.id, user.name, badges, certificates],
   );
 
   const handleAddSubmission = useCallback((submission: Submission) => {
