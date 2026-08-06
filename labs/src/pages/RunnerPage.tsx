@@ -13,6 +13,7 @@ export const RunnerPage: React.FC<{ labId: string }> = ({ labId }) => {
     handleProgressChange,
     handleExitLab,
     handleLabCompleted,
+    handleAwardBadge,
     handleAddSubmission,
   } = useLabs();
 
@@ -78,6 +79,7 @@ export const RunnerPage: React.FC<{ labId: string }> = ({ labId }) => {
         onProgressChange={(patch) => handleProgressChange(lab.id, patch)}
         onExitLab={handleExitLab}
         onLabCompleted={handleLabCompleted}
+        onAwardBadge={handleAwardBadge}
         onAddSubmission={handleAddSubmission}
       />
     </motion.div>

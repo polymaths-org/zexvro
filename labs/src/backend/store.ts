@@ -158,14 +158,18 @@ export class MemoryStore implements LabsStore {
     map.set(labId, progress);
     this.progress.set(githubId, map);
   }
+  private submissions: Submission[] = [];
   async listSubmissions() {
-    return sampleSubmissions;
+    return this.submissions;
   }
   async saveSubmission(submission: Submission) {
-    return;
+    this.submissions = [submission, ...this.submissions];
   }
   async updateSubmission(id: string, patch: Partial<Submission>) {
-    return undefined;
+    const idx = this.submissions.findIndex((s) => s.id === id);
+    if (idx === -1) return undefined;
+    this.submissions[idx] = { ...this.submissions[idx], ...patch };
+    return this.submissions[idx];
   }
 }
 

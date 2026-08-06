@@ -1,6 +1,7 @@
 import React from 'react';
 import { BadgeCheck, ShieldCheck } from 'lucide-react';
 import { Certificate } from '../types';
+import { VerifyQR } from './VerifyQR';
 
 interface CertificatePreviewProps {
   design?: Certificate['design'];
@@ -47,7 +48,10 @@ export const CertificatePreview: React.FC<CertificatePreviewProps> = ({
   return (
     <div
       className="relative w-full rounded-2xl overflow-hidden aspect-[16/9] border-2 select-none"
-      style={{ background: d.background, borderColor: d.borderColor }}
+      style={{
+        background: d.backgroundImage ? `url("${d.backgroundImage}") center / cover no-repeat` : d.background,
+        borderColor: d.borderColor,
+      }}
     >
       {(d.elements || []).map((el) => {
         const style: React.CSSProperties = {
@@ -86,13 +90,12 @@ export const CertificatePreview: React.FC<CertificatePreviewProps> = ({
         }
         if (el.kind === 'qr') {
           return (
-            <div key={el.id} style={{ ...style, width: el.size, height: el.size }} className="p-1 rounded" >
-              <div className="w-full h-full grid grid-cols-5 grid-rows-5 gap-px" style={{ backgroundColor: el.color }}>
-                {Array.from({ length: 25 }).map((_, i) => {
-                  const on = [0, 1, 2, 5, 10, 11, 12, 15, 20, 21, 22, 6, 8, 16, 18, 24].includes(i) || i % 7 === 0;
-                  return <div key={i} className={on ? 'bg-black' : 'bg-transparent'} />;
-                })}
-              </div>
+            <div key={el.id} style={{ ...style, width: el.size, height: el.size }}>
+              <VerifyQR
+                value={`${window.location.origin}/verify/${certNumber || ''}`}
+                size={Math.max(16, el.size)}
+                className="w-full h-full"
+              />
             </div>
           );
         }

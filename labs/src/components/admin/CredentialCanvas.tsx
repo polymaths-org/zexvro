@@ -16,17 +16,16 @@ import {
   Trash2,
   PlusCircle,
   Minus,
-  Save,
   Check,
 } from 'lucide-react';
 import { LabCredential, CredentialElement } from '../../types';
+import { VerifyQR } from '../VerifyQR';
 
 interface CredentialCanvasProps {
   value: LabCredential;
   onChange: (next: LabCredential) => void;
   badgeName: string;
   labName: string;
-  onSave?: () => void;
 }
 
 const ICON_MAP: Record<string, React.ReactNode> = {
@@ -88,7 +87,6 @@ export const CredentialCanvas: React.FC<CredentialCanvasProps> = ({
   onChange,
   badgeName,
   labName,
-  onSave,
 }) => {
   const badge = value.badge || defaultBadge(badgeName, labName);
   const cert = value.certificate || defaultCert();
@@ -252,17 +250,11 @@ export const CredentialCanvas: React.FC<CredentialCanvasProps> = ({
     if (el.kind === 'qr') {
       return (
         <div key={el.id} {...commonProps} style={{ ...style, width: el.size, height: el.size }}>
-          <div
-            className="w-full h-full p-1 rounded"
-            style={{ backgroundColor: el.color }}
-          >
-            <div className="w-full h-full grid grid-cols-5 grid-rows-5 gap-px opacity-90">
-              {Array.from({ length: 25 }).map((_, i) => {
-                const on = [0, 1, 2, 5, 10, 11, 12, 15, 20, 21, 22, 6, 8, 16, 18, 24].includes(i) || (i % 7 === 0);
-                return <div key={i} className={on ? 'bg-black' : 'bg-transparent'} />;
-              })}
-            </div>
-          </div>
+          <VerifyQR
+            value={typeof el.text === 'string' && el.text.length > 4 ? el.text : 'https://labs.zexvro.in/verify'}
+            size={Math.max(16, el.size)}
+            className="w-full h-full"
+          />
         </div>
       );
     }
@@ -302,13 +294,15 @@ export const CredentialCanvas: React.FC<CredentialCanvasProps> = ({
   };
 
   const badgeBackgroundImage = badge.backgroundImage || undefined;
+  const certBackgroundImage = cert.backgroundImage || undefined;
   const badgeBg = badge.dotgrid
     ? `radial-gradient(${badge.accent}33 1px, transparent 1px)`
     : undefined;
   const isBadge = selectedKind === 'badge';
+  const activeBgImage = isBadge ? badgeBackgroundImage : certBackgroundImage;
   const canvasBg =
-    badgeBackgroundImage && isBadge
-      ? `url("${badgeBackgroundImage}") center / cover no-repeat`
+    activeBgImage
+      ? `url("${activeBgImage}") center / cover no-repeat`
       : undefined;
   const canvasBgStyle: React.CSSProperties =
     canvasBg
@@ -336,24 +330,6 @@ export const CredentialCanvas: React.FC<CredentialCanvasProps> = ({
           >
             <ShieldCheck className="h-4 w-4" /> Certificate
           </button>
-          <div className="ml-auto flex items-center gap-2">
-            <button
-              onClick={() => {
-                onSave?.();
-                setSavedTick(true);
-                setTimeout(() => setSavedTick(false), 2500);
-              }}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-extrabold rounded-xl flex items-center gap-1.5 font-heading"
-            >
-              <Save className="h-4 w-4" /> Save Design
-            </button>
-            <div
-              className="px-3 py-2 bg-zinc-900 border border-zinc-700 text-zinc-300 text-xs font-bold rounded-xl flex items-center gap-1.5"
-            >
-              {savedTick ? <Check className="h-4 w-4 text-emerald-400" /> : <ImagePlus className="h-4 w-4 text-zinc-500" />}
-              {savedTick ? 'Saved' : 'Draft'}
-            </div>
-          </div>
         </div>
 
         {/* Canvas */}
@@ -481,32 +457,57 @@ export const CredentialCanvas: React.FC<CredentialCanvasProps> = ({
             </div>
             </>
           ) : (
-            <div>
-              <label className="block text-[10px] font-mono text-zinc-500 mb-1 font-bold">Logo</label>
-              <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-xl text-xs font-bold text-zinc-200">
-                <ImagePlus className="h-3.5 w-3.5" /> Upload logo
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    const reader = new FileReader();
-                    reader.onload = () =>
-                      patch('cert', (d) => ({ ...d, logoUrl: String(reader.result) }) as any);
-                    reader.readAsDataURL(file);
-                  }}
-                />
-              </label>
-              {cert.logoUrl && (
-                <button
-                  onClick={() => patch('cert', (d) => ({ ...d, logoUrl: '' }) as any)}
-                  className="ml-2 text-[11px] font-mono text-zinc-500 hover:text-white underline"
-                >
-                  Remove
-                </button>
-              )}
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[10px] font-mono text-zinc-500 mb-1 font-bold">Logo</label>
+                <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-xl text-xs font-bold text-zinc-200">
+                  <ImagePlus className="h-3.5 w-3.5" /> Upload logo
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = () =>
+                        patch('cert', (d) => ({ ...d, logoUrl: String(reader.result) }) as any);
+                      reader.readAsDataURL(file);
+                    }}
+                  />
+                </label>
+                {cert.logoUrl && (
+                  <button
+                    onClick={() => patch('cert', (d) => ({ ...d, logoUrl: '' }) as any)}
+                    className="ml-2 text-[11px] font-mono text-zinc-500 hover:text-white underline"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+              <div className="pt-2 border-t border-zinc-800 flex items-center gap-3 flex-wrap">
+                <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-xl text-xs font-bold text-zinc-200">
+                  <ImageIcon className="h-3.5 w-3.5" /> Certificate background image
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      readImage(e.target.files?.[0], (url) =>
+                        patch('cert', (d) => ({ ...d, backgroundImage: url }) as any),
+                      );
+                    }}
+                  />
+                </label>
+                {cert.backgroundImage && (
+                  <button
+                    onClick={() => patch('cert', (d) => ({ ...d, backgroundImage: '' }) as any)}
+                    className="text-[11px] font-mono text-zinc-500 hover:text-white underline"
+                  >
+                    Remove bg image
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </div>

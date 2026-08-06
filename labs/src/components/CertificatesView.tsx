@@ -6,21 +6,24 @@ import {
   ExternalLink, 
   CheckCircle2, 
   X, 
-  QrCode
 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { Certificate, Badge, User } from '../types';
+import { Certificate, Badge, User, Lab } from '../types';
+import { VerifyQR } from './VerifyQR';
+import { CertificatePreview } from './CertificatePreview';
 
 interface CertificatesViewProps {
   user: User;
   certificates: Certificate[];
   badges: Badge[];
+  labs?: Lab[];
 }
 
 export const CertificatesView: React.FC<CertificatesViewProps> = ({
   user,
   certificates,
   badges,
+  labs = [],
 }) => {
   const [selectedCert, setSelectedCert] = useState<Certificate | null>(null);
 
@@ -88,6 +91,17 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
                   <span>Issued: {cert.issuedAt}</span>
                 </div>
 
+                {cert.design && cert.design.elements && cert.design.elements.length > 0 && (
+                  <div className="mb-3">
+                    <CertificatePreview
+                      design={cert.design}
+                      studentName={cert.studentName}
+                      labTitle={cert.labTitle}
+                      issuedAt={cert.issuedAt}
+                    />
+                  </div>
+                )}
+
                 <div className="p-3 bg-black border border-zinc-800 rounded-xl mb-3 flex items-center justify-between">
                   <div>
                     <span className="text-[10px] font-mono text-zinc-500 block uppercase font-bold">Verification ID</span>
@@ -130,6 +144,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-5">
           {badges.map((badge) => {
             const isEarned = !!badge.earnedAt;
+            const design = labs.find((l) => l.badgeId === badge.id)?.credential?.badge;
             return (
               <div
                 key={badge.id}
@@ -139,13 +154,39 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
                     : 'bg-black border-zinc-800/80 opacity-60'
                 }`}
               >
-                <div>
-                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-3 border ${
-                    isEarned
-                      ? 'bg-white text-black border-white'
-                      : 'bg-zinc-900 border-zinc-800 text-zinc-600'
-                  }`}>
-                    <Award className="h-7 w-7" />
+                <div className="w-full">
+                  <div className="mx-auto mb-3 relative w-16 h-16 overflow-hidden rounded-2xl border border-zinc-700"
+                    style={{
+                      background: design?.backgroundImage ? `url("${design.backgroundImage}") center/cover no-repeat` : design?.background || badge.color,
+                    }}
+                  >
+                    {design?.elements ? (
+                      design.elements
+                        .filter((e) => e.kind === 'icon')
+                        .map((e) => (
+                          <div
+                            key={e.id}
+                            className="absolute inset-0 flex items-center justify-center"
+                            style={{ color: '#fff' }}
+                          >
+                            <Award className="w-7 h-7" style={{ opacity: isEarned ? 1 : 0.4 }} />
+                          </div>
+                        ))
+                    ) : badge.imageUrl ? (
+                      <img
+                        src={badge.imageUrl}
+                        alt={badge.name}
+                        className={`w-full h-full object-cover ${isEarned ? '' : 'grayscale opacity-40'}`}
+                      />
+                    ) : (
+                      <div
+                        className={`w-full h-full flex items-center justify-center ${
+                          isEarned ? 'bg-white text-black' : 'bg-zinc-900 text-zinc-600'
+                        }`}
+                      >
+                        <Award className="h-7 w-7" />
+                      </div>
+                    )}
                   </div>
 
                   <h4 className="text-xs font-bold text-white line-clamp-1 font-heading">{badge.name}</h4>
@@ -232,7 +273,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
 
                 <div className="flex flex-col items-center">
                   <div className="p-2 bg-white rounded-lg">
-                    <QrCode className="h-10 w-10 text-black" />
+                    <VerifyQR value={`${window.location.origin}/verify/${selectedCert.certificateNumber}`} size={56} />
                   </div>
                   <span className="text-[9px] text-zinc-500 mt-1">Scan to Verify</span>
                 </div>

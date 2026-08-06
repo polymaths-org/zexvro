@@ -54,6 +54,7 @@ interface LabsContextValue {
   handleConfirmAccess: () => void;
   handleExitLab: () => void;
   handleLabCompleted: (lab: Lab, xpEarned: number) => void;
+  handleAwardBadge: (labId: string) => number; // eagerly award a lab's badge; returns xp bonus (0 if not earned)
   handleAddSubmission: (submission: Submission) => void;
   handleProgressChange: (labId: string, patch: Partial<LabRunProgress>) => void;
   handleCreateLab: (lab: Partial<Lab>) => void;
@@ -174,8 +175,14 @@ export function LabsProvider({ children }: { children: React.ReactNode }) {
     api
       .fetchSubmissions()
       .then((data) => {
-        if (data?.submissions && data.submissions.length > 0 && user.role === 'admin') {
-          setSubmissions(data.submissions);
+        if (data?.submissions && data.submissions.length > 0) {
+          // Merge backend + local so the learner's own recent submissions are
+          // not dropped just because the backend list came back small/empty.
+          setSubmissions((prev) => {
+            const map = new Map<string, Submission>();
+            [...prev, ...data.submissions].forEach((s) => s?.id && map.set(s.id, s));
+            return [...data.submissions, ...prev.filter((s) => !map.has(s.id))];
+          });
         }
       })
       .catch(() => {});
@@ -321,6 +328,8 @@ export function LabsProvider({ children }: { children: React.ReactNode }) {
 
   const handleLabCompleted = useCallback(
     (lab: Lab, xpEarned: number) => {
+      // Guard: once completed, never re-run the award/submission flow.
+      if ((user.completedLabIds || []).includes(lab.id)) return;
       const now = new Date();
       const earnedBadge = lab.badgeId ? badges.find((b) => b.id === lab.badgeId) : null;
 
@@ -385,12 +394,35 @@ export function LabsProvider({ children }: { children: React.ReactNode }) {
       setSubmissions((prev) => [submission, ...prev]);
       api.createSubmission(submission);
     },
-    [user.id, user.name, badges, certificates, api],
+    [user.id, user.name, user.completedLabIds, badges, certificates, api],
   );
 
   const handleAddSubmission = useCallback((submission: Submission) => {
     setSubmissions((prev) => [submission, ...prev]);
   }, []);
+
+  // Eagerly award a lab's badge (used when the badge is granted on a specific
+  // task completing, not on lab submission). Idempotent — only awards once.
+  const handleAwardBadge = useCallback(
+    (labId: string): number => {
+      const lab = labs.find((l) => l.id === labId);
+      if (!lab?.badgeId) return 0;
+      let badgeXp = 0;
+      setBadges((prev) => {
+        const b = prev.find((x) => x.id === lab.badgeId);
+        if (!b || b.earnedAt) return prev;
+        badgeXp = b.xpBonus || 0;
+        return prev.map((x) =>
+          x.id === lab.badgeId ? { ...x, earnedAt: new Date().toISOString().split('T')[0] } : x,
+        );
+      });
+      if (badgeXp > 0) {
+        setUser((prev) => ({ ...prev, xp: prev.xp + badgeXp }));
+      }
+      return badgeXp;
+    },
+    [labs],
+  );
 
   const handleCreateLab = useCallback((labData: Partial<Lab>) => {
     api.createLab(labData).then((data) => {
@@ -505,6 +537,7 @@ export function LabsProvider({ children }: { children: React.ReactNode }) {
     handleConfirmAccess,
     handleExitLab,
     handleLabCompleted,
+    handleAwardBadge,
     handleAddSubmission,
     handleProgressChange,
     handleCreateLab,

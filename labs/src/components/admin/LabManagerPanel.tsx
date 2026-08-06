@@ -23,7 +23,7 @@ import {
   Unlock,
   GitBranch,
 } from 'lucide-react';
-import { Lab, LabPage, LabTask, LabTaskType, LabCategory, LabDifficulty, Badge, LabRule } from '../../types';
+import { Lab, LabPage, LabTask, LabTaskType, LabCategory, LabDifficulty, Badge, LabRule, LabCredential } from '../../types';
 import { CredentialCanvas } from './CredentialCanvas';
 import { SaveButton } from './SaveButton';
 
@@ -98,7 +98,14 @@ export const LabManagerPanel: React.FC<LabManagerPanelProps> = ({
 
   // --- Credentials state ---
   const [badgeId, setBadgeId] = useState(lab.badgeId || badges[0]?.id || '');
-  const [awardOn, setAwardOn] = useState('completion');
+  const [awardOn, setAwardOn] = useState(lab.credential?.awardOn || 'completion');
+  const [credentialBadgeName, setCredentialBadgeName] = useState(
+    lab.credential?.badgeName || lab.badgeName || '',
+  );
+  const [credentialCertName, setCredentialCertName] = useState(
+    lab.credential?.certificateName || lab.credentialName || '',
+  );
+  const [credentialDraft, setCredentialDraft] = useState<LabCredential>(lab.credential || {});
 
   // --- Rules state ---
   const [rules, setRules] = useState<LabRule[]>(lab.rules || []);
@@ -273,9 +280,15 @@ export const LabManagerPanel: React.FC<LabManagerPanelProps> = ({
     const badge = badges.find((b) => b.id === badgeId);
     onUpdateLab(lab.id, {
       badgeId: badgeId || undefined,
-      badgeName: badge?.name || lab.badgeName,
+      badgeName: credentialBadgeName || badge?.name || lab.badgeName,
       badgeIconUrl: badge?.iconName || lab.badgeIconUrl,
-      credential: { ...(lab.credential || {}), awardOn },
+      credentialName: credentialCertName || undefined,
+      credential: {
+        ...credentialDraft,
+        awardOn,
+        badgeName: credentialBadgeName || badge?.name || undefined,
+        certificateName: credentialCertName || undefined,
+      },
     });
   };
 
@@ -739,17 +752,40 @@ export const LabManagerPanel: React.FC<LabManagerPanelProps> = ({
               <div>
                 <label className="block text-[11px] font-mono text-zinc-400 mb-1 font-bold">Grant badge when</label>
                 <select value={awardOn} onChange={(e) => setAwardOn(e.target.value)} className={inputCls}>
-                  <option value="completion">Lab completed</option>
+                  <option value="completion">Lab submitted</option>
                   {pages.map((p, i) => (
                     <option key={p.id} value={`page:${i + 1}`}>After Page {i + 1}</option>
                   ))}
+                  {pages.flatMap((p) => p.elements)
+                    .filter((el) => (el.type || 'task') === 'task')
+                    .map((t) => (
+                      <option key={t.id} value={`task:${t.id}`}>After task: {t.title}</option>
+                    ))}
                 </select>
+              </div>
+              <div>
+                <label className="block text-[11px] font-mono text-zinc-400 mb-1 font-bold">Badge name</label>
+                <input
+                  value={credentialBadgeName}
+                  onChange={(e) => setCredentialBadgeName(e.target.value)}
+                  placeholder="e.g. Solidity Master"
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-mono text-zinc-400 mb-1 font-bold">Certificate name</label>
+                <input
+                  value={credentialCertName}
+                  onChange={(e) => setCredentialCertName(e.target.value)}
+                  placeholder="e.g. Certificate of Completion"
+                  className={inputCls}
+                />
               </div>
             </div>
             <div className="flex items-center gap-3 pt-1">
               <SaveButton onSave={(done) => { saveCredentials(); done(); }} label="Save Credentials" />
               <button
-                onClick={() => onPreviewLab({ ...lab, credential: lab.credential })}
+                onClick={() => onPreviewLab({ ...lab, credential: credentialDraft })}
                 className="px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 text-sm font-extrabold rounded-xl flex items-center gap-2 font-heading"
               >
                 <Eye className="h-4 w-4" /> Preview
@@ -758,11 +794,10 @@ export const LabManagerPanel: React.FC<LabManagerPanelProps> = ({
           </div>
 
           <CredentialCanvas
-            value={lab.credential || {}}
-            onChange={(credential) => onUpdateLab(lab.id, { credential })}
-            badgeName={badges.find((b) => b.id === badgeId)?.name || lab.badgeName || 'Skill Badge'}
+            value={credentialDraft}
+            onChange={(credential) => setCredentialDraft(credential)}
+            badgeName={credentialBadgeName || badges.find((b) => b.id === badgeId)?.name || lab.badgeName || 'Skill Badge'}
             labName={lab.title}
-            onSave={() => saveCredentials()}
           />
         </div>
       )}

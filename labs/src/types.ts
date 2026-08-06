@@ -130,6 +130,7 @@ export interface Lab {
   editors?: string[]; // GitHub usernames allowed to edit/manage this lab
   rules?: LabRule[]; // progression rules (e.g. unlock next page after a task)
   credential?: LabCredential; // per-lab badge + certificate design
+  credentialName?: string; // display name for the certificate (saved to DB)
 }
 
 // --- Credential canvas design (per-lab) ---
@@ -151,6 +152,8 @@ export interface CredentialElement {
 
 export interface LabCredential {
   awardOn?: string;
+  badgeName?: string; // display name saved to DB for the badge
+  certificateName?: string; // display name saved to DB for the certificate
   badge?: {
     background: string;
     backgroundImage?: string; // optional uploaded image behind the badge
@@ -161,6 +164,7 @@ export interface LabCredential {
   };
   certificate?: {
     background: string;
+    backgroundImage?: string; // optional uploaded image behind the certificate
     borderColor: string;
     accent: string;
     logoUrl?: string;

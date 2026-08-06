@@ -21,6 +21,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
 import { Lab, LabTask, LabPage, User, LabRunProgress, Submission } from '../types';
 import { renderContentElement, CodeBlockElement } from './ui/ContentElements';
+import { api } from '../lib/api';
 
 interface LabRunnerViewProps {
   lab: Lab;
@@ -29,6 +30,7 @@ interface LabRunnerViewProps {
   onProgressChange: (patch: Partial<LabRunProgress>) => void;
   onExitLab: () => void;
   onLabCompleted: (lab: Lab, xpEarned: number) => void;
+  onAwardBadge?: (labId: string) => number;
   onAddSubmission?: (submission: Submission) => void;
 }
 
@@ -39,6 +41,7 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
   onProgressChange,
   onExitLab,
   onLabCompleted,
+  onAwardBadge,
   onAddSubmission,
 }) => {
   const [verifyingTaskId, setVerifyingTaskId] = useState<string | null>(null);
@@ -132,6 +135,21 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
         colors: ['#3b82f6', '#60a5fa', '#ffffff'],
         disableForReducedMotion: true,
       });
+
+      // If this lab's badge is granted after THIS specific task completes,
+      // award it eagerly (idempotent — the badge is only ever earned once).
+      if (lab.credential?.awardOn === `task:${taskId}`) {
+        const bonus = onAwardBadge?.(lab.id) || 0;
+        if (bonus > 0) {
+          confetti({
+            particleCount: 60,
+            spread: 80,
+            origin: { y: 0.6 },
+            colors: ['#f59e0b', '#3b82f6', '#ffffff'],
+            disableForReducedMotion: true,
+          });
+        }
+      }
     }
 
     if (completed && next.length === verifiableTasks.length && verifiableTasks.length > 0) {
@@ -205,10 +223,12 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
       type: 'repo',
     };
     onAddSubmission?.(submission);
-    fetch('/api/submissions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ labId: lab.id, labTitle: lab.title, repoUrl: url, type: 'repo' }),
+    api.createSubmission({
+      labId: lab.id,
+      labTitle: lab.title,
+      repoUrl: url,
+      type: 'repo',
+      status: 'for_review',
     }).catch(() => {});
     setRepoSubmitted((prev) => ({ ...prev, [task.id]: true }));
     setTaskCompleted(task.id, true);

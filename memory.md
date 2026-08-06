@@ -1931,3 +1931,20 @@ Use `None` for empty fields. Do not delete fields.
 - **Seed script** `scripts/seed-firestore.mjs` was also using POST; switched to PATCH upsert so re-seeding is idempotent. Verified `Done: 9 docs written` without dupes.
 - Verified deployed: `/api/health` = `{build:9}`, `/api/labs` = 4 labs, `/api/badges` = 5. Cached health — always cache-bust with `?cb=` to check build number.
 - Build: `tsc --noEmit` clean, deployed to Pages (`labs`).
+
+## 2026-08-06 (3) - Submissions/Operations fix + credential upgrades (Paris)
+- **Submissions & Operations panels not working** (root causes):
+  1. `MemoryStore.saveSubmission`/`updateSubmission` were NO-OPS and `listSubmissions` returned `sampleSubmissions` — submissions never persisted client-side. Fixed in `src/backend/store.ts` to store in memory (update finds by id, merge; missing ids get clean created=false).
+  2. Repo submissions from the runner used a raw `fetch('/api/submissions')` with NO Firebase token → backend 401'd. Rewrote to use `api.createSubmission(labId, labTitle, repoUrl, type:'repo', created:false, uriStatus:'for_review')` (auto-attaches auth header). `LabRunnerView.tsx`.
+  3. Operations sync in `state/labs.tsx` MERGED backend + local submissions (deduped by id) instead of only replacing state for admins, so Operations panel now lists them.
+- **No double-submit**: `handleLabCompleted` now guards via `user.completedLabIds` — records it + builds a `for_review` submission once.
+- **Badge award triggers**: added context `handleAwardBadge(labId)` (idempotent, grants earnedAt + xpBonus once, returns bonus). Wired `RunnerPage` → `onAwardBadge` prop → `LabRunnerView`. In task completion, if `lab.credential.awardOn === 'task:<id>'`, fires the award + a second confetti burst. `awardOn` select in LabManagerPanel now offers: `completion` (Lab submitted), `page:N`, `task:<id>`.
+- **Credential editor upgrades** (`admin/CredentialCanvas.tsx` + `LabManagerPanel.tsx`):
+  - Certificate **background-image upload** (upper-right photo icon) + remove, mirrors badge pattern; rendered as `background: url() center/cover`.
+  - **Name fields** for badge + certificate (`credentialBadgeName`/`credentialCertName`), persisted into `credential.badgeName`/`certificateName` + lab `badgeName`/`credentialName` via `saveCredentials`.
+  - **Single save, no autosave loop**: credential edits go to a local `credentialDraft` (only `saveCredentials()` from the one "Save Credentials" button persists); removed the redundant canvas "Save Design" toolbar button so exactly one save button exists.
+- **Real QR codes** (was a fake 5×5 grid): installed `qrcode` + `@types/qrcode`. New `components/VerifyQR.tsx` renders `QRCode.toDataURL(value,{width,margin})`. Wired into `CertificatePreview.tsx` (`el.kind==='qr'` → `window.location.origin/verify/${certNumber}`), `CredentialCanvas` qr block (`https://labs.zexvro.in/verify`), and `CertificatesView` verify modal (live scanable QR replacing the static QrCode icon).
+- **My Progress preview**: `CertificatesView` now takes `labs` and renders design-based badge previews (bg image/gradient + icon, grayscale when locked) and inline `CertificatePreview` thumbnails on issued cert cards. `CertificatesPage` passes `labs`.
+- Types: `LabCredential.certificate.backgroundImage`, `LabCredential.badgeName/certificateName`, `Lab.credentialName`.
+- Build: `tsc --noEmit` clean, `vite build` ok, deployed to Pages (`labs`) — new bundle `index-zH2CuSjW.js` verified live.
+- **Note**: `landing/zexvro/` had unrelated uncommitted changes (Preloader.tsx, watermark mp4, loading gif, App.tsx) — NOT staged; only labs/ committed.
