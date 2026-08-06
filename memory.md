@@ -1,5 +1,9 @@
 # ZEXVRO Shared Memory
 
+## 2026-08-06 - ZEXVRO Labs: lab UI breathing room + scroll-to-top on page change (Paris)
+
+Prod bundle `index-sC9jLbhy.js`. In `LabRunnerView.tsx`: added a `scrollRef` on the content column + a `useEffect([currentPageId])` that scrolls to top (instant) when the page changes, so moving Next/Prev starts at the top of the new page. Increased spacing: outer column `space-y-6→8`/`py-8→10`, elements `space-y-4→5` and `mt-4→6` moved to a `mb-6` on the page title, task cards `p-5→p-5 sm:p-6` + `gap-3→gap-3 sm:gap-4`, flag/code/repo inputs and hints `mt-3→4` with `py-2→py-2.5`, next-nav `pt-2→pt-4 mt-8`. tsc+build clean, deployed, bundle confirmed live.
+
 ## 2026-08-06 - ZEXVRO Labs: badge export/display show original image, no fake glyph (Paris)
 
 Prod bundle `index-CiaprXdg.js`. The "INTO the Midnight SPPU" badge uses a real backgroundImage (579KB) with 0 icon elements, but three places overlaid fake white award glyphs on top: `badgeExport.ts` drew an accent circle + ribbon via `drawBadgeGlyph` (now deleted), `BadgeArt.tsx` always drew `ICONS[badge.icon]` over the image (now only renders icon for color-only badges), and `CertificatesView` gallery drew an Award overlay in the `design.elements` icon branch (now shows backgroundImage as-is). Downloads/issued badges now show the admin's original image untouched. tsc+build clean, deployed, bundle confirmed live.

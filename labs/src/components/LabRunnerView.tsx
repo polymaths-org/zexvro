@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   ArrowLeft,
   CheckCircle2,
@@ -53,6 +53,8 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [showIncompleteHint, setShowIncompleteHint] = useState(false);
 
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+
   const completedTaskIds = progress?.completedTaskIds || [];
 
   const hasTimeLimit = !!lab.timeLimitMinutes;
@@ -81,6 +83,10 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
 
   const currentPageId = progress?.currentPageId || pages[0]?.id || null;
   const activePage = pages.find((p) => p.id === currentPageId) || null;
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+  }, [currentPageId]);
   const visibleElements = activePage ? activePage.elements : singleElements;
 
   const verifiableTasks = (pages.length ? pages.flatMap((p) => p.elements) : lab.tasks).filter(
@@ -253,13 +259,13 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.2 }}
-        className={`p-5 rounded-2xl border transition-all ${
+        className={`p-5 sm:p-6 rounded-2xl border transition-all ${
           isDone
             ? 'bg-zinc-900/60 border-blue-900'
             : 'bg-zinc-950 border-zinc-800 hover:border-zinc-600'
         }`}
       >
-        <div className="flex items-start gap-3">
+        <div className="flex items-start gap-3 sm:gap-4">
           {/* Real checkbox — checked tasks stay checked, they cannot be unchecked.
               Flag/code tasks cannot be checked by hand: they complete only once
               the submitted flag/output is verified. */}
@@ -307,10 +313,10 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
                 </motion.span>
               )}
             </div>
-            <p className="text-sm text-zinc-300 mt-1.5 leading-relaxed">{task.description}</p>
+            <p className="text-sm text-zinc-300 mt-2 leading-relaxed">{task.description}</p>
 
             {task.hint && (
-              <div className="mt-3 p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl text-xs text-zinc-400 flex items-start gap-2 font-mono">
+              <div className="mt-4 p-3.5 bg-zinc-900/70 border border-zinc-800 rounded-xl text-xs text-zinc-400 flex items-start gap-2.5 font-mono">
                 <HelpCircle className="h-3.5 w-3.5 text-blue-accent shrink-0 mt-0.5" />
                 <div>
                   <span className="text-white font-bold">Hint: </span>
@@ -321,8 +327,8 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
 
             {/* Flag input for 'flag' type */}
             {flagType === 'flag' && !isDone && (
-              <div className="mt-3 flex items-center gap-2">
-                <div className="flex-1 flex items-center gap-2 bg-black border border-zinc-800 rounded-xl px-3 py-2 font-mono">
+              <div className="mt-4 flex items-center gap-2">
+                <div className="flex-1 flex items-center gap-2 bg-black border border-zinc-800 rounded-xl px-3 py-2.5 font-mono">
                   <Flag className="h-3.5 w-3.5 text-blue-accent shrink-0" />
                   <input
                     type="text"
@@ -345,8 +351,8 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
 
             {/* Code output input for 'code' type */}
             {flagType === 'code' && !isDone && (
-              <div className="mt-3 flex items-center gap-2">
-                <div className="flex-1 flex items-center gap-2 bg-black border border-zinc-800 rounded-xl px-3 py-2 font-mono">
+              <div className="mt-4 flex items-center gap-2">
+                <div className="flex-1 flex items-center gap-2 bg-black border border-zinc-800 rounded-xl px-3 py-2.5 font-mono">
                   <Terminal className="h-3.5 w-3.5 text-blue-accent shrink-0" />
                   <input
                     type="text"
@@ -376,7 +382,7 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
             {flagType === 'checkbox' && !isDone && task.verificationCommand && (
               <button
                 onClick={() => setTaskCompleted(task.id, true)}
-                className="mt-3 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 text-xs font-extrabold rounded-xl flex items-center gap-1.5 font-heading"
+                className="mt-4 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 text-xs font-extrabold rounded-xl flex items-center gap-1.5 font-heading"
               >
                 <CheckCircle2 className="h-3.5 w-3.5 text-blue-accent" />
                 Mark Complete
@@ -385,8 +391,8 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
 
             {/* Repo submission */}
             {flagType === 'repo' && !isDone && !repoSubmitted[task.id] && (
-              <div className="mt-3 space-y-2">
-                <div className="flex items-center gap-2 bg-black border border-zinc-800 rounded-xl px-3 py-2 font-mono">
+              <div className="mt-4 space-y-2">
+                <div className="flex items-center gap-2 bg-black border border-zinc-800 rounded-xl px-3 py-2.5 font-mono">
                   <GitFork className="h-3.5 w-3.5 text-blue-accent shrink-0" />
                   <input
                     type="text"
@@ -596,8 +602,8 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
       </div>
 
       {/* Centered content column — wider so the lab fills the screen, not thin gaps */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-5xl mx-auto px-4 sm:px-8 py-6 sm:py-8 space-y-6">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto">
+        <div className="max-w-5xl mx-auto px-4 sm:px-8 py-6 sm:py-10 space-y-8">
           {/* Lab intro card — shown only on the first page, with the 1:1 banner */}
           {(() => {
             const pageIdx = pages.findIndex((p) => p.id === currentPageId);
@@ -672,14 +678,14 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
             >
               {/* Page title as heading */}
               {activePage && (
-                <div>
+                <div className="mb-6">
                   <h3 className="text-2xl font-black text-white font-heading">{activePage.title || 'Lab Content'}</h3>
                   <div className="h-px bg-zinc-800 mt-3" />
                 </div>
               )}
 
               {/* Elements */}
-              <div className="space-y-4 mt-4">
+              <div className="space-y-5">
                 {visibleElements.map((el, idx) => renderElement(el, idx))}
 
                 {visibleElements.length === 0 && (
@@ -693,7 +699,7 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
 
           {/* Next page navigation */}
           {pages.length > 1 && activePage && (
-            <div className="flex items-center justify-between pt-2 border-t border-zinc-800">
+            <div className="flex items-center justify-between pt-4 mt-8 border-t border-zinc-800">
               {(() => {
                 const pageIdx = pages.findIndex((p) => p.id === currentPageId);
                 const next = pages[pageIdx + 1];
