@@ -10,6 +10,7 @@ export const RunnerPage: React.FC<{ labId: string }> = ({ labId }) => {
     activeLab,
     user,
     labProgress,
+    reenrolledLabIds,
     handleProgressChange,
     handleExitLab,
     handleLabCompleted,
@@ -20,8 +21,9 @@ export const RunnerPage: React.FC<{ labId: string }> = ({ labId }) => {
   const lab = activeLab && activeLab.id === labId ? activeLab : labs.find((l) => l.id === labId);
 
   // Lab is already submitted/completed by this user → show the completed state
-  // instead of letting them re-run it.
-  const isCompleted = (user.completedLabIds || []).includes(lab?.id || '');
+  // instead of letting them re-run it — UNLESS the user explicitly re-enrolled.
+  const reenrolled = reenrolledLabIds.includes(labId);
+  const isCompleted = !reenrolled && (user.completedLabIds || []).includes(lab?.id || '');
 
   if (isCompleted && lab) {
     return (

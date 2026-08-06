@@ -16,6 +16,7 @@ export interface LocalDB {
   users?: User[];
   user?: User;
   labProgress?: Record<string, LabRunProgress>;
+  reenrolledLabIds?: string[];
 }
 
 export function loadLocalDB(): LocalDB | null {

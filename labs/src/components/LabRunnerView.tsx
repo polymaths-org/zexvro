@@ -22,6 +22,7 @@ import confetti from 'canvas-confetti';
 import { Lab, LabTask, LabPage, User, LabRunProgress, Submission } from '../types';
 import { renderContentElement, CodeBlockElement } from './ui/ContentElements';
 import { api } from '../lib/api';
+import { CredentialBadgeArt, credentialBadgeName } from './BadgeArt';
 
 interface LabRunnerViewProps {
   lab: Lab;
@@ -768,23 +769,27 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
               transition={{ type: 'spring', stiffness: 300, damping: 22 }}
               className="relative w-full max-w-lg bg-zinc-950 border border-blue-900 rounded-3xl p-8 text-center shadow-[0_0_50px_rgba(59,130,246,0.25)]"
             >
-              <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-sky-400 text-white rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce font-extrabold shadow-lg">
-                {lab.badgeIconUrl ? (
-                  <img src={lab.badgeIconUrl} alt={lab.badgeName || 'Badge'} className="w-10 h-10 object-cover rounded-full" />
+              <div className="w-16 h-16 rounded-full overflow-hidden mx-auto mb-4 shadow-lg ring-2 ring-blue-500/50">
+                {lab.credential?.badge ? (
+                  <CredentialBadgeArt badge={lab.credential.badge} className="w-full h-full" />
+                ) : lab.badgeIconUrl ? (
+                  <img src={lab.badgeIconUrl} alt={credentialBadgeName(lab)} className="w-full h-full object-cover" />
                 ) : (
-                  <Award className="h-8 w-8" />
+                  <div className="w-full h-full bg-gradient-to-br from-blue-600 to-sky-400 text-white flex items-center justify-center animate-bounce font-extrabold">
+                    <Award className="h-8 w-8" />
+                  </div>
                 )}
               </div>
 
               <span className="text-xs font-mono font-bold text-white uppercase tracking-widest bg-blue-600 px-3 py-1 rounded-md">
-                {lab.badgeName ? `${lab.badgeName} UNLOCKED` : 'LAB COMPLETED'} • {completionPercent}% SCORE
+                {credentialBadgeName(lab).toUpperCase()} UNLOCKED • {completionPercent}% SCORE
               </span>
 
               <h2 className="text-2xl font-black text-white mt-4 font-heading">{lab.title}</h2>
               <p className="text-sm text-zinc-300 mt-2">
                 You finished every task! You earned{' '}
                 <span className="text-blue-accent font-extrabold font-mono">+{lab.xpReward} XP</span>
-                {lab.badgeName ? <> and unlocked the <span className="text-white font-bold">{lab.badgeName}</span> badge</> : null}.
+                {' '}and unlocked the <span className="text-white font-bold">{credentialBadgeName(lab)}</span> badge.
               </p>
 
               <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3">

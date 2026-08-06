@@ -1,6 +1,16 @@
 # ZEXVRO Shared Memory
 
-## 2026-08-06 - ZEXVRO Labs: real badge catalog, credential editor crop controls, cert image rendering, re-enroll, ops view-only, code tasks, full user roster (Paris)
+## 2026-08-06 - ZEXVRO Labs: runner re-enroll gate, movable credential line, credential badge on completion, real user roster (Paris)
+
+Prod bundle `index-rdm5lE0I.js`. Batch 3 cleanup, four fixes:
+
+- **Re-enroll in runner was blocked.** Re-enrolling reset `labProgress` and navigated to the runner, but `RunnerPage` still gated on `user.completedLabIds`, so it showed "Lab Completed" instead of reopening the lab. Added a `reenrolledLabIds: string[]` list persisted in `LocalDB` (`persistence.ts`); `handleReenroll` records the lab id and `RunnerPage` computes `isCompleted = !reenrolled && completedLabIds.includes(...)`, so a re-enrolled lab reopens and can be retaken.
+- **Credential line is now movable.** The line element in `CredentialCanvas` was a 2px div that was essentially undraggable. It now renders a 24px-tall centered hit-area (invisible flex wrapper) with the visible 2px gradient line, plus a blue selection outline when selected — so it can be dragged/moved like the other blocks.
+- **Completion maps to the designed credential badge.** Completion no longer shows the old hardcoded "Solidity Developer and more" dropdown-style list. Badge name/art now derive from `lab.credential.badge` via new `src/components/BadgeArt.tsx` (`credentialBadgeName` + `CredentialBadgeArt`, renders bg image + icon). Used by the runner completion modal, `LabProgressSidebar`, and `LabDetailsView` chips. The CertificatesView "Skill Badges Gallery" now renders only `badges.filter(b => b.earnedAt)` and resolves each design with `labs.find(l => l.id === badge.id.replace(/^lab_/, '') || l.badgeId === badge.id)`.
+- **Users tab shows real users, not dummies.** Root cause: `sampleSubmissions` in `mockData.ts` carried 3 dummy users (Alice Nakamoto, Bob Buterin, Carol Szabo) that fed both the Operations table and the admin Users merge. Emptied `sampleSubmissions`; the admin Users fetch now builds the roster purely from the backend `users` collection (real GitHub users create Firestore `users/{uid}` docs via `resolveUser`) + named submission users + current admin, and **stale local copies of demo (`user_demo_*`) submissions/users are filtered out on hydration** so old localStorage can't respawn them.
+- Verified: tsc clean, build clean, deployed; prod bundle confirmed live on `labs.zexvro.in`.
+
+## 2026-08-06 - ZEXVRO Labs: real badge catalog, credential editor crop controls, raw image rendering, re-enroll, ops view-only, code tasks, full user roster (Paris)
 
 Prod bundle `index-BBOYsxam.js`. Batch 2 of the learner/admin cleanup:
 

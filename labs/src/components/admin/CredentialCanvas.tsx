@@ -316,10 +316,23 @@ export const CredentialCanvas: React.FC<CredentialCanvasProps> = ({
           style={{
             ...style,
             width: `${el.width || 24}%`,
-            height: 2,
-            background: `linear-gradient(90deg, transparent, ${el.color}, transparent)`,
+            height: 24,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}
-        />
+        >
+          <div
+            className="w-full"
+            style={{
+              height: 2,
+              background: `linear-gradient(90deg, transparent, ${el.color}, transparent)`,
+            }}
+          />
+          {isSelected && (
+            <div className="absolute -top-1 -bottom-1 w-full border border-blue-400/50 rounded" />
+          )}
+        </div>
       );
     }
     // text

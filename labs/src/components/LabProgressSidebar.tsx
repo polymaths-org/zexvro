@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Lab, LabRunProgress } from '../types';
+import { CredentialBadgeArt, credentialBadgeName } from './BadgeArt';
 
 interface LabProgressSidebarProps {
   lab: Lab;
@@ -241,12 +242,18 @@ export const LabProgressSidebar: React.FC<LabProgressSidebarProps> = ({
       {!collapsed && (
         <div className="mt-auto p-3 border-t border-zinc-800/80 bg-black">
           <div className="flex items-center gap-3 bg-zinc-900/80 border border-zinc-800 rounded-xl p-3">
-            <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white shrink-0">
-              <Award className="h-5 w-5" />
+            <div className="w-9 h-9 rounded-xl overflow-hidden shrink-0 bg-blue-600">
+              {lab.credential?.badge ? (
+                <CredentialBadgeArt badge={lab.credential.badge} className="w-full h-full" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-white">
+                  <Award className="h-5 w-5" />
+                </div>
+              )}
             </div>
             <div className="min-w-0">
               <p className="text-[11px] font-bold text-zinc-200 truncate">
-                {lab.badgeName || 'ZEXVRO Skill Badge'}
+                {credentialBadgeName(lab)}
               </p>
               <p className="text-[10px] text-zinc-500 font-mono truncate">
                 Earned on completion

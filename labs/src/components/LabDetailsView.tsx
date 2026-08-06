@@ -23,6 +23,7 @@ import { motion } from 'motion/react';
 import { Lab, User } from '../types';
 import { Button } from './ui/Button';
 import { shareUrl, paths } from '../lib/router';
+import { CredentialBadgeArt, credentialBadgeName } from './BadgeArt';
 
 interface LabDetailsViewProps {
   lab: Lab;
@@ -161,7 +162,7 @@ export const LabDetailsView: React.FC<LabDetailsViewProps> = ({ lab, user, enrol
               </span>
               <span className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-xl font-mono text-xs text-zinc-200 font-bold">
                 <Award className="h-3.5 w-3.5 text-blue-accent" />
-                {lab.badgeName || 'ZEXVRO Skill Badge'}
+                {credentialBadgeName(lab)}
               </span>
             </div>
           </div>
@@ -202,7 +203,7 @@ export const LabDetailsView: React.FC<LabDetailsViewProps> = ({ lab, user, enrol
             <div className="pt-3 border-t border-zinc-800/70 flex flex-wrap gap-6 text-sm font-mono text-zinc-400">
               <span>Author: <span className="text-white font-bold">{lab.author}</span></span>
               <span>Updated: <span className="text-white font-bold">{lab.updatedAt}</span></span>
-              <span>Credential: <span className="text-blue-accent font-bold">{lab.badgeName || 'ZEXVRO Skill Badge'}</span></span>
+              <span>Credential: <span className="text-blue-accent font-bold">{credentialBadgeName(lab)}</span></span>
             </div>
           </div>
 

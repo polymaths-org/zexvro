@@ -50,6 +50,7 @@ interface LabsContextValue {
   goToTab: (tab: ActiveTab) => void;
   handleStartLab: (lab: Lab) => void;
   handleReenroll: (lab: Lab) => void;
+  reenrolledLabIds: string[];
   handleOpenDetails: (lab: Lab) => void;
   handleConfirmAccess: () => void;
   handleExitLab: () => void;
@@ -91,6 +92,10 @@ export function LabsProvider({ children }: { children: React.ReactNode }) {
   const [users, setUsers] = useState<User[]>([]);
   const [labProgress, setLabProgress] = useState<Record<string, LabRunProgress>>({});
   const [activeLab, setActiveLab] = useState<Lab | null>(null);
+  const [reenrolledLabIds, setReenrolledLabIds] = useState<string[]>(() => {
+    const local = loadLocalDB();
+    return local?.reenrolledLabIds ? local.reenrolledLabIds : [];
+  });
 
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [pendingLab, setPendingLab] = useState<Lab | null>(null);
@@ -110,11 +115,13 @@ export function LabsProvider({ children }: { children: React.ReactNode }) {
   // Hydrate from the local store so edits survive reloads, then reconcile with the backend.
   useEffect(() => {
     const local = loadLocalDB();
+    const isDemoUser = (id?: string) => !!id && /^user_demo_/.test(id);
     if (local?.labs) setLabs((prev) => mergeLabs(prev, local.labs));
     if (local?.badges && local.badges.length > 0) setBadges(local.badges);
     if (local?.certificates) setCertificates(local.certificates);
-    if (local?.submissions) setSubmissions(local.submissions);
-    if (local?.users && local.users.length > 0) setUsers(local.users);
+    // Never restore demo/dummy submissions or users from stale local storage.
+    if (local?.submissions) setSubmissions(local.submissions.filter((s) => !isDemoUser(s.userId)));
+    if (local?.users && local.users.length > 0) setUsers(local.users.filter((u) => !isDemoUser(u.id)));
     if (local?.user && local.user.id) setUser((prev) => ({ ...prev, ...local.user }));
     if (local?.labProgress) setLabProgress(local.labProgress);
     setHasHydrated(true);
@@ -123,8 +130,8 @@ export function LabsProvider({ children }: { children: React.ReactNode }) {
   // Persist every mutation so "reload" never brings back the old state.
   useEffect(() => {
     if (!hasHydrated) return;
-    saveLocalDB({ labs, badges, certificates, submissions, users, user, labProgress });
-  }, [labs, badges, certificates, submissions, users, user, labProgress, hasHydrated]);
+    saveLocalDB({ labs, badges, certificates, submissions, users, user, labProgress, reenrolledLabIds });
+  }, [labs, badges, certificates, submissions, users, user, labProgress, reenrolledLabIds, hasHydrated]);
 
   // Restore the authenticated session via Firebase Auth. The SDK keeps the
   // ID token fresh (auto-refresh), so no manual session-cookie handling is
@@ -196,38 +203,42 @@ export function LabsProvider({ children }: { children: React.ReactNode }) {
 
   // Fetch platform users for the admin Users tab — only when the viewer is an
   // admin. Non-admins / visitors should never hit the admin users endpoint.
+  // The backend list is authoritative (users who signed in / have a profile).
   useEffect(() => {
     if (user.role !== 'admin') return;
     api
       .fetchUsers()
       .then((data) => {
         const list = (data?.users as User[]) || [];
-        // Backend returns only users who have a Firestore profile doc. Merge in
-        // every user that has interacted (submissions) so the admin sees the
-        // full roster, plus the current admin if missing.
-        setUsers((prev) => {
-          const seen = new Map<string, User>();
-          [...list, ...submissions, ...prev].forEach((s) => {
-            const uid = (s as Submission)?.userId || (s as User)?.id;
-            if (!uid) return;
-            const isSubmission = !(s as User)?.username && !(s as User)?.name;
-            seen.set(uid, {
-              id: uid,
-              name: (s as User)?.name || (s as Submission)?.userName || 'Learner',
-              username: (s as User)?.username || '',
-              email: (s as User)?.email || '',
-              avatarUrl: (s as User)?.avatarUrl || '',
-              role: (s as User)?.role || 'student',
-              githubConnected: isSubmission ? false : (s as User)?.githubConnected || false,
-              xp: (s as User)?.xp || 0,
-              completedLabsCount: (s as User)?.completedLabsCount || 0,
-              startedLabIds: (s as User)?.startedLabIds || [],
-              completedLabIds: (s as User)?.completedLabIds || [],
-            } as User);
-          });
-          if (!seen.has(user.id)) seen.set(user.id, user);
-          return [...seen.values()];
-        });
+        // Backend list is authoritative. Add real (named) submission users and
+        // the current admin. Do NOT keep stale/local entries — that previously
+        // surfaced dummy users.
+        const seen = new Map<string, User>();
+        for (const u of list) {
+          if (!u?.id) continue;
+          seen.set(u.id, u);
+        }
+        for (const s of submissions) {
+          const uid = (s as Submission)?.userId;
+          if (!uid || seen.has(uid)) continue;
+          const name = (s as Submission)?.userName;
+          if (!name) continue; // skip submissions without a real identity
+          seen.set(uid, {
+            id: uid,
+            name: name as string,
+            username: '',
+            email: '',
+            avatarUrl: '',
+            role: 'student',
+            githubConnected: false,
+            xp: 0,
+            completedLabsCount: 0,
+            startedLabIds: [],
+            completedLabIds: [],
+          } as User);
+        }
+        if (!seen.has(user.id)) seen.set(user.id, user);
+        setUsers([...seen.values()]);
       })
       .catch(() => setUsers([user]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -322,11 +333,14 @@ export function LabsProvider({ children }: { children: React.ReactNode }) {
   );
 
   // Re-enroll: clears the saved run progress for a completed lab so the user
-  // can retake it (certificate/badge stay earned).
+  // can retake it (certificate/badge stay earned). Also records the lab in
+  // reenrolledLabIds so the runner lets them back in (it normally blocks
+  // already-completed labs).
   const handleReenroll = useCallback(
     (lab: Lab) => {
       setActiveLab(lab);
       navigate(paths.runner(lab.id));
+      setReenrolledLabIds((prev) => (prev.includes(lab.id) ? prev : [...prev, lab.id]));
       setLabProgress((prev) => ({
         ...prev,
         [lab.id]: {
@@ -564,6 +578,7 @@ export function LabsProvider({ children }: { children: React.ReactNode }) {
     users,
     labProgress,
     activeLab,
+    reenrolledLabIds,
     isLoginOpen,
     setIsLoginOpen,
     pendingLab,

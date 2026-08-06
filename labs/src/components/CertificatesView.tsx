@@ -143,9 +143,9 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-5">
-          {badges.map((badge) => {
+          {badges.filter((b) => b.earnedAt).map((badge) => {
             const isEarned = !!badge.earnedAt;
-            const design = labs.find((l) => l.badgeId === badge.id)?.credential?.badge;
+            const design = labs.find((l) => l.id === badge.id.replace(/^lab_/, '') || l.badgeId === badge.id)?.credential?.badge;
             return (
               <div
                 key={badge.id}

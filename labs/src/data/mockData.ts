@@ -382,36 +382,7 @@ export const sampleModules: Module[] = [
   },
 ];
 
-// Sample submissions for the admin submission manager (§5)
-export const sampleSubmissions: Submission[] = [
-  {
-    id: 'sub_001',
-    labId: 'lab_solidity_101',
-    userId: 'user_demo_1',
-    userName: 'Alice Nakamoto',
-    labTitle: 'Solidity Fundamentals: Your First Smart Contract',
-    status: 'for_review',
-    submittedAt: '2026-08-04T14:30:00Z',
-  },
-  {
-    id: 'sub_002',
-    labId: 'lab_defi_amm',
-    userId: 'user_demo_2',
-    userName: 'Bob Buterin',
-    labTitle: 'Building a DeFi AMM with Uniswap V3 Patterns',
-    status: 'passed',
-    score: 95,
-    submittedAt: '2026-08-03T10:15:00Z',
-    reviewedBy: 'admin',
-    reviewNote: 'Excellent implementation of the swap function.',
-  },
-  {
-    id: 'sub_003',
-    labId: 'lab_nft_721',
-    userId: 'user_demo_3',
-    userName: 'Carol Szabo',
-    labTitle: 'Minting & Managing ERC-721 NFT Collections',
-    status: 'pending',
-    submittedAt: '2026-08-05T08:00:00Z',
-  },
-];
+// No dummy submissions — real submissions come from the backend and from lab
+// completions. Dummy rows would show fake users (Alice Nakamoto, ...) in the
+// admin roster, so we start empty.
+export const sampleSubmissions: Submission[] = [];
