@@ -260,17 +260,25 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
         }`}
       >
         <div className="flex items-start gap-3">
-          {/* Real checkbox — checked tasks stay checked, they cannot be unchecked */}
+          {/* Real checkbox — checked tasks stay checked, they cannot be unchecked.
+              Flag/code tasks cannot be checked by hand: they complete only once
+              the submitted flag/output is verified. */}
           <motion.button
             role="checkbox"
             aria-checked={isDone}
             aria-label={`Mark task complete: ${task.title}`}
-            onClick={() => isDone || setTaskCompleted(task.id, true)}
+            onClick={() => {
+              if (isDone) return;
+              if (flagType === 'flag' || flagType === 'code') return;
+              setTaskCompleted(task.id, true);
+            }}
             whileTap={{ scale: 0.85 }}
             className={`mt-0.5 w-6 h-6 shrink-0 rounded-lg border-2 flex items-center justify-center transition-all ${
               isDone
                 ? 'bg-blue-600 border-blue-600 text-white'
-                : 'border-zinc-600 hover:border-blue-400 text-transparent'
+                : flagType === 'flag' || flagType === 'code'
+                  ? 'border-zinc-700 cursor-not-allowed opacity-60'
+                  : 'border-zinc-600 hover:border-blue-400 text-transparent'
             }`}
           >
             <motion.span

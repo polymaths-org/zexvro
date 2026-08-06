@@ -1,5 +1,9 @@
 # ZEXVRO Shared Memory
 
+## 2026-08-06 - ZEXVRO Labs: flag/code tasks can't be hand-checked until verified (Paris)
+
+Prod bundle `index-BUd0NaHM.js`. In `LabRunnerView.tsx` the task checkbox no longer completes flag/code tasks by hand — clicking does nothing for `flagType === 'flag'`/`'code'` (checkbox rendered `cursor-not-allowed opacity-60`); those tasks only complete when `handleVerifyFlag` / `handleVerifyCode` accept the submitted flag/output. Plain checkbox and repo tasks unchanged. tsc + build clean, deployed, bundle confirmed live.
+
 ## 2026-08-06 - ZEXVRO Labs: robust admin roster + role toggle, bigger badges + download/share, per-lab cert/badge award toggles (Paris)
 
 Prod bundle `index-DVWLsa3F.js` (deploy `d97dc33a`). Verified live: `/api/admin/users` returns all 4 users for both admin accounts (clawdroid, zexvro/"Paris Nilesh Kulkarni"); new role endpoint works end-to-end (promote/demote Nabil, then restored).
