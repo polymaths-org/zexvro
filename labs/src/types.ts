@@ -154,6 +154,8 @@ export interface LabCredential {
   awardOn?: string;
   badgeName?: string; // display name saved to DB for the badge
   certificateName?: string; // display name saved to DB for the certificate
+  awardBadge?: boolean; // whether a badge is granted on completion (default true)
+  awardCertificate?: boolean; // whether a certificate is issued on completion (default true)
   badge?: {
     background: string;
     backgroundImage?: string; // optional uploaded image behind the badge

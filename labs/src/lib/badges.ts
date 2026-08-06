@@ -10,8 +10,9 @@ interface DerivedBadge extends Badge {
 }
 
 export function deriveBadges(labs: Lab[], user: User | null): DerivedBadge[] {
-  const earnedDate = (labId: string): string | undefined => {
-    if (!user?.completedLabIds?.includes(labId)) return undefined;
+  const earnedDate = (lab: Lab): string | undefined => {
+    if (lab.credential?.awardBadge === false) return undefined;
+    if (!user?.completedLabIds?.includes(lab.id)) return undefined;
     return new Date().toISOString().split('T')[0];
   };
 
@@ -31,7 +32,7 @@ export function deriveBadges(labs: Lab[], user: User | null): DerivedBadge[] {
         backgroundImage: badge.backgroundImage,
         xpBonus: lab.xpReward || 0,
         awardOn: lab.credential?.awardOn || 'completion',
-        earnedAt: earnedDate(lab.id),
+        earnedAt: earnedDate(lab),
       };
     });
 }

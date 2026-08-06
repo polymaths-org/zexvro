@@ -99,6 +99,8 @@ export const LabManagerPanel: React.FC<LabManagerPanelProps> = ({
   // --- Credentials state ---
   const [badgeId, setBadgeId] = useState(lab.badgeId || badges[0]?.id || '');
   const [awardOn, setAwardOn] = useState(lab.credential?.awardOn || 'completion');
+  const [awardBadge, setAwardBadge] = useState(lab.credential?.awardBadge !== false);
+  const [awardCertificate, setAwardCertificate] = useState(lab.credential?.awardCertificate !== false);
   const [credentialBadgeName, setCredentialBadgeName] = useState(
     lab.credential?.badgeName || lab.badgeName || '',
   );
@@ -286,6 +288,8 @@ export const LabManagerPanel: React.FC<LabManagerPanelProps> = ({
       credential: {
         ...credentialDraft,
         awardOn,
+        awardBadge,
+        awardCertificate,
         badgeName: credentialBadgeName || badge?.name || undefined,
         certificateName: credentialCertName || undefined,
       },
@@ -781,6 +785,26 @@ export const LabManagerPanel: React.FC<LabManagerPanelProps> = ({
                   className={inputCls}
                 />
               </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+              <label className="flex items-center gap-3 bg-black border border-zinc-800 rounded-xl px-4 py-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={awardBadge}
+                  onChange={(e) => setAwardBadge(e.target.checked)}
+                  className="w-4 h-4 accent-blue-600"
+                />
+                <span className="text-xs font-bold text-white font-heading">Award badge after completion</span>
+              </label>
+              <label className="flex items-center gap-3 bg-black border border-zinc-800 rounded-xl px-4 py-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={awardCertificate}
+                  onChange={(e) => setAwardCertificate(e.target.checked)}
+                  className="w-4 h-4 accent-blue-600"
+                />
+                <span className="text-xs font-bold text-white font-heading">Issue certificate after completion</span>
+              </label>
             </div>
             <div className="flex items-center gap-3 pt-1">
               <SaveButton onSave={(done) => { saveCredentials(); done(); }} label="Save Credentials" />

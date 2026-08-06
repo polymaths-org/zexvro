@@ -1,4 +1,4 @@
-import { Lab, Badge, Certificate, Submission } from '../types';
+import { Lab, Badge, Certificate, Submission, User } from '../types';
 import { getIdToken } from './firebase';
 
 // Centralized data API. Every call attaches the current Firebase ID token so
@@ -28,6 +28,11 @@ export const api = {
   fetchCertificates: () => request<{ certificates: Certificate[] }>('/api/certificates'),
   fetchSubmissions: () => request<{ submissions: Submission[] }>('/api/submissions'),
   fetchUsers: () => request<{ users: unknown[] }>('/api/admin/users'),
+  setUserRole: (id: string, role: 'admin' | 'student') =>
+    request<{ success: boolean; user?: User }>(`/api/admin/users/${encodeURIComponent(id)}/role`, {
+      method: 'PUT',
+      body: JSON.stringify({ role }),
+    }),
 
   createLab: (lab: Partial<Lab>) =>
     request<{ lab: Lab }>('/api/labs', { method: 'POST', body: JSON.stringify(lab) }),

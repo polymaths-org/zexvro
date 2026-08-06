@@ -26,6 +26,7 @@ interface AdminPanelProps {
   labs: Lab[];
   badges: Badge[];
   users?: User[];
+  currentUser?: User;
   submissions?: Submission[];
   tab?: ManagementTab;
   onTabChange?: (tab: ManagementTab) => void;
@@ -38,6 +39,7 @@ interface AdminPanelProps {
   onCreateBadge: (badge: Partial<Badge>) => void;
   onDeleteBadge: (id: string) => void;
   onUpdateSubmission?: (id: string, status: SubmissionStatus, note?: string) => void;
+  onUpdateUserRole?: (id: string, role: 'admin' | 'student') => void;
 }
 
 type ManagementTab = 'overview' | 'labs' | 'operations' | 'users' | 'submissions';
@@ -46,6 +48,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   labs,
   badges,
   users = [],
+  currentUser,
   submissions = [],
   tab: controlledTab,
   onTabChange,
@@ -58,6 +61,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onCreateBadge,
   onDeleteBadge,
   onUpdateSubmission,
+  onUpdateUserRole,
 }) => {
   const [tab, setTab] = useState<ManagementTab>(controlledTab || 'overview');
   const activeTab = controlledTab ?? tab;
@@ -405,6 +409,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 >
                   {u.role}
                 </span>
+                {onUpdateUserRole && u.id !== currentUser?.id && (
+                  <button
+                    onClick={() => onUpdateUserRole(u.id, u.role === 'admin' ? 'student' : 'admin')}
+                    title={u.role === 'admin' ? 'Revoke admin' : 'Make admin'}
+                    className="px-2 py-1 text-[10px] font-mono font-bold rounded-md border transition-colors ${
+                      u.role === 'admin'
+                        ? 'border-red-800 text-red-300 hover:bg-red-950/50'
+                        : 'border-blue-800 text-blue-300 hover:bg-blue-950/50'
+                    }"
+                  >
+                    {u.role === 'admin' ? 'Revoke' : 'Make Admin'}
+                  </button>
+                )}
               </div>
             ))}
             {users.length === 0 && <p className="text-xs text-zinc-500 font-mono text-center py-6">No users yet.</p>}

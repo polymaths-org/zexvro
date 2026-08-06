@@ -198,6 +198,20 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
       return json({ users: await store.listUsers() });
     }
 
+    // admin: promote/demote a user's role (admin | student)
+    const roleMatch = path.match(/^\/admin\/users\/([^/]+)\/role$/);
+    if (roleMatch && method === 'PUT') {
+      const actor = await requireUser(ctx.request, env);
+      if (!actor) return json({ error: 'Unauthorized' }, 401);
+      if (!isAdmin(actor, env)) return json({ error: 'Forbidden' }, 403);
+      const body = await readBody(ctx.request);
+      const role = body?.role === 'admin' ? 'admin' : body?.role === 'student' ? 'student' : null;
+      if (!role) return json({ error: 'Invalid role' }, 400);
+      const updated = await store.updateUserRole(decodeURIComponent(roleMatch[1]), role);
+      if (!updated) return json({ error: 'User not found' }, 404);
+      return json({ success: true, user: updated });
+    }
+
     if (path === '/admin/invite' && method === 'POST') {
       const user = await requireUser(ctx.request, env);
       if (!user) return json({ error: 'Unauthorized' }, 401);

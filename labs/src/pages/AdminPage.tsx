@@ -18,6 +18,7 @@ export const AdminPage: React.FC<{ tab: AdminTab }> = ({ tab }) => {
     handleCreateBadge,
     handleDeleteBadge,
     handleUpdateSubmission,
+    handleUpdateUserRole,
   } = useLabs();
 
   return (
@@ -25,9 +26,11 @@ export const AdminPage: React.FC<{ tab: AdminTab }> = ({ tab }) => {
       labs={labs}
       badges={badges}
       users={users.length > 0 ? users : [user]}
+      currentUser={user}
       submissions={submissions}
       tab={tab}
       onTabChange={(t) => navigate(paths.admin(t as AdminTab))}
+      onUpdateUserRole={handleUpdateUserRole}
       onInviteUser={(username) =>
         fetch('/api/admin/invite', {
           method: 'POST',

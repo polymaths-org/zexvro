@@ -29,6 +29,7 @@ export interface LabsStore {
   getLabPrivate(id: string): Promise<Record<string, unknown> | undefined>;
   getUser(githubId: string): Promise<User | undefined>;
   upsertUser(user: User): Promise<User>;
+  updateUserRole(githubId: string, role: User['role']): Promise<User | undefined>;
   listUsers(): Promise<User[]>;
   findUserByUsername(username: string): Promise<User | undefined>;
   listBadges(): Promise<Badge[]>;
@@ -110,6 +111,13 @@ export class MemoryStore implements LabsStore {
   async upsertUser(user: User) {
     this.users.set(user.id, user);
     return user;
+  }
+  async updateUserRole(githubId: string, role: User['role']) {
+    const existing = this.users.get(githubId);
+    if (!existing) return undefined;
+    const updated = { ...existing, role };
+    this.users.set(githubId, updated);
+    return updated;
   }
   async listUsers() {
     return [...this.users.values()];
@@ -304,6 +312,14 @@ export class DynamoStore implements LabsStore {
       }),
     );
     return user;
+  }
+
+  async updateUserRole(githubId: string, role: User['role']): Promise<User | undefined> {
+    const existing = await this.getUser(githubId);
+    if (!existing) return undefined;
+    const updated = { ...existing, role };
+    await this.upsertUser(updated);
+    return updated;
   }
 
   async listBadges(): Promise<Badge[]> {
@@ -777,6 +793,13 @@ export class FirestoreStore implements LabsStore {
   async upsertUser(user: User): Promise<User> {
     await this.writeDoc('users', user.id, user as unknown as Record<string, unknown>);
     return user;
+  }
+  async updateUserRole(githubId: string, role: User['role']): Promise<User | undefined> {
+    const existing = await this.readDoc('users', githubId);
+    if (!existing) return undefined;
+    const updated = { ...existing, role } as User;
+    await this.writeDoc('users', githubId, updated as unknown as Record<string, unknown>);
+    return updated;
   }
   async listUsers(): Promise<User[]> {
     return (await this.listCollection('users')) as User[];

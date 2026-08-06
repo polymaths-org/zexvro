@@ -1,5 +1,16 @@
 # ZEXVRO Shared Memory
 
+## 2026-08-06 - ZEXVRO Labs: robust admin roster + role toggle, bigger badges + download/share, per-lab cert/badge award toggles (Paris)
+
+Prod bundle `index-DVWLsa3F.js` (deploy `d97dc33a`). Verified live: `/api/admin/users` returns all 4 users for both admin accounts (clawdroid, zexvro/"Paris Nilesh Kulkarni"); new role endpoint works end-to-end (promote/demote Nabil, then restored).
+
+- **Admin → Users tab showing only self.** Root cause was client-side: when `/api/admin/users` returned non-OK, `api.request()` returned null and the roster effect collapsed `users` to `[self]`; `AdminPage` then fell back to `[user]`. The backend itself was already correct (4 user docs in Firestore). Fixed the fetch effect in `state/labs.tsx` so a failed fetch **keeps the previously known roster** (never collapses to just the current admin). Backend verified returning all 4 for both admin logins.
+- **"Make Paris Nilesh Kulkarni admin"** — the account that displays as "Paris Nilesh Kulkarni" is the `zexvro` GitHub login (Firestore uid `4mJMRK4CVdez8gx8Wy3oMb40tx23`) — already `role: admin` in Firestore and already in `LABS_ADMIN_GITHUB_LOGINS` (`zexvro,clawdroid`). clawdroid is also admin. Added a **Make Admin / Revoke** button per user in the Users tab (hidden for the current user) so any account can be promoted from the UI going forward.
+- **Backend role endpoint**: `PUT /api/admin/users/:id/role` in `functions/api/[[path]].ts` (admin-gated), backed by new `updateUserRole` in all three stores (`MemoryStore`, `DynamoStore`, `FirestoreStore`), added to the `LabsStore` interface. Client: `api.setUserRole` + `handleUpdateUserRole` in `state/labs.tsx` (optimistic update + toast).
+- **Progress & Badges**: badge art enlarged `w-16 h-16` → `w-28 h-28` (glyph `w-7` → `w-12`); each earned badge now has **Download PNG** and **Share** buttons. New `src/lib/badgeExport.ts` renders the badge to a 1024×1024 PNG (bg image respects `bgSize`/`bgPosX/Y`/`bgZoom`, white award ribbon glyph, accent halo). Share uses the Web Share API with a PNG `File`, falling back to a download.
+- **Lab management → Credentials tab**: two new toggles — **"Award badge after completion"** and **"Issue certificate after completion"** — saved into `lab.credential.awardBadge` / `awardCertificate`. Wired into `handleLabCompleted` (badge award, cert minting + XP bonus gated), `handleAwardBadge` (task-triggered awards gated), `deriveBadges` (badges with `awardBadge:false` never show as earned), and the runner completion modal copy.
+- Verified: `tsc --noEmit` clean, `vite build` clean, deployed; new bundle confirmed live on `labs.zexvro.in`.
+
 ## 2026-08-06 - ZEXVRO Labs: admin roster fix, cert image export, static cert alignment, lab-details completed copy (Paris)
 
 Prod bundle `index-DLfJknXx.js`. Five fixes:

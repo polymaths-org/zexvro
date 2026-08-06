@@ -4,6 +4,7 @@ import {
   ShieldCheck, 
   Printer, 
   Download, 
+  Share2, 
   ExternalLink, 
   CheckCircle2, 
   X, 
@@ -13,6 +14,7 @@ import { Certificate, Badge, User, Lab } from '../types';
 import { deriveBadges } from '../lib/badges';
 import { CertificatePreview } from './CertificatePreview';
 import { exportCertificatePng, downloadDataUrl } from '../lib/certificateExport';
+import { exportBadgePng } from '../lib/badgeExport';
 
 interface CertificatesViewProps {
   user: User;
@@ -46,6 +48,67 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
       /* keep modal open on failure */
     } finally {
       setDownloading(false);
+    }
+  };
+
+  const [busyBadgeId, setBusyBadgeId] = useState<string | null>(null);
+
+  const badgeDesignFor = (badge: Badge) => {
+    const lab = labs.find((l) => l.id === badge.id.replace(/^lab_/, '') || l.badgeId === badge.id);
+    return lab?.credential?.badge;
+  };
+
+  const handleDownloadBadge = async (badge: Badge) => {
+    if (busyBadgeId) return;
+    setBusyBadgeId(badge.id);
+    try {
+      const design = badgeDesignFor(badge);
+      const dataUrl = await exportBadgePng({
+        background: design?.background || badge.background,
+        backgroundImage: design?.backgroundImage || badge.backgroundImage,
+        bgSize: design?.bgSize,
+        bgPosX: design?.bgPosX,
+        bgPosY: design?.bgPosY,
+        bgZoom: design?.bgZoom,
+        color: badge.color,
+      });
+      const safe = badge.name.replace(/[^a-z0-9-_ ]/gi, '_').trim() || 'badge';
+      downloadDataUrl(dataUrl, `${safe}.png`);
+    } catch {
+      /* silent */
+    } finally {
+      setBusyBadgeId(null);
+    }
+  };
+
+  const handleShareBadge = async (badge: Badge) => {
+    try {
+      const design = badgeDesignFor(badge);
+      const dataUrl = await exportBadgePng({
+        background: design?.background || badge.background,
+        backgroundImage: design?.backgroundImage || badge.backgroundImage,
+        bgSize: design?.bgSize,
+        bgPosX: design?.bgPosX,
+        bgPosY: design?.bgPosY,
+        bgZoom: design?.bgZoom,
+        color: badge.color,
+      });
+      const blob = await (await fetch(dataUrl)).blob();
+      const file = new File([blob], `${badge.name.replace(/[^a-z0-9-_ ]/gi, '_')}.png`, {
+        type: 'image/png',
+      });
+      if (navigator.share) {
+        await navigator.share({ files: [file], title: badge.name, text: `${badge.name} — earned on ZEXVRO Labs` });
+      } else {
+        const url = URL.createObjectURL(file);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = file.name;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch {
+      /* user cancelled share — ignore */
     }
   };
 
@@ -151,7 +214,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-5">
           {badges.filter((b) => b.earnedAt).map((badge) => {
             const isEarned = !!badge.earnedAt;
-            const design = labs.find((l) => l.id === badge.id.replace(/^lab_/, '') || l.badgeId === badge.id)?.credential?.badge;
+            const design = badgeDesignFor(badge);
             return (
               <div
                 key={badge.id}
@@ -162,16 +225,16 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
                 }`}
               >
                 <div className="w-full">
-                  <div className="mx-auto mb-3 relative w-16 h-16 overflow-hidden rounded-2xl border border-zinc-700"
+                  <div className="mx-auto mb-3 relative w-28 h-28 overflow-hidden rounded-2xl border border-zinc-700"
                     style={
-                      design?.backgroundImage
+                      design?.backgroundImage || badge.backgroundImage
                         ? {
-                            backgroundImage: `url("${design.backgroundImage}")`,
-                            backgroundSize: design.bgSize === 'contain' ? 'contain' : 'cover',
-                            backgroundPosition: `${design.bgPosX ?? 50}% ${design.bgPosY ?? 50}%`,
+                            backgroundImage: `url("${design?.backgroundImage || badge.backgroundImage}")`,
+                            backgroundSize: design?.bgSize === 'contain' ? 'contain' : 'cover',
+                            backgroundPosition: `${design?.bgPosX ?? 50}% ${design?.bgPosY ?? 50}%`,
                             backgroundRepeat: 'no-repeat',
                           }
-                        : { background: design?.background || badge.color }
+                        : { background: design?.background || badge.background || badge.color }
                     }
                   >
                     {design?.elements ? (
@@ -183,7 +246,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
                             className="absolute inset-0 flex items-center justify-center"
                             style={{ color: '#fff' }}
                           >
-                            <Award className="w-7 h-7" style={{ opacity: isEarned ? 1 : 0.4 }} />
+                            <Award className="w-12 h-12" style={{ opacity: isEarned ? 1 : 0.4 }} />
                           </div>
                         ))
                     ) : badge.imageUrl ? (
@@ -198,7 +261,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
                           isEarned ? 'bg-white text-black' : 'bg-zinc-900 text-zinc-600'
                         }`}
                       >
-                        <Award className="h-7 w-7" />
+                        <Award className="h-12 w-12" />
                       </div>
                     )}
                   </div>
@@ -209,10 +272,31 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
 
                 <div className="mt-4 pt-3 border-t border-zinc-800 w-full text-[10px] font-mono">
                   {isEarned ? (
-                    <span className="text-white font-bold flex items-center justify-center gap-1">
-                      <CheckCircle2 className="h-3 w-3" />
-                      Earned {badge.earnedAt}
-                    </span>
+                    <div className="flex flex-col items-center gap-2">
+                      <span className="text-white font-bold flex items-center justify-center gap-1">
+                        <CheckCircle2 className="h-3 w-3" />
+                        Earned {badge.earnedAt}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <motion.button
+                          whileTap={{ scale: 0.95 }}
+                          onClick={() => handleDownloadBadge(badge)}
+                          disabled={busyBadgeId === badge.id}
+                          className="flex-1 px-2 py-1.5 bg-white text-black font-extrabold rounded-lg text-[10px] flex items-center justify-center gap-1 hover:bg-zinc-200 transition-colors disabled:opacity-50"
+                        >
+                          <Download className="h-3 w-3" />
+                          {busyBadgeId === badge.id ? 'Rendering…' : 'Download'}
+                        </motion.button>
+                        <motion.button
+                          whileTap={{ scale: 0.95 }}
+                          onClick={() => handleShareBadge(badge)}
+                          className="flex-1 px-2 py-1.5 bg-zinc-900 border border-zinc-700 text-white font-extrabold rounded-lg text-[10px] flex items-center justify-center gap-1 hover:bg-zinc-800 transition-colors"
+                        >
+                          <Share2 className="h-3 w-3" />
+                          Share
+                        </motion.button>
+                      </div>
+                    </div>
                   ) : (
                     <span className="text-zinc-600">Locked (+{badge.xpBonus} XP)</span>
                   )}

@@ -65,6 +65,7 @@ interface LabsContextValue {
   handleCreateBadge: (badge: Partial<Badge>) => void;
   handleDeleteBadge: (id: string) => void;
   handleUpdateSubmission: (id: string, status: SubmissionStatus, note?: string) => void;
+  handleUpdateUserRole: (id: string, role: 'admin' | 'student') => void;
   handleDemoLogin: (u: User) => void;
   handleLogout: () => void;
 }
@@ -240,7 +241,15 @@ export function LabsProvider({ children }: { children: React.ReactNode }) {
         if (!seen.has(user.id)) seen.set(user.id, user);
         setUsers([...seen.values()]);
       })
-      .catch(() => setUsers([user]));
+      .catch(() => {
+        // Never collapse the roster to just the current admin. If the backend
+        // fetch failed (network / transient), keep any users we already know so
+        // the Users tab still shows the real platform roster.
+        setUsers((prev) => {
+          if (!prev || prev.length === 0) return [user];
+          return prev.some((u) => u.id === user.id) ? prev : [...prev, user];
+        });
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user.role, user.id, submissions]);
 
@@ -389,7 +398,9 @@ export function LabsProvider({ children }: { children: React.ReactNode }) {
       // Guard: once completed, never re-run the award/submission flow.
       if ((user.completedLabIds || []).includes(lab.id)) return;
       const now = new Date();
-      const earnedBadge = lab.badgeId ? badges.find((b) => b.id === lab.badgeId) : null;
+      const awardBadge = lab.credential?.awardBadge !== false;
+      const awardCertificate = lab.credential?.awardCertificate !== false;
+      const earnedBadge = awardBadge && lab.badgeId ? badges.find((b) => b.id === lab.badgeId) : null;
 
       let badgeXp = 0;
       if (earnedBadge && !earnedBadge.earnedAt) {
@@ -413,11 +424,12 @@ export function LabsProvider({ children }: { children: React.ReactNode }) {
       });
 
       // Dedupe certificate issuance — never mint a second cert for the same
-      // student + lab, and never when the lab has no publishable credential.
+      // student + lab, and never when the lab has no publishable credential
+      // or the admin disabled certificate issuance for this lab.
       const alreadyCertified = certificates.some(
         (c) => c.studentId === user.id && c.labTitle === lab.title,
       );
-      if (!alreadyCertified) {
+      if (awardCertificate && !alreadyCertified && lab.credential?.certificate) {
         const newCertNumber = `ZEXVRO-CERT-2026-${Date.now()}`;
         const newCert: Certificate = {
           id: `cert_${Date.now()}`,
@@ -465,6 +477,7 @@ export function LabsProvider({ children }: { children: React.ReactNode }) {
     (labId: string): number => {
       const lab = labs.find((l) => l.id === labId);
       if (!lab?.badgeId) return 0;
+      if (lab.credential?.awardBadge === false) return 0;
       let badgeXp = 0;
       setBadges((prev) => {
         const b = prev.find((x) => x.id === lab.badgeId);
@@ -562,6 +575,16 @@ export function LabsProvider({ children }: { children: React.ReactNode }) {
     [pendingStartLab, handleStartLab],
   );
 
+  // Promote/demote a platform user's role from the admin Users tab. Optimistic
+  // update keeps the roster responsive; the backend persists it to the store.
+  const handleUpdateUserRole = useCallback((id: string, role: 'admin' | 'student') => {
+    setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, role } : u)));
+    api.setUserRole(id, role).then((ok) => {
+      toast(ok ? `Role set to ${role}` : 'Failed to update role', ok ? 'success' : 'error');
+      if (id === user.id) setUser((prev) => ({ ...prev, role }));
+    });
+  }, [user.id]);
+
   const handleLogout = useCallback(() => {
     signOutFirebase().catch(() => {});
     setUser(initialUser);
@@ -607,6 +630,7 @@ export function LabsProvider({ children }: { children: React.ReactNode }) {
     handleCreateBadge,
     handleDeleteBadge,
     handleUpdateSubmission,
+    handleUpdateUserRole,
     handleDemoLogin,
     handleLogout,
   };

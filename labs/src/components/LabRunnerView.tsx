@@ -807,7 +807,11 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
                     <span className="flex items-center gap-1.5">
                       <CheckCircle2 className="h-3.5 w-3.5" /> All tasks completed
                     </span>
-                    <span className="text-zinc-500">Your certificate & badge are ready to claim.</span>
+                    <span className="text-zinc-500">
+                      {lab.credential?.awardCertificate === false
+                        ? 'Your score & progress are saved.'
+                        : 'Your certificate & badge are ready to claim.'}
+                    </span>
                   </div>
                 )}
                 <motion.button
