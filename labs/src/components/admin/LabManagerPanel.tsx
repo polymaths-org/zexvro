@@ -762,6 +762,7 @@ export const LabManagerPanel: React.FC<LabManagerPanelProps> = ({
             onChange={(credential) => onUpdateLab(lab.id, { credential })}
             badgeName={badges.find((b) => b.id === badgeId)?.name || lab.badgeName || 'Skill Badge'}
             labName={lab.title}
+            onSave={() => saveCredentials()}
           />
         </div>
       )}

@@ -26,6 +26,7 @@ import { shareUrl, paths } from '../lib/router';
 interface LabDetailsViewProps {
   lab: Lab;
   user: User;
+  enrolledLearners?: User[];
   onBack: () => void;
   onStartLab: (lab: Lab) => void;
 }
@@ -39,10 +40,11 @@ export const getLabAccessState = (lab: Lab): LabAccessState => {
   return 'open';
 };
 
-export const LabDetailsView: React.FC<LabDetailsViewProps> = ({ lab, user, onBack, onStartLab }) => {
+export const LabDetailsView: React.FC<LabDetailsViewProps> = ({ lab, user, enrolledLearners, onBack, onStartLab }) => {
   const state = getLabAccessState(lab);
   const enrolled = lab.enrolledCount ?? lab.completions ?? 0;
   const isAdmin = user.role === 'admin';
+  const isEnrolled = (user.startedLabIds || []).includes(lab.id);
   const [copied, setCopied] = useState(false);
 
   const copyLabLink = async () => {
@@ -130,10 +132,6 @@ export const LabDetailsView: React.FC<LabDetailsViewProps> = ({ lab, user, onBac
           {/* Title + meta */}
           <div className="flex-1 min-w-0 flex flex-col justify-center">
             <div className="flex items-center gap-2 flex-wrap mb-2">
-              <span className={`px-2.5 py-1 text-[11px] font-mono font-bold rounded-lg border uppercase ${stateMeta[state].cls}`}>
-                {stateMeta[state].icon}
-                {stateMeta[state].label}
-              </span>
               <span className="text-[11px] font-mono text-zinc-400 font-bold uppercase">{lab.difficulty}</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight font-heading leading-tight">
@@ -183,7 +181,7 @@ export const LabDetailsView: React.FC<LabDetailsViewProps> = ({ lab, user, onBac
               <GraduationCap className="h-5 w-5 text-blue-accent" />
               About this lab
             </h2>
-            <p className="text-[15px] text-zinc-300 leading-relaxed">{lab.description}</p>
+            <p className="text-[15px] text-zinc-300 leading-relaxed whitespace-pre-line">{lab.description}</p>
 
             {lab.tags.length > 0 && (
               <div className="flex flex-wrap gap-2">
@@ -222,6 +220,42 @@ export const LabDetailsView: React.FC<LabDetailsViewProps> = ({ lab, user, onBac
               </div>
             </div>
           )}
+
+          {/* Enrolled learners — top 5 avatars + total */}
+          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-6 space-y-4">
+            <h2 className="text-lg font-bold text-white font-heading flex items-center gap-2">
+              <Users className="h-5 w-5 text-blue-accent" />
+              Enrolled learners
+            </h2>
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex -space-x-2">
+                {(enrolledLearners || []).slice(0, 5).map((l) => (
+                  <div
+                    key={l.id}
+                    className="w-9 h-9 rounded-full border-2 border-zinc-900 bg-zinc-800 overflow-hidden flex items-center justify-center text-xs font-bold text-white"
+                    title={l.name}
+                  >
+                    {l.avatarUrl ? (
+                      <img src={l.avatarUrl} alt={l.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="uppercase">{l.name?.slice(0, 2) || '?'}</span>
+                    )}
+                  </div>
+                ))}
+                {(enrolledLearners || []).length === 0 && (
+                  <div className="w-9 h-9 rounded-full border-2 border-zinc-900 bg-zinc-800 flex items-center justify-center text-xs text-zinc-500">
+                    ?
+                  </div>
+                )}
+              </div>
+              <span className="text-sm font-bold text-white">{enrolled.toLocaleString()} enrolled</span>
+              {(enrolledLearners || []).length > 5 && (
+                <span className="text-xs font-mono text-zinc-500">
+                  +{(enrolledLearners || []).length - 5} more
+                </span>
+              )}
+            </div>
+          </div>
 
           {/* Curriculum outline */}
           <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-6 space-y-4">
@@ -297,12 +331,19 @@ export const LabDetailsView: React.FC<LabDetailsViewProps> = ({ lab, user, onBac
             icon={<Play className="h-4 w-4 fill-current" />}
             onClick={() => onStartLab(lab)}
           >
-            {state === 'locked' ? 'Enter Access Code' : 'Start Lab'}
+            {state === 'locked' ? 'Enter Access Code' : isEnrolled ? 'Resume Lab' : 'Enroll'}
           </Button>
 
           {state === 'locked' && (
             <p className="text-xs text-zinc-500 font-mono text-center">
-              You will be asked for the code after clicking Start.
+              You will be asked for the code after clicking Enroll.
+            </p>
+          )}
+
+          {isEnrolled && (
+            <p className="text-xs text-zinc-500 font-mono text-center flex items-center justify-center gap-1.5">
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+              You're enrolled — resume where you left off.
             </p>
           )}
 

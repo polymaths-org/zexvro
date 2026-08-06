@@ -10,11 +10,14 @@ import {
   KeyRound,
   Type,
   ImagePlus,
+  Image as ImageIcon,
   QrCode,
   Move,
   Trash2,
   PlusCircle,
   Minus,
+  Save,
+  Check,
 } from 'lucide-react';
 import { LabCredential, CredentialElement } from '../../types';
 
@@ -23,6 +26,7 @@ interface CredentialCanvasProps {
   onChange: (next: LabCredential) => void;
   badgeName: string;
   labName: string;
+  onSave?: () => void;
 }
 
 const ICON_MAP: Record<string, React.ReactNode> = {
@@ -84,13 +88,16 @@ export const CredentialCanvas: React.FC<CredentialCanvasProps> = ({
   onChange,
   badgeName,
   labName,
+  onSave,
 }) => {
   const badge = value.badge || defaultBadge(badgeName, labName);
   const cert = value.certificate || defaultCert();
 
   const [selectedKind, setSelectedKind] = useState<'badge' | 'cert'>('badge');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [savedTick, setSavedTick] = useState(false);
   const dragRef = useRef<{ id: string; dx: number; dy: number } | null>(null);
+  const canvasRef = useRef<HTMLDivElement>(null);
 
   const selected =
     selectedId != null
@@ -120,6 +127,8 @@ export const CredentialCanvas: React.FC<CredentialCanvasProps> = ({
         ? { id: uid('b_icon'), kind: 'icon', x: 50, y: 30, size: 60, color: '#ffffff', align: 'center', shape: 'rect' }
         : type === 'line'
         ? { id: uid('c_sign'), kind: 'line', x: 50, y: 84, size: 1, color: '#52525b', align: 'center', width: 24 }
+        : type === 'image'
+        ? { id: uid('c_img'), kind: 'image', x: 50, y: 30, size: 80, color: '#ffffff', align: 'center' }
         : { id: uid('t'), kind: 'text', x: 50, y: 50, size: 16, color: '#ffffff', text: 'New text', align: 'center', width: 60 };
     const kindKey = kind === 'badge' ? 'badge' : 'certificate';
     const next: any = { ...(kind === 'badge' ? badge : cert) };
@@ -128,26 +137,42 @@ export const CredentialCanvas: React.FC<CredentialCanvasProps> = ({
     setSelectedId(base.id);
   };
 
+  const readImage = (file: File | undefined, cb: (url: string) => void) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => cb(String(reader.result));
+    reader.readAsDataURL(file);
+  };
+
   // --- drag handling ---
+  // The element rects must come from the CANVAS, not the dragged block —
+  // using the block's rect made deltas wrong and snapped elements to the
+  // border. Compute positions against the canvas container rect instead.
+  const canvasRect = () => canvasRef.current?.getBoundingClientRect();
+
   const onCanvasPointerDown = (e: React.PointerEvent, id: string) => {
-    const rect = e.currentTarget.getBoundingClientRect();
+    const rect = canvasRect();
+    if (!rect) return;
     const px = ((e.clientX - rect.left) / rect.width) * 100;
     const py = ((e.clientY - rect.top) / rect.height) * 100;
     const el = (selectedKind === 'badge' ? badge.elements : cert.elements).find((x) => x.id === id);
     dragRef.current = { id, dx: px - (el?.x ?? 0), dy: py - (el?.y ?? 0) };
     setSelectedId(id);
+    canvasRef.current?.setPointerCapture?.(e.pointerId);
   };
   const onCanvasPointerMove = (e: React.PointerEvent) => {
     if (!dragRef.current) return;
-    const rect = e.currentTarget.getBoundingClientRect();
+    const rect = canvasRect();
+    if (!rect) return;
     const px = ((e.clientX - rect.left) / rect.width) * 100;
     const py = ((e.clientY - rect.top) / rect.height) * 100;
     const x = Math.min(100, Math.max(0, px - dragRef.current.dx));
     const y = Math.min(100, Math.max(0, py - dragRef.current.dy));
     updateElement(selectedKind, dragRef.current.id, { x, y });
   };
-  const onCanvasPointerUp = () => {
+  const onCanvasPointerUp = (e: React.PointerEvent) => {
     dragRef.current = null;
+    canvasRef.current?.releasePointerCapture?.(e.pointerId);
   };
 
   // --- rendering blocks ---
@@ -197,6 +222,29 @@ export const CredentialCanvas: React.FC<CredentialCanvasProps> = ({
             <div className="w-full h-full rounded-lg bg-zinc-800 border border-dashed border-zinc-600 flex items-center justify-center">
               <ImagePlus className="w-1/2 h-1/2 text-zinc-500" />
             </div>
+          )}
+        </div>
+      );
+    }
+    if (el.kind === 'image') {
+      return (
+        <div key={el.id} {...commonProps} style={{ ...style, width: el.size, height: el.size }}>
+          {el.imageUrl ? (
+            <img src={el.imageUrl} alt="block" className="w-full h-full object-contain" />
+          ) : (
+            <label className="w-full h-full flex items-center justify-center rounded-lg bg-zinc-800 border border-dashed border-zinc-600 text-zinc-500 cursor-pointer">
+              <ImagePlus className="w-1/2 h-1/2" />
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  readImage(e.target.files?.[0], (url) =>
+                    updateElement(selectedKind, el.id, { imageUrl: url }),
+                  );
+                }}
+              />
+            </label>
           )}
         </div>
       );
@@ -253,14 +301,28 @@ export const CredentialCanvas: React.FC<CredentialCanvasProps> = ({
     );
   };
 
+  const badgeBackgroundImage = badge.backgroundImage || undefined;
   const badgeBg = badge.dotgrid
     ? `radial-gradient(${badge.accent}33 1px, transparent 1px)`
     : undefined;
+  const isBadge = selectedKind === 'badge';
+  const canvasBg =
+    badgeBackgroundImage && isBadge
+      ? `url("${badgeBackgroundImage}") center / cover no-repeat`
+      : undefined;
+  const canvasBgStyle: React.CSSProperties =
+    canvasBg
+      ? { background: canvasBg }
+      : {
+          background: isBadge ? badge.background : cert.background,
+          backgroundImage: isBadge ? badgeBg : undefined,
+          backgroundSize: isBadge ? '24px 24px' : undefined,
+        };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
       {/* Editor tabs */}
-      <div className="space-y-4">
+      <div className="space-y-4 xl:col-span-2">
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => setSelectedKind('badge')}
@@ -274,16 +336,33 @@ export const CredentialCanvas: React.FC<CredentialCanvasProps> = ({
           >
             <ShieldCheck className="h-4 w-4" /> Certificate
           </button>
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={() => {
+                onSave?.();
+                setSavedTick(true);
+                setTimeout(() => setSavedTick(false), 2500);
+              }}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-extrabold rounded-xl flex items-center gap-1.5 font-heading"
+            >
+              <Save className="h-4 w-4" /> Save Design
+            </button>
+            <div
+              className="px-3 py-2 bg-zinc-900 border border-zinc-700 text-zinc-300 text-xs font-bold rounded-xl flex items-center gap-1.5"
+            >
+              {savedTick ? <Check className="h-4 w-4 text-emerald-400" /> : <ImagePlus className="h-4 w-4 text-zinc-500" />}
+              {savedTick ? 'Saved' : 'Draft'}
+            </div>
+          </div>
         </div>
 
         {/* Canvas */}
         <div
+          ref={canvasRef}
           className="relative overflow-hidden rounded-2xl border border-zinc-700 touch-none select-none"
           style={{
             aspectRatio: selectedKind === 'badge' ? '1 / 1' : '16 / 9',
-            background: selectedKind === 'badge' ? badge.background : cert.background,
-            backgroundImage: selectedKind === 'badge' ? badgeBg : undefined,
-            backgroundSize: selectedKind === 'badge' ? '24px 24px' : undefined,
+            ...canvasBgStyle,
           }}
           onPointerMove={onCanvasPointerMove}
           onPointerUp={onCanvasPointerUp}
@@ -305,7 +384,7 @@ export const CredentialCanvas: React.FC<CredentialCanvasProps> = ({
       </div>
 
       {/* Property panel */}
-      <div className="space-y-4">
+      <div className="space-y-4 xl:col-span-1">
         {/* Global styles */}
         <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-4 space-y-3">
           <h3 className="text-xs font-mono font-bold text-zinc-300 uppercase tracking-widest">
@@ -349,7 +428,8 @@ export const CredentialCanvas: React.FC<CredentialCanvasProps> = ({
           </div>
 
           {selectedKind === 'badge' ? (
-            <div className="flex items-center gap-2 flex-wrap">
+            <>
+              <div className="flex items-center gap-2 flex-wrap">
               <div>
                 <label className="block text-[10px] font-mono text-zinc-500 mb-1 font-bold">Icon</label>
                 <div className="flex gap-1.5">
@@ -376,6 +456,30 @@ export const CredentialCanvas: React.FC<CredentialCanvasProps> = ({
                 Dot grid
               </label>
             </div>
+            <div className="pt-2 border-t border-zinc-800 flex items-center gap-3 flex-wrap">
+              <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-xl text-xs font-bold text-zinc-200">
+                <ImageIcon className="h-3.5 w-3.5" /> Badge background image
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    readImage(e.target.files?.[0], (url) =>
+                      patch('badge', (d) => ({ ...d, backgroundImage: url }) as any),
+                    );
+                  }}
+                />
+              </label>
+              {badge.backgroundImage && (
+                <button
+                  onClick={() => patch('badge', (d) => ({ ...d, backgroundImage: '' }) as any)}
+                  className="text-[11px] font-mono text-zinc-500 hover:text-white underline"
+                >
+                  Remove bg image
+                </button>
+              )}
+            </div>
+            </>
           ) : (
             <div>
               <label className="block text-[10px] font-mono text-zinc-500 mb-1 font-bold">Logo</label>
@@ -534,6 +638,9 @@ export const CredentialCanvas: React.FC<CredentialCanvasProps> = ({
                   <Award className="h-3.5 w-3.5" /> Icon
                 </button>
               )}
+              <button onClick={() => addElement(selectedKind, 'image')} className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 text-xs font-bold rounded-lg flex items-center gap-1.5">
+                <ImageIcon className="h-3.5 w-3.5" /> Image
+              </button>
               {selectedKind === 'cert' && (
                 <button onClick={() => addElement('cert', 'line')} className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 text-xs font-bold rounded-lg flex items-center gap-1.5">
                   <Minus className="h-3.5 w-3.5" /> Line

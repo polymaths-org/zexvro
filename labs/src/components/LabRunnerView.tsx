@@ -115,12 +115,10 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
+  // Tasks are one-way: once completed they stay completed (cannot be undone).
   const setTaskCompleted = (taskId: string, completed: boolean) => {
-    const next = completed
-      ? completedTaskIds.includes(taskId)
-        ? completedTaskIds
-        : [...completedTaskIds, taskId]
-      : completedTaskIds.filter((id) => id !== taskId);
+    if (!completed) return;
+    const next = completedTaskIds.includes(taskId) ? completedTaskIds : [...completedTaskIds, taskId];
     onProgressChange({ completedTaskIds: next });
 
     if (completed) {
@@ -234,12 +232,12 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
         }`}
       >
         <div className="flex items-start gap-3">
-          {/* Real checkbox */}
+          {/* Real checkbox — checked tasks stay checked, they cannot be unchecked */}
           <motion.button
             role="checkbox"
             aria-checked={isDone}
             aria-label={`Mark task complete: ${task.title}`}
-            onClick={() => setTaskCompleted(task.id, !isDone)}
+            onClick={() => isDone || setTaskCompleted(task.id, true)}
             whileTap={{ scale: 0.85 }}
             className={`mt-0.5 w-6 h-6 shrink-0 rounded-lg border-2 flex items-center justify-center transition-all ${
               isDone
@@ -763,14 +761,23 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
               </p>
 
               <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => setShowCompletionModal(false)}
-                  className="py-3 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 font-extrabold text-sm rounded-xl transition-all font-heading"
-                >
-                  Keep Working
-                </motion.button>
+                {completionPercent < 100 ? (
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setShowCompletionModal(false)}
+                    className="py-3 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 font-extrabold text-sm rounded-xl transition-all font-heading"
+                  >
+                    Keep Working
+                  </motion.button>
+                ) : (
+                  <div className="flex flex-col justify-center text-[11px] font-mono text-emerald-400 font-bold gap-1">
+                    <span className="flex items-center gap-1.5">
+                      <CheckCircle2 className="h-3.5 w-3.5" /> All tasks completed
+                    </span>
+                    <span className="text-zinc-500">Your certificate & badge are ready to claim.</span>
+                  </div>
+                )}
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
@@ -781,7 +788,7 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
                   }}
                   className="py-3 btn-primary-blue text-white font-extrabold text-sm rounded-xl transition-all shadow-xl font-heading"
                 >
-                  Claim Badge & Exit
+                  Submit Lab & Exit
                 </motion.button>
               </div>
             </motion.div>

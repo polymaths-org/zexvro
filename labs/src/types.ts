@@ -12,6 +12,7 @@ export interface User {
   completedLabsCount: number;
   githubConnected: boolean;
   startedLabIds?: string[]; // labs the user has enrolled/started
+  completedLabIds?: string[]; // labs the user has submitted & finished
 }
 
 export type LabDifficulty = 'Introductory' | 'Intermediate' | 'Advanced';
@@ -134,12 +135,13 @@ export interface Lab {
 // --- Credential canvas design (per-lab) ---
 export interface CredentialElement {
   id: string;
-  kind: 'text' | 'icon' | 'logo' | 'qr' | 'shape' | 'line';
+  kind: 'text' | 'icon' | 'logo' | 'qr' | 'shape' | 'line' | 'image';
   x: number; // % of canvas width
   y: number; // % of canvas height
   size: number; // font size (text) or icon/logo size in px of the 512px canvas
   color: string;
   text?: string;
+  imageUrl?: string; // data URL / hosted image for 'image' blocks
   bold?: boolean;
   italic?: boolean;
   align: 'left' | 'center' | 'right';
@@ -151,6 +153,7 @@ export interface LabCredential {
   awardOn?: string;
   badge?: {
     background: string;
+    backgroundImage?: string; // optional uploaded image behind the badge
     accent: string;
     icon: string; // icon key
     dotgrid?: boolean;

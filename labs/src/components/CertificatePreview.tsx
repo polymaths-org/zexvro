@@ -79,6 +79,11 @@ export const CertificatePreview: React.FC<CertificatePreviewProps> = ({
             </div>
           );
         }
+        if (el.kind === 'image') {
+          return el.imageUrl ? (
+            <img key={el.id} src={el.imageUrl} alt="block" style={{ ...style, width: el.size, height: el.size }} className="object-contain" />
+          ) : null;
+        }
         if (el.kind === 'qr') {
           return (
             <div key={el.id} style={{ ...style, width: el.size, height: el.size }} className="p-1 rounded" >

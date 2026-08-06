@@ -1,5 +1,24 @@
 # ZEXVRO Shared Memory
 
+## 2026-08-06 - ZEXVRO Labs: credential canvas upgrades, enroll flow, one-way tasks, lab submission lock, details polish (Paris)
+
+Prod bundle `index-4vdKnAMX.js`. All items from the user's credential/lab-flow request:
+
+- **Credential canvas rebuilt** (`src/components/admin/CredentialCanvas.tsx`):
+  - **Fixed drag bug** — positions were computed against the dragged *block's* rect (not the canvas), so deltas were wrong and blocks snapped to the border. Now everything measures against `canvasRef` (the canvas container) and pointer capture is set on the container. Blocks drag smoothly anywhere.
+  - **Badge image upload** — new "Badge background image" upload button in the badge styles panel (stores `badge.backgroundImage`, rendered as a cover background). Plus a new `image` block kind available on BOTH badge and certificate ("Image" button in Add block) with per-block file upload (`element.imageUrl`), draggable/resizable like any other block.
+  - **Certificate image support** — same `image` block kind, so logos/photos can be added anywhere on the cert (in addition to the existing logoUrl). `CertificatePreview.tsx` now renders `image` blocks.
+  - **Bigger canvas** — layout changed from 2-col to `xl:grid-cols-3` with the canvas spanning 2 columns (much larger editing surface).
+  - **Save button** — "Save Design" button (top-right) + a Saved/Draft status pill; wired to `saveCredentials()` in `LabManagerPanel` via new `onSave` prop. Type changes: `CredentialElement.kind` gains `'image'`, `CredentialElement.imageUrl?`, `LabCredential.badge.backgroundImage?`.
+- **Tasks are one-way.** `setTaskCompleted` in `LabRunnerView` now refuses to un-check (drops the `completed=false` branch entirely) and the checkbox click is `onClick={() => isDone || setTaskCompleted(...)}`. Once checked, a task stays checked.
+- **Last-task modal.** When the final task is checked the completion modal now shows "Submit Lab & Exit" and a "All tasks completed · cert & badge ready" panel instead of "Keep Working" / "Claim Badge & Exit".
+- **Enroll flow.** Lab details button now reads **Enroll** (or "Resume Lab" if `user.startedLabIds` includes the lab, "Enter Access Code" when gated). New **Enrolled learners** card (top 5 avatar stack + live count + "+N more") fed from `users.filter(u => u.startedLabIds includes labId)`; `LabDetailsPage` passes it. Runner page now has a slow fade/slide entrance (`motion.div`, 0.4s) after enroll.
+- **Lab submission + completion lock.**
+  - On completion the user gets `completedLabIds` (new `User` field) and an actual `Submission` (`type:'lab'`, `status:'for_review'`, `score=xp`) is created + POSTed to `/api/submissions` — it shows up in the admin **Operations** panel for Pass/Reject review (OperationsView already handled `for_review`).
+  - **Once submitted, the lab cannot be re-run**: opening `/runner/<id>` shows a "Lab Completed" screen (checkmark, "Back to Labs") when `completedLabIds` includes it. No second run, no double cert (cert dedupe already in place).
+- **Lab details polish.** Removed the security/access ("Open · Access Code") badge that sat next to the difficulty level. Description now uses `whitespace-pre-line` so line breaks/spacing are respected (rich text).
+- Verified: tsc clean, build clean, deployed. `POST /api/labs/:id/enroll` still 401s without a token; prod bundle confirmed.
+
 ## 2026-08-06 - ZEXVRO Labs: fixed task checks, badges, credentials, enrollment, submissions, lab OG previews (Paris)
 
 Cleared today's checklist (was parked in the entry below). All deployed, prod bundle `index-DnS3isCd.js`.

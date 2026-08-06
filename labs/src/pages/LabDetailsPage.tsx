@@ -4,8 +4,14 @@ import { useLabs } from '../state/labs';
 import { navigate, paths } from '../lib/router';
 
 export const LabDetailsPage: React.FC<{ slug: string }> = ({ slug }) => {
-  const { labs, user, handleStartLab } = useLabs();
+  const { labs, user, users, handleStartLab } = useLabs();
   const lab = labs.find((l) => l.slug === slug || l.id === slug);
+
+  // Learners enrolled in this lab (top 5 rendered in the details sidebar).
+  // Falls back to just the current user when they've started it.
+  const enrolledLearners = user.startedLabIds?.includes(lab?.id || '')
+    ? users.filter((u) => (u.startedLabIds || []).includes(lab?.id || '')).slice(0, 10)
+    : [];
 
   // Draft labs are only reachable by admins/editors — anyone else sees 404.
   if (!lab || (lab.status === 'draft' || lab.isPublished === false) && user.role !== 'admin') {
@@ -29,6 +35,7 @@ export const LabDetailsPage: React.FC<{ slug: string }> = ({ slug }) => {
     <LabDetailsView
       lab={lab}
       user={user}
+      enrolledLearners={enrolledLearners}
       onBack={() => navigate(paths.labs)}
       onStartLab={handleStartLab}
     />

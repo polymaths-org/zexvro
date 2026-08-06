@@ -334,11 +334,16 @@ export function LabsProvider({ children }: { children: React.ReactNode }) {
         );
       }
 
-      setUser((prev) => ({
-        ...prev,
-        xp: prev.xp + xpEarned + badgeXp,
-        completedLabsCount: prev.completedLabsCount + 1,
-      }));
+      setUser((prev) => {
+        const completed = new Set(prev.completedLabIds || []);
+        completed.add(lab.id);
+        return {
+          ...prev,
+          xp: prev.xp + xpEarned + badgeXp,
+          completedLabsCount: prev.completedLabsCount + 1,
+          completedLabIds: [...completed],
+        };
+      });
 
       // Dedupe certificate issuance — never mint a second cert for the same
       // student + lab, and never when the lab has no publishable credential.
@@ -363,8 +368,24 @@ export function LabsProvider({ children }: { children: React.ReactNode }) {
         setCertificates((prev) => [newCert, ...prev]);
         api.createCertificate(newCert);
       }
+
+      // Record an actual lab submission so it appears in the admin Operations
+      // panel (reviewable), and persist to the backend submissions store.
+      const submission: Submission = {
+        id: `sub_${Date.now()}`,
+        labId: lab.id,
+        userId: user.id,
+        userName: user.name || user.username,
+        labTitle: lab.title,
+        status: 'for_review',
+        score: xpEarned,
+        submittedAt: new Date().toISOString(),
+        type: 'lab',
+      };
+      setSubmissions((prev) => [submission, ...prev]);
+      api.createSubmission(submission);
     },
-    [user.id, user.name, badges, certificates],
+    [user.id, user.name, badges, certificates, api],
   );
 
   const handleAddSubmission = useCallback((submission: Submission) => {
