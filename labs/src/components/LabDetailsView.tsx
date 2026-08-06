@@ -366,7 +366,7 @@ export const LabDetailsView: React.FC<LabDetailsViewProps> = ({ lab, user, enrol
             </p>
           )}
 
-          {isEnrolled && (
+          {isEnrolled && !isCompleted && (
             <p className="text-xs text-zinc-500 font-mono text-center flex items-center justify-center gap-1.5">
               <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
               You're enrolled — resume where you left off.

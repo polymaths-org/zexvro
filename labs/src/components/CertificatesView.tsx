@@ -3,6 +3,7 @@ import {
   Award, 
   ShieldCheck, 
   Printer, 
+  Download, 
   ExternalLink, 
   CheckCircle2, 
   X, 
@@ -11,6 +12,7 @@ import { motion } from 'motion/react';
 import { Certificate, Badge, User, Lab } from '../types';
 import { deriveBadges } from '../lib/badges';
 import { CertificatePreview } from './CertificatePreview';
+import { exportCertificatePng, downloadDataUrl } from '../lib/certificateExport';
 
 interface CertificatesViewProps {
   user: User;
@@ -30,6 +32,21 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
 
   const handlePrintCert = () => {
     window.print();
+  };
+
+  const [downloading, setDownloading] = useState(false);
+  const handleDownloadCert = async () => {
+    if (!selectedCert || downloading) return;
+    setDownloading(true);
+    try {
+      const dataUrl = await exportCertificatePng(selectedCert);
+      const safe = (selectedCert.labTitle || 'certificate').replace(/[^a-z0-9-_ ]/gi, '_').trim();
+      downloadDataUrl(dataUrl, `${safe}.png`);
+    } catch {
+      /* keep modal open on failure */
+    } finally {
+      setDownloading(false);
+    }
   };
 
   return (
@@ -91,17 +108,6 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
                   <span className="text-white font-bold">{cert.category}</span>
                   <span>Issued: {cert.issuedAt}</span>
                 </div>
-
-                {cert.design && cert.design.elements && cert.design.elements.length > 0 && (
-                  <div className="mb-3">
-                    <CertificatePreview
-                      design={cert.design}
-                      studentName={cert.studentName}
-                      labTitle={cert.labTitle}
-                      issuedAt={cert.issuedAt}
-                    />
-                  </div>
-                )}
 
                 <div className="p-3 bg-black border border-zinc-800 rounded-xl mb-3 flex items-center justify-between">
                   <div>
@@ -217,19 +223,28 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
         </div>
       </div>
 
-      {/* Official Certificate Modal (Print / View) */}
+      {/* Official Certificate Modal (Print / Download) */}
       {selectedCert && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fadeIn print:p-0 print:bg-white">
-          <div className="relative w-full max-w-3xl bg-black border-2 border-white rounded-3xl p-8 sm:p-12 shadow-[0_0_60px_rgba(255,255,255,0.15)] text-center print:border-4 print:border-black print:text-black print:bg-white print:rounded-none">
+          <div className="relative w-full max-w-3xl bg-black border border-zinc-800 rounded-3xl p-8 sm:p-12 shadow-2xl text-center print:border-0 print:text-black print:bg-white print:rounded-none print:shadow-none print:p-0">
             {/* Modal Actions */}
             <div className="absolute top-6 right-6 flex items-center gap-2 print:hidden">
               <motion.button
                 whileTap={{ scale: 0.95 }}
+                onClick={handleDownloadCert}
+                disabled={downloading}
+                className="px-3 py-1.5 bg-white text-black font-extrabold rounded-xl text-xs flex items-center gap-1.5 hover:bg-zinc-200 transition-colors font-mono disabled:opacity-60"
+              >
+                <Download className="h-4 w-4" />
+                <span>{downloading ? 'Rendering...' : 'Download PNG'}</span>
+              </motion.button>
+              <motion.button
+                whileTap={{ scale: 0.95 }}
                 onClick={handlePrintCert}
-                className="px-3 py-1.5 bg-white text-black font-extrabold rounded-xl text-xs flex items-center gap-1.5 hover:bg-zinc-200 transition-colors font-mono"
+                className="px-3 py-1.5 bg-zinc-900 text-white font-extrabold rounded-xl text-xs flex items-center gap-1.5 hover:bg-zinc-800 transition-colors font-mono"
               >
                 <Printer className="h-4 w-4" />
-                <span>Print / Save PDF</span>
+                <span>Print</span>
               </motion.button>
               <button
                 onClick={() => setSelectedCert(null)}
@@ -240,7 +255,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
             </div>
 
             {/* Issued certificate rendered from the design (image, not canvas) */}
-            <div className="pt-4">
+            <div className="pt-4 print:pt-0">
               <CertificatePreview
                 design={selectedCert.design}
                 studentName={selectedCert.studentName}
@@ -248,7 +263,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
                 issuedAt={selectedCert.issuedAt}
                 certNumber={selectedCert.certificateNumber}
               />
-              <div className="flex items-center justify-center gap-2 mt-4 text-[11px] font-mono text-zinc-500">
+              <div className="flex items-center justify-center gap-2 mt-4 text-[11px] font-mono text-zinc-500 print:hidden">
                 <ShieldCheck className="h-3.5 w-3.5" />
                 <span>Verification ID: {selectedCert.certificateNumber}</span>
               </div>

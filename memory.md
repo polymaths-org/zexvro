@@ -1,5 +1,16 @@
 # ZEXVRO Shared Memory
 
+## 2026-08-06 - ZEXVRO Labs: admin roster fix, cert image export, static cert alignment, lab-details completed copy (Paris)
+
+Prod bundle `index-DLfJknXx.js`. Five fixes:
+
+- **Admin Users list was empty / missing new accounts.** Root cause was a mismatch between the account Paris actually signs in with and admin role. Firestore `users` already had 4 docs (incl. the 2 new GitHub accounts Nabil & Srush), but the `clawdroid` doc (paris@peakso.in) had `role: student` while a bare `4mJMRK...` doc was `admin` — so `/api/admin/users` 403'd for Paris's real login and the client fell back to `[user]`. Fixed by setting `clawdroid` role to `admin` in Firestore (service-account write) + enriching the bare admin doc with `zexvro` name/username, and adding `clawdroid` to `LABS_ADMIN_GITHUB_LOGINS` in `wrangler.jsonc`. Verified live: `/api/admin/users` now returns all 4 users for clawdroid. **Local dev also silently used the memory store** (`.dev.vars` had no `FIREBASE_*`), so the admin page appeared empty locally too — appended Firestore service-account creds to `.dev.vars` (gitignored, matches production). Note: `_shared.ts getStore` falls back to `memory` when Firestore SA envs are missing.
+- **Lab-details copy when completed.** "You're enrolled — resume where you left off" no longer shows once the lab is completed (`isEnrolled && !isCompleted` in `LabDetailsView.tsx`); the completed state only shows the re-enroll note.
+- **No cert preview on the Progress & Badges cards.** Removed the small `CertificatePreview` thumbnail from each cert card in `CertificatesView` (still available via "View Official Certificate" modal).
+- **Certificate text misaligned over the template.** The lab's cert template is 2000×1414 (aspect 1.414) but the preview container was hardcoded 16:9 with `bgSize: contain`, letterboxing the image so %-positioned text drifted off the template's fields. `CertificatePreview.tsx` now measures the bg image, matches the container aspect ratio to it, and re-projects each element from the editor's 16:9 canvas into the image's own coordinate space (mirroring `bgZoom`); the line element changed from a fading gradient to a solid color.
+- **Download now produces the actual certificate image.** New `src/lib/certificateExport.ts` renders the design (bg template + text + QR + logo + line) onto a canvas at native template resolution and downloads it as PNG (`Download PNG` button in the cert modal). The print path no longer adds the black `border-4` outlines / white glow (`print:border-0 print:shadow-none print:p-0`).
+- Verified: tsc clean, build clean, deployed; prod bundle confirmed live on `labs.zexvro.in`.
+
 ## 2026-08-06 - ZEXVRO Labs: runner re-enroll gate, movable credential line, credential badge on completion, real user roster (Paris)
 
 Prod bundle `index-rdm5lE0I.js`. Batch 3 cleanup, four fixes:

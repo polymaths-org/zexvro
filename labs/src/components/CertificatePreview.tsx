@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { BadgeCheck, ShieldCheck } from 'lucide-react';
 import { Certificate } from '../types';
 import { VerifyQR } from './VerifyQR';
@@ -36,6 +36,14 @@ const fallbackDesign: NonNullable<Certificate['design']> = {
   ],
 };
 
+// The credential editor places elements on a 16:9 canvas where the template
+// image is letterboxed with `contain`. To render the certificate so the text
+// sits EXACTLY on the template's fields (no drift, no letterbox bars), we match
+// the container's aspect ratio to the image's native ratio and re-project each
+// element from canvas space into image space.
+const EDITOR_CANVAS_W = 1600;
+const EDITOR_CANVAS_H = 900;
+
 export const CertificatePreview: React.FC<CertificatePreviewProps> = ({
   design,
   studentName,
@@ -44,11 +52,45 @@ export const CertificatePreview: React.FC<CertificatePreviewProps> = ({
   certNumber,
 }) => {
   const d = design && design.elements && design.elements.length > 0 ? design : fallbackDesign;
+  const [imgSize, setImgSize] = useState<{ w: number; h: number } | null>(null);
 
-  const bgStyle: React.CSSProperties = d.backgroundImage
+  useEffect(() => {
+    if (!d.backgroundImage) {
+      setImgSize(null);
+      return;
+    }
+    const im = new Image();
+    let alive = true;
+    im.onload = () => alive && setImgSize({ w: im.naturalWidth, h: im.naturalHeight });
+    im.src = d.backgroundImage;
+    return () => {
+      alive = false;
+    };
+  }, [d.backgroundImage]);
+
+  // Re-project an element from editor-canvas space (16:9 + contain + bgZoom)
+  // into the image's own coordinate space so it lands on the template field.
+  const mapPos = (x: number, y: number) => {
+    if (!imgSize || !d.backgroundImage) return { x, y };
+    const zoom = d.bgZoom && d.bgZoom !== 1 ? d.bgZoom : 1;
+    const scale = Math.min(EDITOR_CANVAS_W / imgSize.w, EDITOR_CANVAS_H / imgSize.h) * zoom;
+    const dispW = imgSize.w * scale;
+    const dispH = imgSize.h * scale;
+    const offX = (EDITOR_CANVAS_W - dispW) / 2;
+    const offY = (EDITOR_CANVAS_H - dispH) / 2;
+    const px = (x / 100) * EDITOR_CANVAS_W;
+    const py = (y / 100) * EDITOR_CANVAS_H;
+    return { x: ((px - offX) / dispW) * 100, y: ((py - offY) / dispH) * 100 };
+  };
+
+  const hasBgImage = !!d.backgroundImage;
+  const containerAspect = hasBgImage && imgSize ? `${imgSize.w} / ${imgSize.h}` : '16 / 9';
+  const bgStyle: React.CSSProperties = hasBgImage
     ? {
         backgroundImage: `url("${d.backgroundImage}")`,
-        backgroundSize: d.bgSize === 'contain' ? 'contain' : 'cover',
+        // Container aspect now matches the image, so cover/contain are identical
+        // and the image fills the box edge-to-edge — no letterbox bars.
+        backgroundSize: imgSize ? 'cover' : d.bgSize === 'contain' ? 'contain' : 'cover',
         backgroundPosition: `${d.bgPosX ?? 50}% ${d.bgPosY ?? 50}%`,
         backgroundRepeat: 'no-repeat',
       }
@@ -56,17 +98,18 @@ export const CertificatePreview: React.FC<CertificatePreviewProps> = ({
 
   return (
     <div
-      className="relative w-full rounded-2xl overflow-hidden aspect-[16/9] border-2 select-none"
+      className="relative w-full overflow-hidden select-none print:rounded-none print:border-0"
       style={{
         ...bgStyle,
-        borderColor: d.borderColor,
+        aspectRatio: containerAspect,
       }}
     >
       {(d.elements || []).map((el) => {
+        const { x, y } = mapPos(Number(el.x) || 0, Number(el.y) || 0);
         const style: React.CSSProperties = {
           position: 'absolute',
-          left: `${el.x}%`,
-          top: `${el.y}%`,
+          left: `${x}%`,
+          top: `${y}%`,
           transform: 'translate(-50%, -50%)',
           color: el.color,
           textAlign: el.align,
@@ -102,7 +145,7 @@ export const CertificatePreview: React.FC<CertificatePreviewProps> = ({
             <div key={el.id} style={{ ...style, width: el.size, height: el.size }}>
               <VerifyQR
                 value={`${window.location.origin}/verify/${certNumber || ''}`}
-                size={Math.max(16, el.size)}
+                size={Math.max(16, Number(el.size) || 36)}
                 className="w-full h-full"
               />
             </div>
@@ -110,7 +153,15 @@ export const CertificatePreview: React.FC<CertificatePreviewProps> = ({
         }
         if (el.kind === 'line') {
           return (
-            <div key={el.id} style={{ ...style, width: `${el.width || 24}%`, height: 2, background: `linear-gradient(90deg, transparent, ${el.color}, transparent)` }} />
+            <div
+              key={el.id}
+              style={{
+                ...style,
+                width: `${el.width || 24}%`,
+                height: 2,
+                background: el.color,
+              }}
+            />
           );
         }
         return (
@@ -133,7 +184,7 @@ export const CertificatePreview: React.FC<CertificatePreviewProps> = ({
       })}
 
       {certNumber && (
-        <div className="absolute bottom-2 left-2 px-2 py-0.5 bg-black/50 border border-zinc-700 rounded text-[9px] font-mono text-zinc-400">
+        <div className="absolute bottom-2 left-2 px-2 py-0.5 bg-black/50 border border-zinc-700 rounded text-[9px] font-mono text-zinc-400 print:hidden">
           {certNumber}
         </div>
       )}
