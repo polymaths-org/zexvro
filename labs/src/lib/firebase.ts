@@ -90,13 +90,36 @@ export function signInWithGithubRedirect(): Promise<void> {
 }
 
 // Completes a pending redirect sign-in (called on boot). Returns the
-// credential, or null when no redirect was in flight.
+// credential, or null when no redirect was in flight. Errors (e.g. Safari's
+// "database connection is closing" IndexedDB bug) are NOT swallowed so the
+// caller can trigger a reload recovery.
 export async function getGithubRedirectResult(): Promise<UserCredential | null> {
+  return getRedirectResult(auth);
+}
+
+// Safari's IndexedDB occasionally wedges its connection mid-session
+// (WebKit: "The database connection is closing", "Connection to Indexed
+// Database server lost"). Firebase Auth reads/writes IndexedDB for session
+// persistence and for the OAuth redirect result, so this hits right after a
+// GitHub redirect lands back on the app. A single page reload re-establishes
+// the connection and completes the pending auth (the redirect result is still
+// in the URL fragment). Returns true when the error looks like that failure.
+export function isIndexedDbUnavailableError(err: any): boolean {
+  const text = String(err?.message || err?.code || '');
+  return /closing|connection to indexed database|indexed database server|unknownerror|idbtransaction|web-storage-unsupported/i.test(text);
+}
+
+// Reload the page at most once per page-load to recover from a wedged
+// IndexedDB connection. The sessionStorage flag stops infinite reload loops
+// (sessionStorage survives the reload but clears when the tab closes).
+export function recoverWithReload(): void {
   try {
-    return await getRedirectResult(auth);
+    if (sessionStorage.getItem('zexvro_auto_reloaded')) return;
+    sessionStorage.setItem('zexvro_auto_reloaded', '1');
   } catch {
-    return null;
+    // sessionStorage unavailable (private mode) — allow the single reload anyway.
   }
+  window.location.reload();
 }
 
 // Dispatches GitHub sign-in: popup everywhere except Safari, where the popup

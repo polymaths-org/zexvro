@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Github, X, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { User } from '../types';
-import { signInWithGithub, signInWithGithubRedirect, isSafari, resolveUser } from '../lib/firebase';
+import { signInWithGithub, signInWithGithubRedirect, isSafari, isIndexedDbUnavailableError, recoverWithReload, resolveUser } from '../lib/firebase';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -37,6 +37,13 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onSucce
       if (!cred) return;
       await finish(cred.user);
     } catch (err: any) {
+      // Safari's IndexedDB can be wedged at click time too (sign-in writes
+      // pending state to IDB before navigating). A single reload re-establishes
+      // it and the user can just click again.
+      if (isIndexedDbUnavailableError(err)) {
+        recoverWithReload();
+        return;
+      }
       const code = err?.code || '';
       const popupBroke = [
         'auth/popup-blocked',

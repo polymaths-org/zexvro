@@ -22,6 +22,8 @@ import {
   resolveUser,
   signOutFirebase,
   getGithubRedirectResult,
+  isIndexedDbUnavailableError,
+  recoverWithReload,
 } from '../lib/firebase';
 import type { ActiveTab } from '../components/Sidebar';
 
@@ -106,6 +108,15 @@ export function LabsProvider({ children }: { children: React.ReactNode }) {
   // ID token fresh (auto-refresh), so no manual session-cookie handling is
   // needed on the client.
   useEffect(() => {
+    // Safari's IndexedDB can wedge during the GitHub OAuth hop ("database
+    // connection is closing"), which breaks the redirect completion. If that
+    // happens, reload once — a fresh page re-establishes IDB and completes
+    // the pending redirect from the URL fragment.
+    const onUnhandled = (e: PromiseRejectionEvent) => {
+      if (isIndexedDbUnavailableError(e?.reason)) recoverWithReload();
+    };
+    window.addEventListener('unhandledrejection', onUnhandled);
+
     // Complete any pending redirect sign-in (Safari GitHub login lands back
     // here after the full-page redirect). onAuthChange below also fires, but
     // resolving the credential explicitly ensures the flow finishes cleanly.
@@ -114,16 +125,24 @@ export function LabsProvider({ children }: { children: React.ReactNode }) {
         if (!cred?.user) return;
         resolveUser(cred.user)
           .then(({ user: resolved }) => setUser((prev) => ({ ...prev, ...resolved, githubConnected: true })))
-          .catch(() => {});
+          .catch((e) => {
+            if (isIndexedDbUnavailableError(e)) recoverWithReload();
+          });
       })
-      .catch(() => {});
+      .catch((e) => {
+        if (isIndexedDbUnavailableError(e)) recoverWithReload();
+      });
 
     const unsub = onAuthChange(async (fbUser) => {
       if (fbUser) {
         try {
           const { user: resolved } = await resolveUser(fbUser);
           setUser((prev) => ({ ...prev, ...resolved, githubConnected: true }));
-        } catch {
+        } catch (e) {
+          if (isIndexedDbUnavailableError(e)) {
+            recoverWithReload();
+            return;
+          }
           setUser((prev) => ({
             ...prev,
             id: fbUser.uid,
@@ -135,7 +154,10 @@ export function LabsProvider({ children }: { children: React.ReactNode }) {
         }
       }
     });
-    return unsub;
+    return () => {
+      window.removeEventListener('unhandledrejection', onUnhandled);
+      unsub();
+    };
   }, [setUser]);
 
   // Sync labs from backend.
