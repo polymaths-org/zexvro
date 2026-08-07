@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Github, X, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { User } from '../types';
-import { signInWithGithub, resolveUser } from '../lib/firebase';
+import { signInWithGithub, signInWithGithubRedirect, isSafari, resolveUser } from '../lib/firebase';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -32,8 +32,31 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onSucce
     setError(null);
     try {
       const cred = await signInWithGithub();
+      // Redirect flow (Safari): the page navigates to GitHub and reloads signed
+      // in, so there is no credential to resolve here — the session restores on boot.
+      if (!cred) return;
       await finish(cred.user);
     } catch (err: any) {
+      const code = err?.code || '';
+      const popupBroke = [
+        'auth/popup-blocked',
+        'auth/cancelled-popup-request',
+        'auth/network-request-failed',
+        'auth/web-storage-unsupported',
+        'auth/operation-not-allowed',
+      ].includes(code);
+      if (!isSafari() && popupBroke) {
+        // Popup was blocked or Safari-style storage broke the handshake —
+        // fall back to the full-page redirect so GitHub auth still works.
+        try {
+          await signInWithGithubRedirect();
+          return;
+        } catch (fallbackErr: any) {
+          setError(cleanAuthError(fallbackErr));
+          setLoading(false);
+          return;
+        }
+      }
       setError(cleanAuthError(err));
       setLoading(false);
     }
@@ -99,6 +122,8 @@ function cleanAuthError(err: any): string {
   const code = err?.code || '';
   if (code.includes('auth/popup-closed-by-user')) return 'Sign-in window was closed. Try again.';
   if (code.includes('auth/popup-blocked')) return 'Popup was blocked. Allow popups for this site.';
+  if (code.includes('auth/web-storage-unsupported'))
+    return 'Your browser is blocking the storage this sign-in needs. Try a different browser or enable third-party cookies.';
   if (code.includes('auth/account-exists-with-different-credential'))
     return 'An account with this email exists via a different provider.';
   if (code.includes('auth/unauthorized-domain'))

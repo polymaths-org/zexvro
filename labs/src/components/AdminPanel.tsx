@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { api } from '../lib/api';
 import {
   ShieldCheck,
   PlusCircle,
@@ -32,7 +33,7 @@ interface AdminPanelProps {
   onTabChange?: (tab: ManagementTab) => void;
   onInviteUser?: (username: string) => void;
   onCreateLab: (lab: Partial<Lab>) => void;
-  onUpdateLab: (id: string, lab: Partial<Lab>) => void;
+  onUpdateLab: (id: string, lab: Partial<Lab>) => Promise<boolean>;
   onDeleteLab: (id: string) => void;
   onPreviewLab: (lab: Lab) => void;
   onUpdateBadge: (id: string, badge: Partial<Badge>) => void;
@@ -107,11 +108,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     return (
       <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto">
         <LabManagerPanel
+          key={managingLab.id}
           lab={managingLab}
           badges={badges}
           onUpdateLab={(id, patch) => {
-            onUpdateLab(id, patch);
             setManagingLab((prev) => (prev ? { ...prev, ...patch } : prev));
+            return onUpdateLab(id, patch).then((ok) => {
+              if (ok) setManagingLab((prev) => (prev ? { ...prev, ...patch } : prev));
+              return ok;
+            });
           }}
           onDeleteLab={(id) => {
             onDeleteLab(id);
@@ -300,7 +305,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           <Eye className="h-4 w-4" />
                         </button>
                         <button
-                          onClick={() => setManagingLab(lab)}
+                          onClick={() => {
+                            // Always open the manager against a fresh copy from
+                            // the server so flags/types a previous session (or
+                            // the seed script) set are never stale-clobbered.
+                            api.fetchLab(lab.id).then((data) => {
+                              setManagingLab(data?.lab || lab);
+                            });
+                          }}
                           className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-extrabold rounded-lg font-heading"
                         >
                           Manage
@@ -519,6 +531,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           </span>
                           {s.reviewNote && (
                             <p className="text-[10px] text-zinc-500 mt-1 italic">{s.reviewNote}</p>
+                          )}
+                          {s.formData && Object.keys(s.formData).length > 0 && (
+                            <div className="mt-1 space-y-0.5">
+                              {Object.entries(s.formData).map(([k, v]) => (
+                                <p key={k} className="text-[10px] text-zinc-400 font-mono truncate max-w-[220px]">
+                                  <span className="text-zinc-600 uppercase">{k}: </span>{v}
+                                </p>
+                              ))}
+                            </div>
                           )}
                         </td>
                       </tr>

@@ -1,4 +1,4 @@
-import { Lab, Badge, Certificate, Submission, User } from '../types';
+import { Lab, Badge, Certificate, Submission, User, LabIdea } from '../types';
 import { getIdToken } from './firebase';
 
 // Centralized data API. Every call attaches the current Firebase ID token so
@@ -24,6 +24,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T | null> {
 
 export const api = {
   fetchLabs: () => request<{ labs: Lab[] }>('/api/labs'),
+  fetchLab: (id: string) => request<{ lab: Lab }>(`/api/labs/${encodeURIComponent(id)}`),
   fetchBadges: () => request<{ badges: Badge[] }>('/api/badges'),
   fetchCertificates: () => request<{ certificates: Certificate[] }>('/api/certificates'),
   fetchSubmissions: () => request<{ submissions: Submission[] }>('/api/submissions'),
@@ -69,4 +70,21 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(input),
     }),
+
+  fetchLabIdeas: () => request<{ ideas: LabIdea[] }>('/api/lab-ideas'),
+  createLabIdea: (idea: Partial<LabIdea>) =>
+    request<{ success: boolean; idea?: LabIdea }>('/api/lab-ideas', {
+      method: 'POST',
+      body: JSON.stringify(idea),
+    }),
+  takeLabIdea: (id: string) =>
+    request<{ success: boolean; idea?: LabIdea }>(`/api/lab-ideas/${encodeURIComponent(id)}/take`, {
+      method: 'POST',
+    }),
+  releaseLabIdea: (id: string) =>
+    request<{ success: boolean; idea?: LabIdea }>(`/api/lab-ideas/${encodeURIComponent(id)}/release`, {
+      method: 'POST',
+    }),
+  deleteLabIdea: (id: string) =>
+    request<{ success: boolean }>(`/api/lab-ideas/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 };

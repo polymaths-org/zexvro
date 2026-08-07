@@ -3,12 +3,15 @@ import {
   getAuth,
   onAuthStateChanged,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   GithubAuthProvider,
   GoogleAuthProvider,
   type User as FirebaseUser,
+  type UserCredential,
 } from 'firebase/auth';
 import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { User } from '../types';
@@ -74,8 +77,44 @@ export async function resolveUser(fbUser: FirebaseUser): Promise<ResolvedUser> {
   return { user: base, isNew };
 }
 
-export function signInWithGithub() {
+export function signInWithGithubPopup(): Promise<UserCredential> {
   return signInWithPopup(auth, githubProvider);
+}
+
+// Full-page redirect flow — the only reliable GitHub auth on Safari, whose
+// Intelligent Tracking Prevention / third-party-cookie blocking breaks the
+// popup handshake (common on MacBooks). The browser navigates to GitHub and
+// lands back here signed in; the session is restored on app boot.
+export function signInWithGithubRedirect(): Promise<void> {
+  return signInWithRedirect(auth, githubProvider);
+}
+
+// Completes a pending redirect sign-in (called on boot). Returns the
+// credential, or null when no redirect was in flight.
+export async function getGithubRedirectResult(): Promise<UserCredential | null> {
+  try {
+    return await getRedirectResult(auth);
+  } catch {
+    return null;
+  }
+}
+
+// Dispatches GitHub sign-in: popup everywhere except Safari, where the popup
+// handshake breaks. Returns null when a redirect was started (the page reloads
+// with the session already restored, so the caller must not await a user).
+export function signInWithGithub(): Promise<UserCredential | null> {
+  if (isSafari()) {
+    return signInWithGithubRedirect().then(() => null);
+  }
+  return signInWithPopup(auth, githubProvider);
+}
+
+export function isSafari(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent;
+  const chromium = /chrome|chromium|crios|edg|opr|samsungbrowser|brave/i.test(ua);
+  const firefox = /firefox|fxios/i.test(ua);
+  return /safari/i.test(ua) && !chromium && !firefox;
 }
 
 export function signInWithGoogle() {

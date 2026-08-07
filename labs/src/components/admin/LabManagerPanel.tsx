@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   ArrowLeft,
   BarChart3,
@@ -22,21 +22,25 @@ import {
   Infinity as InfinityIcon,
   Unlock,
   GitBranch,
+  Lightbulb,
+  Sparkles,
 } from 'lucide-react';
-import { Lab, LabPage, LabTask, LabTaskType, LabCategory, LabDifficulty, Badge, LabRule, LabCredential } from '../../types';
+import { Lab, LabPage, LabTask, LabTaskType, LabCategory, LabDifficulty, Badge, LabRule, LabCredential, LabIdea } from '../../types';
 import { CredentialCanvas } from './CredentialCanvas';
 import { SaveButton } from './SaveButton';
+import { api } from '../../lib/api';
+import { toast } from '../ui/Toaster';
 
 interface LabManagerPanelProps {
   lab: Lab;
   badges: Badge[];
-  onUpdateLab: (id: string, lab: Partial<Lab>) => void;
+  onUpdateLab: (id: string, lab: Partial<Lab>) => Promise<boolean>;
   onDeleteLab: (id: string) => void;
   onPreviewLab: (lab: Lab) => void;
   onBack: () => void;
 }
 
-type SubTab = 'overview' | 'details' | 'content' | 'access' | 'credentials' | 'rules';
+type SubTab = 'overview' | 'details' | 'content' | 'access' | 'credentials' | 'rules' | 'ideas';
 
 const ELEMENT_TYPES: { type: LabTaskType; label: string }[] = [
   { type: 'heading', label: 'Heading' },
@@ -53,6 +57,8 @@ const ELEMENT_TYPES: { type: LabTaskType; label: string }[] = [
   { type: 'steps', label: 'Steps' },
   { type: 'divider', label: 'Divider' },
   { type: 'redirect', label: 'Redirect Button' },
+  { type: 'prompt-builder', label: 'Prompt Builder' },
+  { type: 'input', label: 'Input Form' },
 ];
 
 export const LabManagerPanel: React.FC<LabManagerPanelProps> = ({
@@ -112,6 +118,23 @@ export const LabManagerPanel: React.FC<LabManagerPanelProps> = ({
   // --- Rules state ---
   const [rules, setRules] = useState<LabRule[]>(lab.rules || []);
 
+  // --- Lab Ideas state ---
+  const [ideas, setIdeas] = useState<LabIdea[]>([]);
+  const [ideasLoading, setIdeasLoading] = useState(false);
+  const [newIdeaTitle, setNewIdeaTitle] = useState('');
+  const [newIdeaDesc, setNewIdeaDesc] = useState('');
+
+  const loadIdeas = useCallback(async () => {
+    setIdeasLoading(true);
+    const data = await api.fetchLabIdeas();
+    if (data?.ideas) setIdeas(data.ideas);
+    setIdeasLoading(false);
+  }, []);
+
+  useEffect(() => {
+    loadIdeas();
+  }, [loadIdeas]);
+
   useEffect(() => {
     if (pages.length > 0 && !activePageId) setActivePageId(pages[0].id);
   }, [pages, activePageId]);
@@ -163,11 +186,11 @@ export const LabManagerPanel: React.FC<LabManagerPanelProps> = ({
       );
       if (taskCount === 0) {
         setTaskWarning('You cannot publish a lab with no tasks. Add at least one Task checkbox in the Content tab first.');
-        return;
+        return Promise.resolve(false);
       }
     }
     setTaskWarning('');
-    onUpdateLab(lab.id, {
+    return onUpdateLab(lab.id, {
       title,
       description,
       category,
@@ -193,6 +216,26 @@ export const LabManagerPanel: React.FC<LabManagerPanelProps> = ({
     setActivePageId(id);
   };
 
+  const movePage = (id: string, dir: -1 | 1) => {
+    setPages((prev) => {
+      const idx = prev.findIndex((p) => p.id === id);
+      const target = idx + dir;
+      if (idx < 0 || target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[target]] = [next[target], next[idx]];
+      return next;
+    });
+  };
+
+  const deletePage = (id: string) => {
+    setPages((prev) => {
+      if (prev.length <= 1) return prev;
+      const next = prev.filter((p) => p.id !== id);
+      if (activePageId === id) setActivePageId(next[0]?.id || '');
+      return next;
+    });
+  };
+
   const updatePageTitle = (id: string, value: string) => {
     setPages((prev) => prev.map((p) => (p.id === id ? { ...p, title: value } : p)));
   };
@@ -209,7 +252,7 @@ export const LabManagerPanel: React.FC<LabManagerPanelProps> = ({
                 {
                   id: `el_${Date.now()}`,
                   type,
-                  title: type === 'heading' ? 'New Heading' : type === 'code' ? 'New Code Block' : type === 'task' ? 'New Task' : type === 'text' ? 'Paragraph' : type === 'redirect' ? 'Open Exercise' : 'New Element',
+                  title: type === 'heading' ? 'New Heading' : type === 'code' ? 'New Code Block' : type === 'task' ? 'New Task' : type === 'text' ? 'Paragraph' : type === 'redirect' ? 'Open Exercise' : type === 'input' ? 'Your Details' : 'New Element',
                   description: type === 'code' ? '// code here' : '',
                   language: type === 'code' ? 'solidity' : undefined,
                   flagType: type === 'task' ? 'checkbox' : undefined,
@@ -253,18 +296,17 @@ export const LabManagerPanel: React.FC<LabManagerPanelProps> = ({
     );
   };
 
-  const saveContent = (): boolean => {
+  const saveContent = (): Promise<boolean> => {
     const taskCount = pages.reduce(
       (n, p) => n + p.elements.filter((e) => (e.type || 'task') === 'task').length,
       0,
     );
     if (taskCount === 0) {
       setTaskWarning('Every lab needs at least one Task checkbox so learners can track progress.');
-      return false;
+      return Promise.resolve(false);
     }
     setTaskWarning('');
-    onUpdateLab(lab.id, { pages });
-    return true;
+    return onUpdateLab(lab.id, { pages });
   };
 
   const addEditor = () => {
@@ -275,12 +317,12 @@ export const LabManagerPanel: React.FC<LabManagerPanelProps> = ({
   };
 
   const saveAccess = () => {
-    onUpdateLab(lab.id, { editors });
+    return onUpdateLab(lab.id, { editors });
   };
 
   const saveCredentials = () => {
     const badge = badges.find((b) => b.id === badgeId);
-    onUpdateLab(lab.id, {
+    return onUpdateLab(lab.id, {
       badgeId: badgeId || undefined,
       badgeName: credentialBadgeName || badge?.name || lab.badgeName,
       badgeIconUrl: badge?.iconName || lab.badgeIconUrl,
@@ -297,7 +339,7 @@ export const LabManagerPanel: React.FC<LabManagerPanelProps> = ({
   };
 
   const saveRules = () => {
-    onUpdateLab(lab.id, { rules: rules.filter((r) => r.sourcePageId && r.sourceTaskId) });
+    return onUpdateLab(lab.id, { rules: rules.filter((r) => r.sourcePageId && r.sourceTaskId) });
   };
 
   const addRule = () => {
@@ -319,6 +361,44 @@ export const LabManagerPanel: React.FC<LabManagerPanelProps> = ({
 
   const removeRule = (id: string) => setRules((prev) => prev.filter((r) => r.id !== id));
 
+  const addIdea = async () => {
+    const title = newIdeaTitle.trim();
+    const description = newIdeaDesc.trim();
+    if (!title || !description) {
+      toast('Enter both a title and a description.', 'error');
+      return;
+    }
+    const res = await api.createLabIdea({ labId: lab.id, title, description });
+    if (res?.success && res.idea) {
+      setIdeas((prev) => [res.idea!, ...prev]);
+      setNewIdeaTitle('');
+      setNewIdeaDesc('');
+      toast('Idea added to the pool.');
+    } else {
+      toast('Failed to add idea.', 'error');
+    }
+  };
+
+  const deleteIdea = async (id: string) => {
+    const ok = await api.deleteLabIdea(id);
+    if (ok?.success) {
+      setIdeas((prev) => prev.filter((i) => i.id !== id));
+      toast('Idea removed.');
+    } else {
+      toast('Failed to remove idea.', 'error');
+    }
+  };
+
+  const releaseIdea = async (id: string) => {
+    const res = await api.releaseLabIdea(id);
+    if (res?.success && res.idea) {
+      setIdeas((prev) => prev.map((i) => (i.id === id ? res.idea! : i)));
+      toast('Idea is available again.');
+    } else {
+      toast('Failed to release idea.', 'error');
+    }
+  };
+
   const tabMeta: { id: SubTab; label: string; icon: React.ReactNode }[] = [
     { id: 'overview', label: 'Overview', icon: <BarChart3 className="h-4 w-4" /> },
     { id: 'details', label: 'Details', icon: <FileText className="h-4 w-4" /> },
@@ -326,6 +406,7 @@ export const LabManagerPanel: React.FC<LabManagerPanelProps> = ({
     { id: 'access', label: 'Access', icon: <Users className="h-4 w-4" /> },
     { id: 'credentials', label: 'Credentials', icon: <Award className="h-4 w-4" /> },
     { id: 'rules', label: 'Rules', icon: <Unlock className="h-4 w-4" /> },
+    { id: 'ideas', label: 'Lab Ideas', icon: <Lightbulb className="h-4 w-4" /> },
   ];
 
   const enrolled = lab.enrolledCount ?? lab.completions ?? 0;
@@ -594,7 +675,7 @@ export const LabManagerPanel: React.FC<LabManagerPanelProps> = ({
             </p>
           )}
 
-          <SaveButton onSave={(done) => { saveDetails(); done(); }} label="Save Details" className="w-full" />
+          <SaveButton onSave={saveDetails} label="Save Details" className="w-full" />
         </div>
       )}
 
@@ -611,22 +692,58 @@ export const LabManagerPanel: React.FC<LabManagerPanelProps> = ({
             </div>
             <div className="space-y-2">
               {pages.map((page, i) => (
-                <button
+                <div
                   key={page.id}
-                  onClick={() => setActivePageId(page.id)}
-                  className={`w-full text-left px-3 py-2 rounded-xl text-sm font-bold transition-all border ${
+                  className={`flex items-center gap-1 rounded-xl border transition-all ${
                     page.id === activePageId
-                      ? 'bg-blue-600 border-blue-600 text-white'
-                      : 'bg-black border-zinc-800 text-zinc-300 hover:border-zinc-600'
+                      ? 'bg-blue-600 border-blue-600'
+                      : 'bg-black border-zinc-800 hover:border-zinc-600'
                   }`}
                 >
-                  <span className="text-[10px] opacity-70 mr-1.5">{i + 1}</span>
-                  {page.title || `Page ${i + 1}`}
-                </button>
+                  <button
+                    onClick={() => setActivePageId(page.id)}
+                    className={`flex-1 text-left px-3 py-2 text-sm font-bold ${page.id === activePageId ? 'text-white' : 'text-zinc-300 hover:text-white'}`}
+                  >
+                    <span className="text-[10px] opacity-70 mr-1.5">{i + 1}</span>
+                    {page.title || `Page ${i + 1}`}
+                  </button>
+                  <div className="flex items-center pr-1.5 gap-0.5">
+                    <button
+                      onClick={() => movePage(page.id, -1)}
+                      disabled={i === 0}
+                      title="Move page up"
+                      className={`p-1 rounded transition-colors ${
+                        page.id === activePageId ? 'text-white/80 hover:text-white' : 'text-zinc-500 hover:text-zinc-300'
+                      } disabled:opacity-30`}
+                    >
+                      <ChevronUp className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => movePage(page.id, 1)}
+                      disabled={i === pages.length - 1}
+                      title="Move page down"
+                      className={`p-1 rounded transition-colors ${
+                        page.id === activePageId ? 'text-white/80 hover:text-white' : 'text-zinc-500 hover:text-zinc-300'
+                      } disabled:opacity-30`}
+                    >
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => deletePage(page.id)}
+                      disabled={pages.length <= 1}
+                      title="Delete page"
+                      className={`p-1 rounded transition-colors disabled:opacity-30 ${
+                        page.id === activePageId ? 'text-white/70 hover:text-red-200' : 'text-zinc-500 hover:text-red-400'
+                      }`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
               ))}
             </div>
             <p className="text-[11px] text-zinc-500 font-mono leading-relaxed">
-              The page heading becomes the title students see.
+              The page heading becomes the title students see. Reorder with the arrows; a lab needs at least one page.
             </p>
           </div>
 
@@ -683,11 +800,7 @@ export const LabManagerPanel: React.FC<LabManagerPanelProps> = ({
               </p>
             )}
 
-            <SaveButton
-              onSave={(done) => { saveContent(); done(); }}
-              label="Save Content"
-              className="w-full"
-            />
+            <SaveButton onSave={saveContent} label="Save Content" className="w-full" />
           </div>
         </div>
       )}
@@ -731,7 +844,7 @@ export const LabManagerPanel: React.FC<LabManagerPanelProps> = ({
             ))}
             {editors.length === 0 && <p className="text-xs text-zinc-500 font-mono text-center py-4">No editors added.</p>}
           </div>
-          <SaveButton onSave={(done) => { saveAccess(); done(); }} label="Save Access" className="w-full" />
+          <SaveButton onSave={saveAccess} label="Save Access" className="w-full" />
         </div>
       )}
 
@@ -807,7 +920,7 @@ export const LabManagerPanel: React.FC<LabManagerPanelProps> = ({
               </label>
             </div>
             <div className="flex items-center gap-3 pt-1">
-              <SaveButton onSave={(done) => { saveCredentials(); done(); }} label="Save Credentials" />
+              <SaveButton onSave={saveCredentials} label="Save Credentials" />
               <button
                 onClick={() => onPreviewLab({ ...lab, credential: credentialDraft })}
                 className="px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 text-sm font-extrabold rounded-xl flex items-center gap-2 font-heading"
@@ -927,9 +1040,93 @@ export const LabManagerPanel: React.FC<LabManagerPanelProps> = ({
 
           {rules.length > 0 && (
             <div className="pt-2 border-t border-zinc-800">
-              <SaveButton onSave={(done) => { saveRules(); done(); }} label="Save Rules" className="w-full" />
+              <SaveButton onSave={saveRules} label="Save Rules" className="w-full" />
             </div>
           )}
+        </div>
+      )}
+
+      {/* LAB IDEAS */}
+      {subTab === 'ideas' && (
+        <div className="space-y-5">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-6 space-y-4">
+            <div>
+              <h3 className="text-sm font-bold text-white font-heading flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-blue-accent" />
+                Project Idea Pool
+              </h3>
+              <p className="text-xs text-zinc-400 mt-1 font-mono">
+                These are the "get a random idea" options offered to learners in this lab's prompt
+                builder. A learner who generates a prompt from an idea claims it (marked "taken"),
+                so it is never offered to anyone else.
+              </p>
+            </div>
+
+            {/* Add new idea */}
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[11px] font-mono text-zinc-400 mb-1 font-bold uppercase tracking-wider">Project title</label>
+                <input value={newIdeaTitle} onChange={(e) => setNewIdeaTitle(e.target.value)} placeholder="e.g. Simple Crypto Wallet" className={inputCls} />
+              </div>
+              <div>
+                <label className="block text-[11px] font-mono text-zinc-400 mb-1 font-bold uppercase tracking-wider">Project description</label>
+                <textarea value={newIdeaDesc} onChange={(e) => setNewIdeaDesc(e.target.value)} placeholder="What the learner should build…" rows={3} className={inputCls} />
+              </div>
+              <button onClick={addIdea} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-extrabold rounded-xl font-heading">
+                + Add Idea
+              </button>
+            </div>
+          </div>
+
+          {/* Ideas list */}
+          <div className="bg-zinc-950 border border-zinc-800 rounded-2xl divide-y divide-zinc-800 overflow-hidden">
+            {ideasLoading && (
+              <div className="p-6 text-center text-xs font-mono text-zinc-500">Loading ideas…</div>
+            )}
+            {!ideasLoading && ideas.length === 0 && (
+              <div className="p-6 text-center text-xs font-mono text-zinc-500">No ideas yet. Add one above.</div>
+            )}
+            {!ideasLoading &&
+              ideas.map((idea) => {
+                const taken = !!idea.takenBy;
+                return (
+                  <div key={idea.id} className={`p-4 flex items-start justify-between gap-3 ${taken ? 'opacity-60' : ''}`}>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="text-sm font-bold text-white font-heading">{idea.title}</h4>
+                        {taken && (
+                          <span className="px-2 py-0.5 bg-emerald-950 border border-emerald-800 text-emerald-300 text-[10px] font-mono font-bold rounded-md uppercase">
+                            Taken
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-zinc-400 mt-1 leading-relaxed">{idea.description}</p>
+                      {taken && idea.takenAt && (
+                        <p className="text-[11px] font-mono text-zinc-500 mt-1">Claimed {new Date(idea.takenAt).toLocaleString()}</p>
+                      )}
+                      {!taken && (
+                        <p className="text-[11px] font-mono text-emerald-400 mt-1">Available</p>
+                      )}
+                    </div>
+                    <div className="shrink-0 flex items-center gap-1">
+                      {taken && (
+                        <button
+                          onClick={() => releaseIdea(idea.id)}
+                          className="px-2.5 py-1.5 bg-emerald-950 hover:bg-emerald-900 border border-emerald-800 text-emerald-300 text-[11px] font-extrabold rounded-lg flex items-center gap-1.5 transition-colors font-mono whitespace-nowrap"
+                          title="Make this idea available again"
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          Available
+                        </button>
+                      )}
+                      <button onClick={() => deleteIdea(idea.id)} className="p-1.5 text-zinc-500 hover:text-red-400" title="Remove idea">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
         </div>
       )}
     </div>
@@ -1184,6 +1381,58 @@ const ElementEditor: React.FC<{
             <div>
               <label className="block text-[11px] font-mono text-zinc-400 mb-1">Hint (optional)</label>
               <input value={el.hint || ''} onChange={(e) => onChange({ hint: e.target.value })} className={inputCls} />
+            </div>
+          )}
+
+          {type === 'input' && (
+            <div className="space-y-3">
+              <p className="text-[11px] font-mono text-zinc-500">
+                Ask learners for normal details (name, email, etc.). Their answers are recorded on their submission so you can review them.
+              </p>
+              {(el.inputFields || []).map((f, fi) => (
+                <div key={f.id} className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2">
+                  <input
+                    value={f.label}
+                    onChange={(e) => {
+                      const fields = [...(el.inputFields || [])];
+                      fields[fi] = { ...fields[fi], label: e.target.value };
+                      onChange({ inputFields: fields });
+                    }}
+                    placeholder="Field label (e.g. Full name)"
+                    className="flex-1 bg-transparent text-xs text-white placeholder-zinc-600 focus:outline-none"
+                  />
+                  <select
+                    value={f.type || 'text'}
+                    onChange={(e) => {
+                      const fields = [...(el.inputFields || [])];
+                      fields[fi] = { ...fields[fi], type: e.target.value as any };
+                      onChange({ inputFields: fields });
+                    }}
+                    className="bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1 text-[10px] font-mono text-white"
+                  >
+                    <option value="text">text</option>
+                    <option value="email">email</option>
+                    <option value="number">number</option>
+                  </select>
+                  <button
+                    onClick={() => {
+                      const fields = (el.inputFields || []).filter((x, xi) => xi !== fi);
+                      onChange({ inputFields: fields });
+                    }}
+                    className="p-1 text-zinc-500 hover:text-red-400"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+              <button
+                onClick={() =>
+                  onChange({ inputFields: [...(el.inputFields || []), { id: `field_${Date.now()}`, label: '', type: 'text', required: true }] })
+                }
+                className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 text-xs font-extrabold rounded-xl flex items-center gap-1.5 font-heading"
+              >
+                <PlusCircle className="h-3.5 w-3.5" /> Add field
+              </button>
             </div>
           )}
 

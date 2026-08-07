@@ -14,13 +14,14 @@ import {
   LabRunProgress,
 } from '../types';
 import { api } from '../lib/api';
-import { loadLocalDB, saveLocalDB, mergeLabs, sanitizeLabs, canViewLab } from '../lib/persistence';
+import { sanitizeLabs, canViewLab } from '../lib/persistence';
 import { navigate, paths } from '../lib/router';
 import { toast } from '../components/ui/Toaster';
 import {
   onAuthChange,
   resolveUser,
   signOutFirebase,
+  getGithubRedirectResult,
 } from '../lib/firebase';
 import type { ActiveTab } from '../components/Sidebar';
 
@@ -59,7 +60,7 @@ interface LabsContextValue {
   handleAddSubmission: (submission: Submission) => void;
   handleProgressChange: (labId: string, patch: Partial<LabRunProgress>) => void;
   handleCreateLab: (lab: Partial<Lab>) => void;
-  handleUpdateLab: (id: string, labData: Partial<Lab>) => void;
+  handleUpdateLab: (id: string, labData: Partial<Lab>) => Promise<boolean>;
   handleDeleteLab: (id: string) => void;
   handleUpdateBadge: (id: string, patch: Partial<Badge>) => void;
   handleCreateBadge: (badge: Partial<Badge>) => void;
@@ -74,29 +75,19 @@ const LabsContext = createContext<LabsContextValue | null>(null);
 
 export function LabsProvider({ children }: { children: React.ReactNode }) {
   const [user, setUserState] = useState<User>(initialUser);
-  // Bootstrap from the persisted store when present so admin edits (including
-  // deletions) survive reload — start EMPTY on a fresh browser. Dummy/sample
-  // labs must never be shown to users; only the real backend catalog.
-  const [labs, setLabs] = useState<Lab[]>(() => {
-    const local = loadLocalDB();
-    return local?.labs ? local.labs : [];
-  });
-  const [badges, setBadges] = useState<Badge[]>(() => {
-    const local = loadLocalDB();
-    // The learner-facing badge catalog is derived from each lab's credential
-    // design (see deriveBadges); this list holds any explicit admin badges.
-    // No dummy/sample badges are seeded.
-    return local?.badges && local.badges.length > 0 ? local.badges : [];
-  });
+  // No client-side persistence layer. The Firestore backend is the source of
+  // truth for the full catalog; on boot we fetch it. Dummy/sample labs are never
+  // shown — only the real backend catalog. (localStorage was removed entirely
+  // because oversized banner data URLs overflowed the 5MB quota and resurrected
+  // stale edits.)
+  const [labs, setLabs] = useState<Lab[]>([]);
+  const [badges, setBadges] = useState<Badge[]>([]);
   const [certificates, setCertificates] = useState<Certificate[]>(sampleCertificates);
   const [submissions, setSubmissions] = useState<Submission[]>(sampleSubmissions);
   const [users, setUsers] = useState<User[]>([]);
   const [labProgress, setLabProgress] = useState<Record<string, LabRunProgress>>({});
   const [activeLab, setActiveLab] = useState<Lab | null>(null);
-  const [reenrolledLabIds, setReenrolledLabIds] = useState<string[]>(() => {
-    const local = loadLocalDB();
-    return local?.reenrolledLabIds ? local.reenrolledLabIds : [];
-  });
+  const [reenrolledLabIds, setReenrolledLabIds] = useState<string[]>([]);
 
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [pendingLab, setPendingLab] = useState<Lab | null>(null);
@@ -105,39 +96,28 @@ export function LabsProvider({ children }: { children: React.ReactNode }) {
   const [accessError, setAccessError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [hasHydrated, setHasHydrated] = useState(false);
-
   const setUser = useCallback(
     (updater: User | ((prev: User) => User)) =>
       setUserState((prev) => (typeof updater === 'function' ? (updater as (p: User) => User)(prev) : updater)),
     [],
   );
 
-  // Hydrate from the local store so edits survive reloads, then reconcile with the backend.
-  useEffect(() => {
-    const local = loadLocalDB();
-    const isDemoUser = (id?: string) => !!id && /^user_demo_/.test(id);
-    if (local?.labs) setLabs((prev) => mergeLabs(prev, local.labs));
-    if (local?.badges && local.badges.length > 0) setBadges(local.badges);
-    if (local?.certificates) setCertificates(local.certificates);
-    // Never restore demo/dummy submissions or users from stale local storage.
-    if (local?.submissions) setSubmissions(local.submissions.filter((s) => !isDemoUser(s.userId)));
-    if (local?.users && local.users.length > 0) setUsers(local.users.filter((u) => !isDemoUser(u.id)));
-    if (local?.user && local.user.id) setUser((prev) => ({ ...prev, ...local.user }));
-    if (local?.labProgress) setLabProgress(local.labProgress);
-    setHasHydrated(true);
-  }, [setUser]);
-
-  // Persist every mutation so "reload" never brings back the old state.
-  useEffect(() => {
-    if (!hasHydrated) return;
-    saveLocalDB({ labs, badges, certificates, submissions, users, user, labProgress, reenrolledLabIds });
-  }, [labs, badges, certificates, submissions, users, user, labProgress, reenrolledLabIds, hasHydrated]);
-
   // Restore the authenticated session via Firebase Auth. The SDK keeps the
   // ID token fresh (auto-refresh), so no manual session-cookie handling is
   // needed on the client.
   useEffect(() => {
+    // Complete any pending redirect sign-in (Safari GitHub login lands back
+    // here after the full-page redirect). onAuthChange below also fires, but
+    // resolving the credential explicitly ensures the flow finishes cleanly.
+    getGithubRedirectResult()
+      .then((cred) => {
+        if (!cred?.user) return;
+        resolveUser(cred.user)
+          .then(({ user: resolved }) => setUser((prev) => ({ ...prev, ...resolved, githubConnected: true })))
+          .catch(() => {});
+      })
+      .catch(() => {});
+
     const unsub = onAuthChange(async (fbUser) => {
       if (fbUser) {
         try {
@@ -165,7 +145,7 @@ export function LabsProvider({ children }: { children: React.ReactNode }) {
       .fetchLabs()
       .then((data) => {
         if (data?.labs) {
-          setLabs((prev) => mergeLabs(sanitizeLabs(data.labs), loadLocalDB()?.labs));
+          setLabs(sanitizeLabs(data.labs));
         }
       })
       .catch(() => {})
@@ -506,12 +486,28 @@ export function LabsProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const handleUpdateLab = useCallback((id: string, labData: Partial<Lab>) => {
+  const handleUpdateLab = useCallback(async (id: string, labData: Partial<Lab>): Promise<boolean> => {
+    // Optimistic update keeps the canvas responsive while the server persists.
     setLabs((prev) => prev.map((l) => (l.id === id ? { ...l, ...labData } : l)));
     setActiveLab((prev) => (prev && prev.id === id ? { ...prev, ...labData } : prev));
-    api.updateLab(id, labData).then((ok) => {
-      toast(ok ? 'Lab saved' : 'Failed to save lab', ok ? 'success' : 'error');
-    });
+    try {
+      const data = await api.updateLab(id, labData);
+      if (data?.lab) {
+        // Reconcile from the authoritative server response so locally-applied
+        // patches (like a freshly flipped prompt-builder element type) survive
+        // and nothing else drifts.
+        const server = data.lab;
+        setLabs((prev) => prev.map((l) => (l.id === id ? server : l)));
+        setActiveLab((prev) => (prev && prev.id === id ? server : prev));
+        toast('Lab saved', 'success');
+        return true;
+      }
+      toast('Failed to save lab', 'error');
+      return false;
+    } catch {
+      toast('Failed to save lab', 'error');
+      return false;
+    }
   }, []);
 
   const handleDeleteLab = useCallback((id: string) => {

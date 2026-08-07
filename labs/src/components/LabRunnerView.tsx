@@ -20,7 +20,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
 import { Lab, LabTask, LabPage, User, LabRunProgress, Submission } from '../types';
-import { renderContentElement, CodeBlockElement } from './ui/ContentElements';
+import { renderContentElement, CodeBlockElement, PromptBuilderElement, InputElement } from './ui/ContentElements';
 import { api } from '../lib/api';
 import { CredentialBadgeArt, credentialBadgeName } from './BadgeArt';
 
@@ -532,6 +532,23 @@ export const LabRunnerView: React.FC<LabRunnerViewProps> = ({
     }
     if (elType === 'code') {
       return <div key={el.id}><CodeBlockElement task={el} /></div>;
+    }
+    if (elType === 'prompt-builder') {
+      return <div key={el.id}><PromptBuilderElement task={el} labId={lab.id} userId={user.id} /></div>;
+    }
+    if (elType === 'input') {
+      return (
+        <div key={el.id}>
+          <InputElement
+            task={el}
+            labId={lab.id}
+            labTitle={lab.title}
+            userName={user.name || user.username}
+            userId={user.id}
+            onAddSubmission={onAddSubmission}
+          />
+        </div>
+      );
     }
 
     const rendered = renderContentElement(el);

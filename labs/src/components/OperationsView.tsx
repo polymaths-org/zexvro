@@ -292,6 +292,21 @@ export const OperationsView: React.FC<OperationsViewProps> = ({
               <Row label="Submitted" value={new Date(selectedSub.submittedAt).toLocaleString()} />
               <Row label="Submission ID" value={selectedSub.id} mono />
               {selectedSub.reviewedBy && <Row label="Reviewed by" value={selectedSub.reviewedBy} />}
+              {selectedSub.formData && Object.keys(selectedSub.formData).length > 0 && (
+                <div className="pt-1">
+                  <dt className="text-zinc-500 font-mono text-[11px] uppercase tracking-widest font-bold mb-2">
+                    {selectedSub.inputElementTitle || 'Learner Details'}
+                  </dt>
+                  <dd className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 space-y-2">
+                    {Object.entries(selectedSub.formData).map(([label, val]) => (
+                      <div key={label} className="flex justify-between gap-4 items-start">
+                        <span className="text-zinc-500 font-mono text-[11px] uppercase tracking-wider font-bold shrink-0">{label}</span>
+                        <span className="text-zinc-100 text-xs font-mono text-right break-words">{val}</span>
+                      </div>
+                    ))}
+                  </dd>
+                </div>
+              )}
               {selectedSub.reviewNote && (
                 <div className="flex justify-between gap-4 items-start">
                   <dt className="text-zinc-500 font-mono text-[11px] uppercase tracking-widest font-bold shrink-0">Note</dt>

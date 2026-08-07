@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   ChevronDown,
   ChevronUp,
@@ -12,9 +12,16 @@ import {
   Quote as QuoteIcon,
   Minus,
   ExternalLink,
+  Sparkles,
+  Send,
+  Lock,
+  Loader2,
+  X,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LabTask, CalloutVariant } from '../../types';
+import { LabTask, CalloutVariant, LabIdea } from '../../types';
+import { api } from '../../lib/api';
+import { toast } from './Toaster';
 
 // --- Accordion ---
 export const AccordionElement: React.FC<{ task: LabTask }> = ({ task }) => {
@@ -347,6 +354,356 @@ export const CodeBlockElement: React.FC<{ task: LabTask }> = ({ task }) => {
           </>
         )}
       </div>
+    </div>
+  );
+};
+
+// --- Prompt Builder (interactive) ---
+// Lets a learner enter a project name + description (or pull a curated random
+// idea from the lab idea pool), then generates the lab's custom prompt with the
+// details injected. Once a prompt is generated from a random idea, that idea is
+// marked "taken" so it's never offered to another student, and the learner's
+// choice is locked.
+const PROMPT_PLACEHOLDER = '___STUDENT_PROJECT_DETAILS___';
+
+export const PromptBuilderElement: React.FC<{
+  task: LabTask;
+  labId: string;
+  userId: string;
+}> = ({ task, labId, userId }) => {
+  const template = task.description || task.title || '';
+  const [projectTitle, setProjectTitle] = useState('');
+  const [projectDesc, setProjectDesc] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [generated, setGenerated] = useState('');
+  const [showPrompt, setShowPrompt] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [locked, setLocked] = useState(false);
+  const [notice, setNotice] = useState('');
+  const chosenIdeaIdRef = useRef<string | null>(null);
+
+  const applyIdea = (idea: LabIdea) => {
+    chosenIdeaIdRef.current = idea.id;
+    setProjectTitle(idea.title);
+    setProjectDesc(idea.description);
+  };
+
+  const handleRandomIdea = async () => {
+    setBusy(true);
+    setNotice('');
+    try {
+      const data = await api.fetchLabIdeas();
+      const pool = (data?.ideas || []).filter((i: LabIdea) => i.labId === labId && !i.takenBy);
+      if (pool.length === 0) {
+        setNotice('No project ideas available right now — feel free to enter your own.');
+      } else {
+        applyIdea(pool[Math.floor(Math.random() * pool.length)]);
+        setNotice('');
+      }
+    } catch {
+      setNotice('Could not load ideas. Enter your own project below.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const generatePrompt = async () => {
+    const title = projectTitle.trim();
+    const desc = projectDesc.trim();
+    if (!title || !desc) {
+      setNotice('Enter both a project name and a description (or tap "Get Random Idea").');
+      return;
+    }
+setGenerating(true);
+    const projectDetails = `Project name: ${title}\nProject description: ${desc}`;
+    let compiled = template.includes(PROMPT_PLACEHOLDER)
+      ? template.replace(PROMPT_PLACEHOLDER, projectDetails)
+      : template;
+    // Also fill the inline "PROJECT TITLE + DESCRIPTION HERE" hint if present.
+    compiled = compiled.replace(/PROJECT TITLE \+ DESCRIPTION HERE/g, projectDetails);
+    setGenerated(compiled);
+    setShowPrompt(true);
+    setLocked(true);
+    setNotice('');
+    // Mark the chosen idea as taken so it isn't offered to another student.
+    const ideaId = chosenIdeaIdRef.current;
+    if (ideaId) {
+      await api.takeLabIdea(ideaId);
+    }
+    setGenerating(false);
+  };
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(generated);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast('Could not copy to clipboard.', 'error');
+    }
+  };
+
+  return (
+    <div className="border border-zinc-800 rounded-2xl p-5 bg-zinc-950/60">
+      <div className="flex items-center gap-2 mb-1">
+        <Sparkles className="h-4 w-4 text-blue-accent" />
+        <h4 className="text-sm font-bold text-white font-heading">{task.title || 'Build Your Project Prompt'}</h4>
+      </div>
+      <p className="text-xs text-zinc-400 mb-4 leading-relaxed">
+        {task.description?.includes(PROMPT_PLACEHOLDER)
+          ? 'Tell us what you are building and generate your Midnight bootcamp prompt.'
+          : task.description}
+      </p>
+
+      <div className="space-y-3">
+        <div>
+          <label className="block text-[11px] font-mono text-zinc-400 mb-1 font-bold uppercase tracking-wider">Project name</label>
+          <input
+            value={projectTitle}
+            onChange={(e) => setProjectTitle(e.target.value)}
+            disabled={locked}
+            placeholder="e.g. Simple Crypto Wallet"
+            className="w-full bg-black border border-zinc-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-blue-500 disabled:opacity-60"
+          />
+        </div>
+        <div>
+          <label className="block text-[11px] font-mono text-zinc-400 mb-1 font-bold uppercase tracking-wider">Project description</label>
+          <textarea
+            value={projectDesc}
+            onChange={(e) => setProjectDesc(e.target.value)}
+            disabled={locked}
+            placeholder="What the learner will build…"
+            rows={3}
+            className="w-full bg-black border border-zinc-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-blue-500 disabled:opacity-60"
+          />
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-2">
+          <button
+            onClick={handleRandomIdea}
+            disabled={locked || busy}
+            className="px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 text-sm font-extrabold rounded-xl flex items-center justify-center gap-2 font-heading disabled:opacity-50"
+          >
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4 text-blue-accent" />}
+            Random Project Idea
+          </button>
+          <button
+            onClick={generatePrompt}
+            disabled={locked || generating}
+            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-extrabold rounded-xl flex items-center justify-center gap-2 font-heading shadow-lg disabled:opacity-50"
+          >
+            {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            Generate Prompt
+          </button>
+        </div>
+
+        {!locked && (
+          <p className="text-[11px] font-mono text-zinc-500">
+            Tip: tap Random Project Idea for a curated project, or enter your own. Generating a prompt locks your choice.
+          </p>
+        )}
+        {locked && (
+          <p className="text-[11px] font-mono text-emerald-400 flex items-center gap-1.5">
+            <Lock className="h-3 w-3" />
+            Your project choice is locked. Preview your prompt with the Generate button.
+          </p>
+        )}
+        {notice && <p className="text-[11px] font-mono text-amber-300">{notice}</p>}
+      </div>
+
+      {generated && (
+        <div className="mt-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+              <span className="text-xs font-mono font-bold text-emerald-300 uppercase tracking-wider">Your Generated Prompt</span>
+            </div>
+            <button
+              onClick={() => setShowPrompt(true)}
+              className="text-[11px] font-mono font-bold text-blue-accent hover:text-white"
+            >
+              Expand
+            </button>
+          </div>
+          <CodeBlockElement
+            task={{
+              id: 'generated-prompt-inline',
+              type: 'code',
+              title: 'Prompt to Use',
+              description: generated,
+              language: 'text',
+            }}
+          />
+          <p className="text-[11px] font-mono text-emerald-400 mt-2 flex items-center gap-1.5">
+            <Lock className="h-3 w-3" />
+            Your project choice is locked. Tap "Expand" to reopen the full prompt at any time.
+          </p>
+        </div>
+      )}
+
+      <AnimatePresence>
+        {showPrompt && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+            onClick={() => setShowPrompt(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 16 }}
+              animate={{ scale: 1, y: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative w-full max-w-2xl bg-zinc-950 border border-zinc-700 rounded-3xl shadow-2xl flex flex-col max-h-[85vh]"
+            >
+              <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-800">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                  <h3 className="text-sm font-bold text-white font-heading">Your Custom Prompt</h3>
+                </div>
+                <button onClick={() => setShowPrompt(false)} className="p-1.5 text-zinc-400 hover:text-white">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-auto p-4">
+                <CodeBlockElement
+                  task={{
+                    id: 'generated-prompt',
+                    type: 'code',
+                    title: 'Prompt to Use',
+                    description: generated,
+                    language: 'text',
+                  }}
+                />
+              </div>
+              <div className="px-5 py-4 border-t border-zinc-800 flex items-center gap-2 justify-end">
+                <button
+                  onClick={handleCopy}
+                  className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-extrabold rounded-xl flex items-center gap-2 font-heading"
+                >
+                  {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  {copied ? 'Copied!' : 'Copy Prompt'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+// --- Input Form (collect normal learner details like name/email) ---
+export const InputElement: React.FC<{
+  task: LabTask;
+  labId: string;
+  labTitle: string;
+  userName: string;
+  userId: string;
+  onAddSubmission?: (submission: import('../../types').Submission) => void;
+}> = ({ task, labId, labTitle, userName, userId, onAddSubmission }) => {
+  const fields = task.inputFields || [];
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async () => {
+    const missing = fields.filter((f) => f.required && !(values[f.id] || '').trim());
+    if (missing.length > 0) {
+      setError(`Please fill in: ${missing.map((f) => f.label).join(', ')}`);
+      return;
+    }
+    setSaving(true);
+    setError('');
+    const formData: Record<string, string> = {};
+    for (const f of fields) formData[f.label] = (values[f.id] || '').trim();
+    try {
+      const submission = {
+        id: `sub_${Date.now()}`,
+        labId,
+        userId,
+        userName,
+        labTitle,
+        status: 'for_review',
+        submittedAt: new Date().toISOString(),
+        type: 'lab',
+        inputElementTitle: task.title,
+        formData,
+      };
+      onAddSubmission?.(submission);
+      await api.createSubmission({
+        labId,
+        labTitle,
+        status: 'for_review',
+        inputElementTitle: task.title,
+        formData,
+      });
+      setSaved(true);
+    } catch {
+      setError('Could not save your details. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="border border-zinc-800 rounded-2xl bg-zinc-950 overflow-hidden">
+      <div className="px-5 py-4 border-b border-zinc-800 flex items-center gap-2">
+        <div className="w-9 h-9 rounded-xl bg-blue-600/20 border border-blue-800/50 text-blue-accent flex items-center justify-center shrink-0">
+          <CheckCircle2 className="h-4 w-4" />
+        </div>
+        <div>
+          <h4 className="text-sm font-bold text-white font-heading">{task.title || 'Your Details'}</h4>
+          {task.description && <p className="text-xs text-zinc-400 mt-0.5">{task.description}</p>}
+        </div>
+        {saved && (
+          <span className="ml-auto text-[10px] font-mono font-bold text-emerald-400 uppercase bg-emerald-950/40 border border-emerald-800 rounded-md px-2 py-0.5">
+            Saved
+          </span>
+        )}
+      </div>
+
+      {fields.length === 0 ? (
+        <p className="p-5 text-xs text-zinc-500 font-mono">This form has no fields configured.</p>
+      ) : (
+        <div className="p-5 space-y-4">
+          {fields.map((f) => (
+            <label key={f.id} className="block">
+              <span className="text-[11px] font-mono text-zinc-400 uppercase tracking-wider font-bold">
+                {f.label}
+                {f.required && <span className="text-blue-accent"> *</span>}
+              </span>
+              <input
+                type={f.type || 'text'}
+                value={values[f.id] || ''}
+                onChange={(e) => setValues((prev) => ({ ...prev, [f.id]: e.target.value }))}
+                placeholder={f.placeholder}
+                disabled={saved}
+                className="mt-1 w-full bg-black border border-zinc-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-blue-500 disabled:opacity-60"
+              />
+            </label>
+          ))}
+
+          {error && <p className="text-xs text-red-400 font-mono">{error}</p>}
+
+          {!saved ? (
+            <button
+              onClick={handleSubmit}
+              disabled={saving}
+              className="w-full px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-extrabold rounded-xl flex items-center justify-center gap-2 font-heading disabled:opacity-60"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              {saving ? 'Saving…' : 'Submit'}
+            </button>
+          ) : (
+            <p className="text-xs text-emerald-400 font-mono flex items-center gap-1.5">
+              <Check className="h-3.5 w-3.5" /> Your details have been submitted for review.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 };

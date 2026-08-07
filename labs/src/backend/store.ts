@@ -9,7 +9,7 @@ import {
   UpdateCommand,
   DynamoDBDocumentClient,
 } from '@aws-sdk/lib-dynamodb';
-import { Lab, Badge, Certificate, User, UserLabProgress, Submission } from '../types';
+import { Lab, Badge, Certificate, User, UserLabProgress, Submission, LabIdea } from '../types';
 import { sampleSubmissions, initialUser } from '../data/mockData';
 
 // Single-table DynamoDB store for ZEXVRO Labs following repo conventions.
@@ -44,6 +44,10 @@ export interface LabsStore {
   listSubmissions(): Promise<Submission[]>;
   saveSubmission(submission: Submission): Promise<void>;
   updateSubmission(id: string, patch: Partial<Submission>): Promise<Submission | undefined>;
+  listLabIdeas(): Promise<LabIdea[]>;
+  createLabIdea(idea: LabIdea): Promise<LabIdea>;
+  updateLabIdea(id: string, patch: Partial<LabIdea>): Promise<LabIdea | undefined>;
+  deleteLabIdea(id: string): Promise<boolean>;
 }
 
 export interface StoreConfig {
@@ -178,6 +182,25 @@ export class MemoryStore implements LabsStore {
     if (idx === -1) return undefined;
     this.submissions[idx] = { ...this.submissions[idx], ...patch };
     return this.submissions[idx];
+  }
+  private labIdeas: LabIdea[] = [];
+  async listLabIdeas() {
+    return this.labIdeas;
+  }
+  async createLabIdea(idea: LabIdea) {
+    this.labIdeas = [idea, ...this.labIdeas];
+    return idea;
+  }
+  async updateLabIdea(id: string, patch: Partial<LabIdea>) {
+    const idx = this.labIdeas.findIndex((i) => i.id === id);
+    if (idx === -1) return undefined;
+    this.labIdeas[idx] = { ...this.labIdeas[idx], ...patch };
+    return this.labIdeas[idx];
+  }
+  async deleteLabIdea(id: string) {
+    const before = this.labIdeas.length;
+    this.labIdeas = this.labIdeas.filter((i) => i.id !== id);
+    return this.labIdeas.length !== before;
   }
 }
 
@@ -504,6 +527,48 @@ export class DynamoStore implements LabsStore {
         },
       }),
     );
+  }
+
+  async listLabIdeas(): Promise<LabIdea[]> {
+    const out = await this.client.send(
+      new ScanCommand({
+        TableName: this.tableName,
+        FilterExpression: 'entityType = :idea',
+        ExpressionAttributeValues: { ':idea': 'lab-idea' },
+      }),
+    );
+    return (out.Items ?? []).map((i) => stripKeys<LabIdea>(i as Record<string, unknown>));
+  }
+
+  async createLabIdea(idea: LabIdea): Promise<LabIdea> {
+    await this.client.send(
+      new PutCommand({
+        TableName: this.tableName,
+        Item: { pk: `IDEA#${idea.id}`, sk: 'META', entityType: 'lab-idea', ...idea },
+      }),
+    );
+    return idea;
+  }
+
+  async updateLabIdea(id: string, patch: Partial<LabIdea>): Promise<LabIdea | undefined> {
+    const out = await this.client.send(
+      new GetCommand({ TableName: this.tableName, Key: { pk: `IDEA#${id}`, sk: 'META' } }),
+    );
+    if (!out.Item) return undefined;
+    const updated: LabIdea = {
+      ...stripKeys<LabIdea>(out.Item as Record<string, unknown>),
+      ...patch,
+      id,
+    };
+    await this.createLabIdea(updated);
+    return updated;
+  }
+
+  async deleteLabIdea(id: string): Promise<boolean> {
+    const out = await this.client.send(
+      new DeleteCommand({ TableName: this.tableName, Key: { pk: `IDEA#${id}`, sk: 'META' } }),
+    );
+    return !!out.$metadata;
   }
 }
 
@@ -843,6 +908,28 @@ export class FirestoreStore implements LabsStore {
     const updated = { ...existing, ...patch, id };
     await this.writeDoc('submissions', id, updated as Record<string, unknown>);
     return updated as Submission;
+  }
+
+  // --- Lab Ideas ---
+  async listLabIdeas(): Promise<LabIdea[]> {
+    return (await this.listCollection('lab_ideas')) as LabIdea[];
+  }
+  async createLabIdea(idea: LabIdea): Promise<LabIdea> {
+    await this.writeDoc('lab_ideas', idea.id, idea as unknown as Record<string, unknown>);
+    return idea;
+  }
+  async updateLabIdea(id: string, patch: Partial<LabIdea>): Promise<LabIdea | undefined> {
+    const existing = await this.readDoc('lab_ideas', id);
+    if (!existing) return undefined;
+    const updated = { ...existing, ...patch, id } as LabIdea;
+    await this.writeDoc('lab_ideas', id, updated as unknown as Record<string, unknown>);
+    return updated;
+  }
+  async deleteLabIdea(id: string): Promise<boolean> {
+    const existing = await this.readDoc('lab_ideas', id);
+    if (!existing) return false;
+    await this.fsDelete(`lab_ideas/${encodeURIComponent(id)}`);
+    return true;
   }
 }
 

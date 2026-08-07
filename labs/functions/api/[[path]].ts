@@ -11,7 +11,7 @@ import {
   json,
   readBody,
 } from '../_shared';
-import { Lab, User } from '../../src/types';
+import { Lab, User, LabIdea } from '../../src/types';
 
 // /api/<path>
 export const onRequest: PagesFunction<Env> = async (ctx) => {
@@ -258,6 +258,78 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
         if (!updated) return json({ error: 'Submission not found' }, 404);
         return json({ success: true, submission: updated });
       }
+    }
+
+    // lab ideas
+    if (path === '/lab-ideas' && method === 'GET') {
+      const user = await authenticate(ctx.request, env);
+      const admin = isAdmin(user, env);
+      const all = await store.listLabIdeas();
+      // Non-admins see only UNTAKEN ideas (so a taken idea is never offered to
+      // another student). Admins see everything incl. taken state for review.
+      const ideas = admin ? all : all.filter((i: LabIdea) => !i.takenBy);
+      return json({ ideas });
+    }
+
+    if (path === '/lab-ideas' && method === 'POST') {
+      const user = await requireUser(ctx.request, env);
+      if (!user) return json({ error: 'Unauthorized' }, 401);
+      if (!isAdmin(user, env)) return json({ error: 'Forbidden' }, 403);
+      const throttle = throttled(mutateKey('labidea', user));
+      if (throttle) return throttle;
+      const body = await readBody(ctx.request);
+      const title = (body?.title || '').trim();
+      const description = (body?.description || '').trim();
+      if (!title || !description) return json({ error: 'Title and description are required' }, 400);
+      const idea: LabIdea = {
+        id: `idea_${Date.now()}`,
+        labId: body.labId || '',
+        title,
+        description,
+      };
+      await store.createLabIdea(idea);
+      return json({ success: true, idea }, 201);
+    }
+
+    const ideaTakeMatch = path.match(/^\/lab-ideas\/([^/]+)\/take$/);
+    if (ideaTakeMatch && method === 'POST') {
+      const user = await requireUser(ctx.request, env);
+      if (!user) return json({ error: 'Unauthorized' }, 401);
+      const throttle = throttled(mutateKey('labidea', user), 10, 60_000);
+      if (throttle) return throttle;
+      const id = decodeURIComponent(ideaTakeMatch[1]);
+      const existing = (await store.listLabIdeas()).find((i: LabIdea) => i.id === id);
+      if (!existing) return json({ error: 'Idea not found' }, 404);
+      if (existing.takenBy) return json({ error: 'This idea is already taken' }, 409);
+      const updated = await store.updateLabIdea(id, { takenBy: user.id, takenAt: new Date().toISOString() });
+      return json({ success: true, idea: updated });
+    }
+
+    const ideaReleaseMatch = path.match(/^\/lab-ideas\/([^/]+)\/release$/);
+    if (ideaReleaseMatch && method === 'POST') {
+      // Admin-only: free a taken idea so it returns to the available pool.
+      const user = await requireUser(ctx.request, env);
+      if (!user) return json({ error: 'Unauthorized' }, 401);
+      if (!isAdmin(user, env)) return json({ error: 'Forbidden' }, 403);
+      const throttle = throttled(mutateKey('labidea', user), 10, 60_000);
+      if (throttle) return throttle;
+      const id = decodeURIComponent(ideaReleaseMatch[1]);
+      const existing = (await store.listLabIdeas()).find((i: LabIdea) => i.id === id);
+      if (!existing) return json({ error: 'Idea not found' }, 404);
+      const updated = await store.updateLabIdea(id, { takenBy: undefined, takenAt: undefined });
+      return json({ success: true, idea: updated });
+    }
+
+    const ideaMatch = path.match(/^\/lab-ideas\/([^/]+)$/);
+    if (ideaMatch && method === 'DELETE') {
+      const user = await requireUser(ctx.request, env);
+      if (!user) return json({ error: 'Unauthorized' }, 401);
+      if (!isAdmin(user, env)) return json({ error: 'Forbidden' }, 403);
+      const throttle = throttled(mutateKey('labidea', user));
+      if (throttle) return throttle;
+      const ok = await store.deleteLabIdea(decodeURIComponent(ideaMatch[1]));
+      if (!ok) return json({ error: 'Idea not found' }, 404);
+      return json({ success: true });
     }
 
     // public certificate verification (shareable /verify/<number>)

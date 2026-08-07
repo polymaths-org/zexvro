@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { motion } from 'motion/react';
+import { Lock } from 'lucide-react';
 import { LabRunnerView } from '../components/LabRunnerView';
 import { useLabs } from '../state/labs';
 import { navigate, paths } from '../lib/router';
@@ -16,7 +17,38 @@ export const RunnerPage: React.FC<{ labId: string }> = ({ labId }) => {
     handleLabCompleted,
     handleAwardBadge,
     handleAddSubmission,
+    setIsLoginOpen,
   } = useLabs();
+
+  // The lab runner is only reachable by authenticated users. If a guest lands
+  // directly on /runner/:id, bounce them to the catalog and ask them to log in.
+  useEffect(() => {
+    if (!user.githubConnected) {
+      setIsLoginOpen(true);
+      navigate(paths.home);
+    }
+  }, [user.githubConnected]);
+
+  if (!user.githubConnected) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-black text-zinc-100 p-6">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.35 }}
+          className="w-full max-w-md bg-zinc-950 border border-zinc-800 rounded-3xl p-10 text-center"
+        >
+          <div className="w-16 h-16 mx-auto rounded-full bg-blue-950 border border-blue-800 flex items-center justify-center mb-5">
+            <Lock className="h-7 w-7 text-blue-accent" />
+          </div>
+          <h1 className="text-xl font-black text-white font-heading">Login Required</h1>
+          <p className="text-sm text-zinc-400 mt-2">
+            You need to sign in to open a lab. Redirecting you to log in…
+          </p>
+        </motion.div>
+      </div>
+    );
+  }
 
   const lab = activeLab && activeLab.id === labId ? activeLab : labs.find((l) => l.id === labId);
 

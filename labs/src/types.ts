@@ -39,11 +39,23 @@ export type LabTaskType =
   | 'table'
   | 'steps'
   | 'repo'
-  | 'redirect';
+  | 'redirect'
+  | 'prompt-builder'
+  | 'input';
 
 export type CalloutVariant = 'info' | 'tip' | 'warning' | 'success';
 
 export type TaskFlagType = 'none' | 'checkbox' | 'flag' | 'code' | 'repo';
+
+// A single field in an 'input' element — the learner fills these in and the
+// answers are recorded against their submission so admins can review them.
+export interface LabInputField {
+  id: string;
+  label: string; // e.g. "Full name", "Email"
+  placeholder?: string;
+  type?: 'text' | 'email' | 'number'; // input kind (default text)
+  required?: boolean;
+}
 
 export interface LabTask {
   id: string;
@@ -73,6 +85,8 @@ export interface LabTask {
   // 'redirect' button element
   redirectUrl?: string; // target link opened on click
   buttonColor?: string; // hex background color for the button
+  // 'input' element (collect normal learner details like name/email)
+  inputFields?: LabInputField[]; // the fields the learner fills in
 }
 
 // A lab page groups content elements + tasks. The page heading is the page title.
@@ -254,6 +268,10 @@ export interface Submission {
   reviewNote?: string;
   repoUrl?: string; // repo submission link
   type?: 'repo' | 'lab'; // what was submitted
+  // Answers captured from 'input' elements (name, email, other details) — keyed
+  // by the input field's label so admins can review them in the submissions view.
+  formData?: Record<string, string>;
+  inputElementTitle?: string; // title of the 'input' element this data came from
 }
 
 // Live runner progress shared between the lab workbench and its progress sidebar.
@@ -279,4 +297,16 @@ export interface Module {
   coverImage?: string;
   labIds: string[];
   gate?: { unlockAfter: number };
+}
+
+// A curated project idea a learner can pull into the prompt builder. Ideas are
+// lab-scoped and become "taken" once a learner generates a prompt from them, so
+// the same idea is never offered twice.
+export interface LabIdea {
+  id: string;
+  labId: string; // the lab that owns this idea pool
+  title: string; // project name
+  description: string; // project description
+  takenBy?: string; // user id that claimed this idea
+  takenAt?: string; // ISO timestamp when it was claimed
 }
