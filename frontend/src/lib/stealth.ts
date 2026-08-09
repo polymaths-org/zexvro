@@ -15,7 +15,7 @@
 
 import nacl from 'tweetnacl';
 import { sha256 as nobleSha256 } from '@noble/hashes/sha256';
-import { Keypair } from 'stellar-sdk';
+import { Keypair } from '@stellar/stellar-sdk';
 
 const META_PREFIX = 'z0st1';
 const DOMAIN = new TextEncoder().encode('zexvro-stealth-v1');

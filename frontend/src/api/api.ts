@@ -546,7 +546,7 @@ export const zkWorkerApi = {
 
 import {
   TransactionBuilder, Operation, Asset, Networks, Account, BASE_FEE, Memo,
-} from 'stellar-sdk';
+} from '@stellar/stellar-sdk';
 import { signTransaction as freighterSign } from '@stellar/freighter-api';
 
 /** Known USDC/EURC issuers — testnet (SDF) vs mainnet (Circle). */

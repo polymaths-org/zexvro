@@ -29,7 +29,7 @@ import { buildPoseidon } from 'circomlibjs';
 import {
   Contract, Networks, TransactionBuilder, Address, xdr,
   Horizon, rpc, Account, Keypair, authorizeEntry,
-} from 'stellar-sdk';
+} from '@stellar/stellar-sdk';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 8787);

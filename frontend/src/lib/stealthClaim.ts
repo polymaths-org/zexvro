@@ -15,7 +15,7 @@
 import nacl from 'tweetnacl';
 import { pbkdf2 } from '@noble/hashes/pbkdf2';
 import { sha256 } from '@noble/hashes/sha256';
-import { Keypair, TransactionBuilder, Operation, Networks, Account, BASE_FEE, Asset } from 'stellar-sdk';
+import { Keypair, TransactionBuilder, Operation, Networks, Account, BASE_FEE, Asset } from '@stellar/stellar-sdk';
 
 /** Current claim format (pure JS). Legacy AES-GCM claims used z0w1. */
 const CLAIM_PREFIX = 'z0w2';

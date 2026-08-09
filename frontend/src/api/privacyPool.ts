@@ -12,8 +12,8 @@
 import { signTransaction as freighterSign } from '@stellar/freighter-api';
 import {
   Contract, Networks, TransactionBuilder, Address, xdr,
-  Horizon, rpc, Account, Keypair, Transaction, authorizeEntry,
-} from 'stellar-sdk';
+  Horizon, rpc, Keypair, Transaction, authorizeEntry,
+} from '@stellar/stellar-sdk';
 import { zkNotesApi, zkWorkerApi } from './api';
 import { getUserTreasurySecret } from '../lib/userTreasury';
 
@@ -484,7 +484,7 @@ async function rpcCall(method: string, params: Record<string, unknown>): Promise
   throw networkFetchError(candidates[0] || SOROBAN_RPC_URL, lastErr);
 }
 
-async function loadAccount(address: string): Promise<Account> {
+async function loadAccount(address: string): Promise<Horizon.AccountResponse> {
   return horizon.loadAccount(address);
 }
 
@@ -984,7 +984,7 @@ function shortG(address: string): string {
 }
 
 /** Spendable native ≈ balance − selling liabilities (Horizon). */
-function nativeBalancesFromAccount(account: Account): { total: number; available: number } {
+function nativeBalancesFromAccount(account: Horizon.AccountResponse): { total: number; available: number } {
   const row = (account as any).balances?.find((b: any) => b.asset_type === 'native');
   const total = Number(row?.balance || 0);
   const selling = Number(row?.selling_liabilities || 0);

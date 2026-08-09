@@ -2,7 +2,7 @@
  * Per-browser personal treasury for Zer0 auto-approve.
  * Secret stays in localStorage only — never put in Zer0 settings / AWS sync.
  */
-import { Keypair } from 'stellar-sdk';
+import { Keypair } from '@stellar/stellar-sdk';
 
 const STORAGE_KEY = 'zexvro_user_treasury_v1';
 
