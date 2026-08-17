@@ -1,6 +1,8 @@
 export interface ServiceItem {
   id: string;
   name: string;
+  /** Unique display headline shown big on the card */
+  headline: string;
   shortDesc: string;
   fullDesc: string;
   /** Lucide fallback id (legacy); prefer logo paths */
@@ -11,6 +13,8 @@ export interface ServiceItem {
   logo32: string;
   logo64: string;
   logo: string;
+  /** Optional external link (e.g. ZEXVRO Labs) */
+  href?: string;
 }
 
 export interface Web2Web3Step {

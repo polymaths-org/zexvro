@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
-import { motion } from 'motion/react';
+import { MapPin } from 'lucide-react';
 
-const LINKS = {
+type FooterItem = { label: string; href: string; plain?: boolean };
+
+const LINKS: Record<string, FooterItem[]> = {
   Product: [
-    { label: 'Platform', href: '#platform' },
+    { label: 'Platform', href: '#about' },
     { label: 'Services', href: '#about' },
+    { label: 'Web3 Labs', href: 'https://labs.zexvro.in' },
     { label: 'Waitlist', href: '#waitlist' },
   ],
   Company: [
@@ -12,9 +15,10 @@ const LINKS = {
     { label: 'About', href: '#about' },
     { label: 'Contact', href: '#contact' },
   ],
-  Legal: [
-    { label: 'Privacy', href: '#' },
-    { label: 'Terms', href: '#' },
+  Contact: [
+    { label: 'support@zexvro.in', href: 'mailto:support@zexvro.in' },
+    { label: 'GM@zexvro.in', href: 'mailto:gm@zexvro.in' },
+    { label: 'Pune, IN', href: '', plain: true },
   ],
 };
 
@@ -92,12 +96,19 @@ export const Footer: React.FC = () => {
                     <ul className="space-y-2.5">
                       {items.map((item) => (
                         <li key={item.label}>
-                          <a
-                            href={item.href}
-                            className="text-sm font-medium text-white/55 hover:text-white transition-colors"
-                          >
-                            {item.label}
-                          </a>
+                          {item.plain ? (
+                            <span className="inline-flex items-center gap-1.5 text-sm font-medium text-white/55">
+                              <MapPin size={13} className="text-white/40" />
+                              {item.label}
+                            </span>
+                          ) : (
+                            <a
+                              href={item.href}
+                              className="text-sm font-medium text-white/55 hover:text-white transition-colors break-all"
+                            >
+                              {item.label}
+                            </a>
+                          )}
                         </li>
                       ))}
                     </ul>
@@ -106,13 +117,24 @@ export const Footer: React.FC = () => {
               </div>
             </div>
 
-            <div className="mt-12 pt-6 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="mt-12 pt-6 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-6">
               <p className="text-[11px] font-medium text-white/40">
                 © {new Date().getFullYear()} ZEXVRO. All rights reserved.
               </p>
-              <p className="font-pixel text-[10px] tracking-[0.2em] uppercase text-white/30">
-                Built for builders
-              </p>
+              <div className="flex flex-col items-center sm:items-end gap-1.5">
+                <span className="font-pixel text-[9px] tracking-[0.28em] uppercase text-white/40">
+                  Have something to discuss?
+                </span>
+                <a
+                  href="mailto:gm@zexvro.in"
+                  aria-label="Email GM@zexvro.in"
+                  className="group inline-block"
+                >
+                  <span className="font-pixel text-xl sm:text-2xl md:text-3xl font-bold text-white tracking-tight break-all group-hover:text-blue-200 transition-colors drop-shadow-[0_0_24px_rgba(255,255,255,0.1)]">
+                    GM@zexvro.in
+                  </span>
+                </a>
+              </div>
             </div>
           </div>
         </div>

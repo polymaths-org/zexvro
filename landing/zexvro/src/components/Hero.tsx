@@ -1,7 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { motion, useMotionValue, useSpring, useTransform, useScroll } from 'motion/react';
 import { ArrowRight } from 'lucide-react';
-import { SafeShader } from './SafeShader';
+
+const SafeShader = lazy(() => import('./SafeShader').then((m) => ({ default: m.SafeShader })));
 
 const ease = [0.16, 1, 0.3, 1] as const;
 
@@ -101,44 +102,46 @@ export const Hero: React.FC = () => {
             ease,
           }}
         >
-          <SafeShader
-            fov={30}
-            pixelDensity={0.9}
-            veilClassName="absolute inset-0 bg-black/15 pointer-events-none"
-            gradient={{
-              animate: 'on',
-              brightness: 1.2,
-              cAzimuthAngle: 180,
-              cDistance: 8.5,
-              cPolarAngle: 115,
-              cameraZoom: 5.21,
-              color1: '#264eff',
-              color2: '#000000',
-              color3: '#000000',
-              envPreset: 'city',
-              grain: 'on',
-              lightType: '3d',
-              positionX: -1.2,
-              positionY: 0.1,
-              positionZ: 2.1,
-              range: 'disabled',
-              rangeEnd: 40,
-              rangeStart: 0,
-              reflection: 0.1,
-              rotationX: 0,
-              rotationY: 0,
-              rotationZ: 235,
-              shader: 'defaults',
-              type: 'sphere',
-              uAmplitude: 0,
-              uDensity: 1.1,
-              uFrequency: 5.5,
-              uSpeed: 0.2,
-              uStrength: 2.4,
-              uTime: 0.2,
-              wireframe: false,
-            }}
-          />
+          <Suspense fallback={<div className="absolute inset-0 bg-black" />}>
+            <SafeShader
+              fov={30}
+              pixelDensity={0.9}
+              veilClassName="absolute inset-0 bg-black/15 pointer-events-none"
+              gradient={{
+                animate: 'on',
+                brightness: 1.2,
+                cAzimuthAngle: 180,
+                cDistance: 8.5,
+                cPolarAngle: 115,
+                cameraZoom: 5.21,
+                color1: '#264eff',
+                color2: '#000000',
+                color3: '#000000',
+                envPreset: 'city',
+                grain: 'on',
+                lightType: '3d',
+                positionX: -1.2,
+                positionY: 0.1,
+                positionZ: 2.1,
+                range: 'disabled',
+                rangeEnd: 40,
+                rangeStart: 0,
+                reflection: 0.1,
+                rotationX: 0,
+                rotationY: 0,
+                rotationZ: 235,
+                shader: 'defaults',
+                type: 'sphere',
+                uAmplitude: 0,
+                uDensity: 1.1,
+                uFrequency: 5.5,
+                uSpeed: 0.2,
+                uStrength: 2.4,
+                uTime: 0.2,
+                wireframe: false,
+              }}
+            />
+          </Suspense>
           <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/20 pointer-events-none" />
         </motion.div>
       </div>
@@ -228,9 +231,7 @@ export const Hero: React.FC = () => {
                 </span>
               </a>
               <a
-                href="https://console.zexvro.in"
-                target="_blank"
-                rel="noopener noreferrer"
+                href="mailto:support@zexvro.in?subject=Book%20a%20demo"
                 className="group relative px-8 py-4 rounded-full overflow-hidden border border-white/10 hover:border-white/20 bg-transparent text-white font-bold text-sm transition-transform active:scale-95 duration-300 text-center"
               >
                 <span className="absolute inset-0 bg-white/0 group-hover:bg-white/5 transition-colors" />

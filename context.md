@@ -206,7 +206,8 @@ Status labels: incomplete / partial. Prefer finishing owned items over new featu
 2. Landing: update demos + demo icons.
 3. Shell polish: Zer0 sidebar duplication, Payroll → Finance, home metrics, need-help → docs.
 4. Project settings revamp (including Discord settings) where pure UI.
-5. Misc cleanup not owned by Morph/Nabil.
+5. Prompt customization (users can customize AI/system prompts).
+6. Misc cleanup not owned by Morph/Nabil.
 
 ### Tomorrow checklist (2026-07-26 — Paris / shared)
 

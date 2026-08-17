@@ -14,6 +14,7 @@ export type Route =
   | { kind: 'public-profile'; username: string }
   | { kind: 'admin'; tab: AdminTab }
   | { kind: 'operations' }
+  | { kind: 'dev' }
   | { kind: 'not-found' };
 
 const ADMIN_TABS: AdminTab[] = ['overview', 'labs', 'operations', 'users', 'submissions'];
@@ -40,6 +41,8 @@ export function parsePathname(pathname: string): Route {
       return parts[1] ? { kind: 'public-profile', username: decodeURIComponent(parts[1]) } : { kind: 'not-found' };
     case 'operations':
       return { kind: 'operations' };
+    case 'dev':
+      return { kind: 'dev' };
     case 'admin': {
       const tab = (parts[1] || 'overview') as AdminTab;
       return { kind: 'admin', tab: ADMIN_TABS.includes(tab) ? tab : 'overview' };

@@ -16,6 +16,7 @@ import { ProfilePage } from './pages/ProfilePage';
 import { PublicProfilePage } from './pages/PublicProfilePage';
 import { AdminPage } from './pages/AdminPage';
 import { OperationsPage } from './pages/OperationsPage';
+import { DevPage } from './pages/DevPage';
 import { RunnerPage } from './pages/RunnerPage';
 import { VerifyPage } from './pages/VerifyPage';
 import { NotFoundPage } from './pages/NotFoundPage';
@@ -38,6 +39,8 @@ function routeToTab(route: Route): ActiveTab {
       return 'lab-runner';
     case 'operations':
       return 'operations';
+    case 'dev':
+      return 'dashboard';
     default:
       return 'dashboard';
   }
@@ -105,6 +108,11 @@ function Shell() {
   // Public certificate verification is fully standalone.
   if (route.kind === 'verify') {
     return <VerifyPage number={route.number} />;
+  }
+
+  // /dev is a bare under-maintenance page — no shell UI at all.
+  if (route.kind === 'dev') {
+    return <DevPage />;
   }
 
   const activeTab = routeToTab(route);

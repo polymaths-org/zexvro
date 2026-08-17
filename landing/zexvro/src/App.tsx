@@ -1,13 +1,13 @@
-import React from 'react';
+import { useState } from 'react';
 import { ScrollProvider } from './components/ScrollProvider';
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
 import { Web3Grid } from './components/Web3Grid';
 import { Team } from './components/Team';
-import { ServiceShowcase } from './components/ServiceShowcase';
 import { Waitlist } from './components/Waitlist';
 import { WaitlistAdmin } from './components/WaitlistAdmin';
 import { Footer } from './components/Footer';
+import { Preloader } from './components/Preloader';
 
 function hasWaitlistSecret(): boolean {
   if (typeof window === 'undefined') return false;
@@ -26,25 +26,29 @@ const isWaitlistAdmin =
   (window.location.pathname.replace(/\/$/, '') === '/waitlist' || hasWaitlistSecret());
 
 export default function App() {
+  const [loaded, setLoaded] = useState(false);
+
   if (isWaitlistAdmin) {
     return <WaitlistAdmin />;
   }
 
   return (
-    <ScrollProvider>
-      <div className="relative min-h-screen bg-black text-white selection:bg-blue-500/30 selection:text-white">
-        <div className="grain-overlay" />
-        <div className="vignette" />
+    <>
+      {!loaded && <Preloader onDone={() => setLoaded(true)} />}
+      <ScrollProvider>
+        <div className="relative min-h-screen bg-black text-white selection:bg-blue-500/30 selection:text-white">
+          <div className="grain-overlay" />
+          <div className="vignette" />
 
-        <Navbar />
+          <Navbar />
 
-        <Hero />
-        <Web3Grid />
-        <Team />
-        <ServiceShowcase />
-        <Waitlist />
-        <Footer />
-      </div>
-    </ScrollProvider>
+          <Hero />
+          <Web3Grid />
+          <Team />
+          <Waitlist />
+          <Footer />
+        </div>
+      </ScrollProvider>
+    </>
   );
 }

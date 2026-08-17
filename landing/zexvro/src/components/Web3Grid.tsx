@@ -1,14 +1,12 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { motion, AnimatePresence } from 'motion/react';
-import { activeServices } from '../data/services';
+import { activeServices, labsService } from '../data/services';
 import { ServiceLogo } from './ServiceLogo';
-import {
-  ChevronLeft,
-  ChevronRight,
-  Play,
-} from 'lucide-react';
+import { Glass } from './Glass';
+import { GraduationCap, ArrowRight } from 'lucide-react';
+
+const SafeShader = lazy(() => import('./SafeShader').then((m) => ({ default: m.SafeShader })));
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -54,11 +52,13 @@ export const Web3Grid: React.FC = () => {
   const carSubRef = useRef<HTMLParagraphElement>(null);
 
   const [brandError, setBrandError] = useState(false);
-  const [activeIdx, setActiveIdx] = useState(0);
   const [typed, setTyped] = useState('');
   const typeFull = '5 unique services — just for the MVP.';
 
   const n = activeServices.length;
+
+  /** Horizontal showcase shows the 5 MVP services plus ZEXVRO Labs learning track. */
+  const carouselServices: typeof activeServices = [...activeServices, labsService];
 
   useEffect(() => {
     const section = sectionRef.current;
@@ -127,20 +127,20 @@ export const Web3Grid: React.FC = () => {
         scrollTrigger: {
           trigger: section,
           start: 'top top',
-          end: '+=620%',
-          scrub: 1.2,
+          end: '+=950%',
+          scrub: 1.6,
           pin: pin,
           anticipatePin: 1,
           invalidateOnRefresh: true,
           onUpdate: (self) => {
             const p = self.progress;
-            // type during line phase only
-            if (p >= 0.38 && p < 0.48) {
-              const t = Math.min(1, (p - 0.38) / 0.08);
+            // type during line phase only (tl ≈2.4-2.6 of total ~13.65 ⇒ ~0.18 progress)
+            if (p >= 0.17 && p < 0.2) {
+              const t = Math.min(1, (p - 0.17) / 0.03);
               setTyped(typeFull.slice(0, Math.floor(t * typeFull.length)));
-            } else if (p >= 0.48 && p < 0.58) {
+            } else if (p >= 0.2 && p < 0.3) {
               setTyped(typeFull);
-            } else if (p < 0.38) {
+            } else if (p < 0.17) {
               setTyped('');
             }
           },
@@ -301,15 +301,14 @@ export const Web3Grid: React.FC = () => {
       );
       tl.set(bubblesBlockRef.current, { pointerEvents: 'none', visibility: 'hidden' }, 3.35);
 
-      // ——— Premium 3D carousel enter ———
+      // ——— Horizontal scroll showcase enter ———
       tl.set(showcaseRef.current, { pointerEvents: 'auto' }, 3.25);
       tl.fromTo(
         showcaseRef.current,
-        { opacity: 0, y: 56, rotateX: 14, filter: 'blur(14px)', scale: 0.94 },
+        { opacity: 0, y: 56, filter: 'blur(14px)', scale: 0.94 },
         {
           opacity: 1,
           y: 0,
-          rotateX: 0,
           filter: 'blur(0px)',
           scale: 1,
           duration: 0.6,
@@ -323,36 +322,61 @@ export const Web3Grid: React.FC = () => {
         3.4
       );
       tl.to(carSubRef.current, { opacity: 0.7, y: 0, duration: 0.28 }, 3.5);
-      tl.to({}, { duration: 0.45 }, 3.8);
+
+      // ——— Carousel: focused card holds centre, next card's edge peeks in from the right ———
+      const stage = carStageRef.current;
+      const cards = stage ? Array.from(stage.children) : [];
+      const vw = () => window.innerWidth;
+      const cardW = () => cards[0]?.getBoundingClientRect().width || 400;
+      const peekX = () => {
+        const p = Math.min(90, Math.max(56, vw() * 0.05));
+        return vw() / 2 - p - cardW() / 2;
+      };
+      gsap.set(cards, {
+        x: vw,
+        xPercent: -50,
+        yPercent: -50,
+        scale: 0.85,
+        opacity: 0,
+        pointerEvents: 'none',
+      });
+
+      const MOVE = 0.5;
+      const HOLD = 0.6;
+      let t = 3.55;
+      cards.forEach((el, i) => {
+        // if this card hasn't been revealed yet, keep it hidden off the right
+        if (i > 0) {
+          gsap.set(el, { x: vw, scale: 0.8, opacity: 0 });
+        }
+        // slide to centre and become the focused card
+        tl.to(el, { x: 0, scale: 1, opacity: 1, duration: MOVE, ease: 'power4.out', pointerEvents: 'auto' }, t);
+        t += MOVE;
+        // during the hold, reveal the next card's edge peeking off the right
+        if (cards[i + 1]) {
+          tl.set(cards[i + 1], { x: peekX(), scale: 0.8, opacity: 0.4 }, t);
+        }
+        tl.to({}, { duration: HOLD }, t);
+        t += HOLD;
+        // exit left
+        tl.to(el, { x: () => -vw(), scale: 0.85, opacity: 0, duration: MOVE, ease: 'power2.in', pointerEvents: 'none' }, t);
+        t += MOVE;
+      });
+      tl.to({}, { duration: 0.5 }, t);
     }, section);
 
     ScrollTrigger.refresh();
     return () => ctx.revert();
   }, []);
 
-  const shift = (dir: number) => setActiveIdx((i) => i + dir);
-
-  const cardStyle = (rel: number): React.CSSProperties => {
-    const abs = Math.abs(rel);
-    const show = abs <= 1;
-    return {
-      transform: `
-        translate(-50%, -50%)
-        translateX(${rel * 62}%)
-        translateY(${abs === 0 ? 0 : 18}px)
-        translateZ(${abs === 0 ? 100 : -160}px)
-        rotateY(${rel * -48}deg)
-        rotateX(${abs === 0 ? 0 : 6}deg)
-        scale(${abs === 0 ? 1.08 : 0.74})
-      `,
-      opacity: show ? (abs === 0 ? 1 : 0.38) : 0,
-      zIndex: 20 - abs,
-      pointerEvents: show ? 'auto' : 'none',
-      filter: abs === 0 ? 'none' : 'blur(4px) brightness(0.7)',
-      transition:
-        'transform 0.7s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.5s ease, filter 0.55s ease',
-    };
-  };
+  const LabsGlyph = ({ size = 88 }: { size?: number }) => (
+    <div
+      className="relative flex items-center justify-center rounded-2xl border border-white/20 bg-gradient-to-br from-violet-500/30 via-indigo-500/15 to-transparent shadow-[0_0_32px_rgba(124,58,237,0.25)]"
+      style={{ width: size, height: size }}
+    >
+      <GraduationCap size={Math.round(size * 0.5)} className="text-white" strokeWidth={1.5} />
+    </div>
+  );
 
   return (
     <section ref={sectionRef} id="about" className="relative w-full bg-black select-none">
@@ -534,194 +558,144 @@ export const Web3Grid: React.FC = () => {
           </p>
         </div>
 
-        {/* ——— 3D CAROUSEL SHOWCASE ——— */}
+        {/* ——— HORIZONTAL SCROLL SHOWCASE ——— */}
         <div
           ref={showcaseRef}
-          className="absolute inset-0 z-30 flex flex-col items-center justify-center px-4 md:px-8 bg-black"
-          style={{ perspective: '1800px' }}
+          className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black overflow-hidden px-0"
         >
-          <div className="text-center mb-5 md:mb-7 max-w-xl px-4">
+          <Suspense fallback={null}>
+            <SafeShader
+              fov={45}
+              pixelDensity={0.85}
+              veilClassName="absolute inset-0 bg-black/25 pointer-events-none"
+              gradient={{
+                animate: 'on',
+                brightness: 1.15,
+                cAzimuthAngle: 180,
+                cDistance: 3.59,
+                cPolarAngle: 90,
+                cameraZoom: 2.01,
+                color1: '#3029ff',
+                color2: '#3553db',
+                color3: '#000000',
+                envPreset: 'city',
+                grain: 'on',
+                lightType: '3d',
+                positionX: -0.1,
+                positionY: -0.2,
+                positionZ: 0,
+                range: 'disabled',
+                rangeEnd: 40,
+                rangeStart: 0,
+                reflection: 0.1,
+                rotationX: 40,
+                rotationY: 100,
+                rotationZ: 50,
+                shader: 'defaults',
+                type: 'sphere',
+                uAmplitude: 1,
+                uDensity: 1.3,
+                uFrequency: 5.5,
+                uSpeed: 0.4,
+                uStrength: 4,
+                uTime: 0,
+                wireframe: false,
+              }}
+            />
+          </Suspense>
+          <div className="text-center mb-8 md:mb-10 max-w-xl px-6">
             <h3
               ref={carTitleRef}
               className="font-sans text-2xl sm:text-3xl md:text-4xl font-black text-white tracking-tight"
             >
               Five services.
-              <span className="block sm:inline"> Built for real product work.</span>
+              <span className="block sm:inline"> One way in.</span>
             </h3>
             <p
               ref={carSubRef}
               className="mt-3 text-sm font-semibold text-white/60 leading-relaxed max-w-md mx-auto"
             >
-              Flip through the MVP — demo, what it does, and where it fits.
+              Keep scrolling — each service enters, holds in the centre, then drifts off left.
             </p>
           </div>
 
-          <div className="flex gap-2 mb-5 md:mb-6">
-            {activeServices.map((s, i) => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => setActiveIdx(i)}
-                className={`h-1.5 rounded-full transition-all duration-500 ${
-                  ((activeIdx % n) + n) % n === i
-                    ? 'w-8 bg-white shadow-[0_0_12px_rgba(255,255,255,0.5)]'
-                    : 'w-1.5 bg-white/30 hover:bg-white/50'
-                }`}
-                aria-label={s.name}
-              />
-            ))}
-          </div>
-
-          <div className="relative w-full max-w-5xl flex items-center gap-2 md:gap-4">
-            <button
-              type="button"
-              onClick={() => shift(-1)}
-              className="shrink-0 z-40 h-11 w-11 md:h-12 md:w-12 rounded-full border border-white/20 bg-white/10 hover:bg-white/18 flex items-center justify-center text-white shadow-[0_8px_24px_rgba(0,0,0,0.35)] transition-all hover:scale-105 active:scale-95"
-              aria-label="Previous"
-            >
-              <ChevronLeft size={20} />
-            </button>
-
-            <div
-              ref={carStageRef}
-              className="relative flex-1 h-[380px] sm:h-[420px] md:h-[460px]"
-              style={{ transformStyle: 'preserve-3d', perspective: '1600px' }}
-            >
-              {activeServices.map((s, i) => {
-                let rel = ((i - activeIdx) % n + n) % n;
-                if (rel > n / 2) rel -= n;
-                const abs = Math.abs(rel);
-                const focused = abs === 0;
-                const logoState = focused
-                  ? s.id === 'morph'
-                    ? 'morph'
-                    : 'focus'
-                  : 'idle';
-
-                return (
-                  <div
-                    key={s.id}
-                    className="absolute left-1/2 top-1/2 w-[min(90%,360px)] sm:w-[380px] md:w-[420px]"
-                    style={{
-                      ...cardStyle(rel),
-                      transformStyle: 'preserve-3d',
-                    }}
-                  >
-                    <div
-                      className={`rounded-2xl md:rounded-3xl border overflow-hidden backdrop-blur-xl transition-[box-shadow,border-color] duration-500 ${
-                        focused
-                          ? 'border-white/30 bg-gradient-to-b from-white/[0.14] to-white/[0.04] shadow-[0_36px_90px_rgba(38,78,255,0.32),inset_0_1px_0_rgba(255,255,255,0.22)]'
-                          : 'border-white/10 bg-white/[0.04] shadow-[0_16px_40px_rgba(0,0,0,0.45)]'
-                      }`}
-                    >
-                      <div className="relative aspect-[16/10] bg-gradient-to-br from-[#0a0a12] via-black to-[#0c0c18] flex items-center justify-center">
-                        <div className={`absolute inset-0 bg-gradient-to-tr ${s.hologramColor} opacity-60 pointer-events-none`} />
-                        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(48,41,255,0.2),transparent_60%)]" />
-                        <div
-                          className="absolute inset-0 opacity-[0.08]"
-                          style={{
-                            backgroundImage:
-                              'linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)',
-                            backgroundSize: '28px 28px',
-                          }}
-                        />
-                        <AnimatePresence mode="wait">
-                          {focused ? (
-                            <motion.div
-                              key={`play-${s.id}`}
-                              initial={{ opacity: 0, scale: 0.85, y: 10 }}
-                              animate={{ opacity: 1, scale: 1, y: 0 }}
-                              exit={{ opacity: 0, scale: 0.9 }}
-                              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-                              className="relative z-10 flex flex-col items-center gap-3"
-                            >
-                              <ServiceLogo
-                                id={s.id}
-                                name={s.name}
-                                size={88}
-                                state={logoState}
-                                priority
-                                className="bg-black/30 border border-white/10"
-                              />
-                              <button
-                                type="button"
-                                className="h-12 w-12 rounded-full border border-white/30 bg-white/15 hover:bg-white/25 flex items-center justify-center transition-all hover:scale-105 shadow-[0_0_40px_rgba(255,255,255,0.14)]"
-                                aria-label={`Demo ${s.name}`}
-                              >
-                                <Play size={18} className="text-white ml-0.5" fill="currentColor" />
-                              </button>
-                              <p className="font-pixel text-[9px] tracking-[0.3em] uppercase text-white/55">
-                                Demo · {s.name}
-                              </p>
-                            </motion.div>
-                          ) : (
-                            <div className="relative z-10 opacity-70">
-                              <ServiceLogo id={s.id} name={s.name} size={48} state="idle" className="bg-transparent" />
-                            </div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-
-                      <AnimatePresence mode="wait">
-                        {focused && (
-                          <motion.div
-                            key={`body-${s.id}`}
-                            initial={{ opacity: 0, y: 16 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: 8 }}
-                            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-                            className="p-5 md:p-6 border-t border-white/10"
-                          >
-                            <div className="flex items-start gap-4">
-                              <ServiceLogo
-                                id={s.id}
-                                name={s.name}
-                                size={48}
-                                state={s.id === 'morph' ? 'morph' : 'active'}
-                                className="shrink-0 border border-white/15 bg-white/5"
-                              />
-                              <div className="min-w-0 text-left">
-                                <p className="font-pixel text-[9px] tracking-[0.28em] uppercase text-blue-200/80 mb-1.5">
-                                  0{(((activeIdx % n) + n) % n) + 1} · MVP
-                                </p>
-                                <h3 className="font-sans text-xl md:text-2xl font-black text-white tracking-tight mb-2">
-                                  {s.name}
-                                </h3>
-                                <p className="text-sm md:text-base font-bold text-white/90 leading-snug mb-2">
-                                  {s.shortDesc}
-                                </p>
-                                <p className="text-xs sm:text-sm font-medium text-white/55 leading-relaxed line-clamp-3">
-                                  {s.fullDesc}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex flex-wrap gap-1.5 mt-4">
-                              {s.techDetails.slice(0, 3).map((t) => (
-                                <span
-                                  key={t}
-                                  className="px-2 py-0.5 rounded-full border border-white/12 bg-white/[0.05] text-[10px] font-medium text-white/55"
-                                >
-                                  {t}
-                                </span>
-                              ))}
-                            </div>
-                          </motion.div>
+          <div
+            ref={carStageRef}
+            className="relative w-full flex-1"
+            style={{ perspective: '1600px' }}
+          >
+            {carouselServices.map((s, i) => {
+              const isLabs = s.id === 'labs';
+              return (
+                <div
+                  key={s.id}
+                  className="absolute w-[min(86vw,430px)]"
+                  style={{ left: '50%', top: '50%' }}
+                >
+                  <div className="rounded-[24px] overflow-hidden backdrop-blur-[40px] backdrop-saturate-150">
+                <Glass active radius={24} className="overflow-hidden shadow-[0_28px_80px_rgba(0,0,0,0.55)]">
+                    <div className="relative aspect-[16/10] flex items-center justify-center">
+                      <div className="relative z-10 flex flex-col items-center gap-3">
+                        {isLabs ? (
+                          <Glass active radius={18} className="p-4">
+                            <LabsGlyph size={64} />
+                          </Glass>
+                        ) : (
+                          <Glass active radius={18} className="p-4">
+                            <ServiceLogo
+                              id={s.id}
+                              name={s.name}
+                              size={64}
+                              state="idle"
+                              priority
+                            />
+                          </Glass>
                         )}
-                      </AnimatePresence>
+                        <p className="font-pixel text-[9px] tracking-[0.3em] uppercase text-white/60">
+                          {s.name}
+                        </p>
+                      </div>
                     </div>
+                    <div className="p-6 md:p-7 text-left">
+                      <p className="font-pixel text-[9px] tracking-[0.28em] uppercase text-blue-200/80 mb-2">
+                        {isLabs ? '06 · ZEXVRO Labs' : `0${i + 1} · ${s.name}`}
+                      </p>
+                      <h3 className="font-sans text-xl md:text-2xl font-black text-white tracking-tight leading-tight mb-2">
+                        {s.headline}
+                      </h3>
+                      <p className="text-sm md:text-base font-semibold text-white/95 leading-snug mb-2">
+                        {s.shortDesc}
+                      </p>
+                      <p className="text-sm font-medium text-white/60 leading-relaxed">
+                        {s.fullDesc}
+                      </p>
+                      <div className="flex flex-wrap gap-1.5 mt-4">
+                        {s.techDetails.slice(0, 3).map((t) => (
+                          <span
+                            key={t}
+                            className="px-2.5 py-1 rounded-full border border-white/12 bg-white/[0.05] text-[10px] font-medium text-white/60"
+                          >
+                            {t}
+                          </span>
+                        ))}
+                      </div>
+                      {s.href && (
+                        <a
+                          href={s.href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-5 inline-flex items-center gap-1.5 rounded-full bg-white text-black px-5 py-2.5 text-xs font-bold hover:bg-white/90 transition-colors"
+                        >
+                          Open Web3 Labs
+                          <ArrowRight size={14} />
+                        </a>
+                      )}
+                    </div>
+                  </Glass>
                   </div>
-                );
-              })}
-            </div>
-
-            <button
-              type="button"
-              onClick={() => shift(1)}
-              className="shrink-0 z-40 h-11 w-11 md:h-12 md:w-12 rounded-full border border-white/20 bg-white/10 hover:bg-white/18 flex items-center justify-center text-white shadow-[0_8px_24px_rgba(0,0,0,0.35)] transition-all hover:scale-105 active:scale-95"
-              aria-label="Next"
-            >
-              <ChevronRight size={20} />
-            </button>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

@@ -14,6 +14,7 @@ export const activeServices: ServiceItem[] = [
   {
     id: 'zer0',
     name: 'Zer0',
+    headline: 'Private by default. Verifiable when it matters.',
     shortDesc: 'Zero-knowledge privacy for business payments',
     fullDesc:
       'Transaction privacy for teams that need Web3 settlement without public exposure. Dashboard, pay flows, proofs, and stealth tooling — enterprise-grade privacy without the jargon.',
@@ -25,6 +26,7 @@ export const activeServices: ServiceItem[] = [
   {
     id: 'morph',
     name: 'Morph',
+    headline: 'Turn Web2 into Web3 — step by step.',
     shortDesc: 'Transformation agent for Web2 → Web3 migration',
     fullDesc:
       'Inspect repos, explain migration work, and deploy through CLI and web. Shared memory between agents so ZEXVRO stays agent-first — not a bolt-on chatbot.',
@@ -36,6 +38,7 @@ export const activeServices: ServiceItem[] = [
   {
     id: 'reqwid',
     name: 'REQWID',
+    headline: 'Know who — or what — is calling.',
     shortDesc: 'Human vs agent classification for product flows',
     fullDesc:
       'SDK/API that labels internet users as human or agent with confidence scores. Foundation for HDM-style human data markets and gated access — without claiming perfect detection.',
@@ -47,6 +50,7 @@ export const activeServices: ServiceItem[] = [
   {
     id: 'nfto',
     name: 'NFTo',
+    headline: 'Ship NFTs without the chain lecture.',
     shortDesc: 'Deploy and sell NFTs without chain complexity',
     fullDesc:
       'Guided collection create, mint, sale, and embed checkout on Stellar/Soroban. Built for indie studios and product teams who want NFTs — not wallets and gas lectures.',
@@ -58,6 +62,7 @@ export const activeServices: ServiceItem[] = [
   {
     id: 'dedsec',
     name: 'DEDSEC',
+    headline: 'Charge for API access, automatically.',
     shortDesc: 'x402 paid access gateway for APIs & compute',
     fullDesc:
       'HTTP 402 payment challenges in front of resources. Verify Soroban auth, settle USDC per request, fail closed — economic access control for agent traffic and free-tier abuse.',
@@ -67,5 +72,20 @@ export const activeServices: ServiceItem[] = [
     ...logos('dedsec'),
   },
 ];
+
+/** ZEXVRO Labs — learning track surfaced in the carousel (not one of the 5 MVP services). */
+export const labsService: ServiceItem = {
+  id: 'labs',
+  name: 'ZEXVRO Labs',
+  headline: 'Learn Web3 by building it.',
+  shortDesc: 'Hands-on Web3 learning track',
+  fullDesc:
+    'Learn Web3 by building — not by lectures. Guided labs, badges, and certificates at labs.zexvro.in.',
+  iconName: 'GraduationCap',
+  techDetails: ['Guided labs', 'Badges & certs', 'Projects', 'Know the stack'],
+  hologramColor: 'from-indigo-500/20 via-violet-500/10 to-transparent',
+  href: 'https://labs.zexvro.in',
+  ...logos('zer0'),
+};
 
 export const comingSoonServicesCount = 0;

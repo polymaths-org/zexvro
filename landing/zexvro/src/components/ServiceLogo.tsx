@@ -11,7 +11,7 @@ type Props = {
   state?: ServiceLogoState;
   className?: string;
   imgClassName?: string;
-  /** Morph logo is dark-on-transparent — invert on dark UI */
+  /** Morph logo is already white-on-transparent — do NOT invert (default false) */
   invertMorph?: boolean;
   priority?: boolean;
 };
@@ -27,7 +27,7 @@ export const ServiceLogo: React.FC<Props> = ({
   state = 'idle',
   className = '',
   imgClassName = '',
-  invertMorph = true,
+  invertMorph = false,
   priority = false,
 }) => {
   const [failed, setFailed] = useState(false);

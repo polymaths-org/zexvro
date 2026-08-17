@@ -42,6 +42,7 @@ This repository currently holds the project foundation:
 - `memory.md` - shared working memory for developers and agents.
 - `design.md` - visual system, themes, typography, product + marketing UI rules.
 - `docs/marketing.md` - marketing kit brief, service one-liners, motion inventory.
+- `docs/roadmap-unified-paas.md` - the full plan/roadmap: unify the platform base (registry, gateway, identity, credits, workspace, audit), then programs/team/first client.
 - `frontend/` - Vite + React frontend workspace (dashboard + in-app welcome).
 - `landing/zexvro/` - standalone public landing site.
 - `frontend/public/marketing/` - product cinema and brand motion assets.
