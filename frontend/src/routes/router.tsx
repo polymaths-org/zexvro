@@ -49,8 +49,8 @@ import type { MemoryEntry } from '../types';
 import { normalizeMemoryEntry } from '../lib/memoryNormalize';
 
 // Service components
-import TransformationAgent from '../components/services/TransformationAgent';
-import TradePipeline from '../components/services/TradePipeline';
+// NOTE: TransformationAgent and TradePipeline removed — Morph lives in AgentStudio,
+// A2A Trade is out of MVP. Transformation route redirects to /agent.
 import AgentAuth from '../components/services/AgentAuth';
 import NftService, { NftCollectionCreate, NftCollectionStudio } from '../components/services/NftService';
 import DepinService from '../components/services/DepinService';
@@ -611,16 +611,29 @@ const projectSettingsRoute = createRoute({
 });
 
 // Service-specific routes
+// Transformation (Morph) redirects to the Agentic Operations page — TransformationAgent.tsx
+// was a fake demo component, real Morph lives in AgentStudio.
 const projectTransformationRoute = createRoute({
   getParentRoute: () => dashboardLayoutRoute,
   path: '/dashboard/w/$workspaceId/p/$projectId/transformation',
-  component: TransformationAgent,
+  beforeLoad: ({ params }) => {
+    throw redirect({
+      to: '/dashboard/w/$workspaceId/p/$projectId/agent',
+      params: { workspaceId: params.workspaceId, projectId: params.projectId },
+    });
+  },
 });
 
+// A2A Trade removed from MVP — route kept as redirect to services for bookmarks/links.
 const projectTradeRoute = createRoute({
   getParentRoute: () => dashboardLayoutRoute,
   path: '/dashboard/w/$workspaceId/p/$projectId/trade',
-  component: TradePipeline,
+  beforeLoad: ({ params }) => {
+    throw redirect({
+      to: '/dashboard/w/$workspaceId/p/$projectId/services',
+      params: { workspaceId: params.workspaceId, projectId: params.projectId },
+    });
+  },
 });
 
 const projectAgentAuthRoute = createRoute({

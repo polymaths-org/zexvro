@@ -15,6 +15,12 @@ export interface ServiceItem {
   logo: string;
   /** Optional external link (e.g. ZEXVRO Labs) */
   href?: string;
+  /** What the service does — one concise line */
+  what: string;
+  /** Who the service is for */
+  forWho: string;
+  /** Strong reason to use it */
+  why: string;
 }
 
 export interface Web2Web3Step {

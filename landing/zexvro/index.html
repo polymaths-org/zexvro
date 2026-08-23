@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
 
-    <title>Zexvro (ZEXVRO) — Web3 Made Simple | Wallets, Payments &amp; NFTs</title>
+    <title>ZEXVRO — Web3 Made Simple | Private Payments, NFTs &amp; Agent Infrastructure</title>
     <meta
       name="description"
-      content="Zexvro (ZEXVRO) is a Web3 infrastructure platform for builders — wallets, crypto payments, and NFT tooling without gas noise or chain complexity. Official site: zexvro.in."
+      content="ZEXVRO (Zexvro) is Web3 infrastructure that feels like normal software: private payments (Zer0), Web2→Web3 migration agent (Morph), human-vs-agent ID (REQWID), NFT tooling (NFTo), paid API access (DEDSEC), and ZEXVRO Labs. Official site: zexvro.in."
     />
     <meta
       name="keywords"
@@ -34,9 +34,45 @@
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     <meta name="geo.region" content="IN" />
 
+    <!-- Default canonical; route-aware script below swaps it for /services -->
     <link rel="canonical" href="https://zexvro.in/" />
     <link rel="alternate" hreflang="en" href="https://zexvro.in/" />
     <link rel="alternate" hreflang="x-default" href="https://zexvro.in/" />
+
+    <!-- Route-aware canonical + OG url: SPA serves /services from this file -->
+    <script>
+      (function () {
+        try {
+          var path = window.location.pathname.replace(/\/$/, '') || '/';
+          var url = 'https://zexvro.in' + (path === '/' ? '/' : path) + '/';
+          var isServices = path === '/services';
+          var can = document.querySelector('link[rel="canonical"]');
+          if (can) {
+            can.href = url;
+          } else {
+            can = document.createElement('link');
+            can.rel = 'canonical';
+            can.href = url;
+            document.head.appendChild(can);
+          }
+          document.querySelectorAll('meta[property="og:url"]').forEach(function (m) {
+            m.setAttribute('content', url);
+          });
+          if (isServices) {
+            document.title =
+              'ZEXVRO Service Catalog — Zer0, Morph, REQWID, NFTo & DEDSEC';
+            var d = document.querySelector('meta[name="description"]');
+            if (!d) {
+              d = document.createElement('meta');
+              d.name = 'description';
+              document.head.appendChild(d);
+            }
+            d.content =
+              'The full ZEXVRO service catalog: what each service does, who it is for, and why teams use it — Zer0, Morph, REQWID, NFTo, DEDSEC, and ZEXVRO Labs.';
+          }
+        } catch (e) {}
+      })();
+    </script>
 
     <!-- Favicons: path rename (v2) busts Google/browser caches; 48px required for SERP -->
     <link rel="icon" href="/favicon-v2.ico" sizes="any" />
@@ -76,10 +112,10 @@
     <meta property="og:site_name" content="Zexvro" />
     <meta property="og:locale" content="en_US" />
     <meta property="og:url" content="https://zexvro.in/" />
-    <meta property="og:title" content="Zexvro (ZEXVRO) — Web3 Made Simple" />
+    <meta property="og:title" content="ZEXVRO — Web3 Made Simple" />
     <meta
       property="og:description"
-      content="Zexvro is a Web3 platform for wallets, payments, and NFTs. Launch, pay, and scale without drowning in gas and chain noise."
+      content="Private payments, NFTs, and agent-ready Web3 infrastructure that feels like normal software. Official site: zexvro.in."
     />
     <meta property="og:image" content="https://zexvro.in/og-image.png?v=20260724" />
     <meta property="og:image:secure_url" content="https://zexvro.in/og-image.png?v=20260724" />
@@ -94,10 +130,10 @@
     <meta name="twitter:site" content="@zexvr0" />
     <meta name="twitter:creator" content="@zexvr0" />
     <meta name="twitter:url" content="https://zexvro.in/" />
-    <meta name="twitter:title" content="Zexvro (ZEXVRO) — Web3 Made Simple" />
+    <meta name="twitter:title" content="ZEXVRO — Web3 Made Simple" />
     <meta
       name="twitter:description"
-      content="Zexvro Web3 infrastructure that feels like normal software. Connect, pay, and scale — without the noise."
+      content="Private payments, NFTs, and agent-ready Web3 infrastructure that feels like normal software. Official site: zexvro.in."
     />
     <meta name="twitter:image" content="https://zexvro.in/og-image.png?v=20260724" />
     <meta name="twitter:image:alt" content="Zexvro — Web3 Made Simple" />
@@ -138,8 +174,25 @@
               "crypto payments",
               "NFT minting",
               "wallet infrastructure",
-              "onchain payments"
+              "onchain payments",
+              "zero-knowledge privacy",
+              "Web2 to Web3 migration",
+              "human vs agent classification",
+              "x402 paid API access"
             ],
+            "hasOfferCatalog": {
+              "@type": "OfferCatalog",
+              "name": "ZEXVRO Services",
+              "url": "https://zexvro.in/services",
+              "itemListElement": [
+                { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Zer0", "description": "Zero-knowledge private settlement for business payments.", "url": "https://zexvro.in/services#zer0" } },
+                { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Morph", "description": "Agent that migrates Web2 products to Web3 step by step.", "url": "https://zexvro.in/services#morph" } },
+                { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "REQWID", "description": "Human vs agent traffic classification SDK/API.", "url": "https://zexvro.in/services#reqwid" } },
+                { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "NFTo", "description": "Guided NFT collections, minting, and USDC checkout on Stellar/Soroban.", "url": "https://zexvro.in/services#nfto" } },
+                { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "DEDSEC", "description": "x402 paid-access gateway settling USDC per request.", "url": "https://zexvro.in/services#dedsec" } },
+                { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "ZEXVRO Labs", "description": "Hands-on Web3 learning track with labs, badges, and certificates.", "url": "https://labs.zexvro.in" } }
+              ]
+            },
             "sameAs": [
               "https://x.com/zexvr0",
               "https://console.zexvro.in"
@@ -175,10 +228,10 @@
             "@type": "WebPage",
             "@id": "https://zexvro.in/#webpage",
             "url": "https://zexvro.in/",
-            "name": "Zexvro (ZEXVRO) — Web3 Made Simple | Connect, Pay & Scale",
+            "name": "ZEXVRO — Web3 Made Simple | Private Payments, NFTs & Agent Infrastructure",
             "isPartOf": { "@id": "https://zexvro.in/#website" },
             "about": { "@id": "https://zexvro.in/#organization" },
-            "description": "Zexvro makes shifting your business to Web3 simple. Launch wallets, payments, and NFT tooling without drowning in the stack.",
+            "description": "ZEXVRO makes shifting your business to Web3 simple. Launch wallets, payments, and NFT tooling without drowning in the stack.",
             "primaryImageOfPage": {
               "@type": "ImageObject",
               "url": "https://zexvro.in/og-image.png",
@@ -186,7 +239,18 @@
               "height": 630
             },
             "inLanguage": "en",
-            "dateModified": "2026-07-24"
+            "dateModified": "2026-08-22"
+          },
+          {
+            "@type": "CollectionPage",
+            "@id": "https://zexvro.in/services#webpage",
+            "url": "https://zexvro.in/services",
+            "name": "ZEXVRO Service Catalog — Zer0, Morph, REQWID, NFTo & DEDSEC",
+            "isPartOf": { "@id": "https://zexvro.in/#website" },
+            "about": { "@id": "https://zexvro.in/#organization" },
+            "description": "The full ZEXVRO service catalog: what each service does, who it is for, and why teams use it.",
+            "inLanguage": "en",
+            "dateModified": "2026-08-22"
           },
           {
             "@type": "SoftwareApplication",

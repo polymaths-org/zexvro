@@ -21,6 +21,9 @@ export const activeServices: ServiceItem[] = [
     iconName: 'ShieldCheck',
     techDetails: ['ZK proofs', 'Stealth addresses', 'Pay party', 'Compliance view-keys'],
     hologramColor: 'from-violet-500/20 via-purple-500/10 to-transparent',
+    what: 'Private settlement for business payments — dashboards, pay flows, ZK proofs, and stealth tooling in one place.',
+    forWho: 'Finance and ops teams that need Web3 settlement without public exposure.',
+    why: 'Private by default, verifiable when it matters — compliance view-keys keep it auditable without leaking the ledger.',
     ...logos('zer0'),
   },
   {
@@ -33,6 +36,9 @@ export const activeServices: ServiceItem[] = [
     iconName: 'Zap',
     techDetails: ['CLI + web agent', 'Repo inspection', 'Persistent memory', 'Deploy assist'],
     hologramColor: 'from-amber-500/20 via-orange-500/10 to-transparent',
+    what: 'An agent that inspects your repos, explains the migration work, and deploys — through CLI or web.',
+    forWho: 'Web2 product teams starting a Web3 migration without an in-house chain team.',
+    why: 'Step-by-step transformation with persistent agent memory — a guided path, not a rewrite.',
     ...logos('morph'),
   },
   {
@@ -45,6 +51,9 @@ export const activeServices: ServiceItem[] = [
     iconName: 'UserCheck',
     techDetails: ['SDK / API', 'Confidence scores', 'Appeal flow', 'Privacy model'],
     hologramColor: 'from-blue-500/20 via-indigo-500/10 to-transparent',
+    what: 'SDK/API that labels traffic as human or agent, with confidence scores and an appeal flow.',
+    forWho: 'Product and API teams who gate access, fight bot abuse, or build human-data flows.',
+    why: 'Know who — or what — is calling, and gate or price it accordingly, without claiming perfect detection.',
     ...logos('reqwid'),
   },
   {
@@ -57,6 +66,9 @@ export const activeServices: ServiceItem[] = [
     iconName: 'Coins',
     techDetails: ['Soroban collections', 'USDC checkout', 'Embed SDK', 'Studio analytics'],
     hologramColor: 'from-pink-500/20 via-purple-500/10 to-transparent',
+    what: 'Guided collection create, mint, sale, and embed checkout on Stellar/Soroban.',
+    forWho: 'Indie studios, creators, and product teams that want NFTs — not wallets and gas lectures.',
+    why: 'USDC checkout and an embed SDK mean you ship NFTs with zero chain complexity.',
     ...logos('nfto'),
   },
   {
@@ -69,6 +81,9 @@ export const activeServices: ServiceItem[] = [
     iconName: 'CreditCard',
     techDetails: ['x402 v2', 'USDC exact', 'Replay protection', 'Edge enforcement'],
     hologramColor: 'from-emerald-500/20 via-teal-500/10 to-transparent',
+    what: 'x402 payment challenges in front of your resources — Soroban auth verified, USDC settled per request.',
+    forWho: 'API and compute providers dealing with agent traffic and free-tier abuse.',
+    why: 'Economic access control that fails closed — every request paid, verified, and replay-protected.',
     ...logos('dedsec'),
   },
 ];
@@ -85,6 +100,9 @@ export const labsService: ServiceItem = {
   techDetails: ['Guided labs', 'Badges & certs', 'Projects', 'Know the stack'],
   hologramColor: 'from-indigo-500/20 via-violet-500/10 to-transparent',
   href: 'https://labs.zexvro.in',
+  what: 'Hands-on Web3 learning track with guided labs, badges, and certificates.',
+  forWho: 'Developers and teams who need to understand the stack before building on it.',
+  why: 'Learn Web3 by building it — not by lectures.',
   ...logos('zer0'),
 };
 

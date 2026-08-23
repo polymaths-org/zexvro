@@ -76,12 +76,12 @@ export const Team: React.FC = () => {
         >
           The&nbsp;Tea
           <img
-            src="/services/morph.svg"
+            src="/morph-idle.gif"
             alt=""
             role="presentation"
             loading="lazy"
             className="inline-block align-baseline"
-            style={{ height: '1.02em', width: 'auto', transform: 'translateY(0.06em)' }}
+            style={{ height: '1.02em', width: 'auto', transform: 'translateY(0.12em) translateX(-0.05em)' }}
           />
         </motion.h2>
       </div>

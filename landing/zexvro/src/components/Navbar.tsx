@@ -1,38 +1,48 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence, useScroll, useMotionValueEvent } from 'motion/react';
 import { Glass } from './Glass';
+import { WaitlistModal } from './WaitlistModal';
 import { Menu, X } from 'lucide-react';
-
-const LINKS = [
-  { label: 'Home', href: '#home' },
-  { label: 'About', href: '#about' },
-  { label: 'Team', href: '#team' },
-  { label: 'Platform', href: '#about' },
-  { label: 'Contact', href: '#contact' },
-];
 
 const ease = [0.16, 1, 0.3, 1] as const;
 
-export const Navbar: React.FC = () => {
+/** On the /services catalog page, anchor links route back to the landing page. */
+const onCatalog =
+  typeof window !== 'undefined' && window.location.pathname.replace(/\/$/, '') === '/services';
+
+const LINKS = [
+  { label: 'Home', href: onCatalog ? '/' : '#home' },
+  { label: 'About', href: onCatalog ? '/#about' : '#about' },
+  { label: 'Team', href: onCatalog ? '/#team' : '#team' },
+  { label: 'Services', href: '/services/' },
+  { label: 'Contact', href: onCatalog ? '/#contact' : '#contact' },
+];
+
+type NavbarProps = { forceExpanded?: boolean };
+
+export const Navbar: React.FC<NavbarProps> = ({ forceExpanded = false }) => {
   const [logoError, setLogoError] = useState(false);
   const [wordmarkError, setWordmarkError] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [waitlistOpen, setWaitlistOpen] = useState(false);
   const { scrollY } = useScroll();
 
   useMotionValueEvent(scrollY, 'change', (y) => {
+    if (forceExpanded) return;
     const threshold = typeof window !== 'undefined' ? window.innerHeight * 0.72 : 600;
     setExpanded(y > threshold);
     if (y <= threshold) setMobileOpen(false);
   });
 
   useEffect(() => {
+    if (forceExpanded) setExpanded(true);
     const onResize = () => {
       if (window.innerWidth >= 768) setMobileOpen(false);
     };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
-  }, []);
+  }, [forceExpanded]);
 
   return (
     <motion.header
@@ -40,15 +50,15 @@ export const Navbar: React.FC = () => {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 1.2, ease, delay: 0.08 }}
       className="fixed top-0 left-0 w-full z-50 flex justify-center px-4 md:px-6 pointer-events-none"
-      style={{ paddingTop: expanded ? 12 : 28 }}
+      style={{ paddingTop: forceExpanded || expanded ? 12 : 28 }}
     >
       <motion.div
         layout
         transition={{ layout: { duration: 0.5, ease } }}
         className="pointer-events-auto max-w-full"
-        style={{ width: expanded ? 'min(880px, calc(100vw - 2rem))' : 'auto' }}
+        style={{ width: forceExpanded || expanded ? 'min(880px, calc(100vw - 2rem))' : 'auto' }}
       >
-        <Glass active={expanded} radius={999} className={expanded ? 'w-full' : ''}>
+        <Glass active radius={999} className={forceExpanded || expanded ? 'w-full' : ''}>
           <nav
             className={`flex items-center gap-3 md:gap-5 ${
               expanded
@@ -120,14 +130,13 @@ export const Navbar: React.FC = () => {
                   transition={{ duration: 0.3, ease }}
                   className="flex items-center gap-2 shrink-0"
                 >
-                  <a
-                    href="https://console.zexvro.in"
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    type="button"
+                    onClick={() => setWaitlistOpen(true)}
                     className="hidden sm:inline-flex items-center px-3.5 py-1.5 rounded-full text-[11px] font-bold tracking-wide bg-white text-black hover:bg-white/90 transition-colors"
                   >
                     Get Started
-                  </a>
+                  </button>
                   <button
                     type="button"
                     className="md:hidden flex items-center justify-center h-8 w-8 rounded-full bg-white/[0.08] text-white"
@@ -165,15 +174,16 @@ export const Navbar: React.FC = () => {
                     </li>
                   ))}
                   <li className="p-1.5">
-                    <a
-                      href="https://console.zexvro.in"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={() => setMobileOpen(false)}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMobileOpen(false);
+                        setWaitlistOpen(true);
+                      }}
                       className="flex items-center justify-center w-full py-2.5 rounded-full bg-white text-black text-xs font-bold"
                     >
                       Get Started
-                    </a>
+                    </button>
                   </li>
                 </ul>
               </Glass>
@@ -181,6 +191,8 @@ export const Navbar: React.FC = () => {
           )}
         </AnimatePresence>
       </motion.div>
+
+      <WaitlistModal open={waitlistOpen} onClose={() => setWaitlistOpen(false)} />
     </motion.header>
   );
 };

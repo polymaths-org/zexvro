@@ -1,6 +1,7 @@
 import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { motion, useMotionValue, useSpring, useTransform, useScroll } from 'motion/react';
 import { ArrowRight } from 'lucide-react';
+import { WaitlistModal } from './WaitlistModal';
 
 const SafeShader = lazy(() => import('./SafeShader').then((m) => ({ default: m.SafeShader })));
 
@@ -13,6 +14,7 @@ export const Hero: React.FC = () => {
   const [inView, setInView] = useState(true);
   const [playKey, setPlayKey] = useState(0);
   const [shaderFromRight, setShaderFromRight] = useState(true);
+  const [waitlistOpen, setWaitlistOpen] = useState(false);
   const wasAway = useRef(false);
 
   // Re-run intro when hero re-enters — shader always from right
@@ -218,18 +220,17 @@ export const Hero: React.FC = () => {
             </p>
 
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-4 sm:space-y-0 sm:space-x-6 pt-1">
-              <a
-                href="https://console.zexvro.in"
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                type="button"
+                onClick={() => setWaitlistOpen(true)}
                 className="group relative px-8 py-4 rounded-full overflow-hidden bg-white text-black font-bold text-sm transition-transform active:scale-95 duration-300 shadow-[0_0_35px_rgba(255,255,255,0.45)] hover:shadow-[0_0_50px_rgba(255,255,255,0.7)]"
               >
                 <span className="absolute inset-0 bg-gradient-to-r from-blue-100 via-white to-pink-100 group-hover:opacity-95 transition-opacity" />
                 <span className="relative z-10 flex items-center justify-center space-x-2">
-                  <span>Explore Platform</span>
+                  <span>Get Started</span>
                   <ArrowRight size={16} className="transform group-hover:translate-x-1.5 transition-transform" />
                 </span>
-              </a>
+              </button>
               <a
                 href="mailto:support@zexvro.in?subject=Book%20a%20demo"
                 className="group relative px-8 py-4 rounded-full overflow-hidden border border-white/10 hover:border-white/20 bg-transparent text-white font-bold text-sm transition-transform active:scale-95 duration-300 text-center"
@@ -294,6 +295,8 @@ export const Hero: React.FC = () => {
       </motion.div>
 
       <div className="absolute bottom-0 left-0 w-full h-44 bg-gradient-to-t from-black via-black/85 to-transparent pointer-events-none z-[25]" />
+
+      <WaitlistModal open={waitlistOpen} onClose={() => setWaitlistOpen(false)} />
     </div>
   );
 };

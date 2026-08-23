@@ -1,5 +1,21 @@
 # ZEXVRO Shared Memory
 
+## 2026-08-23 - VC-Readiness & PaaS Stabilization: Phase 1 & 2 Completed (Paris)
+- **Goal**: Transition ZEXVRO from disconnected MVP services into a unified, investor-ready PaaS platform.
+- **Service Registry Unification**:
+  - Refactored `frontend/src/data/serviceCatalog.ts` as the canonical single source of truth for all 5 MVP services: Zer0 (active/privacy), Morph (configuring/agentic), REQWID (configuring/auth), NFTo (active/digital-assets), DEDSEC (active/gateway).
+  - Updated `frontend/src/data/mock.ts` to re-export `mockServices` directly from `serviceCatalog.ts` (purged stale/dead mock arrays).
+- **Navigation & Routing**:
+  - Removed deprecated A2A Trade route and redirected legacy TransformationAgent to the real Morph Agent studio in `router.tsx`.
+  - Consolidated sidebar in `DashboardLayout.tsx`: merged old scattered items into a clean "Services" section featuring all 5 core products.
+  - Upgraded `makeNavTo` helper in `DashboardLayout.tsx` so clicking NFTo, DEDSEC, or REQWID from the workspace level automatically resolves to the active workspace project's service page (or falls back to Services Manager if no project exists).
+  - Standardized "Need Help?" link to "Documentation: API, SDK, and guides" pointing directly to `/docs`.
+- **Services Polish & Resilience**:
+  - Updated `Services.tsx` headers and metadata to highlight Stellar mainnet readiness.
+  - Verified error boundaries and offline/CORS resilience in `AgentAuth.tsx` (REQWID) and `DepinService.tsx` (DEDSEC).
+- **Build Verification**: `npx tsc --noEmit` clean (0 errors) and `npm run build` succeeds cleanly.
+
+
 ## 2026-08-15 - Funding plan deck + PDF delivered; peakCTF confirmed separate project (Paris)
 - **Confirmed**: `peakctf-*` resources (7 Dynamo tables, S3 bucket, Lambda in acct `290294660486`) are PQDF/peakCTF — **another project, not part of ZEXVRO**. Excluded from the funding plan and cost model. Do not touch/bill under ZEXVRO.
 - **Deliverables**:
@@ -2084,3 +2100,18 @@ Use `None` for empty fields. Do not delete fields.
 - **GIF**: uses local `public/dev.gif` (360x360, ~3MB, added by user), referenced as `/dev.gif` in the page — ships to `dist/dev.gif`. No external Giphy URL needed.
 - **STATS.md now carries REAL Firestore numbers**, pulled by new `scripts/labs-stats.mjs` (service-account REST, paginated reads of users/labs/submissions/certificates/badges/lab_ideas). Snapshot 2026-08-09: **132 users** on platform, **~302 enrolled in the SPPU lab** (`lab.enrolledCount` — the number the Labs page shows; it was ~299 when the user checked and ticked up), 33 active learners (≥1 submission), 34 completions (cert holders), 37 submissions (1 passed, 36 for review → 3% pass rate), 41 certificates issued, 1 published lab, 60 project ideas (all taken). `totalXp`/badges are 0 — engagement is tracked via submissions+certs, not flat user xp fields. (Per-user `progress/{uid}/labs` subcollection scan is slow; skipped — enrollment comes from lab.enrolledCount.)
 - Verified: `cd labs && npx tsc --noEmit` clean; `npx vite build` ok. Not committed/deployed.
+
+## 2026-08-22 — Landing: waitlist modal, services redesign, /services catalog (Paris scope)
+- Get Started (navbar desktop+mobile) and Hero primary CTA now open a glass WaitlistModal instead of linking to console.zexvro.in. Modal reuses the waitlist API (source: landing-modal), Esc/backdrop close, success/duplicate states.
+- Removed Web3Grid pinned GSAP scroll sequence (lag complaint). New static `Services.tsx` section (id=about): 6 cards (Zer0, Morph, REQWID, NFTo, DEDSEC + Labs) each with What / For / Why blocks; light framer-motion in-view fades only.
+- Added `what/forWho/why` fields to `src/data/services.ts` (single source of truth).
+- New `/services` catalog route (`ServicesCatalog.tsx`, pathname check in App.tsx, no router dep) with full details + tech chips + waitlist CTA; `/services` added to public/_redirects.
+- Verified: tsc clean, build passes, preview 200 on / and /services. Not committed yet.
+
+## 2026-08-22 — Landing: SEO hardening vs "zexvdo" typosquat + title fix
+- Title rewritten: "Zexvro (ZEXVRO) — Web3 Made Simple | Wallets, Payments & NFTs" → "ZEXVRO — Web3 Made Simple | Private Payments, NFTs & Agent Infrastructure". Same for og:title / twitter:title.
+- Fixed real bug: SPA 200-rewrite served /services with canonical → "/" (catalog page could never be indexed). index.html now has a route-aware inline script that swaps canonical/og:url, and sets catalog title+description when path=/services.
+- sitemap.xml: added https://zexvro.in/services (priority 0.9), refreshed lastmod to 2026-08-22.
+- JSON-LD: added hasOfferCatalog (6 services w/ deep links /services#<id>), CollectionPage node for the catalog, expanded knowsAbout; dateModified bumped.
+- Description now names all five services (Zer0/Morph/REQWID/NFTo/DEDSEC) to reinforce brand entity against typo-squat searches.
+- NOTE (manual, outside repo): submit updated sitemap in Google Search Console; if zexvdo impersonates, file Google impersonation/trademark report.

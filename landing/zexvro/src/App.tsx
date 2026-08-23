@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { ScrollProvider } from './components/ScrollProvider';
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
-import { Web3Grid } from './components/Web3Grid';
+import { Services } from './components/Services';
+import { ServicesCatalog } from './components/ServicesCatalog';
 import { Team } from './components/Team';
 import { Waitlist } from './components/Waitlist';
 import { WaitlistAdmin } from './components/WaitlistAdmin';
@@ -25,11 +26,18 @@ const isWaitlistAdmin =
   typeof window !== 'undefined' &&
   (window.location.pathname.replace(/\/$/, '') === '/waitlist' || hasWaitlistSecret());
 
+const isServicesCatalog =
+  typeof window !== 'undefined' && window.location.pathname.replace(/\/$/, '') === '/services';
+
 export default function App() {
   const [loaded, setLoaded] = useState(false);
 
   if (isWaitlistAdmin) {
     return <WaitlistAdmin />;
+  }
+
+  if (isServicesCatalog) {
+    return <ServicesCatalog />;
   }
 
   return (
@@ -43,7 +51,7 @@ export default function App() {
           <Navbar />
 
           <Hero />
-          <Web3Grid />
+          <Services />
           <Team />
           <Waitlist />
           <Footer />

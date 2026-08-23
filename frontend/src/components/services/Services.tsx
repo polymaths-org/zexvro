@@ -28,32 +28,32 @@ const serviceMeta: Record<Service['category'], {
   routeSegment?: string;
 }> = {
   privacy: {
-    state: 'Product UI live',
-    purpose: 'Private transaction and payment flows with optional ZK proofs.',
+    state: 'Mainnet live',
+    purpose: 'Private payment flows with ZK proofs on Stellar. 4 deployed pool contracts with real Merkle trees.',
     routeSegment: 'zer0',
   },
   transformation: {
     state: 'Agent ready',
-    purpose: 'Web2→Web3 migration agent (Morph) with human approval.',
+    purpose: 'Web2→Web3 migration agent. Inspects repos, plans migration path, executes with human approval.',
     routeSegment: 'transformation',
   },
   trade: {
-    state: 'Out of MVP',
-    purpose: 'A2A Trade is not part of MVP.',
+    state: 'Removed',
+    purpose: 'A2A Trade has been removed from MVP scope.',
   },
   auth: {
     state: 'Gate ready',
-    purpose: 'REQWID dual-channel human / agent capability gate.',
+    purpose: 'Dual-channel human/agent auth gate. Humans prove humanity, agents prove identity — policy decides access.',
     routeSegment: 'agent-auth',
   },
   nft: {
-    state: 'Product UI live',
-    purpose: 'NFTo collection create, mint, sale, and embed checkout.',
+    state: 'Mainnet live',
+    purpose: 'NFT collections on Stellar mainnet. Create, mint, and sell with embedded USDC/XLM checkout.',
     routeSegment: 'nft',
   },
   depin: {
     state: 'Gateway live',
-    purpose: 'DEDSEC x402 paid access gateway for protected HTTP routes.',
+    purpose: 'x402 paid-access gateway. Protect any HTTP API with per-request Stellar USDC micro-payments.',
     routeSegment: 'depin',
   },
 };
@@ -131,9 +131,15 @@ export default function Services({ services }: ServicesProps) {
     ? 'Open collections'
     : selectedService?.category === 'depin'
       ? 'Open gateway'
-      : meta?.routeSegment
-        ? 'Open service'
-        : 'Unavailable';
+      : selectedService?.category === 'privacy'
+        ? 'Open Zer0'
+        : selectedService?.category === 'transformation'
+          ? 'Open agent'
+          : selectedService?.category === 'auth'
+            ? 'Open gate'
+            : meta?.routeSegment
+              ? 'Open service'
+              : 'Unavailable';
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -143,7 +149,7 @@ export default function Services({ services }: ServicesProps) {
           Services
         </h1>
         <p className="mt-1 max-w-2xl text-sm text-zinc-500 dark:text-zinc-400">
-          Enable MVP services for this project, then open Zer0, Morph, REQWID, NFTo, or DEDSEC.
+          Web3 infrastructure on Stellar mainnet. Enable services, open dashboards, and build.
         </p>
       </div>
 

@@ -252,28 +252,21 @@ const SIDEBAR_CATEGORIES: Array<{
 }> = [
   {
     id: 'workspace-management',
-    label: 'Workspace Management',
+    label: 'Workspace',
     items: [
       { to: 'overview', label: 'Overview', icon: 'overview' },
       { to: 'projects', label: 'Projects', icon: 'projects' },
       { to: 'team', label: 'Team', icon: 'team' },
       { to: 'credits', label: 'Credits (ZCR)', icon: 'payroll' },
-      { to: 'audit', label: 'Audit Log', icon: 'security' },
-      { to: 'settings', label: 'Settings', icon: 'settings' },
-    ],
-  },
-  {
-    // Full Zer0 nav lives in Zer0Layout sub-sidebar — shell only links into the product.
-    id: 'finance',
-    label: 'Finance',
-    items: [
-      { to: 'zer0', label: 'Zer0', icon: 'privacy' },
     ],
   },
   {
     id: 'services',
-    label: 'Service Catalog',
+    label: 'Services',
     items: [
+      { to: 'zer0', label: 'Zer0', icon: 'privacy' },
+      { to: 'nft', label: 'NFTo', icon: 'nft' },
+      { to: 'depin', label: 'DEDSEC', icon: 'depin' },
       { to: 'services', label: 'Services Manager', icon: 'services' },
     ],
   },
@@ -282,15 +275,18 @@ const SIDEBAR_CATEGORIES: Array<{
     label: 'Agentic Operation',
     items: [
       { to: 'agent', label: 'Morph Agent', icon: 'agent' },
+      { to: 'agent-auth', label: 'REQWID', icon: 'auth' },
       { to: 'memory', label: 'Shared Memory', icon: 'memory' },
     ],
   },
   {
     id: 'security-section',
-    label: 'Security & Insights',
+    label: 'Security & Admin',
     items: [
       { to: 'security', label: 'Security', icon: 'security' },
       { to: 'analytics', label: 'Analytics', icon: 'analytics' },
+      { to: 'audit', label: 'Audit Log', icon: 'security' },
+      { to: 'settings', label: 'Settings', icon: 'settings' },
     ],
   },
 ];
@@ -331,7 +327,7 @@ export default function DashboardLayout() {
     return code ? code.toUpperCase() : null;
   });
   const [expandedCats, setExpandedCats] = useState<Record<string, boolean>>({
-    'workspace-management': true, finance: true, services: true, 'agentic-operation': true, 'security-section': true,
+    'workspace-management': true, services: true, 'agentic-operation': true, 'security-section': true,
     'project-core': true, 'project-finance': true, 'project-services': true, 'project-digital-assets': true,
     'project-resource-gateway': true, 'project-agentic': true, 'project-security': true, 'project-admin': true,
   });
@@ -824,6 +820,13 @@ export default function DashboardLayout() {
 
   const makeNavTo = (section: string) => {
     if (!workspaceId) return '#';
+    if (['nft', 'depin', 'agent-auth'].includes(section)) {
+      const workspaceProjects = projectStore.projects.filter(p => p.workspaceId === workspaceId);
+      if (workspaceProjects.length > 0) {
+        return `/dashboard/w/${workspaceId}/p/${workspaceProjects[0].id}/${section}`;
+      }
+      return `/dashboard/w/${workspaceId}/services`;
+    }
     return `/dashboard/w/${workspaceId}/${section}`;
   };
 
@@ -1278,8 +1281,8 @@ export default function DashboardLayout() {
                       <HelpCircle className="h-4 w-4" />
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-xs font-semibold leading-none text-zinc-855 dark:text-zinc-200">Need help?</span>
-                      <span className="mt-1 block truncate text-[10px] text-zinc-400">Open docs</span>
+                      <span className="block truncate text-xs font-semibold leading-none text-zinc-855 dark:text-zinc-200">Documentation</span>
+                      <span className="mt-1 block truncate text-[10px] text-zinc-400">API, SDK, and guides</span>
                     </span>
                   </span>
                   <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-zinc-400 transition group-hover:text-blue-500" />
