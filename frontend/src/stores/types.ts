@@ -142,7 +142,7 @@ export interface ServiceDefinition {
   id: string;
   name: string;
   description: string;
-  category: 'privacy' | 'transformation' | 'trade' | 'auth' | 'nft' | 'depin';
+  category: 'privacy' | 'transformation' | 'trade' | 'auth' | 'nft' | 'depin' | 'rpc' | 'storage' | 'relay';
   status: 'available' | 'beta' | 'coming_soon';
 }
 

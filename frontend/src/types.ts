@@ -31,7 +31,7 @@ export interface Service {
   description: string;
   progress: number;
   lastActivity: string;
-  category: 'privacy' | 'transformation' | 'trade' | 'auth' | 'nft' | 'depin';
+  category: 'privacy' | 'transformation' | 'trade' | 'auth' | 'nft' | 'depin' | 'rpc' | 'storage' | 'relay';
 }
 
 export interface TeamMember {

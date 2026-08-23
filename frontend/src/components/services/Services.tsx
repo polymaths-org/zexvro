@@ -56,6 +56,21 @@ const serviceMeta: Record<Service['category'], {
     purpose: 'x402 paid-access gateway. Protect any HTTP API with per-request Stellar USDC micro-payments.',
     routeSegment: 'depin',
   },
+  rpc: {
+    state: 'Mainnet live',
+    purpose: 'High-availability Soroban RPC & Horizon node gateway with custom event indexing and sub-second responses.',
+    routeSegment: 'overview',
+  },
+  storage: {
+    state: 'Active',
+    purpose: 'Decentralized IPFS & S3 storage drive for uploading metadata, media, and dApp build artifacts.',
+    routeSegment: 'overview',
+  },
+  relay: {
+    state: 'Relayer ready',
+    purpose: 'Fee-bump transaction relayer allowing developers to sponsor user gas fees with workspace ZCR credits.',
+    routeSegment: 'overview',
+  },
 };
 
 function ServiceBrandIcon({ category, className = '' }: { category: Service['category']; className?: string }) {
