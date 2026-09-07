@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+  <url>
+    <loc>https://zexvro.in/</loc>
+    <lastmod>2026-08-27</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+    <image:image>
+      <image:loc>https://zexvro.in/og-image.png</image:loc>
+      <image:title>ZEXVRO — Web3 Made Simple</image:title>
+      <image:caption>Official ZEXVRO (zexvro.in) brand image — unified Web3 platform for private payments, NFTs, and agent infrastructure.</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://zexvro.in/brand-mark.png</image:loc>
+      <image:title>ZEXVRO logo</image:title>
+      <image:caption>ZEXVRO brand mark — Web3 infrastructure platform at zexvro.in</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://zexvro.in/logo.png</image:loc>
+      <image:title>ZEXVRO symbol</image:title>
+      <image:caption>ZEXVRO logo symbol</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://zexvro.in/logo-transparent.png</image:loc>
+      <image:title>ZEXVRO transparent logo</image:title>
+      <image:caption>ZEXVRO transparent brand mark</image:caption>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://zexvro.in/services/</loc>
+    <lastmod>2026-08-27</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+    <image:image>
+      <image:loc>https://zexvro.in/services/zer0-64.png</image:loc>
+      <image:title>Zer0 — ZEXVRO zero-knowledge privacy service</image:title>
+      <image:caption>Zer0 private payments service by ZEXVRO (zexvro.in)</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://zexvro.in/services/morph-64.png</image:loc>
+      <image:title>Morph — ZEXVRO Web2 to Web3 migration agent</image:title>
+      <image:caption>Morph transformation agent by ZEXVRO (zexvro.in)</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://zexvro.in/services/reqwid-64.png</image:loc>
+      <image:title>REQWID — ZEXVRO agent authentication service</image:title>
+      <image:caption>REQWID human vs agent classification by ZEXVRO (zexvro.in)</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://zexvro.in/services/nfto-64.png</image:loc>
+      <image:title>NFTo — ZEXVRO NFT deployment and checkout</image:title>
+      <image:caption>NFTo NFT tooling by ZEXVRO (zexvro.in)</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://zexvro.in/services/dedsec-64.png</image:loc>
+      <image:title>DEDSEC — ZEXVRO x402 paid API gateway</image:title>
+      <image:caption>DEDSEC paid access gateway by ZEXVRO (zexvro.in)</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://zexvro.in/og-image.png</image:loc>
+      <image:title>ZEXVRO — Web3 Made Simple</image:title>
+      <image:caption>Official ZEXVRO (zexvro.in) brand image</image:caption>
+    </image:image>
+  </url>
+</urlset>

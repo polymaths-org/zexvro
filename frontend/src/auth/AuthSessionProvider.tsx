@@ -15,7 +15,7 @@ import {
 } from './cognito';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ||
-  'https://qkuostruh3.execute-api.us-east-1.amazonaws.com';
+  '';
 
 interface AuthSessionContextValue {
   userSession: UserSession;

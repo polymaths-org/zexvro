@@ -6,13 +6,17 @@ import type { Service } from '../types';
  * Every UI surface (sidebar, services page, landing, docs, agent KB)
  * MUST consume this array. Do NOT hardcode service lists elsewhere.
  *
- * Updated 2026-08-23 to reflect actual production state:
+ * Updated 2026-08-27 (Track A honesty pass):
+ * LIVE (zexvro.in + console + on-chain verifiable):
  * - NFTo: mainnet WASM + App Runner + USDC checkout (ACTIVE)
  * - Zer0: 4 mainnet pool contracts + ZK prover + full product UI (ACTIVE)
  * - DEDSEC: x402 gateway on App Runner + probe dashboard (ACTIVE)
  * - Morph: Lambda chat + CLI + Agentic Ops dashboard (CONFIGURING — agent ready)
  * - REQWID: ECS gate API + Agent Auth page (CONFIGURING — gate ready)
+ * PROPOSED (spec ready, NOT live — planned SCF #46 T2):
+ * - ZEXVRO Node / Storage / Gas Relayer: status 'proposed', progress 10-15
  * - A2A Trade: REMOVED from MVP (not listed)
+ * - ZDB: exploration track, NOT in this catalog (see context.md §6)
  */
 export const serviceCatalog: Service[] = [
   {
@@ -69,30 +73,30 @@ export const serviceCatalog: Service[] = [
     id: 'srv-node-rpc',
     name: 'ZEXVRO Node',
     owner: 'Paris',
-    status: 'active',
-    description: 'High-availability Soroban RPC & Horizon gateway with custom contract event indexing and low-latency node routing.',
-    progress: 90,
-    lastActivity: 'Mainnet & Testnet RPC Proxy Live · 99.9% Uptime',
+    status: 'proposed',
+    description: 'Proposed — high-availability Soroban RPC & Horizon gateway with API-key auth and event indexing. Spec ready, 1-day wrapper.',
+    progress: 15,
+    lastActivity: 'Proposed · spec ready · not yet deployed (planned SCF T2)',
     category: 'rpc',
   },
   {
     id: 'srv-storage-ipfs',
     name: 'ZEXVRO Storage',
     owner: 'Paris',
-    status: 'active',
-    description: 'Decentralized IPFS & S3 storage drive. Upload metadata, dApp assets, and media with instant global CDN links.',
-    progress: 85,
-    lastActivity: 'Pinata IPFS + CloudFront CDN live',
+    status: 'proposed',
+    description: 'Proposed — decentralized IPFS & S3 storage drive. Unified upload endpoint + CDN links. 1-day build on existing Pinata/S3.',
+    progress: 15,
+    lastActivity: 'Proposed · spec ready · not yet deployed (planned SCF T2)',
     category: 'storage',
   },
   {
     id: 'srv-gas-relay',
     name: 'ZEXVRO Gas Relayer',
     owner: 'Paris',
-    status: 'configuring',
-    description: 'Fee-bump transaction sponsor engine. Allow end users to interact with Soroban smart contracts 100% gasless using workspace ZCR credits.',
-    progress: 70,
-    lastActivity: 'Soroban Fee-Bump relayer API ready',
+    status: 'proposed',
+    description: 'Proposed — fee-bump transaction sponsor. Developers spend ZCR to make end-user Soroban calls gasless. 2-day relayer endpoint.',
+    progress: 10,
+    lastActivity: 'Proposed · spec ready · not yet deployed (planned SCF T2)',
     category: 'relay',
   },
 ];

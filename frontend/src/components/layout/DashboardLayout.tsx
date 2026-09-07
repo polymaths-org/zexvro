@@ -41,7 +41,7 @@ import type { WorkspaceRole } from '../../stores/types';
 
 const IS_LOCAL_HOST = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 const API_BASE_URL = import.meta.env.VITE_API_URL ||
-  'https://qkuostruh3.execute-api.us-east-1.amazonaws.com';
+  '';
 const AGENT_CHAT_URL = IS_LOCAL_HOST ? '/api/agent/chat' : `${API_BASE_URL}/api/chat`;
 const SHOULD_CHECK_CLI_STATUS =
   !IS_LOCAL_HOST ||

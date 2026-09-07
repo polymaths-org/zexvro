@@ -328,7 +328,7 @@ function emailFromAuthHeader(req) {
 const PLATFORM_API =
   process.env.VITE_API_URL
   || process.env.PLATFORM_API_URL
-  || 'https://qkuostruh3.execute-api.us-east-1.amazonaws.com';
+  || '';
 
 /** Push accept onto hosted Lambda so owner Dynamo roster updates. */
 async function forwardAcceptToPlatform(req, payload) {

@@ -8,10 +8,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 REGION="${AWS_REGION:-us-east-1}"
 LAMBDA="zexvro-agent-backend"
-API_URL="${VITE_API_URL:-https://qkuostruh3.execute-api.us-east-1.amazonaws.com}"
+API_URL="${VITE_API_URL:-}"
 APP_URL="${VITE_APP_URL:-https://console.zexvro.in}"
-NFT_URL="${VITE_NFT_API_URL:-https://iyk6idmup6.us-east-1.awsapprunner.com}"
-DEPIN_URL="${VITE_DEPIN_API_URL:-https://sr9k3xpmbj.us-east-1.awsapprunner.com}"
+NFT_URL="${VITE_NFT_API_URL:-}"
+DEPIN_URL="${VITE_DEPIN_API_URL:-}"
 # REQWID = Gate (agent-auth). Must be absolute in production — relative /api/agent-auth
 # is only the Vite dev proxy and returns SPA HTML on Cloudflare Pages.
 GATE_URL="${VITE_AGENT_AUTH_API_URL:-https://api.zexvro.in/gate}"

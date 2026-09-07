@@ -35,10 +35,10 @@ jobs:
       # Public Cloudflare account id for ZEXVRO (not a secret).
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID || 'ac51c31a2a40b154a68a40bd5283fae2' }}
       # Same production defaults as scripts/deploy-production.sh
-      VITE_API_URL: ${{ vars.VITE_API_URL || 'https://qkuostruh3.execute-api.us-east-1.amazonaws.com' }}
+      VITE_API_URL: ${{ vars.VITE_API_URL || '' }}
       VITE_APP_URL: ${{ vars.VITE_APP_URL || 'https://console.zexvro.in' }}
-      VITE_NFT_API_URL: ${{ vars.VITE_NFT_API_URL || 'https://iyk6idmup6.us-east-1.awsapprunner.com' }}
-      VITE_DEPIN_API_URL: ${{ vars.VITE_DEPIN_API_URL || 'https://sr9k3xpmbj.us-east-1.awsapprunner.com' }}
+      VITE_NFT_API_URL: ${{ vars.VITE_NFT_API_URL || '' }}
+      VITE_DEPIN_API_URL: ${{ vars.VITE_DEPIN_API_URL || '' }}
       VITE_AGENT_AUTH_API_URL: ${{ vars.VITE_AGENT_AUTH_API_URL || 'https://api.zexvro.in/gate' }}
       CF_PAGES_PROJECT: ${{ vars.CF_PAGES_PROJECT || 'zexvro' }}
 

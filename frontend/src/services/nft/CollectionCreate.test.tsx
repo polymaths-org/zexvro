@@ -7,7 +7,7 @@ import CollectionList from './CollectionList';
 
 const api = vi.hoisted(() => ({
   createNftCollection: vi.fn(),
-  getNftApiBaseUrl: vi.fn(() => 'https://iyk6idmup6.us-east-1.awsapprunner.com'),
+  getNftApiBaseUrl: vi.fn(() => ''),
   getNftServiceHealth: vi.fn(),
   listNftCollections: vi.fn(),
   uploadNftMedia: vi.fn(),

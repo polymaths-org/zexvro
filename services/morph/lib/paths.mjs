@@ -22,7 +22,7 @@ export function defaultApiBase() {
   return (
     process.env.ZEXVRO_API_URL ||
     process.env.VITE_API_URL ||
-    'https://qkuostruh3.execute-api.us-east-1.amazonaws.com'
+    '' // AWS DECOUPLED 2026-09-02 — use same-origin/local, no API Gateway
   ).replace(/\/$/, '')
 }
 
@@ -38,7 +38,7 @@ export function defaultNftUrl() {
   return (
     process.env.ZEXVRO_NFT_URL ||
     process.env.NFT_API_BASE ||
-    'https://iyk6idmup6.us-east-1.awsapprunner.com'
+    '' // AWS DECOUPLED — local /api/nft via Vite
   ).replace(/\/$/, '')
 }
 
@@ -46,6 +46,6 @@ export function defaultDepinUrl() {
   return (
     process.env.ZEXVRO_DEPIN_URL ||
     process.env.VITE_DEPIN_API_URL ||
-    'https://sr9k3xpmbj.us-east-1.awsapprunner.com'
+    '' // AWS DECOUPLED — local /api/depin
   ).replace(/\/$/, '')
 }

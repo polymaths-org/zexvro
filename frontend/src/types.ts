@@ -27,7 +27,7 @@ export interface Service {
   id: string;
   name: string;
   owner: string;
-  status: 'active' | 'configuring' | 'inactive';
+  status: 'active' | 'configuring' | 'inactive' | 'proposed';
   description: string;
   progress: number;
   lastActivity: string;

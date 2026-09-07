@@ -14,14 +14,13 @@ const IS_LOCAL =
   typeof window !== 'undefined'
   && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
-const PROD_PLATFORM_API = 'https://qkuostruh3.execute-api.us-east-1.amazonaws.com';
+const PROD_PLATFORM_API = ''; // AWS DECOUPLED 2026-09-02 — no API Gateway; use same-origin Vite proxy
 
-/** Platform backend (workspaces, memory, …) — never localhost:8080. */
+/** Platform backend — AWS-free. Returns "" for same-origin (/api/* via Vite) when VITE_API_URL is empty. */
 export function platformApiBase(): string {
   const fromEnv = (import.meta.env.VITE_API_URL as string | undefined)?.trim();
   if (fromEnv) return fromEnv.replace(/\/$/, '');
-  // Local mock on 8080 is unused; point at hosted API Gateway.
-  return PROD_PLATFORM_API;
+  return PROD_PLATFORM_API; // "" => same-origin, no AWS
 }
 
 /**

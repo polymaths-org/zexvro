@@ -112,7 +112,7 @@ function relativeTime(ts: number): string {
 
 const IS_LOCAL_HOST = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 const API_BASE_URL =
-  import.meta.env.VITE_API_URL || 'https://qkuostruh3.execute-api.us-east-1.amazonaws.com';
+  import.meta.env.VITE_API_URL || '';
 const AGENT_CHAT_URL = IS_LOCAL_HOST ? '/api/agent/chat' : `${API_BASE_URL}/api/chat`;
 
 export default function AgentStudio({ cliConnected = false, cliLastActive = null }: AgentStudioProps) {

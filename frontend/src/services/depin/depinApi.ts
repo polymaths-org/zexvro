@@ -1,4 +1,4 @@
-const HOSTED_DEPIN_API = 'https://sr9k3xpmbj.us-east-1.awsapprunner.com';
+const HOSTED_DEPIN_API = '';
 const configuredDepinApi = (import.meta.env.VITE_DEPIN_API_URL || '').trim().replace(/\/$/, '');
 // Prefer explicit env; fall back to hosted App Runner so Pages/local never hit a dead proxy.
 const DEPIN_API_BASE = configuredDepinApi || HOSTED_DEPIN_API;

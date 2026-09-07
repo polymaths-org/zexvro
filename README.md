@@ -44,7 +44,10 @@ This repository currently holds the project foundation:
 - `docs/marketing.md` - marketing kit brief, service one-liners, motion inventory.
 - `docs/roadmap-unified-paas.md` - the full plan/roadmap: unify the platform base (registry, gateway, identity, credits, workspace, audit), then programs/team/first client.
 - `frontend/` - Vite + React frontend workspace (dashboard + in-app welcome).
-- `landing/zexvro/` - standalone public landing site.
+- `landing/zexvro-main/` - standalone public landing site (main ZEXVRO brand site).
+- `landing/morph/` - MORPH landing site (host on `morph.zexvro.in`).
+- `landing/zer0/` - Zer0 landing site (host on `zer0.zexvro.in`).
+- `landing/zdb/` - ZDB landing site (host on `zdb.zexvro.in`).
 - `frontend/public/marketing/` - product cinema and brand motion assets.
 - `presentation/` - pitch decks (`ppt/`), masters (`video/`), previews (`demo-video/`), sources (`imp/`).
 - `assets/brand/` - logo, typo logo, and brand design assets.

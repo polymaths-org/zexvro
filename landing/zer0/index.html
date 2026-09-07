@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zer0 — Private by default. Verifiable when it matters. | ZEXVRO</title>
+<meta name="description" content="Zer0 is ZEXVRO's zero-knowledge privacy pool for business payments and proofs. Dashboard, pay flows, ZK proofs, and stealth tooling — enterprise privacy without the jargon.">
+<meta name="robots" content="index, follow">
+<meta name="author" content="ZEXVRO">
+<link rel="canonical" href="https://zer0.zexvro.in/">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='24' font-size='24'>0</text></svg>">
+<meta name="theme-color" content="#050505">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Zer0 by ZEXVRO">
+<meta property="og:url" content="https://zer0.zexvro.in/">
+<meta property="og:title" content="Zer0 — Private by default. Verifiable when it matters.">
+<meta property="og:description" content="Zero-knowledge privacy pool for business payments and proofs.">
+<meta property="og:image" content="https://zer0.zexvro.in/assets/zer0.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="628">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@zexvro">
+<meta name="twitter:title" content="Zer0 — Private by default. Verifiable when it matters.">
+<meta name="twitter:description" content="ZEXVRO's zero-knowledge privacy pool for business payments and proofs.">
+<meta name="twitter:image" content="https://zer0.zexvro.in/assets/zer0.png">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Zer0",
+  "alternateName": "ZEXVRO Zer0",
+  "applicationCategory": "BusinessApplication",
+  "operatingSystem": "Web",
+  "url": "https://zer0.zexvro.in/",
+  "description": "ZEXVRO's zero-knowledge privacy pool for business payments and proofs. Dashboards, pay flows, ZK proofs, and stealth tooling — enterprise privacy without the jargon.",
+  "publisher": {
+    "@type": "Organization",
+    "name": "ZEXVRO",
+    "url": "https://zexvro.in"
+  },
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  }
+}
+</script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#050505;--surface:#0A0A0B;--raised:#111113;--hover:#18181B;
+  --border:#27272A;--border-strong:#3F3F46;
+  --fg:#FAFAFA;--sec:#A1A1AA;--muted:#71717A;
+  --accent:#fff;--accent-text:#050505;
+  --violet:#7C3AED;--violet-soft:rgba(124,58,237,.14);
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--fg);font-family:'Inter','SF Pro','Segoe UI',-apple-system,sans-serif;line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+::selection{background:var(--violet);color:#fff}
+a{color:var(--sec);text-decoration:none;transition:color .18s}
+a:hover{color:var(--fg)}
+.container{max-width:1120px;margin:0 auto;padding:0 28px}
+
+/* ── nav ── */
+.nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(5,5,5,.85);backdrop-filter:blur(14px);border-bottom:1px solid var(--border)}
+.nav-inner{display:flex;align-items:center;justify-content:space-between;height:64px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:2px;font-size:15px;color:var(--fg)}
+.brand .mark{width:26px;height:26px;border-radius:50%;object-fit:cover;flex:0 0 26px}
+.brand em{font-style:normal;color:var(--muted);font-weight:400}
+.nav-links{display:flex;align-items:center;gap:28px}
+.nav-links a{font-size:13px;color:var(--sec)}
+.nav-links .cta{background:var(--fg);color:var(--accent-text);padding:8px 16px;border-radius:8px;font-weight:600}
+.nav-links .cta:hover{background:var(--violet);color:#fff}
+
+/* ── hero ── */
+.hero{position:relative;min-height:92vh;display:flex;align-items:center;padding:140px 0 80px;overflow:hidden}
+.hero::before{content:"";position:absolute;inset:0;background:
+  radial-gradient(640px 440px at 75% 15%,rgba(124,58,237,.14),transparent 60%),
+  radial-gradient(700px 500px at 10% 85%,rgba(255,255,255,.04),transparent 60%);pointer-events:none}
+.grid-overlay{position:absolute;inset:0;background-image:
+  linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),
+  linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px);background-size:52px 52px;mask-image:radial-gradient(ellipse 70% 60% at 70% 30%,#000,transparent);-webkit-mask-image:radial-gradient(ellipse 70% 60% at 70% 30%,#000,transparent);pointer-events:none}
+.hero-grid{position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;max-width:760px;margin:0 auto}
+.hero-logo{width:132px;height:132px;object-fit:contain;margin-bottom:28px;display:block}
+.badge{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border);background:var(--raised);color:var(--sec);font-size:12px;padding:6px 12px;border-radius:100px;margin-bottom:22px}
+h1{font-size:clamp(40px,6vw,66px);font-weight:800;letter-spacing:-2px;line-height:1.05;margin-bottom:22px}
+h1 .grad{background:linear-gradient(180deg,#A855F7,var(--violet) 55%,#6D28D9);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero-sub{color:var(--sec);font-size:clamp(16px,2vw,19px);max-width:560px;margin:0 auto 32px}
+.hero-actions{display:flex;gap:14px;flex-wrap:wrap;justify-content:center}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:13px 22px;border-radius:10px;font-size:15px;font-weight:600;border:1px solid var(--border);cursor:pointer;transition:all .18s}
+.btn-primary{background:var(--fg);color:var(--accent-text)}
+.btn-primary:hover{background:var(--violet);border-color:var(--violet);color:#fff}
+.btn-ghost{background:transparent;color:var(--fg)}
+.btn-ghost:hover{background:var(--hover);border-color:var(--border-strong)}
+
+/* ── strip ── */
+.strip{padding:40px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.strip-inner{display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap;color:var(--muted);font-size:13px}
+.strip-inner span{white-space:nowrap;letter-spacing:1px;text-transform:uppercase;opacity:.7}
+
+/* ── sections ── */
+.section{padding:96px 0}
+.label{color:var(--violet);font-size:12px;letter-spacing:2.5px;text-transform:uppercase;margin-bottom:14px;font-weight:600}
+h2{font-size:clamp(28px,4vw,40px);font-weight:800;letter-spacing:-1px;margin-bottom:16px;line-height:1.1}
+.lead{color:var(--sec);font-size:16px;max-width:640px;margin-bottom:48px}
+.feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.feat{background:var(--raised);border:1px solid var(--border);border-radius:14px;padding:28px;transition:border-color .2s,transform .2s}
+.feat:hover{border-color:var(--border-strong);transform:translateY(-3px)}
+.feat .ic{width:42px;height:42px;border-radius:10px;background:var(--violet-soft);display:flex;align-items:center;justify-content:center;margin-bottom:18px}
+.feat .ic svg{width:22px;height:22px;stroke:var(--violet)}
+.feat h3{font-size:17px;font-weight:700;margin-bottom:8px}
+.feat p{color:var(--sec);font-size:14px}
+
+/* proof / how */
+.proof{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.proof .step{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:22px;position:relative}
+.proof .num{font-size:12px;color:var(--violet);font-weight:700;letter-spacing:1px;margin-bottom:10px}
+.proof h4{font-size:15px;margin-bottom:6px}
+.proof p{color:var(--muted);font-size:13px}
+
+/* two col */
+.two{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center}
+.two .list{display:flex;flex-direction:column;gap:16px}
+.two .li{display:flex;gap:12px;align-items:flex-start}
+.two .li .c{width:22px;height:22px;flex:0 0 22px;border-radius:50%;background:var(--violet-soft);display:flex;align-items:center;justify-content:center;color:var(--violet)}
+.two .li b{display:block;font-size:15px;margin-bottom:2px}
+.two .li p{color:var(--muted);font-size:13px}
+
+/* cta */
+.cta{padding:96px 0;text-align:center;position:relative;overflow:hidden}
+.cta::before{content:"";position:absolute;inset:0;background:radial-gradient(600px 300px at 50% 100%,rgba(124,58,237,.15),transparent 60%);pointer-events:none}
+.cta h2{max-width:640px;margin:0 auto 20px}
+.cta .sub{color:var(--sec);max-width:520px;margin:0 auto 36px}
+.cta .btn{font-size:16px;padding:15px 28px}
+
+/* footer */
+footer{position:relative;overflow:hidden;border-top:1px solid var(--border);padding:72px 0 40px;color:var(--muted);font-size:13px;background:#0A0A0B}
+.foot-glow{position:absolute;inset:0;pointer-events:none;background:radial-gradient(700px 300px at 50% 120%,rgba(124,58,237,.14),transparent 60%)}
+.foot-grid{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:40px;position:relative;z-index:1}
+.foot-brand{display:flex;flex-direction:column;gap:16px}
+.foot-brand .brand{font-size:22px;letter-spacing:3px;color:var(--fg)}
+.foot-brand .brand .mark{width:30px;height:30px;flex:0 0 30px}
+.foot-brand p{max-width:280px;color:var(--sec);line-height:1.7}
+.foot-col h5{color:var(--fg);font-size:12px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:18px}
+.foot-col a{display:block;color:var(--muted);margin-bottom:12px;transition:color .15s}
+.foot-col a:hover{color:var(--violet)}
+.foot-bottom{margin-top:56px;padding-top:28px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;position:relative;z-index:1}
+.foot-bottom .mark{color:var(--fg);font-weight:800;letter-spacing:4px;font-size:15px}
+.foot-bottom .mark span{color:var(--muted)}
+
+@media(max-width:880px){
+  .hero-grid{grid-template-columns:1fr;gap:60px}
+  .feat-grid,.proof,.two{grid-template-columns:1fr}
+  .foot-grid{grid-template-columns:1fr 1fr;gap:32px}
+  .foot-brand{grid-column:1 / -1}
+  .strip-inner{justify-content:center;gap:16px}
+  .nav-links{display:none}
+}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="container nav-inner">
+    <a class="brand" href="/"><img class="mark" src="assets/zer0.png" alt="Zer0"><span>ZER0 <em>/ privacy</em></span></a>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#how">How it works</a>
+      <a href="#getstarted">Get started</a>
+      <a class="cta" href="https://zexvro.in">Back to ZEXVRO</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="grid-overlay"></div>
+  <div class="container hero-grid">
+    <img class="hero-logo" src="assets/zer0.png" alt="Zer0 logo">
+    <span class="badge">ZEXVRO Privacy Pool</span>
+    <h1>Private by default. <span class="grad">Verifiable</span> when it matters.</h1>
+    <p class="hero-sub">Zer0 is zero-knowledge privacy for business payments. Dashboards, pay flows, ZK proofs, and stealth tooling — enterprise privacy without the jargon.</p>
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="#getstarted">Start with Zer0</a>
+      <a class="btn btn-ghost" href="#how">How it works →</a>
+    </div>
+  </div>
+</header>
+
+<div class="strip">
+  <div class="container strip-inner">
+    <span>ZK proofs</span>
+    <span>Stealth addresses</span>
+    <span>Pay flows</span>
+    <span>Dashboards</span>
+    <span>Compliance view-keys</span>
+    <span>Private pools</span>
+  </div>
+</div>
+
+<section class="section" id="features">
+  <div class="container">
+    <div class="label">What Zer0 gives you</div>
+    <h2>Web3 settlement without public exposure</h2>
+    <p class="lead">Zero-knowledge privacy for teams that need blockchain settlement without leaking the ledger. Private when it should be, provable when it must be.</p>
+    <div class="feat-grid">
+      <div class="feat">
+        <div class="ic"><svg fill="none" stroke-width="2" viewBox="0 0 24 24"><path d="M12 3l8 4v6c0 4-3 7-8 8-5-1-8-4-8-8V7l8-4z"/><path d="M9 12l2 2 4-4"/></svg></div>
+        <h3>ZK proofs</h3>
+        <p>Verify payments and state without revealing the underlying data — prove enough, expose nothing.</p>
+      </div>
+      <div class="feat">
+        <div class="ic"><svg fill="none" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+        <h3>Stealth tooling</h3>
+        <p>Stealth addresses and fresh destinations per payment, so business flows stay private by design.</p>
+      </div>
+      <div class="feat">
+        <div class="ic"><svg fill="none" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z"/><path d="M14 2v6h6"/></svg></div>
+        <h3>Dashboards</h3>
+        <p>A clear console for your pools, pay flows, and proofs — without shipping your ledger to the cloud.</p>
+      </div>
+      <div class="feat">
+        <div class="ic"><svg fill="none" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></div>
+        <h3>Pay flows</h3>
+        <p>Business payments that settle on-chain yet stay confidential — invoices and payouts that don't expose the numbers.</p>
+      </div>
+      <div class="feat">
+        <div class="ic"><svg fill="none" stroke-width="2" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg></div>
+        <h3>View keys</h3>
+        <p>Compliance view-keys keep the pool auditable without leaking the ledger — private, but not opaque.</p>
+      </div>
+      <div class="feat">
+        <div class="ic"><svg fill="none" stroke-width="2" viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 9v11h14V9"/><path d="M9 20v-6h6v6"/></svg></div>
+        <h3>Private pools</h3>
+        <p>Enterprise-grade privacy for teams that need Web3 settlement without public exposure — no jargon required.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="how" style="padding-top:0">
+  <div class="container">
+    <div class="label">How it works</div>
+    <h2>Privacy and proof, together</h2>
+    <p class="lead">Zero-knowledge cryptography keeps your business private by default — and lets you prove the specifics only when it matters.</p>
+    <div class="proof">
+      <div class="step"><div class="num">01 · SHIELD</div><h4>Deposit privately</h4><p>Funds enter a Zer0 privacy pool. The ledger sees a shielded transaction, not your business details.</p></div>
+      <div class="step"><div class="num">02 · SETTLE</div><h4>Pay confidentially</h4><p>Make payments with stealth addresses and ZK proofs — settlement without public exposure.</p></div>
+      <div class="step"><div class="num">03 · PROVE</div><h4>Audit on demand</h4><p>Compliance view-keys reveal exactly what's needed to auditors and regulators — and nothing more.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="getstarted" style="padding-top:0">
+  <div class="container">
+    <div class="two">
+      <div>
+        <div class="label">Why Zer0</div>
+        <h2>Private for your team. Provable for your business.</h2>
+        <div class="list">
+          <div class="li"><span class="c">✓</span><div><b>Private by default</b><p>Business payments don't end up on a public ledger for anyone to scan.</p></div></div>
+          <div class="li"><span class="c">✓</span><div><b>Verifiable when it matters</b><p>ZK proofs and compliance view-keys keep it auditable without leaking the ledger.</p></div></div>
+          <div class="li"><span class="c">✓</span><div><b>No crypto jargon</b><p>Dashboards and pay flows are built for finance and ops teams, not chain maximalists.</p></div></div>
+        </div>
+      </div>
+      <div>
+        <div class="label">Use it with ZEXVRO</div>
+        <h2>Part of the platform</h2>
+        <div class="list">
+          <div class="li"><span class="c">→</span><div><b>With Morph</b><p>Migrate existing payment and auth flows onto Zer0 privacy rails in guided steps.</p></div></div>
+          <div class="li"><span class="c">→</span><div><b>On Stellar</b><p>Settles on Stellar Soroban — the budgets and rails ZEXVRO is built around.</p></div></div>
+          <div class="li"><span class="c">→</span><div><b>Agent-ready</b><p>Zer0 slots into ZEXVRO's private, verifiable, agent-ready platform.</p></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="cta">
+  <div class="container">
+    <div class="label">Get started</div>
+    <h2>Give your business payments real privacy</h2>
+    <p class="sub">Private pools, stealth transactions, and ZK proofs — verifiable when it matters, leak-proof by default.</p>
+    <a class="btn btn-primary" href="https://zexvro.in">Get started with ZEXVRO</a>
+  </div>
+</section>
+
+<footer>
+  <div class="foot-glow"></div>
+  <div class="container">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <a class="brand" href="/"><img class="mark" src="assets/zer0.png" alt="Zer0">ZER0</a>
+        <p>ZEXVRO's zero-knowledge privacy pool for business payments and proofs. Private by default, verifiable when it matters.</p>
+      </div>
+      <div class="foot-col">
+        <h5>Product</h5>
+        <a href="#features">Features</a>
+        <a href="#how">How it works</a>
+        <a href="#getstarted">Get started</a>
+        <a href="https://zexvro.in">ZEXVRO</a>
+      </div>
+      <div class="foot-col">
+        <h5>Resources</h5>
+        <a href="https://github.com/zexvro">GitHub</a>
+        <a href="https://zexvro.in">Docs</a>
+        <a href="https://zexvro.in">ZK reference</a>
+        <a href="https://zexvro.in">Status</a>
+      </div>
+      <div class="foot-col">
+        <h5>Company</h5>
+        <a href="https://zexvro.in">About ZEXVRO</a>
+        <a href="https://zexvro.in">Contact</a>
+        <a href="https://zexvro.in">Privacy</a>
+        <a href="https://zexvro.in">Terms</a>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <div class="mark">ZER0 <span>· by ZEXVRO</span></div>
+      <div>© <span id="yr"></span> ZEXVRO · All rights reserved</div>
+    </div>
+  </div>
+</footer>
+
+<script>
+document.getElementById('yr').textContent = new Date().getFullYear();
+</script>
+</body>
+</html>

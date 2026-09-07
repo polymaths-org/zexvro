@@ -56,22 +56,24 @@ These foundational services address absolute developer needs and can be shipped 
 
 ## Part 2: Complete ZEXVRO Service Catalog
 
+> **Honesty note (2026-08-27):** Tier 1 below is **Proposed, not live**. `zexvro.in` correctly shows only the 5 Tier 2 flagships; console `serviceCatalog.ts` marks Tier 1 as `proposed` until the 1-2 day wrappers are actually deployed. Handbook requires claim-safe status.
+
 ```
 +-----------------------------------------------------------------------------------+
 |                           ZEXVRO DEVELOPER PLATFORM                               |
 +-----------------------------------------------------------------------------------+
 |                                                                                   |
-|  [ TIER 1: FOUNDATIONAL CORE INFRASTRUCTURE ]                                     |
-|  * ZEXVRO Node (RPC & Indexer) [ACTIVE] * ZEXVRO Storage (IPFS/S3 Drive) [ACTIVE] |
-|  * ZEXVRO Relay (Gas Tank) [CONFIGURING] * ZEXVRO Auth (Social & Passkey)         |
-|  * ZEXVRO Data (Serverless SQL & State)  * ZEXVRO Functions (Edge Serverless)     |
+|  [ TIER 1: FOUNDATIONAL CORE INFRASTRUCTURE — PROPOSED ]                          |
+|  * ZEXVRO Node (RPC & Indexer) [PROPOSED] * ZEXVRO Storage (IPFS/S3 Drive) [PROPOSED] |
+|  * ZEXVRO Relay (Gas Tank) [PROPOSED] * ZEXVRO Auth (Social & Passkey) [PROPOSED] |
+|  * ZEXVRO Data (Serverless SQL & State) [PROPOSED]  * ZEXVRO Functions (Edge) [PROPOSED] |
 |                                                                                   |
-|  [ TIER 2: SPECIALIZED INNOVATION PRIMITIVES ]                                    |
+|  [ TIER 2: SPECIALIZED INNOVATION PRIMITIVES — LIVE + CONFIGURING ]               |
 |  * Zer0 (ZK Stealth Payments) [ACTIVE]  * Morph (AI Dev Agent Studio) [CONFIG]    |
 |  * REQWID (Bot Security/Auth) [CONFIG]  * NFTo (Soroban Asset Studio) [ACTIVE]    |
 |  * DEDSEC (x402 Micropayment) [ACTIVE]                                            |
 |                                                                                   |
-|  [ TIER 3: INTERNAL PLATFORM CONTROL PLANE ]                                      |
+|  [ TIER 3: INTERNAL PLATFORM CONTROL PLANE — INTERNAL (not user-facing) ]         |
 |  * zexvro-events   * zexvro-telemetry  * zexvro-vault                          |
 |  * zexvro-zk-queue * zexvro-metering   * zexvro-notify                         |
 |                                                                                   |
@@ -87,9 +89,9 @@ These foundational services address absolute developer needs and can be shipped 
 | **REQWID** | `auth` | **Configuring** | Dual-channel human/agent capability gate and anti-farm verification. |
 | **NFTo** | `nft` | **Active (Mainnet)** | Complete Soroban NFT deployment, collection creation, minting & checkout SDK. |
 | **DEDSEC** | `depin` | **Active (Gateway)** | Economic edge gateway turning HTTP API endpoints into pay-per-request USDC resources. |
-| **ZEXVRO Node** | `rpc` | **Active (MVP)** | High-availability Soroban RPC & Horizon gateway with custom contract event indexing. |
-| **ZEXVRO Storage** | `storage` | **Active (MVP)** | S3 & IPFS decentralized storage drive with global CDN links. |
-| **ZEXVRO Gas Relayer** | `relay` | **Configuring (MVP)** | Sponsored transaction relayer engine for 100% gasless dApp user onboarding. |
+| **ZEXVRO Node** | `rpc` | **Proposed (SCF T2)** | High-availability Soroban RPC & Horizon gateway — 1-day wrapper, spec ready. |
+| **ZEXVRO Storage** | `storage` | **Proposed (SCF T2)** | S3 & IPFS drive — 1-day build on existing Pinata/S3 bindings. |
+| **ZEXVRO Gas Relayer** | `relay` | **Proposed (SCF T2)** | Sponsored fee-bump relayer for gasless Soroban calls — 2-day relayer endpoint. |
 
 ---
 
@@ -120,18 +122,20 @@ They allow us to capture developers immediately with essential, everyday develop
 
 ## Part 5: Implementation Roadmap
 
+> Roadmap is **proposed timeline for SCF #46**. Tier 1 was prematurely marked `done` — corrected to `planned`.
+
 ```mermaid
 gantt
-    title ZEXVRO Complete Platform Roadmap
+    title ZEXVRO Complete Platform Roadmap (Proposed — SCF #46)
     dateFormat  YYYY-MM-DD
-    section Phase A (Fast MVPs)
-    ZEXVRO Node RPC Gateway & Storage Drive :done, p1, 2026-08-20, 2026-08-23
-    ZEXVRO Gas Relayer & Vault Keys         :active, p2, 2026-08-24, 2026-09-05
+    section Phase A (Fast MVPs - Proposed)
+    ZEXVRO Node RPC Gateway & Storage Drive :p1, 2026-09-15, 2026-09-18
+    ZEXVRO Gas Relayer & Vault Keys         :p2, 2026-09-18, 2026-09-25
     section Phase B (Events & Metering)
-    zexvro-events & zexvro-metering          :p3, 2026-09-06, 2026-09-25
-    zexvro-telemetry & Notification Hub     :p4, 2026-09-26, 2026-10-15
+    zexvro-events & zexvro-metering          :p3, 2026-09-26, 2026-10-15
+    zexvro-telemetry & Notification Hub     :p4, 2026-10-16, 2026-11-05
     section Phase C (Advanced Scale)
-    zexvro-zk-queue WASM Prover Pool         :p5, 2026-10-16, 2026-11-05
+    zexvro-zk-queue WASM Prover Pool         :p5, 2026-11-06, 2026-11-30
 ```
 
 ---

@@ -12,7 +12,7 @@
     />
     <meta
       name="keywords"
-      content="Zexvro, ZEXVRO, Web3 platform, blockchain infrastructure, crypto payments, NFT tooling, wallet infrastructure, onchain payments, dApp infrastructure"
+      content="ZEXVRO, Zexvro, Zexvro Web3, Zexvro platform, zexvro.in, Web3 platform, blockchain infrastructure, crypto payments, NFT tooling, wallet infrastructure, onchain payments, dApp infrastructure, zero-knowledge privacy, Web2 to Web3, agent infrastructure"
     />
     <meta name="author" content="Zexvro" />
     <meta name="publisher" content="Zexvro" />
@@ -25,14 +25,21 @@
     <meta name="msapplication-TileColor" content="#000000" />
     <meta name="color-scheme" content="dark" />
     <meta name="format-detection" content="telephone=no" />
-    <meta name="application-name" content="Zexvro" />
-    <meta name="apple-mobile-web-app-title" content="Zexvro" />
+    <meta name="apple-mobile-web-app-title" content="ZEXVRO" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="rating" content="general" />
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     <meta name="geo.region" content="IN" />
+
+    <!-- Brand disambiguation: fight autocorrect from "zexvro" → "zexvdo" or "zero" -->
+    <meta name="application-name" content="ZEXVRO" />
+    <meta name="og:brand" content="ZEXVRO" />
+    <meta name="msapplication-TileImage" content="/icons/android-chrome-192x192-v2.png" />
+
+    <!-- Google Search Console verification -->
+    <meta name="google-site-verification" content="zDE9ZMzinRZY3DrpILi3zph578-s3d0h0y9S2k4miBY" />
 
     <!-- Default canonical; route-aware script below swaps it for /services -->
     <link rel="canonical" href="https://zexvro.in/" />
@@ -109,7 +116,7 @@
 
     <!-- Open Graph — 1200×630 social card (not raw logo) -->
     <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="Zexvro" />
+    <meta property="og:site_name" content="ZEXVRO" />
     <meta property="og:locale" content="en_US" />
     <meta property="og:url" content="https://zexvro.in/" />
     <meta property="og:title" content="ZEXVRO — Web3 Made Simple" />
@@ -122,7 +129,7 @@
     <meta property="og:image:type" content="image/png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="Zexvro — Web3 Made Simple" />
+    <meta property="og:image:alt" content="ZEXVRO — Web3 Made Simple | zexvro.in" />
     <meta property="og:determiner" content="the" />
 
     <!-- Twitter / X -->
@@ -136,9 +143,9 @@
       content="Private payments, NFTs, and agent-ready Web3 infrastructure that feels like normal software. Official site: zexvro.in."
     />
     <meta name="twitter:image" content="https://zexvro.in/og-image.png?v=20260724" />
-    <meta name="twitter:image:alt" content="Zexvro — Web3 Made Simple" />
+    <meta name="twitter:image:alt" content="ZEXVRO — Web3 Made Simple | zexvro.in" />
 
-    <!-- Structured data: brand entity (Zexvro ≠ ZERO) -->
+    <!-- Structured data: brand entity + Sitelinks SearchBox + FAQ -->
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -146,9 +153,9 @@
           {
             "@type": "Organization",
             "@id": "https://zexvro.in/#organization",
-            "name": "Zexvro",
-            "legalName": "Zexvro",
-            "alternateName": ["ZEXVRO", "Zexvro Web3", "Zexvro Platform", "zexvro.in"],
+            "name": "ZEXVRO",
+            "legalName": "ZEXVRO",
+            "alternateName": ["Zexvro", "Zexvro Web3", "Zexvro Platform", "zexvro.in", "ZEXVRO Web3", "ZEXVRO Platform"],
             "url": "https://zexvro.in/",
             "logo": {
               "@type": "ImageObject",
@@ -157,20 +164,22 @@
               "contentUrl": "https://zexvro.in/brand-mark.png",
               "width": 1200,
               "height": 1200,
-              "caption": "Zexvro logo",
+              "caption": "ZEXVRO logo — Web3 infrastructure platform",
               "inLanguage": "en"
             },
             "image": [
               "https://zexvro.in/og-image.png",
               "https://zexvro.in/brand-mark.png"
             ],
-            "description": "Zexvro (ZEXVRO) is a Web3 infrastructure company. Launch wallets, crypto payments, and NFT tooling without gas, chains, or stack noise. Official site: zexvro.in.",
+            "description": "ZEXVRO (spelled Z-E-X-V-R-O) is a unified Web3 PaaS. Private payments, NFT tooling, agent infrastructure, and Web2→Web3 migration. Official site: zexvro.in.",
             "slogan": "Web3 Made Simple",
             "foundingDate": "2024",
             "areaServed": "Worldwide",
             "knowsAbout": [
               "Web3",
               "blockchain",
+              "Web3 platform",
+              "ZEXVRO",
               "crypto payments",
               "NFT minting",
               "wallet infrastructure",
@@ -178,7 +187,8 @@
               "zero-knowledge privacy",
               "Web2 to Web3 migration",
               "human vs agent classification",
-              "x402 paid API access"
+              "x402 paid API access",
+              "Stellar blockchain"
             ],
             "hasOfferCatalog": {
               "@type": "OfferCatalog",
@@ -207,22 +217,30 @@
           {
             "@type": "Brand",
             "@id": "https://zexvro.in/#brand",
-            "name": "Zexvro",
-            "alternateName": ["ZEXVRO", "Zexvro Web3"],
+            "name": "ZEXVRO",
+            "alternateName": ["Zexvro", "Zexvro Web3", "ZEXVRO Web3"],
             "url": "https://zexvro.in/",
             "logo": "https://zexvro.in/brand-mark.png",
             "slogan": "Web3 Made Simple",
-            "description": "Zexvro is the brand name for a Web3 infrastructure platform. Spelled Z-E-X-V-R-O (Zexvro / ZEXVRO), not ZERO."
+            "description": "ZEXVRO is a unified Web3 platform-as-a-service brand. Spelled Z-E-X-V-R-O (ZEXVRO / Zexvro). The official website is zexvro.in."
           },
           {
             "@type": "WebSite",
             "@id": "https://zexvro.in/#website",
             "url": "https://zexvro.in/",
-            "name": "Zexvro",
-            "alternateName": ["ZEXVRO", "Zexvro Web3"],
-            "description": "Official website of Zexvro (ZEXVRO) — Web3 platform to connect, pay, mint, and scale without stack noise.",
+            "name": "ZEXVRO",
+            "alternateName": ["Zexvro", "Zexvro Web3", "ZEXVRO Web3 Platform"],
+            "description": "Official website of ZEXVRO — unified Web3 PaaS for private payments, NFT tooling, and agent-ready infrastructure.",
             "publisher": { "@id": "https://zexvro.in/#organization" },
-            "inLanguage": "en"
+            "inLanguage": "en",
+            "potentialAction": {
+              "@type": "SearchAction",
+              "target": {
+                "@type": "EntryPoint",
+                "urlTemplate": "https://zexvro.in/?q={search_term_string}"
+              },
+              "query-input": "required name=search_term_string"
+            }
           },
           {
             "@type": "WebPage",
@@ -231,7 +249,7 @@
             "name": "ZEXVRO — Web3 Made Simple | Private Payments, NFTs & Agent Infrastructure",
             "isPartOf": { "@id": "https://zexvro.in/#website" },
             "about": { "@id": "https://zexvro.in/#organization" },
-            "description": "ZEXVRO makes shifting your business to Web3 simple. Launch wallets, payments, and NFT tooling without drowning in the stack.",
+            "description": "ZEXVRO (zexvro.in) makes shifting your business to Web3 simple. Private payments, NFTs, and agent-ready infrastructure without stack noise.",
             "primaryImageOfPage": {
               "@type": "ImageObject",
               "url": "https://zexvro.in/og-image.png",
@@ -239,7 +257,7 @@
               "height": 630
             },
             "inLanguage": "en",
-            "dateModified": "2026-08-22"
+            "dateModified": "2026-08-27"
           },
           {
             "@type": "CollectionPage",
@@ -248,20 +266,20 @@
             "name": "ZEXVRO Service Catalog — Zer0, Morph, REQWID, NFTo & DEDSEC",
             "isPartOf": { "@id": "https://zexvro.in/#website" },
             "about": { "@id": "https://zexvro.in/#organization" },
-            "description": "The full ZEXVRO service catalog: what each service does, who it is for, and why teams use it.",
+            "description": "The full ZEXVRO (zexvro.in) service catalog: Zer0, Morph, REQWID, NFTo, DEDSEC — what each does, who it is for, and why teams use it.",
             "inLanguage": "en",
-            "dateModified": "2026-08-22"
+            "dateModified": "2026-08-27"
           },
           {
             "@type": "SoftwareApplication",
-            "name": "Zexvro",
-            "alternateName": ["ZEXVRO", "Zexvro Console"],
+            "name": "ZEXVRO Console",
+            "alternateName": ["ZEXVRO", "Zexvro", "Zexvro Console"],
             "applicationCategory": "BusinessApplication",
             "applicationSubCategory": "Web3 Infrastructure",
             "operatingSystem": "Web",
             "url": "https://console.zexvro.in",
             "image": "https://zexvro.in/og-image.png",
-            "description": "Zexvro Web3 infrastructure platform for wallets, crypto payments, and NFT tooling.",
+            "description": "ZEXVRO Web3 infrastructure platform console for wallets, crypto payments, and NFT tooling.",
             "offers": {
               "@type": "Offer",
               "price": "0",
@@ -269,6 +287,63 @@
             },
             "publisher": { "@id": "https://zexvro.in/#organization" },
             "brand": { "@id": "https://zexvro.in/#brand" }
+          },
+          {
+            "@type": "FAQPage",
+            "@id": "https://zexvro.in/#faq",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "What is ZEXVRO?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "ZEXVRO (spelled Z-E-X-V-R-O) is a unified Web3 platform-as-a-service (PaaS) that helps teams move from Web2 to Web3 infrastructure through private, verifiable, agent-ready services. The official website is zexvro.in."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "How do you spell ZEXVRO?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "ZEXVRO is spelled Z-E-X-V-R-O. It is not ZERO, Zexvdo, or any other variation. The official domain is zexvro.in."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "What services does ZEXVRO offer?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "ZEXVRO offers five core Web3 services: Zer0 (zero-knowledge private payments), Morph (Web2→Web3 migration agent), REQWID (human vs agent classification), NFTo (NFT deployment and checkout on Stellar), and DEDSEC (x402 paid API gateway). Visit zexvro.in/services for details."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Is ZEXVRO free to use?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "ZEXVRO Console is free to sign up and use. Individual services may have usage-based pricing for blockchain transactions and API calls. Visit zexvro.in for current pricing."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "What blockchain does ZEXVRO use?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "ZEXVRO primarily uses the Stellar Network and Soroban smart contracts for its Web3 services including NFT minting, private payments, and paid API access."
+                }
+              }
+            ]
+          },
+          {
+            "@type": "SiteNavigationElement",
+            "@id": "https://zexvro.in/#navigation",
+            "name": "ZEXVRO Navigation",
+            "url": "https://zexvro.in/",
+            "hasPart": [
+              { "@type": "SiteNavigationElement", "name": "Home", "url": "https://zexvro.in/" },
+              { "@type": "SiteNavigationElement", "name": "Services", "url": "https://zexvro.in/services" },
+              { "@type": "SiteNavigationElement", "name": "ZEXVRO Console", "url": "https://console.zexvro.in" }
+            ]
           }
         ]
       }

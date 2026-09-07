@@ -6,7 +6,7 @@ import {
   type DepinProvider,
 } from './depinApi';
 
-const DEPIN_BASE = 'https://sr9k3xpmbj.us-east-1.awsapprunner.com';
+const DEPIN_BASE = '';
 
 const provider: DepinProvider = {
   route: '/v1/nft-health',

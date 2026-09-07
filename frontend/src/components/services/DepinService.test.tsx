@@ -7,7 +7,7 @@ const api = vi.hoisted(() => ({
   getDepinHealth: vi.fn(),
   getDepinStatus: vi.fn(),
   probeDepinProvider: vi.fn(),
-  getDepinApiBaseUrl: vi.fn(() => 'https://sr9k3xpmbj.us-east-1.awsapprunner.com'),
+  getDepinApiBaseUrl: vi.fn(() => ''),
 }));
 
 vi.mock('../../services/depin/depinApi', () => api);

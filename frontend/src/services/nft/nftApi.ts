@@ -1,7 +1,7 @@
 import type { CollectionStatus } from '../../types';
 import { ensureValidAccessToken, isAccessTokenExpired } from '../../auth/cognito';
 
-const HOSTED_NFT_API = 'https://iyk6idmup6.us-east-1.awsapprunner.com';
+const HOSTED_NFT_API = '';
 const configuredNftApi = (import.meta.env.VITE_NFT_API_URL || '').trim().replace(/\/$/, '');
 // Prefer explicit env; fall back to hosted App Runner so local/Pages never hit a dead proxy or SPA HTML 200.
 const NFT_API_BASE = configuredNftApi || HOSTED_NFT_API;

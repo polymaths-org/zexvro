@@ -51,17 +51,17 @@ const cfg = {
   consoleUrl: env('CONSOLE_URL', 'https://console.zexvro.in').replace(/\/$/, ''),
   landUrl: env('LAND_URL', 'https://zexvro.in').replace(/\/$/, ''),
   gateUrl: env('GATE_URL', 'https://api.zexvro.in/gate').replace(/\/$/, ''),
-  nftUrl: env('NFT_URL', env('NFT_API_BASE', 'https://iyk6idmup6.us-east-1.awsapprunner.com')).replace(
+  nftUrl: env('NFT_URL', env('NFT_API_BASE', '')).replace(
     /\/$/,
     '',
   ),
   depinUrl: env(
     'DEPIN_URL',
-    env('VITE_DEPIN_API_URL', 'https://sr9k3xpmbj.us-east-1.awsapprunner.com'),
+    env('VITE_DEPIN_API_URL', ''),
   ).replace(/\/$/, ''),
   platformUrl: env(
     'PLATFORM_API_URL',
-    env('VITE_API_URL', 'https://qkuostruh3.execute-api.us-east-1.amazonaws.com'),
+    env('VITE_API_URL', ''),
   ).replace(/\/$/, ''),
   gateAdminKey: env('GATE_ADMIN_API_KEY'),
   nftToken: env('NFT_SMOKE_ACCESS_TOKEN', env('COGNITO_ACCESS_TOKEN')),

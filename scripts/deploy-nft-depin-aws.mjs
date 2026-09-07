@@ -640,7 +640,7 @@ const baseNftEnv = {
   NFT_STORAGE_MODE: 's3',
   NFT_S3_BUCKET: 'zexvro-nft-media-290294660486-us-east-1',
   NFT_S3_REGION: region,
-  NFT_CDN_BASE_URL: 'https://d1a0z3arlwwfrj.cloudfront.net',
+  NFT_CDN_BASE_URL: '',
   NFT_REPOSITORY: 'dynamo',
   NFT_DYNAMO_TABLE: 'zexvro-nft',
   NFT_DYNAMO_REGION: region,

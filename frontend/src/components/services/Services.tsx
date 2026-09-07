@@ -57,19 +57,19 @@ const serviceMeta: Record<Service['category'], {
     routeSegment: 'depin',
   },
   rpc: {
-    state: 'Mainnet live',
-    purpose: 'High-availability Soroban RPC & Horizon node gateway with custom event indexing and sub-second responses.',
-    routeSegment: 'overview',
+    state: 'Proposed',
+    purpose: 'Proposed — RPC & Horizon gateway with API-key auth and event indexing. 1-day wrapper over public Soroban RPC.',
+    routeSegment: undefined,
   },
   storage: {
-    state: 'Active',
-    purpose: 'Decentralized IPFS & S3 storage drive for uploading metadata, media, and dApp build artifacts.',
-    routeSegment: 'overview',
+    state: 'Proposed',
+    purpose: 'Proposed — IPFS & S3 storage drive for metadata, media, anddApp artifacts. 1-day build on existing Pinata/S3.',
+    routeSegment: undefined,
   },
   relay: {
-    state: 'Relayer ready',
-    purpose: 'Fee-bump transaction relayer allowing developers to sponsor user gas fees with workspace ZCR credits.',
-    routeSegment: 'overview',
+    state: 'Proposed',
+    purpose: 'Proposed — fee-bump gas relayer for gasless Soroban calls, billed in ZCR. 2-day build on fee-bump builder.',
+    routeSegment: undefined,
   },
 };
 
@@ -91,6 +91,7 @@ function ServiceBrandIcon({ category, className = '' }: { category: Service['cat
 function stateTone(status: Service['status'] | 'enabled') {
   if (status === 'active' || status === 'enabled') return 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400';
   if (status === 'configuring') return 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-400';
+  if (status === 'proposed') return 'border-zinc-300 bg-zinc-100 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400';
   return 'border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400';
 }
 

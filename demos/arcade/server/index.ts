@@ -38,8 +38,8 @@ export default capsule({
         mode,
         gateSiteKey: '',
         gateApiUrl: 'https://api.zexvro.in/gate',
-        nftApiUrl: 'https://iyk6idmup6.us-east-1.awsapprunner.com',
-        depinApiUrl: 'https://sr9k3xpmbj.us-east-1.awsapprunner.com',
+        nftApiUrl: '',
+        depinApiUrl: '',
         features: {
           captchaOnScore: mode === 'web3',
           nftSkins: mode === 'web3',

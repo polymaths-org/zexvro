@@ -1,4 +1,6 @@
-# Zexvro public site — https://zexvro.in
+# ZEXVRO public site — https://zexvro.in
+# Brand: ZEXVRO (spelled Z-E-X-V-R-O), not "zero", "zexvdo", or any variation.
+
 User-agent: *
 Allow: /
 Allow: /favicon.ico
@@ -23,15 +25,16 @@ Disallow: /rushi1.png
 Disallow: /rushi2.png
 Disallow: /fonts/
 
-# Image-only bots: same policy
-User-agent: Googlebot-Image
-Allow: /favicon.ico
+# Googlebot — full access, no crawl-delay (Google prefers no delay)
+User-agent: Googlebot
+Allow: /
 Allow: /favicon-v2.ico
 Allow: /icons/
 Allow: /og-image.png
 Allow: /brand-mark.png
 Allow: /logo.png
-Allow: /logo-transparent.png
+Allow: /site.webmanifest
+Allow: /sitemap.xml
 Disallow: /cubes.png
 Disallow: /mobile_statue.png
 Disallow: /deploy-nfts-clicks.png
@@ -41,5 +44,35 @@ Disallow: /paris1.png
 Disallow: /paris2.png
 Disallow: /rushi1.png
 Disallow: /rushi2.png
+Disallow: /fonts/
+
+# Googlebot-Image: only serve brand assets and og-image
+User-agent: Googlebot-Image
+Allow: /favicon.ico
+Allow: /favicon-v2.ico
+Allow: /icons/
+Allow: /og-image.png
+Allow: /brand-mark.png
+Allow: /logo.png
+Allow: /logo-transparent.png
+Allow: /services/zer0-64.png
+Allow: /services/morph-64.png
+Allow: /services/reqwid-64.png
+Allow: /services/nfto-64.png
+Allow: /services/dedsec-64.png
+Disallow: /cubes.png
+Disallow: /mobile_statue.png
+Disallow: /deploy-nfts-clicks.png
+Disallow: /web2.png
+Disallow: /web3.png
+Disallow: /paris1.png
+Disallow: /paris2.png
+Disallow: /rushi1.png
+Disallow: /rushi2.png
+
+# Bing
+User-agent: Bingbot
+Allow: /
+Disallow: /fonts/
 
 Sitemap: https://zexvro.in/sitemap.xml
