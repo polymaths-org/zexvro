@@ -13,9 +13,12 @@ export interface Env {
   GITHUB_CLIENT_ID?: string;
   GITHUB_CLIENT_SECRET?: string;
   LABS_ADMIN_GITHUB_LOGINS?: string;
+  LABS_ALLOW_DEV_LOGIN?: string;
   LABS_STATE_BACKEND?: string;
   LABS_DYNAMO_REGION?: string;
   LABS_DYNAMO_TABLE?: string;
+  SPACETIME_URL?: string;
+  SPACETIME_DB?: string;
   AWS_ACCESS_KEY_ID?: string;
   AWS_SECRET_ACCESS_KEY?: string;
   FIREBASE_API_KEY?: string;
@@ -79,6 +82,8 @@ export function getStore(env: Env) {
     tableName: env.LABS_DYNAMO_TABLE || 'zexvro-labs',
     credentials: dynamoCreds,
     useFetchHandler: true,
+    url: env.SPACETIME_URL || 'https://maincloud.spacetimedb.com',
+    db: env.SPACETIME_DB || 'labs-beta',
     firestore: {
       projectId: env.FIREBASE_PROJECT_ID || '',
       clientEmail: env.FIREBASE_CLIENT_EMAIL || '',

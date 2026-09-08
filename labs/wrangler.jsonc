@@ -5,7 +5,9 @@
   "compatibility_date": "2025-01-01",
   "compatibility_flags": ["nodejs_compat"],
   "vars": {
-    "LABS_STATE_BACKEND": "firestore",
+    "LABS_STATE_BACKEND": "spacetime",
+    "SPACETIME_URL": "https://maincloud.spacetimedb.com",
+    "SPACETIME_DB": "labs-beta",
     "LABS_ADMIN_GITHUB_LOGINS": "zexvro,clawdroid",
     "APP_URL": "https://labs.zexvro.in",
     "FIREBASE_API_KEY": "AIzaSyAmF2qY-3F9RyxJyeVY1Wm1Ijs7BaedL8M"

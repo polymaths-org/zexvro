@@ -11,6 +11,7 @@ import {
 } from '@aws-sdk/lib-dynamodb';
 import { Lab, Badge, Certificate, User, UserLabProgress, Submission, LabIdea } from '../types';
 import { sampleSubmissions, initialUser } from '../data/mockData';
+import { SpacetimeStore, spacetimeConfigFrom } from './spacetime';
 
 // Single-table DynamoDB store for ZEXVRO Labs following repo conventions.
 //   Lab:        pk LAB#<id>            sk META   gsi1pk SLUG#<slug>  gsi1sk LAB
@@ -56,6 +57,8 @@ export interface StoreConfig {
   tableName?: string;
   credentials?: { accessKeyId: string; secretAccessKey: string };
   useFetchHandler?: boolean;
+  url?: string;
+  db?: string;
   firestore?: { projectId: string; clientEmail: string; privateKey: string };
 }
 
@@ -942,6 +945,9 @@ export function createStore(cfg: StoreConfig = {}): LabsStore {
       credentials: cfg.credentials,
       useFetchHandler: cfg.useFetchHandler,
     });
+  }
+  if (backend === 'spacetime') {
+    return new SpacetimeStore(spacetimeConfigFrom(cfg));
   }
   if (backend === 'firestore' && cfg.firestore?.projectId && cfg.firestore.clientEmail && cfg.firestore.privateKey) {
     return new FirestoreStore(cfg.firestore);

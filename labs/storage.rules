@@ -1,0 +1,25 @@
+rules_version = '2';
+
+// ZEXVRO Labs asset storage.
+//
+// Binary assets (lab banners, badge/certificate art, credential canvas
+// uploads) live here. Database rows keep only the download URL plus a
+// sha256 hash. Reads are public for published assets so images load from
+// the CDN without database egress; writes are admin-only.
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Published lab assets: world-readable, admin-writable.
+    match /labs/{labId}/{file} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow delete: if request.auth != null
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    // Brand and fallback art shipped with the app.
+    match /brand/{file} {
+      allow read: if true;
+      allow write: if false;
+    }
+  }
+}

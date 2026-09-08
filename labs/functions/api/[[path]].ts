@@ -10,6 +10,7 @@ import {
   checkRateLimit,
   json,
   readBody,
+  setSession,
 } from '../_shared';
 import { Lab, User, LabIdea } from '../../src/types';
 
@@ -56,6 +57,31 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
       const res = json({ success: true });
       res.headers.set('Set-Cookie', clearCookie(c.isSecure));
       return res;
+    }
+
+    // Beta-only test login. Enabled solely by LABS_ALLOW_DEV_LOGIN=true
+    // (set on the beta Pages project, never production). Issues the same
+    // HMAC session cookie as the GitHub OAuth callback for a synthetic
+    // tester identity so end-to-end flows can be exercised in a browser
+    // without external OAuth credentials.
+    if (path === '/auth/dev-login' && method === 'POST') {
+      if ((env.LABS_ALLOW_DEV_LOGIN || '') !== 'true') return json({ error: 'Not found' }, 404);
+      const body = await readBody(ctx.request);
+      const username = String(body?.username || 'beta_tester').slice(0, 40) || 'beta_tester';
+      const user: User = {
+        id: `dev_${username}`,
+        name: username,
+        email: '',
+        username,
+        avatarUrl: '',
+        role: 'student',
+        xp: 0,
+        streakDays: 0,
+        completedLabsCount: 0,
+        githubConnected: true,
+      };
+      const res = json({ success: true, user });
+      return setSession(res, user, env);
     }
 
     if (path === '/auth/github/url' && method === 'GET') {
@@ -378,6 +404,21 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
       const allTasks = [...(lab.pages || []).flatMap((p) => p.elements), ...lab.tasks];
       const task = allTasks.find((t) => t.id === taskId);
       if (!task) return json({ error: 'Task not found' }, 404);
+
+      // SpacetimeDB backend: answers live in a private table readable only
+      // inside reducers, so delegate the check to the database.
+      const spacetimeVerify = (store as unknown as {
+        verifyTask?: (labId: string, taskId: string, flag: string, command: string) => Promise<void>;
+      }).verifyTask;
+      if (typeof spacetimeVerify === 'function') {
+        try {
+          await spacetimeVerify.call(store, labId, taskId, flag || '', userCommand || codeContent || '');
+          return json({ passed: true, log: '[CHECK PASSED] Verified.', taskId, xpAwarded: 50 });
+        } catch (e: unknown) {
+          const message = e instanceof Error ? e.message : 'Check failed';
+          return json({ passed: false, log: `[CHECK FAILED] ${message}`, taskId, xpAwarded: 0 });
+        }
+      }
 
       const cmd = (userCommand || '').trim().toLowerCase();
       const reqCmd = (task.verificationCommand || '').trim().toLowerCase();
