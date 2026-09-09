@@ -1,12 +1,7 @@
 # Labs SpacetimeDB Migration — Beta Outcome and Executive Overview
 
-Beta URL: https://beta.labs.zexvro.in (DNS blocked: the Pages custom
-domain is registered but Cloudflare has not created the CNAME record, and
-the wrangler OAuth token has no DNS write scope, so record creation needs
-one dashboard action: DNS panel, add CNAME beta.labs pointing to
-labs-beta.pages.dev, proxied; the certificate then issues automatically)
-Beta deployment, identical build, live now:
-https://1d07137d.labs-beta.pages.dev
+Beta URL: https://beta.labs.zexvro.in (live and verified end to end;
+identical build also at https://1d07137d.labs-beta.pages.dev)
 Database: SpacetimeDB Maincloud `labs-beta`
 (c200e46355ace8187a668335cb5200baa01ea345e11422c72c0c933a05d86c80)
 Date: 2026-09-09
