@@ -1,0 +1,141 @@
+@import "tailwindcss";
+
+/* Brand display face: Orbitron for the Handshake wordmark and
+   brand moments only. Body/UI stays Inter. */
+@theme {
+  --font-display: "Orbitron", "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  :root {
+    --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+
+    /* Light tokens */
+    --bg-app: #FAFAFA;
+    --surface: #FFFFFF;
+    --surface-raised: #FFFFFF;
+    --surface-hover: #F4F4F5;
+    --border: #E4E4E7;
+    --border-strong: #A1A1AA;
+    --text-primary: #09090B;
+    --text-secondary: #52525B;
+    --text-muted: #71717A;
+    --accent: #09090B;
+    --accent-text: #FFFFFF;
+    --brand-blue: #2563EB;
+    --success: #16A34A;
+    --warning: #D97706;
+    --danger: #DC2626;
+  }
+
+  .dark {
+    /* Rich Mono Graphite & Sophisticated Shades of Grey */
+    --bg-app: #090A0D;
+    --surface: #101217;
+    --surface-raised: #15181F;
+    --surface-hover: #1C2029;
+    --border: #232732;
+    --border-strong: #333846;
+    --text-primary: #FAFAFA;
+    --text-secondary: #9BA2B0;
+    --text-muted: #6C7280;
+    --accent: #FFFFFF;
+    --accent-text: #090A0D;
+    --brand-blue: #3B82F6;
+    --success: #22C55E;
+    --warning: #F59E0B;
+    --danger: #EF4444;
+  }
+
+  * {
+    border-color: var(--border);
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--bg-app);
+    color: var(--text-primary);
+    min-height: 100vh;
+  }
+
+  .dark body {
+    background-color: #0A0A0B;
+    background-image: linear-gradient(180deg, #0C0C0E 0%, #070708 100%);
+    background-attachment: fixed;
+  }
+
+  code, pre, .font-mono, kbd {
+    font-family: var(--font-mono);
+  }
+}
+
+/* Graphite flat surfaces */
+.bg-graphite-surface {
+  background: #0A0A0B;
+  border: 1px solid #232838;
+}
+
+.bg-graphite-elevated {
+  background: #111113;
+  border: 1px solid #2B3144;
+}
+
+.bg-graphite-hover:hover {
+  background: #18181B;
+  border-color: #384159;
+}
+
+/* Sidebar nav icons: zinc at rest, white on hover, blue on the active item. */
+.sidebar-nav button svg {
+  color: #71717A;
+  transition: color 0.15s ease-out;
+}
+.sidebar-nav button:hover svg {
+  color: #FAFAFA;
+}
+.sidebar-nav .sidebar-active svg {
+  color: #3B82F6;
+}
+
+/* Custom scrollbar for dense code views */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* App backdrop: neutral graphite light (static crown + faint side washes).
+   No hue — depth without tint. No animation. */
+.app-ambient {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 55% 38% at 50% -6%, rgba(255, 255, 255, 0.045), transparent 70%),
+    radial-gradient(ellipse 28% 24% at 7% 24%, rgba(255, 255, 255, 0.02), transparent 70%),
+    radial-gradient(ellipse 30% 26% at 93% 66%, rgba(255, 255, 255, 0.018), transparent 70%);
+}
+
+/* App backdrop: film-grain noise over the gradients. Static, very low
+   opacity so it reads as texture, not dirt. */
+.app-noise {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.045;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.6'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+}
+

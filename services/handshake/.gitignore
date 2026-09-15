@@ -1,0 +1,13 @@
+# Rust / SpacetimeDB build outputs
+spacetimedb/target/
+spacetimedb/*.wasm
+
+# Frontend build outputs & deps
+handshake/dist/
+handshake/node_modules/
+handshake/.vite/
+
+# Local env / spacetime auth
+handshake/.env
+handshake/.env.local
+.spacetime/
