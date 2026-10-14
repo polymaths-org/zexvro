@@ -1,0 +1,36 @@
+appId: in.zexvro.morphic
+productName: Morph
+copyright: Copyright © 2026 ZEXVRO
+directories:
+  buildResources: resources
+  output: dist
+files:
+  - out/**
+  - package.json
+  - "!**/*.map"
+
+win:
+  target: [nsis]
+  artifactName: Morph-Setup-${version}.${ext}
+nsis:
+  # One click, no wizard pages: fewer decisions for people who just want it installed.
+  oneClick: true
+  perMachine: false
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: Morph
+
+mac:
+  target:
+    - target: dmg
+      arch: [universal]
+  category: public.app-category.productivity
+  hardenedRuntime: true
+  # Signing + notarization need Apple Developer credentials; unsigned builds warn on first open.
+  notarize: false
+
+linux:
+  target: [AppImage, deb]
+  category: Utility
+  maintainer: ZEXVRO <hello@zexvro.in>
+  synopsis: Tell Morph what you need, and it does it on the computer for you.
