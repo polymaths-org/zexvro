@@ -96,7 +96,8 @@ test('conversations: ask, follow up, rename, reopen, delete, retry, stop, themes
   await page.waitForTimeout(300)
   await shot(page, 'c05-settings-themes')
   await page.keyboard.press('Escape')
-  await expect(page.getByRole('heading', { name: 'Settings' })).toBeHidden()
+  // Wait for React to unmount the closing dialog before sending the reopen shortcut.
+  await expect(page.getByRole('heading', { name: 'Settings', includeHidden: true })).toHaveCount(0)
   await page.keyboard.press('Control+,')
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
   await page.getByRole('button', { name: 'Look', exact: true }).click()

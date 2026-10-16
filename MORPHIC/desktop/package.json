@@ -9,6 +9,7 @@
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
+    "dev:local": "node scripts/dev-local.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.node.json --composite false && tsc --noEmit -p tsconfig.web.json --composite false",
     "build": "npm run typecheck && electron-vite build",
     "preview": "electron-vite preview",
@@ -17,7 +18,10 @@
     "dist:win": "npm run build && electron-builder --win",
     "dist:mac": "npm run build && electron-builder --mac",
     "dist:linux": "npm run build && electron-builder --linux",
-    "test": "vitest run"
+    "test": "vitest run",
+    "eval:harness": "electron-vite build && node evals/run.mjs",
+    "eval:hard": "electron-vite build && node evals/run.mjs --cases=dense,resilience,impossible,opaque,auth,denied,transport",
+    "test:eval": "node --test evals/*.test.mjs"
   },
   "devDependencies": {
     "@fontsource-variable/atkinson-hyperlegible-next": "^5.3.0",

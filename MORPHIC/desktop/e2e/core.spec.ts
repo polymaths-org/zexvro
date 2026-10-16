@@ -45,7 +45,7 @@ test('Morph sets reminders, shows checklists and asks before opening websites', 
   await shot(page, 'k02-checklist')
 
   // Websites open in Morph's own browser (browser mode), never the person's default browser, and without nagging.
-  vroai.reply = `Here it is.\n${action('open_website', { url: url, why: 'to show you' })}`
+  vroai.queue = [`Here it is.\n${action('open_website', { url: url, why: 'to show you' })}`, 'The website is open in my browser.']
   await ask(page, 'Open the train booking site')
   await expect(page.getByText('Opened 127.0.0.1 in my browser')).toBeVisible()
   await expect(page.getByRole('region', { name: "Morph's browser" })).toBeVisible()

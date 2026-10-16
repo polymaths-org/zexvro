@@ -90,7 +90,16 @@ export interface TaskStep {
 export interface Task {
   id: string
   goal: string
-  status: 'running' | 'waiting' | 'done' | 'stopped' | 'failed'
+  status: 'running' | 'waiting' | 'done' | 'stopped' | 'failed' | 'paused' | 'blocked'
+  /** Original user request; the model's goal paraphrase must never replace it. */
+  request?: string
+  /** Last observed page, retained independently of long-term personal memory. */
+  checkpoint?: { url: string; title: string; text: string; at: number }
+  /** Bounded page evidence for this task, separate from personal memory. Untrusted website data. */
+  notices?: { url: string; text: string }[]
+  observations?: { url: string; title: string; text: string }[]
+  /** Consequential clicks already dispatched in this task; never replay automatically. */
+  dispatchedEffects?: string[]
   /** What Morph is doing right now, in one calm sentence. */
   say: string
   steps: TaskStep[]
@@ -104,6 +113,7 @@ export interface PageElement {
   tag: string
   role: string
   label: string
+  context?: string
   value?: string
   /** Password, one-time code, card or PIN fields: Morph never types into these. */
   sensitive?: boolean
@@ -111,6 +121,7 @@ export interface PageElement {
   submit?: boolean
   href?: string
   options?: string[]
+  disabled?: boolean
 }
 
 export interface PageSnapshot {
@@ -118,15 +129,24 @@ export interface PageSnapshot {
   title: string
   text: string
   elements: PageElement[]
+  notices?: string[]
+  viewport?: { x: number; y: number; width: number; height: number; scrollHeight: number }
+  formFingerprint?: string
+  observation?: { query: string; offset: number; total: number; matched: number; returned: number; truncated: boolean }
+  revision?: number
+  media?: { kind: string; description: string }[]
 }
 
-export type BrowserAction =
+export type BrowserAction = (
   | { do: 'go'; url: string }
   | { do: 'click'; id: number }
   | { do: 'type'; id: number; text: string }
   | { do: 'select'; id: number; option: string }
   | { do: 'scroll'; dir: 'up' | 'down' }
   | { do: 'back' }
+  | { do: 'wait'; ms: number }
+  | { do: 'inspect'; query: string; offset?: number }
+) & { snapshotId?: number; reviewed?: boolean }
 
 // ── Connectors (MCP: the open standard for connecting outside tools) ─────────────────────────
 

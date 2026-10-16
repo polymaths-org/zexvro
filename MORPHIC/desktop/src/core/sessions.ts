@@ -10,6 +10,27 @@ export class Sessions {
   constructor(dataDir: string) {
     this.dir = join(dataDir, 'sessions')
     mkdirSync(this.dir, { recursive: true })
+    // Runtime promises and approval arguments do not survive restart. Never pretend they do.
+    for (const name of readdirSync(this.dir)) {
+      if (!name.endsWith('.json')) continue
+      const session = this.get(name.slice(0, -5))
+      if (!session) continue
+      let changed = false
+      for (const message of session.messages) {
+        if (message.task && ['running', 'waiting'].includes(message.task.status)) {
+          message.task.status = 'paused'
+          message.task.result = 'Morph restarted during this task. It is unfinished; read the current page before continuing.'
+          message.task.say = ''
+          changed = true
+        }
+        if (message.approval?.status === 'pending') {
+          message.approval.status = 'declined'
+          message.actions = [...(message.actions || []), { tool: message.approval.tool, summary: 'This approval expired on restart. Ask again before doing it.', status: 'declined' }]
+          changed = true
+        }
+      }
+      if (changed) this.save(session)
+    }
   }
 
   private file(id: string) {

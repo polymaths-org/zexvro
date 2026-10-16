@@ -14,19 +14,21 @@ import { Peer, type Transport } from '@shared/rpc'
 import { ActivityLog } from './activity'
 import { Agent } from './agent'
 import { Memory } from './memory'
-import { FallbackClient, OpenRouterClient, VroaiClient, type ModelClient } from './model'
+import { createChatClient, FallbackClient, VroaiClient, type ModelClient } from './model'
 import { Reminders } from './reminders'
 import { Routines } from './routines'
 import { SoulStore } from './soul'
 import { Sessions } from './sessions'
 import { Skills } from './skills'
 import { Connectors } from './connectors'
+import { Workspace } from './workspace'
 
 const DEFAULT_URL = process.env.VROAI_URL ?? import.meta.env.MAIN_VITE_VROAI_URL ?? 'http://localhost:3000'
 
 // Model provider (configuration only; never shown in the app). With an OpenRouter key and model set,
 // OpenRouter answers and VROAI is the fallback; MORPHIC_PROVIDER=vroai forces VROAI (tests use this).
 const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY ?? import.meta.env.MAIN_VITE_OPENROUTER_API_KEY ?? ''
+const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL?.trim() || undefined
 const OPENROUTER_MODELS = (process.env.OPENROUTER_MODEL ?? import.meta.env.MAIN_VITE_OPENROUTER_MODEL ?? '')
   .split(',')
   .map((m) => m.trim())
@@ -80,7 +82,7 @@ export function startCore(dataDir: string, transport: Transport) {
   const vroai = new VroaiClient(() => settings.serviceUrl.trim() || DEFAULT_URL)
   const model: ModelClient =
     PROVIDER === 'openrouter'
-      ? new FallbackClient([new OpenRouterClient(() => ({ key: OPENROUTER_KEY, models: OPENROUTER_MODELS })), vroai], (err) =>
+      ? new FallbackClient([createChatClient({ key: OPENROUTER_KEY, models: OPENROUTER_MODELS, baseUrl: OPENROUTER_BASE_URL }), vroai], (err) =>
           console.error('[core] primary model failed, falling back:', err instanceof Error ? err.message : err)
         )
       : vroai
@@ -96,9 +98,19 @@ export function startCore(dataDir: string, transport: Transport) {
     () => emit({ type: 'reminders.changed' })
   )
   const connectors = new Connectors(dataDir, () => emit({ type: 'connectors.changed' }))
+  let workspace: Workspace | undefined
+  if (process.env.MORPHIC_WORKSPACE_ROOT) {
+    try {
+      const check = process.env.MORPHIC_CHECK_COMMAND ? JSON.parse(process.env.MORPHIC_CHECK_COMMAND) : undefined
+      workspace = new Workspace(process.env.MORPHIC_WORKSPACE_ROOT, check)
+    } catch (error) {
+      console.error('[core] Coding workspace disabled:', error instanceof Error ? error.message : 'invalid configuration')
+    }
+  }
   connectors.start()
   const agent = new Agent({
     connectors,
+    workspace,
     sessions,
     memory,
     reminders,

@@ -102,8 +102,8 @@ test('Morph browses a website step by step while the person watches, and asks be
 })
 
 test('connectors: add an MCP program from Settings and see its tools', async () => {
-  const { app, page } = await launch(profile({ onboarded: true, theme: 'light', palette: 'ocean' }), url)
-  await expect(page.getByRole('heading', { name: /Good/ })).toBeVisible({ timeout: 10_000 })
+  const { app, page } = await launch(profile({ onboarded: true, name: 'Asha', theme: 'light', palette: 'ocean' }), url)
+  await expect(page.getByRole('heading', { name: /Asha/ })).toBeVisible({ timeout: 10_000 })
   await page.keyboard.press('Control+,')
   await page.getByRole('button', { name: 'Connectors' }).click()
   await page.getByRole('button', { name: 'Add a connector' }).click()

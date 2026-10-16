@@ -3,3 +3,6 @@ out/
 dist/
 test-results/
 playwright-report/
+.dev-profile/
+.env.local
+.env.*.local

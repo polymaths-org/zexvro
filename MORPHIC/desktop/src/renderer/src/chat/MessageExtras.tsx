@@ -114,7 +114,9 @@ const TASK_STATUS: Record<Task['status'], string> = {
   waiting: 'Waiting for you',
   done: 'Finished',
   stopped: 'Stopped',
-  failed: "Couldn't finish"
+  failed: "Couldn't finish",
+  paused: 'Paused — unfinished',
+  blocked: 'Blocked — requirement unmet'
 }
 
 /** A browsing task, live: what Morph is doing now, every step so far, and the outcome. */

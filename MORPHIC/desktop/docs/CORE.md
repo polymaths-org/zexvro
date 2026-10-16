@@ -106,7 +106,8 @@ the same site gets them as a guide in the step prompt.
 | --- | --- |
 | `MAIN_VITE_VROAI_URL` / `VROAI_URL` | VROAI address (`POST {prompt}` → `{success, response}`). |
 | `MAIN_VITE_OPENROUTER_API_KEY` / `OPENROUTER_API_KEY` | When set together with a model, a chat-completions provider answers and VROAI is the fallback. |
-| `MAIN_VITE_OPENROUTER_MODEL` / `OPENROUTER_MODEL` | Model id; comma-separated ids are fallbacks tried by the provider. |
+| `MAIN_VITE_OPENROUTER_MODEL` / `OPENROUTER_MODEL` | Model id; comma-separated ids use client-side sequential fallbacks for custom gateways, or provider fallbacks on stock OpenRouter. |
+| `OPENROUTER_BASE_URL` (runtime only) | Optional OpenAI-compatible gateway base URL, including `/v1`. Custom gateways are probed at `/models`; stock OpenRouter uses `/key`. |
 | `MORPHIC_PROVIDER=vroai` | Forces VROAI (e2e tests use this). |
 
 `FallbackClient` tries providers in order and rests one that just failed (`backoffFor`):

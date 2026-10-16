@@ -10,9 +10,10 @@ import type { Routines } from './routines'
 import type { Sessions } from './sessions'
 import type { Skills } from './skills'
 import type { Connectors } from './connectors'
-import { findTool, hostOf, TOOLS, type ToolContext } from './tools'
-import { buildStepPrompt, judge, MAX_STEPS, parseStep, type BrowserHost } from './browser-task'
+import { findTool, hostOf, TOOLS, type ToolContext, type ToolResult } from './tools'
+import { BROWSER_STEP_TOOL, buildStepPrompt, judge, MAX_STEPS, parseStep, type BrowserHost } from './browser-task'
 import { newId } from './store'
+import type { Workspace } from './workspace'
 
 const TEXT_MAX = 20_000
 /** Memory work waits until the person has been quiet this long (VROAI handles one request at a time). */
@@ -39,6 +40,7 @@ export interface AgentDeps {
   browser: BrowserHost
   connectors: Connectors
   reflectAfterMs?: number
+  workspace?: Workspace
 }
 
 interface Launch {
@@ -83,6 +85,7 @@ function untilTime(value: unknown): number | undefined {
 }
 
 export class Agent {
+  private browserTask: { controller: AbortController; done: Promise<void> } | null = null
   private inflight = new Map<string, AbortController>()
   /** Conversations deleted mid-answer: their late answer must not bring them back. */
   private discarded = new Set<string>()
@@ -95,7 +98,7 @@ export class Agent {
 
   constructor(private deps: AgentDeps) {}
 
-  private toolContext(sessionId: string): ToolContext {
+  private toolContext(sessionId: string, signal?: AbortSignal): ToolContext {
     const { memory, reminders, activity, connectors, browser } = this.deps
     return {
       sessionId,
@@ -103,6 +106,8 @@ export class Agent {
       reminders,
       activity,
       connectors,
+      workspace: this.deps.workspace,
+      signal,
       memoryEnabled: this.deps.settings().memory,
       formatWhen: (ms) => formatWhen(ms),
       openInBrowser: async (url) => (await browser.open(url)).ok
@@ -160,22 +165,39 @@ export class Agent {
 
     let reply: Message
     let launch: Launch | undefined
+    let superseded = false
     try {
-      const tools = availableTools(TOOLS, this.deps.settings(), this.deps.connectors.ready().length > 0).map((t) => ({
+      const tools = availableTools(TOOLS, this.deps.settings(), this.deps.connectors.ready().length > 0, !!this.deps.workspace).map((t) => ({
         name: t.name,
         description: t.usage,
         parameters: t.schema
       }))
-      const { prompt, recalled } = this.turnPrompt(session, toolResult)
-      const raw = await this.deps.model.complete(prompt, controller.signal, tools)
-      ;({ message: reply, launch } = await this.applyReply(session.id, raw))
-      this.noteUse(recalled, reply.text)
+      const observations: string[] = toolResult ? [toolResult] : []
+      const completedActions: ActionRecord[] = []
+      reply = { id: newId(), role: 'morph', text: '', at: Date.now() }
+      for (let round = 0; round < 6; round++) {
+        if (controller.signal.aborted) throw new Error('stopped')
+        const browserPage = this.deps.settings().browser ? await this.deps.browser.snapshot().catch(() => null) : null
+        const { prompt, recalled } = this.turnPrompt(session, observations.join('\n\n'), browserPage)
+        const raw = await this.deps.model.complete(prompt, controller.signal, tools)
+        const applied = await this.applyReply(session.id, raw, controller.signal)
+        reply = applied.message
+        launch = applied.launch
+        completedActions.push(...(reply.actions ?? []))
+        if (completedActions.length) reply.actions = [...completedActions]
+        this.noteUse(recalled, reply.text)
+        if (!applied.observations.length || reply.approval || launch) break
+        observations.push(...applied.observations)
+        if (round === 5) reply.text = 'I reached the tool-step limit. This task is unfinished; the recorded results are preserved for the next turn.'
+      }
     } catch {
       reply = { id: newId(), role: 'morph', text: '', at: Date.now(), ...(controller.signal.aborted ? { stopped: true } : { failed: true }) }
     } finally {
+      superseded = this.inflight.get(session.id) !== controller
       if (this.inflight.get(session.id) === controller) this.inflight.delete(session.id)
     }
 
+    if (superseded) return null
     this.deps.emit({ type: 'chat.progress', sessionId: session.id, phase: 'done' })
     if (this.discarded.delete(session.id)) return null
     // Re-read: the person may have ticked a checklist step or approved something while we waited.
@@ -188,7 +210,7 @@ export class Agent {
     return latest
   }
 
-  private turnPrompt(session: Session, toolResult?: string): { prompt: string; recalled: Recalled } {
+  private turnPrompt(session: Session, toolResult?: string, browserPage?: PageSnapshot | null): { prompt: string; recalled: Recalled } {
     const { memory, reminders, skills, settings } = this.deps
     const s = settings()
     const recentAsks = session.messages
@@ -213,7 +235,9 @@ export class Agent {
       now: new Date(),
       formatWhen: (ms) => formatWhen(ms),
       connectorTools: this.deps.connectors.ready(),
-      toolResult
+      toolResult,
+      browserPage,
+      workspaceRoot: this.deps.workspace?.root
     })
     return { prompt, recalled }
   }
@@ -226,29 +250,37 @@ export class Agent {
   }
 
   /** Runs the reply's actions through the Sentinel and turns it into Morph's message. */
-  private async applyReply(sessionId: string, raw: string): Promise<{ message: Message; launch?: Launch }> {
+  private async applyReply(sessionId: string, raw: string, signal?: AbortSignal): Promise<{ message: Message; launch?: Launch; observations: string[] }> {
     const { text, actions: requested } = parseReply(raw)
-    const ctx = this.toolContext(sessionId)
+    const ctx = this.toolContext(sessionId, signal)
     const message: Message = { id: newId(), role: 'morph', text, at: Date.now() }
     const actions: ActionRecord[] = []
+    const observations: string[] = []
     let changedReminders = false
     let changedMemory = false
     let launch: Launch | undefined
     const settings = this.deps.settings()
+    const allowed = new Set(availableTools(TOOLS, settings, this.deps.connectors.ready().length > 0, !!this.deps.workspace).map(t => t.name))
 
     for (const request of requested.slice(0, 6)) {
+      if (signal?.aborted) throw new Error('stopped')
       const tool = findTool(request.tool)
-      if (!tool) continue
+      if (!tool || !allowed.has(tool.name)) {
+        actions.push({ tool: request.tool, summary: 'That tool is unavailable in the current configuration.', status: 'failed' })
+        observations.push(`${request.tool}: unavailable. Use only the currently advertised tools.`)
+        continue
+      }
       const args = tool.validate(request.args, ctx)
       if (typeof args === 'string') {
-        if (tool.name === 'set_reminder') actions.push({ tool: tool.name, summary: "I couldn't set that reminder. Please tell me the day and time again.", status: 'failed' })
+        actions.push({ tool: tool.name, summary: `Could not use ${tool.name}: ${args}`, status: 'failed' })
+        observations.push(`${tool.name}: invalid arguments (${args}). Correct them using the tool schema or explain what is missing.`)
         continue
       }
       if (tool.name === 'start_browsing') {
         if (!settings.browser || message.task || message.approval) continue
         const { goal, url } = args as unknown as Launch
         if (!settings.askBeforeBrowsing) {
-          message.task = newTask(goal)
+          message.task = newTask(goal, this.deps.sessions.get(sessionId)?.messages.filter(m => m.role === 'you').at(-1)?.text)
           launch = { goal, url }
           continue
         }
@@ -262,9 +294,16 @@ export class Agent {
         message.approval = approval
         continue
       }
-      const result = await tool.run(args, ctx)
-      if (result.action) actions.push(result.action)
-      if (result.plan && !message.plan) message.plan = result.plan
+      try {
+        const result = await tool.run(args, ctx)
+        if (result.action) actions.push(result.action)
+        if (result.plan && !message.plan) message.plan = result.plan
+        if (result.followUp) observations.push(result.followUp)
+      } catch (error) {
+        const note = error instanceof Error ? error.message.slice(0, 300) : 'Tool failed'
+        actions.push({ tool: tool.name, summary: note, status: 'failed' })
+        observations.push(`${tool.name} failed: ${note}. Inspect or correct the request; do not claim success.`)
+      }
       changedReminders ||= tool.name.includes('reminder')
       changedMemory ||= tool.name === 'remember' || tool.name === 'forget'
     }
@@ -283,7 +322,7 @@ export class Agent {
     }
     if (changedReminders) this.deps.emit({ type: 'reminders.changed' })
     if (changedMemory) this.deps.emit({ type: 'memory.changed' })
-    return { message, launch }
+    return { message, launch, observations }
   }
 
   /** The person pressed a button on a review card. */
@@ -312,13 +351,19 @@ export class Agent {
     } else if (tool.name === 'start_browsing') {
       message.approval.status = 'allowed'
       const { goal, url } = pending.args as unknown as Launch
-      message.task = newTask(goal)
+      message.task = newTask(goal, session.messages.filter(m => m.role === 'you').at(-1)?.text)
       this.deps.sessions.save(session)
       void this.runTask(sessionId, message.id, url)
       return session
     } else {
       message.approval.status = 'allowed'
-      const result = await tool.run(pending.args as never, this.toolContext(sessionId))
+      let result: ToolResult
+      try {
+        result = await tool.run(pending.args as never, this.toolContext(sessionId))
+      } catch (error) {
+        const note = error instanceof Error ? error.message.slice(0, 300) : 'Tool failed'
+        result = { action: { tool: tool.name, summary: note, status: 'failed' }, followUp: `${tool.name} failed after review: ${note}. Read current state and repair the request; do not claim success.` }
+      }
       if (result.action) message.actions = [...(message.actions ?? []), result.action]
       if (result.followUp) {
         // Morph reads what came back and answers with it, in a new message.
@@ -370,9 +415,21 @@ export class Agent {
    * new website or pressing a "real-world" button needs an OK; private fields are handed to the person.
    */
   async runTask(sessionId: string, messageId: string, startUrl: string) {
+    const previous = this.browserTask
+    previous?.controller.abort()
+    const controller = new AbortController()
+    const done = (async () => {
+      await previous?.done
+      if (!controller.signal.aborted) await this.runBrowserTask(sessionId, messageId, startUrl, controller)
+    })()
+    this.browserTask = { controller, done }
+    await done
+    if (this.browserTask?.controller === controller) this.browserTask = null
+  }
+
+  private async runBrowserTask(sessionId: string, messageId: string, startUrl: string, controller: AbortController) {
     const { browser, model, settings, activity, routines } = this.deps
     this.inflight.get(sessionId)?.abort()
-    const controller = new AbortController()
     const { signal } = controller
     this.inflight.set(sessionId, controller)
     this.deps.emit({ type: 'chat.progress', sessionId, phase: 'thinking' })
@@ -393,32 +450,84 @@ export class Agent {
     const approved = new Set<string>(startUrl ? [hostOf(startUrl)] : [])
     let page: PageSnapshot | null = null
     let badReplies = 0
+    let nativeSteps = true
+    let feedback = ''
+    let lastAttempt = ''
+    let repeated = 0
+    let unresolvedFailure = false
+    const seenStates = new Map<string, number>()
     const goal = this.deps.sessions.get(sessionId)?.messages.find(isTask)?.task?.goal ?? ''
     // A routine learned from a similar task: a guide for the model, so it needs fewer guesses.
     const routine = settings().memory ? (routines?.find(goal, hostOf(startUrl) || undefined) ?? null) : null
 
     browser.driving(true)
     try {
-      if (startUrl) {
+      page = await browser.snapshot()
+      const request = this.deps.sessions.get(sessionId)?.messages.find(isTask)?.task?.request || ''
+      // A same-page follow-up must preserve DOM state, selections and forms.
+      if (startUrl && (page?.url !== startUrl || /\b(reload|refresh|start over)\b/i.test(request))) {
         task((t) => (t.say = `Opening ${hostOf(startUrl)}…`))
         const opened = await browser.open(startUrl)
         step(opened.ok ? `Opened ${hostOf(opened.url) || hostOf(startUrl)}` : `Couldn't open ${hostOf(startUrl)}`, opened.ok ? 'done' : 'failed')
       }
       for (let n = 0; n < MAX_STEPS; n++) {
         if (signal.aborted) throw new Error('stopped')
-        page = await browser.snapshot()
-        task((t) => (t.url = page?.url))
+        if (n > 0 || !page || (startUrl && page.url !== startUrl)) page = await browser.snapshot()
+        task((t) => {
+          t.url = page?.url
+          if (page) {
+            const notices = t.notices ??= []
+            for (const text of page.notices || []) if (!notices.some(n => n.url === page!.url && n.text === text)) notices.push({ url: page.url, text })
+            if (notices.length > 12) notices.splice(0, notices.length - 12)
+            t.checkpoint = { url: page.url, title: page.title, text: page.text.slice(0, 1600), at: Date.now() }
+            const observations = t.observations ??= []
+            const prior = observations.find(o => o.url === page!.url)
+            const evidence = { url: page.url, title: page.title, text: page.text.slice(0, 2200) }
+            if (prior) Object.assign(prior, evidence)
+            else observations.push(evidence)
+            if (observations.length > 8) observations.shift()
+          }
+        })
         const current = this.deps.sessions.get(sessionId)?.messages.find(isTask)?.task
         if (!current) return
-        const reply = parseStep(await model.complete(buildStepPrompt(current, page, settings().name, new Date(), routine), signal))
+        let raw: string
+        try {
+          raw = await model.complete(buildStepPrompt(current, page, settings().name, new Date(), routine, feedback), signal, nativeSteps ? [BROWSER_STEP_TOOL] : [])
+        } catch (error) {
+          if (signal.aborted) throw error
+          if (/no text or tool calls|empty tool|\(200\)/i.test(error instanceof Error ? error.message : '')) nativeSteps = false
+          feedback = `The model request failed: ${error instanceof Error ? error.message.slice(0, 180) : 'unknown error'}. No action ran. Retry the same observation.`
+          step(feedback, 'failed')
+          if (++badReplies >= 3) return finish('paused', 'The service could not return a usable next step. The task is unfinished; the browser state is preserved.')
+          continue
+        }
+        const reply = parseStep(raw)
         if (!reply) {
-          if (++badReplies >= 2) return finish('failed', "I got a bit muddled on this page, so I've stopped. You can carry on yourself, or ask me again.")
+          feedback = 'Invalid step response. Call browser_step with actions using existing ids, done with an observed result, or handoff. An empty object is not a step. No action ran.'
+          if (++badReplies >= 3) return finish('paused', 'I could not choose a valid next step. The task is unfinished and the page is preserved.')
           continue
         }
         badReplies = 0
+        feedback = ''
+        if (reply.actions.length) {
+          const stateKey = JSON.stringify([page?.url, page?.viewport, page?.formFingerprint, page?.observation, page?.text, page?.elements.map(e => [e.role, e.label, e.context, e.value, e.disabled]), reply.actions.map(a => 'id' in a ? { ...a, id: page?.elements.find(e => e.id === a.id)?.label } : a)])
+          const visits = (seenStates.get(stateKey) || 0) + 1
+          seenStates.set(stateKey, visits)
+          if (visits >= 3) return finish('paused', 'I returned to the same observed state and action repeatedly. This task is unfinished; I paused the cycle instead of continuing.')
+        }
+        const attempt = JSON.stringify([page?.url, page?.viewport, page?.formFingerprint, page?.text, page?.elements, reply.actions])
+        repeated = reply.actions.length && attempt === lastAttempt ? repeated + 1 : 0
+        lastAttempt = attempt
+        if (repeated === 1 && reply.actions.length === 1 && reply.actions[0].do === 'click') {
+          feedback = 'The previous identical click already ran, but this observation is unchanged. Do not click it again. Read the current controls/status (including newly revealed review or receipt), choose a different next action, finish only with evidence, or hand off the blocker.'
+          step('Repeated click withheld; requested a new decision', 'skipped')
+          continue
+        }
+        if (repeated >= 2) return finish('paused', 'The same action is making no progress. I paused this unfinished task instead of repeating it.')
         if (reply.say) task((t) => (t.say = reply.say))
+        if (reply.blocked) return finish('blocked', reply.blocked)
         if (reply.handoff) {
-          if (!(await ask(reply.handoff.text, undefined, 'handoff'))) throw new Error('stopped')
+          if (!(await ask(reply.handoff.text, undefined, 'handoff'))) return finish('stopped', 'You declined or stopped the handoff. This task is unfinished; no further action ran.')
           step('You did a step yourself')
           continue
         }
@@ -426,19 +535,41 @@ export class Agent {
           if (signal.aborted) throw new Error('stopped')
           const verdict = judge(action, page, approved)
           if (verdict.kind === 'refuse') {
+            unresolvedFailure = true
             step(verdict.reason, 'skipped')
+            feedback = `${verdict.reason} No action ran. Choose an element from the new snapshot.`
             break
           }
           if (verdict.kind === 'handoff') {
-            if (!(await ask(verdict.text, undefined, 'handoff'))) throw new Error('stopped')
+            if (!(await ask(verdict.text, undefined, 'handoff'))) return finish('stopped', 'You declined or stopped the private-input handoff. This task is unfinished; no further action ran.')
             step('You typed something private yourself')
             break
           }
+          const effectKey = verdict.kind === 'ask' && action.do === 'click'
+            ? JSON.stringify([page?.url, page?.elements.find(e => e.id === action.id)?.label, page?.formFingerprint || page?.elements.filter(e => e.value !== undefined).map(e => [e.label, e.value])])
+            : undefined
+          if (effectKey && current.dispatchedEffects?.includes(effectKey)) {
+            feedback = 'This consequential action with these form values was already dispatched. Do not submit it again. Inspect the receipt/status and finish if verified; otherwise hand off the uncertain outcome.'
+            step('Prevented a duplicate consequential action', 'skipped')
+            break
+          }
           if (verdict.kind === 'ask') {
+            const reviewedState = JSON.stringify([page?.url, page?.elements, page?.formFingerprint])
             if (!(await ask(verdict.summary, verdict.warning))) {
               return finish('stopped', `Okay, I didn't ${verdict.summary.charAt(0).toLowerCase()}${verdict.summary.slice(1)}. I've stopped here, and nothing else was done.`)
             }
             if (verdict.approveDomain) approved.add(verdict.approveDomain)
+            else {
+              const fresh = await browser.snapshot()
+              if (JSON.stringify([fresh?.url, fresh?.elements, fresh?.formFingerprint]) !== reviewedState) {
+                page = fresh
+                unresolvedFailure = true
+                feedback = 'The page or form changed while review was pending. Nothing ran. Inspect the fresh page and request review again for the current state.'
+                step('Review expired because the page or form changed', 'skipped')
+                break
+              }
+              page = fresh
+            }
           }
           let ok = true
           let note: string | undefined
@@ -448,15 +579,22 @@ export class Agent {
             ok = opened.ok
             if (ok) approved.add(hostOf(opened.url))
           } else {
-            ;({ ok, note, navigated = false } = await browser.act(action))
+            ;({ ok, note, navigated = false } = await browser.act({ ...action, ...(verdict.kind === 'ask' ? { reviewed: true } : {}), ...(page?.revision !== undefined ? { snapshotId: page.revision } : {}) }))
           }
           const describe = verdict.kind === 'allow' ? verdict.describe : verdict.summary.replace(/^Press/, 'Pressed').replace(/^Open/, 'Opened')
           step(ok ? describe : `${describe}: ${note ?? "that didn't work"}`, ok ? 'done' : 'failed')
+          if (effectKey && ok) task(t => { (t.dispatchedEffects ??= []).push(effectKey) })
+          unresolvedFailure = !ok
+          if (!ok) feedback = `${note || 'Action failed'}. Read the fresh snapshot and choose a different valid step; do not claim success.`
           if (verdict.kind === 'ask') activity.add({ kind: 'website', summary: `${describe} (you said OK)`, sessionId })
-          // Only look again if the page actually changed; otherwise keep going (fill every box, then press).
-          if (action.do === 'go' || action.do === 'back' || navigated || !ok) break
+          // Read a fresh observation after each state-changing action; only independent typing can batch.
+          if (action.do !== 'type' || navigated || !ok) break
         }
-        if (reply.done) {
+        if (reply.done && !reply.actions.length) {
+          if (unresolvedFailure) {
+            feedback = 'The last action was refused or failed. The task cannot be complete on that basis. Recover using current page evidence or hand off as unfinished.'
+            continue
+          }
           activity.add({ kind: 'website', summary: `Browsing task: ${current.goal}`, sessionId })
           const steps = this.deps.sessions.get(sessionId)?.messages.find(isTask)?.task?.steps ?? current.steps
           const site = hostOf(startUrl) || hostOf(page?.url ?? '')
@@ -464,7 +602,7 @@ export class Agent {
           return finish('done', reply.result || 'All done.')
         }
       }
-      finish('done', "I've taken quite a few steps, so I'll pause here. Tell me if you'd like me to carry on.")
+      finish('paused', 'The step budget was reached. This task is unfinished; the current page and checkpoint are preserved for a follow-up.')
     } catch {
       finish(signal.aborted ? 'stopped' : 'failed', signal.aborted ? 'You stopped me. Nothing else was done.' : "Something went wrong with the browser, so I've stopped.")
     } finally {
@@ -566,6 +704,6 @@ export class Agent {
   }
 }
 
-function newTask(goal: string): Task {
-  return { id: newId(), goal, status: 'running', say: 'Getting started…', steps: [] }
+function newTask(goal: string, request?: string): Task {
+  return { id: newId(), goal, request: request?.slice(0, 4000), status: 'running', say: 'Getting started…', steps: [] }
 }

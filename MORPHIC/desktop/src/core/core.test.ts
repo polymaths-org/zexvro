@@ -6,7 +6,7 @@ import type { BrowserAction, CoreEvent, CoreSettings, PageElement, PageSnapshot 
 import { ActivityLog } from './activity'
 import { Agent } from './agent'
 import { bm25, daysUntil, findDate, guessCategory, looksSensitive, Memory } from './memory'
-import { backoffFor, FallbackClient, OpenRouterClient, splitPrompt, type ModelClient } from './model'
+import { backoffFor, createChatClient, FallbackClient, OpenRouterClient, splitPrompt, type ModelClient } from './model'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { buildTurnPrompt } from './prompt'
@@ -17,6 +17,7 @@ import { parseSkill, Skills } from './skills'
 import { addressWarning, TOOLS } from './tools'
 import { judge, parseStep } from './browser-task'
 import { Connectors } from './connectors'
+import { Workspace } from './workspace'
 import { generalise, Routines } from './routines'
 import { identity, RULES, SoulStore } from './soul'
 import { DEFAULT_PERSONALITY } from '@shared/settings'
@@ -33,8 +34,10 @@ const localStamp = (ms: number) => {
 /** A model that returns scripted replies and records every prompt it was given. */
 class FakeModel implements ModelClient {
   prompts: string[] = []
+  toolSets: unknown[] = []
   constructor(public replies: (string | Error)[]) {}
-  async complete(prompt: string) {
+  async complete(prompt: string, _signal?: AbortSignal, tools?: unknown) {
+    this.toolSets.push(tools)
     this.prompts.push(prompt)
     const next = this.replies.shift() ?? 'Okay.'
     if (next instanceof Error) throw next
@@ -47,18 +50,21 @@ class FakeModel implements ModelClient {
 
 /** A pretend browser: pages are scripted per test, and every action is recorded. */
 class FakeBrowser {
+  closed = true
   opened: string[] = []
   acts: BrowserAction[] = []
   pages: PageSnapshot[] = []
   async open(url: string) {
+    this.closed = false
     this.opened.push(url)
     return { ok: true, url, title: 'Page' }
   }
   async snapshot() {
-    return this.pages.length > 1 ? this.pages.shift()! : (this.pages[0] ?? null)
+    return this.closed ? null : (this.pages[0] ?? null)
   }
   async act(action: BrowserAction) {
     this.acts.push(action)
+    if (action.do === 'click' && this.pages.length > 1) this.pages.shift()
     return { ok: true }
   }
   driving() {}
@@ -75,7 +81,7 @@ async function until(check: () => boolean, ms = 2000) {
   }
 }
 
-function setup(replies: (string | Error)[], settings: Partial<CoreSettings> = {}) {
+function setup(replies: (string | Error)[], settings: Partial<CoreSettings> = {}, workspace?: Workspace) {
   const dir = tmp()
   const events: CoreEvent[] = []
   const reminders = new Reminders(dir, () => {})
@@ -87,6 +93,7 @@ function setup(replies: (string | Error)[], settings: Partial<CoreSettings> = {}
   const routines = new Routines(dir)
   const soul = new SoulStore(dir)
   const agent = new Agent({
+    workspace,
     routines,
     soul: () => soul.get().text,
     browser,
@@ -119,6 +126,11 @@ describe('protocol', () => {
     const r = parseReply('Morph: I have set it.\n<<action {"tool": "set_reminder", "args": {"text": "Tablets {blue}", "when": "2026-10-14 20:00"}}>>')
     expect(r.text).toBe('I have set it.')
     expect(r.actions).toEqual([{ tool: 'set_reminder', args: { text: 'Tablets {blue}', when: '2026-10-14 20:00' } }])
+  })
+
+  it('normalizes flattened tool arguments without overriding explicit envelopes', () => {
+    expect(parseReply('<<action {"tool":"start_browsing","url":"https://example.com","goal":"Compare rooms"}>>').actions).toEqual([{tool:'start_browsing',args:{url:'https://example.com',goal:'Compare rooms'}}])
+    expect(parseReply('<<action {"tool":"start_browsing","args":{},"goal":"Do not merge"}>>').actions).toEqual([{tool:'start_browsing',args:{}}])
   })
 
   it('understands every common way models write tool calls, and hides them all', () => {
@@ -303,7 +315,7 @@ describe('skills and tools', () => {
   })
 
   it('declares a safety tier for every tool; only starting to browse (if switched on) and connector tools ask', () => {
-    expect(TOOLS.filter((t) => t.tier === 'ask').map((t) => t.name)).toEqual(['start_browsing', 'use_connector'])
+    expect(TOOLS.filter((t) => t.tier === 'ask').map((t) => t.name)).toEqual(['start_browsing', 'use_connector', 'workspace_edit'])
     expect(TOOLS.every((t) => t.schema && t.usage)).toBe(true)
   })
 })
@@ -489,6 +501,219 @@ describe('prompt', () => {
 })
 
 describe('browsing', () => {
+  it('keeps the whole request and live browser across turns without reopening the page', async () => {
+    const { agent, browser, model, sessions } = setup([
+      '<<action {"tool":"start_browsing","args":{"goal":"Open settings","url":"https://desk.example/settings"}}>>',
+      '{"done":true,"result":"Daily draft saved"}',
+      '<<action {"tool":"start_browsing","args":{"goal":"Change frequency","url":"https://desk.example/settings"}}>>',
+      '{"done":true,"result":"Weekly draft saved"}'
+    ], { memory: false })
+    browser.pages = [{ ...page([], 'https://desk.example/settings'), text: 'Draft saved: Daily' }]
+    await agent.send(ID, 'Open settings, choose Support, name Rushi, and save a Daily draft.')
+    await until(() => sessions.get(ID)?.messages.at(-1)?.task?.status === 'done')
+    expect(model.prompts[1]).toContain('choose Support, name Rushi, and save a Daily draft')
+    await agent.send(ID, 'Change it to Weekly on the same page.')
+    await until(() => sessions.get(ID)?.messages.at(-1)?.task?.status === 'done')
+    expect(browser.opened).toEqual(['https://desk.example/settings'])
+    expect(model.prompts[2]).toContain('Current browser observation')
+    expect(model.prompts[2]).toContain('Daily draft saved')
+    expect(sessions.get(ID)?.messages.at(-1)?.task?.checkpoint?.url).toBe('https://desk.example/settings')
+    const split = splitPrompt(model.prompts[2])
+    expect(split.system).not.toContain('Draft saved: Daily')
+    expect(split.user).toContain('Draft saved: Daily')
+  })
+
+  it('keeps prior page facts through navigation without personal memory', async () => {
+    const { agent, browser, model, sessions } = setup([
+      '{"actions":[{"do":"click","id":1}]}', '{"done":true,"result":"Kite Pro has 16 GB"}'
+    ], { memory: false })
+    browser.closed = false
+    browser.pages = [{ ...page([el(1, 'Return')], 'https://vendor.example/specs'), text: 'Kite Pro has 16 GB RAM' }, page([], 'https://shop.example/inventory')]
+    sessions.save({ id: ID, title: 't', createdAt: 0, updatedAt: 0, messages: [{ id: 'm1', role: 'morph', text: '', at: 0, task: { id: 't1', goal: 'Compare RAM', status: 'running', say: '', steps: [] } }] })
+    await agent.runTask(ID, 'm1', '')
+    expect(model.prompts[1]).toContain('Kite Pro has 16 GB RAM')
+    expect(sessions.get(ID)?.messages[0].task?.observations).toHaveLength(2)
+    const split = splitPrompt(model.prompts[1])
+    expect(split.system).not.toContain('Kite Pro has 16 GB RAM')
+    expect(split.user).toContain('Kite Pro has 16 GB RAM')
+  })
+
+  it('feeds open_website back into the answer loop with the actual page', async () => {
+    const { agent, browser, model, sessions } = setup(['<<action {"tool":"open_website","args":{"url":"https://invoice.example"}}>>', 'The invoice is unpaid: 42 credits.'])
+    browser.pages = [{ ...page([], 'https://invoice.example'), text: '42 credits. Status unpaid.' }]
+    await agent.send(ID, 'Read this invoice')
+    expect(model.prompts).toHaveLength(2)
+    expect(model.prompts[1]).toContain('42 credits. Status unpaid.')
+    expect(sessions.get(ID)?.messages.at(-1)?.text).toContain('unpaid')
+  })
+
+  it('runs inspected workspace edit through review and feeds the real check back', async () => {
+    const root = tmp()
+    writeFileSync(join(root, 'calc.mjs'), 'export const value = 1')
+    writeFileSync(join(root, 'check.mjs'), "import {value} from './calc.mjs'; if(value!==2)process.exit(1);console.log('CHECK_PASSED')")
+    const workspace = new Workspace(root, [process.execPath, 'check.mjs'])
+    const { hash } = await workspace.read('calc.mjs')
+    const { agent, sessions, model } = setup([
+      '<<action {"tool":"workspace_read","args":{"path":"calc.mjs"}}>>',
+      `<<action ${JSON.stringify({ tool: 'workspace_edit', args: { path: 'calc.mjs', old_text: 'value = 1', new_text: 'value = 2', expected_hash: hash } })}>>`,
+      '<<action {"tool":"workspace_check","args":{}}>>',
+      'The configured check passed.'
+    ], {}, workspace)
+    await agent.send(ID, 'Inspect calc.mjs, change value to 2 and verify it.')
+    const pending = sessions.get(ID)!.messages.at(-1)!.approval!
+    expect(readFileSync(join(root, 'calc.mjs'), 'utf8')).toContain('value = 1')
+    await agent.approve(ID, pending.id, true)
+    await until(() => sessions.get(ID)?.messages.at(-1)?.text === 'The configured check passed.')
+    expect(readFileSync(join(root, 'calc.mjs'), 'utf8')).toContain('value = 2')
+    expect(model.prompts.at(-1)).toContain('CHECK_PASSED')
+    expect(sessions.get(ID)?.messages.at(-1)?.actions?.some(a => a.tool === 'workspace_check' && a.status === 'done')).toBe(true)
+  })
+
+  it('gives no-progress feedback before repeating a harmless click', async () => {
+    const { agent, browser, model, sessions } = setup(['{"actions":[{"do":"click","id":1}]}', '{"actions":[{"do":"click","id":1}]}', '{"done":true,"result":"Review panel already visible"}'])
+    browser.closed = false
+    browser.pages = [page([el(1, 'Review request')])]
+    sessions.save({ id: ID, title: 't', createdAt: 0, updatedAt: 0, messages: [{ id: 'm1', role: 'morph', text: '', at: 0, task: { id: 't1', goal: 'Open review', status: 'running', say: '', steps: [] } }] })
+    await agent.runTask(ID, 'm1', '')
+    expect(browser.acts).toHaveLength(1)
+    expect(model.prompts[2]).toContain('previous identical click already ran')
+  })
+
+  it('expires a consequential review if the form changes before approval', async () => {
+    const { agent, browser, sessions } = setup(['{"actions":[{"do":"click","id":1}]}', ...Array(40).fill('{"done":true,"result":"Submitted"}')])
+    browser.closed = false
+    browser.pages = [page([el(1, 'Submit request'), el(2, 'Quantity', { tag: 'input', value: '3' })])]
+    sessions.save({ id: ID, title: 't', createdAt: 0, updatedAt: 0, messages: [{ id: 'm1', role: 'morph', text: '', at: 0, task: { id: 't1', goal: 'Submit 3 units', status: 'running', say: '', steps: [] } }] })
+    const run = agent.runTask(ID, 'm1', '')
+    await until(() => sessions.get(ID)?.messages[0].approval?.status === 'pending')
+    browser.pages[0].elements[1].value = '30'
+    await agent.approve(ID, sessions.get(ID)!.messages[0].approval!.id, true)
+    await run
+    expect(browser.acts).toHaveLength(0)
+    expect(sessions.get(ID)?.messages[0].task?.status).toBe('paused')
+  })
+
+  it('prevents replay of an already dispatched consequential click', async () => {
+    const { agent, browser, sessions } = setup([
+      '{"actions":[{"do":"click","id":1}]}', '{"actions":[{"do":"wait","ms":100}]}', '{"actions":[{"do":"click","id":1}]}', '{"done":true,"result":"Request receipt observed"}'
+    ])
+    browser.closed = false
+    browser.pages = [page([el(1, 'Submit request')])]
+    sessions.save({ id: ID, title: 't', createdAt: 0, updatedAt: 0, messages: [{ id: 'm1', role: 'morph', text: '', at: 0, task: { id: 't1', goal: 'Submit request once', status: 'running', say: '', steps: [] } }] })
+    const run = agent.runTask(ID, 'm1', '')
+    await until(() => sessions.get(ID)?.messages[0].approval?.status === 'pending')
+    await agent.approve(ID, sessions.get(ID)!.messages[0].approval!.id, true)
+    await run
+    expect(browser.acts.filter(a => a.do === 'click')).toHaveLength(1)
+    expect(sessions.get(ID)?.messages[0].task?.steps.some(s => s.text.includes('Prevented a duplicate'))).toBe(true)
+    expect(sessions.get(ID)?.messages[0].task?.dispatchedEffects).toHaveLength(1)
+  })
+
+  it('retains transient notices even after a later status replaces them', async () => {
+    const {agent,browser,sessions,model}=setup(['{"actions":[{"do":"click","id":1}]}','{"done":true,"result":"Ready"}'])
+    browser.closed=false;browser.pages=[{...page([el(1,'Review')]),notices:['Cedar now has only 2 seats']},{...page([]),notices:['Birch request ready']}]
+    sessions.save({id:ID,title:'t',createdAt:0,updatedAt:0,messages:[{id:'m1',role:'morph',text:'',at:0,task:{id:'t1',goal:'Book three seats',status:'running',say:'',steps:[]}}]})
+    await agent.runTask(ID,'m1','')
+    expect(model.prompts[1]).toContain('Cedar now has only 2 seats')
+    expect(model.prompts[1]).toContain('Birch request ready')
+  })
+
+  it('does not mistake real scrolling through repeated rows for a cycle', async () => {
+    const {agent,browser,sessions}=setup([...Array(6).fill('{"actions":[{"do":"scroll","dir":"down"}]}'),'{"blocked":"Fixture complete"}'])
+    browser.closed=false;browser.pages=[{...page([el(1,'Amount')]),viewport:{x:0,y:0,width:1200,height:700,scrollHeight:10000}}]
+    const original=browser.act.bind(browser)
+    browser.act=async action=>{browser.pages[0].viewport!.y+=500;return original(action)}
+    sessions.save({id:ID,title:'t',createdAt:0,updatedAt:0,messages:[{id:'m1',role:'morph',text:'',at:0,task:{id:'t1',goal:'Inspect repeated rows',status:'running',say:'',steps:[]}}]})
+    await agent.runTask(ID,'m1','')
+    expect(browser.acts).toHaveLength(6)
+    expect(sessions.get(ID)?.messages[0].task?.status).toBe('blocked')
+  })
+
+  it('stops a nonconsecutive observed-state cycle instead of spending the full budget', async () => {
+    const replies=Array.from({length:40},(_,i)=>JSON.stringify({actions:[{do:'scroll',dir:i%2?'up':'down'}]}))
+    const {agent,browser,sessions}=setup(replies)
+    browser.closed=false;browser.pages=[page([])]
+    sessions.save({id:ID,title:'t',createdAt:0,updatedAt:0,messages:[{id:'m1',role:'morph',text:'',at:0,task:{id:'t1',goal:'Look around',status:'running',say:'',steps:[]}}]})
+    await agent.runTask(ID,'m1','')
+    expect(browser.acts.length).toBeLessThan(8)
+    expect(sessions.get(ID)?.messages[0].task?.result).toContain('paused the cycle')
+  })
+
+  it('declining a handoff stops cleanly without an aborted signal or failed task', async () => {
+    const {agent,browser,sessions}=setup(['{"handoff":"Please sign in"}'])
+    browser.closed=false;browser.pages=[page([])]
+    sessions.save({id:ID,title:'t',createdAt:0,updatedAt:0,messages:[{id:'m1',role:'morph',text:'',at:0,task:{id:'t1',goal:'Read private report',status:'running',say:'',steps:[]}}]})
+    const run=agent.runTask(ID,'m1','')
+    await until(()=>sessions.get(ID)?.messages[0].approval?.status==='pending')
+    await agent.approve(ID,sessions.get(ID)!.messages[0].approval!.id,false)
+    await run
+    expect(sessions.get(ID)?.messages[0].task?.status).toBe('stopped')
+  })
+
+  it('falls back to explicit text JSON after an empty native tool response', async () => {
+    const {agent,browser,sessions,model}=setup([new Error('OpenRouter returned no text or tool calls (200)'),'{"blocked":"No image capability is available"}'])
+    browser.closed=false;browser.pages=[page([])]
+    sessions.save({id:ID,title:'t',createdAt:0,updatedAt:0,messages:[{id:'m1',role:'morph',text:'',at:0,task:{id:'t1',goal:'Read canvas',status:'running',say:'',steps:[]}}]})
+    await agent.runTask(ID,'m1','')
+    expect(model.toolSets[0]).toHaveLength(1)
+    expect(model.toolSets[1]).toEqual([])
+    expect(sessions.get(ID)?.messages[0].task?.status).toBe('blocked')
+  })
+
+  it('supports bounded scoped inspection and a distinct evidenced blocked outcome', async () => {
+    expect(parseStep('{"actions":[{"do":"inspect","query":"SKU-99","offset":-10}]}')?.actions).toEqual([{do:'inspect',query:'SKU-99',offset:0}])
+    expect(parseStep('{"blocked":"No 64 GB configuration exists","done":true}')).toBeNull()
+    expect(judge({do:'inspect',query:'SKU-99'},null,new Set()).kind).toBe('allow')
+    const { agent, browser, sessions, routines } = setup(['{"blocked":"The complete inventory only offers 16 and 32 GB; 64 GB is unavailable."}'])
+    browser.closed=false;browser.pages=[page([])]
+    sessions.save({id:ID,title:'t',createdAt:0,updatedAt:0,messages:[{id:'m1',role:'morph',text:'',at:0,task:{id:'t1',goal:'Buy 64 GB RAM',status:'running',say:'',steps:[]}}]})
+    await agent.runTask(ID,'m1','')
+    expect(sessions.get(ID)?.messages[0].task?.status).toBe('blocked')
+    expect(routines.list()).toHaveLength(0)
+  })
+
+  it('accepts the native step envelope, rejects empty steps and supports bounded waits', () => {
+    expect(parseStep('<<action {"tool":"browser_step","args":{"actions":[{"do":"wait","ms":9000}]}}>>')?.actions).toEqual([{ do: 'wait', ms: 2000 }])
+    expect(parseStep('{"say":"working"}')).toBeNull()
+    expect(parseStep('{"actions":[{"do":"invented"}]}')).toBeNull()
+  })
+
+  it('repairs malformed step replies with explicit feedback and never learns from an unfinished loop', async () => {
+    const { agent, browser, model, sessions, routines } = setup(['not json', '{}', '{"actions":[{"do":"wait","ms":100}]}', '{"actions":[{"do":"wait","ms":100}]}', '{"actions":[{"do":"wait","ms":100}]}'])
+    browser.closed = false
+    browser.pages = [page([])]
+    sessions.save({ id: ID, title: 't', createdAt: 0, updatedAt: 0, messages: [{ id: 'm1', role: 'morph', text: '', at: 0, task: { id: 't1', goal: 'Look around', status: 'running', say: '', steps: [] } }] })
+    await agent.runTask(ID, 'm1', '')
+    expect(model.prompts[1]).toContain('Invalid step response')
+    expect(sessions.get(ID)?.messages[0].task).toMatchObject({ status: 'paused' })
+    expect(routines.list()).toHaveLength(0)
+  })
+
+  it('does not claim completion after a refused action', async () => {
+    const { agent, browser, sessions } = setup(['{"actions":[{"do":"click","id":999}]}', ...Array(40).fill('{"done":true,"result":"Saved"}')])
+    browser.closed = false
+    browser.pages = [page([])]
+    sessions.save({ id: ID, title: 't', createdAt: 0, updatedAt: 0, messages: [{ id: 'm1', role: 'morph', text: '', at: 0, task: { id: 't1', goal: 'Save draft', status: 'running', say: '', steps: [] } }] })
+    await agent.runTask(ID, 'm1', '')
+    expect(sessions.get(ID)?.messages[0].task?.status).toBe('paused')
+    expect(browser.acts).toHaveLength(0)
+  })
+
+  it('marks interrupted tasks paused and approvals expired on restart', () => {
+    const { dir, sessions } = setup([])
+    sessions.save({ id: ID, title: 't', createdAt: 0, updatedAt: 0, messages: [{ id: 'm1', role: 'morph', text: '', at: 0, task: { id: 't1', goal: 'Submit', status: 'waiting', say: '', steps: [] }, approval: { id: 'a1', tool: 'browser', summary: 'Submit', status: 'pending' } }] })
+    const reloaded = new Sessions(dir).get(ID)!
+    expect(reloaded.messages[0].task?.status).toBe('paused')
+    expect(reloaded.messages[0].approval?.status).toBe('declined')
+  })
+
+  it('enforces disabled tools at execution, not just in the prompt', async () => {
+    const { agent, browser, sessions } = setup(['<<action {"tool":"open_website","args":{"url":"https://example.com"}}>>', 'My browser is switched off.'], { browser: false })
+    await agent.send(ID, 'Open a website')
+    expect(browser.opened).toHaveLength(0)
+    expect(sessions.get(ID)?.messages.at(-1)?.actions?.[0].status).toBe('failed')
+  })
+
   it('starts browsing straight away when asking first is off (the default)', async () => {
     const { agent, browser, sessions } = setup([
       'On it.\n<<action {"tool": "start_browsing", "args": {"goal": "Check the weather", "url": "https://weather.example"}}>>',
@@ -558,7 +783,7 @@ describe('browsing', () => {
     session = sessions.get(ID)!
     const task = session.messages.at(-1)!.task!
     expect(browser.opened).toEqual(['https://trains.example/book'])
-    expect(browser.acts.at(-1)).toEqual({ do: 'click', id: 4 })
+    expect(browser.acts.at(-1)).toEqual({ do: 'click', id: 4, reviewed: true })
     expect(task.result).toBe('Your 8:05 train to Mumbai is booked.')
     expect(task.steps.map((s) => s.text)).toEqual([
       'Opened trains.example',
@@ -572,6 +797,7 @@ describe('browsing', () => {
   it('stops cleanly when the person says no, and never presses the button', async () => {
     const { agent, browser, sessions } = setup(['{"say": "Paying", "actions": [{"do": "click", "id": 5}]}'], { askBeforeBrowsing: false })
     browser.pages = [page([el(5, 'Pay now', { submit: true })])]
+    browser.closed = false
     sessions.save({ id: ID, title: 't', createdAt: 0, updatedAt: 0, messages: [{ id: 'm1', role: 'morph', text: 'On it', at: 0, task: { id: 't1', goal: 'Pay the bill', status: 'running', say: '', steps: [] } }] })
     const run = agent.runTask(ID, 'm1', '')
     const msg = () => sessions.get(ID)!.messages[0]
@@ -589,6 +815,7 @@ describe('browsing', () => {
       '{"done": true, "result": "You are logged in."}'
     ])
     browser.pages = [page([el(2, 'Password', { tag: 'input', sensitive: true })])]
+    browser.closed = false
     sessions.save({ id: ID, title: 't', createdAt: 0, updatedAt: 0, messages: [{ id: 'm1', role: 'morph', text: '', at: 0, task: { id: 't1', goal: 'Log in', status: 'running', say: '', steps: [] } }] })
     const run = agent.runTask(ID, 'm1', '')
     const msg = () => sessions.get(ID)!.messages[0]
@@ -603,6 +830,7 @@ describe('browsing', () => {
   it('can be stopped mid-task', async () => {
     const { agent, browser, sessions } = setup(['{"say": "Opening", "actions": [{"do": "go", "url": "http://10.0.0.5/"}]}'])
     browser.pages = [page([])]
+    browser.closed = false
     sessions.save({ id: ID, title: 't', createdAt: 0, updatedAt: 0, messages: [{ id: 'm1', role: 'morph', text: '', at: 0, task: { id: 't1', goal: 'Look around', status: 'running', say: '', steps: [] } }] })
     const run = agent.runTask(ID, 'm1', '')
     const msg = () => sessions.get(ID)!.messages[0]
@@ -658,7 +886,13 @@ describe('model providers', () => {
 
   it('talks to an OpenAI-compatible endpoint with system + user messages and fallback models', async () => {
     let seen: { headers: Record<string, unknown>; body: Record<string, unknown> } | null = null
+    let probePath = ''
     const server = createServer((req, res) => {
+      if (req.method === 'GET') {
+        probePath = req.url ?? ''
+        res.writeHead(req.url === '/models' && req.headers.authorization === 'Bearer test-key' ? 200 : 404).end('{}')
+        return
+      }
       let raw = ''
       req.on('data', (c) => (raw += c))
       req.on('end', () => {
@@ -688,7 +922,41 @@ describe('model providers', () => {
     const reply = await client.complete('hi', new AbortController().signal, [{ name: 'set_reminder', description: 'set one', parameters: { type: 'object' } }])
     expect(seen!.body).toMatchObject({ tool_choice: 'auto', tools: [{ type: 'function', function: { name: 'set_reminder' } }] })
     expect(parseReply(reply).actions).toEqual([{ tool: 'set_reminder', args: { text: 'Tea', when: '2026-10-14 17:00' } }])
+    expect(await client.reachable()).toBe(true)
+    expect(probePath).toBe('/models')
+    const unauthorized = new OpenRouterClient(() => ({ key: 'wrong-key', models: ['a/one'], baseUrl }))
+    expect(await unauthorized.reachable()).toBe(false)
     server.close()
+  })
+
+  it('tries compatible gateway models in order and preserves native tools on fallback', async () => {
+    const seen: Record<string, unknown>[] = []
+    const server = createServer((req, res) => {
+      let raw = ''
+      req.on('data', (chunk) => (raw += chunk))
+      req.on('end', () => {
+        const body = JSON.parse(raw)
+        seen.push(body)
+        if (body.model !== 'third') {
+          res.writeHead(body.model === 'first' ? 403 : 429, { 'Content-Type': 'application/json' }).end('{"error":{"message":"unavailable"}}')
+          return
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ choices: [{ message: { tool_calls: [{ function: { name: 'remember', arguments: '{"fact":"Test color is teal"}' } }] } }] }))
+      })
+    })
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    try {
+      const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+      const client = createChatClient({ key: 'local', models: ['first', 'second', 'third'], baseUrl })
+      const tools = [{ name: 'remember', description: 'Remember a fact', parameters: { type: 'object' } }]
+      const reply = await client.complete('Remember my test color', new AbortController().signal, tools)
+      expect(seen.map((body) => body.model)).toEqual(['first', 'second', 'third'])
+      expect(seen.every((body) => !('models' in body) && Array.isArray(body.tools))).toBe(true)
+      expect(parseReply(reply).actions).toEqual([{ tool: 'remember', args: { fact: 'Test color is teal' } }])
+    } finally {
+      server.closeAllConnections()
+      server.close()
+    }
   })
 
   it('falls back to the next provider on failure, but never retries after Stop', async () => {
@@ -738,5 +1006,36 @@ describe('model providers', () => {
     const client = new FallbackClient([down, flaky], () => {}, () => 1000)
     await expect(client.complete('a', new AbortController().signal)).rejects.toThrow()
     expect(await client.complete('b', new AbortController().signal)).toBe('back again')
+  })
+})
+
+describe('truncated model output', () => {
+  it('retries a length-limited response without executing its partial tool call and retains the learned budget', async () => {
+    const budgets: number[]=[]
+    const server=createServer((req,res)=>{
+      let raw='';req.on('data',c=>raw+=c);req.on('end',()=>{
+        const body=JSON.parse(raw);budgets.push(body.max_tokens)
+        const first=budgets.length===1
+        res.writeHead(200,{'Content-Type':'application/json'}).end(JSON.stringify({choices:[{finish_reason:first?'length':'stop',message:first?{tool_calls:[{function:{name:'workspace_edit',arguments:'{"path":"wrong.mjs"}'}}]}:{content:'Observed final result'}}]}))
+      })
+    })
+    await new Promise<void>(r=>server.listen(0,'127.0.0.1',r))
+    try{
+      const client=new OpenRouterClient(()=>({key:'local',models:['test'],baseUrl:`http://127.0.0.1:${(server.address() as AddressInfo).port}`}))
+      expect(await client.complete('Inspect',new AbortController().signal)).toBe('Observed final result')
+      expect(await client.complete('Follow up',new AbortController().signal)).toBe('Observed final result')
+      expect(budgets).toEqual([1500,3000,3000])
+    }finally{server.closeAllConnections();server.close()}
+  })
+
+  it('caps output-budget retries and never returns a truncated action',async()=>{
+    let calls=0
+    const server=createServer((_req,res)=>{calls++;res.writeHead(200,{'Content-Type':'application/json'}).end(JSON.stringify({choices:[{finish_reason:'length',message:{content:'{"tool":"workspace_edit"}'}}]}))})
+    await new Promise<void>(r=>server.listen(0,'127.0.0.1',r))
+    try{
+      const client=new OpenRouterClient(()=>({key:'local',models:['test'],baseUrl:`http://127.0.0.1:${(server.address() as AddressInfo).port}`}))
+      await expect(client.complete('Inspect',new AbortController().signal)).rejects.toThrow('6000 tokens')
+      expect(calls).toBe(3)
+    }finally{server.closeAllConnections();server.close()}
   })
 })

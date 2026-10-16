@@ -38,7 +38,8 @@ function toAction(value: unknown): ParsedAction | null {
   const fn = v.function && typeof v.function === 'object' ? (v.function as Record<string, unknown>) : null
   const tool = [v.tool, v.name, fn?.name, v.function].find((t): t is string => typeof t === 'string')
   if (!tool || !/^[a-z_]{3,40}$/.test(tool)) return null
-  let args: unknown = v.args ?? v.arguments ?? v.parameters ?? v.input ?? fn?.arguments ?? {}
+  const flatArgs = typeof v.tool === 'string' ? Object.fromEntries(Object.entries(v).filter(([key]) => !['tool','name','function','id','type'].includes(key))) : {}
+  let args: unknown = v.args ?? v.arguments ?? v.parameters ?? v.input ?? fn?.arguments ?? flatArgs
   if (typeof args === 'string') {
     try {
       args = JSON.parse(args)

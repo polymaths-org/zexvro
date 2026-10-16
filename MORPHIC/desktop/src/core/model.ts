@@ -69,13 +69,14 @@ export interface OpenRouterConfig {
 
 /** OpenRouter's OpenAI-compatible chat API. */
 export class OpenRouterClient implements ModelClient {
+  private outputBudget = 1500
   constructor(private config: () => OpenRouterConfig) {}
 
   private base() {
     return (this.config().baseUrl ?? 'https://openrouter.ai/api/v1').replace(/\/$/, '')
   }
 
-  async complete(prompt: string, signal: AbortSignal, tools?: NativeTool[]): Promise<string> {
+  async complete(prompt: string, signal: AbortSignal, tools?: NativeTool[], budget = this.outputBudget): Promise<string> {
     const { key, models } = this.config()
     const { system, user } = splitPrompt(prompt)
     const res = await fetch(`${this.base()}/chat/completions`, {
@@ -83,20 +84,27 @@ export class OpenRouterClient implements ModelClient {
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://zexvro.in', 'X-Title': 'Morph' },
       body: JSON.stringify({
         ...(models.length > 1 ? { models } : { model: models[0] }),
-        max_tokens: 1500,
+        max_tokens: budget,
         temperature: 0.4,
         messages: [...(system ? [{ role: 'system', content: system }] : []), { role: 'user', content: user }],
         ...(tools?.length
           ? { tools: tools.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.parameters } })), tool_choice: 'auto' }
-          : {})
+          : tools ? { tool_choice: 'none' } : {})
       }),
       signal: AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)])
     })
     type Call = { function?: { name?: string; arguments?: string } }
     const body = (await res.json().catch(() => null)) as {
-      choices?: { message?: { content?: unknown; tool_calls?: Call[] } }[]
+      choices?: { finish_reason?: string; message?: { content?: unknown; tool_calls?: Call[] } }[]
       error?: { message?: string }
     } | null
+    if (res.ok && body?.choices?.[0]?.finish_reason === 'length') {
+      // A partial tool call must never reach execution. Retry only the model request.
+      if (budget >= 6000) throw new Error('Model output budget exhausted at 6000 tokens; no truncated action was executed.')
+      if (signal.aborted) throw new Error('stopped')
+      this.outputBudget = Math.min(6000, budget * 2)
+      return this.complete(prompt, signal, tools, this.outputBudget)
+    }
     const message = body?.choices?.[0]?.message
     const text = typeof message?.content === 'string' ? message.content.trim() : ''
     // Native tool calls become the same <<action>> lines the rest of Core already understands.
@@ -110,16 +118,19 @@ export class OpenRouterClient implements ModelClient {
       }
       return [`<<action ${JSON.stringify({ tool: call.function.name, args })}>>`]
     })
-    if (!res.ok || (!text && calls.length === 0)) {
+    if (res.ok && !text && calls.length === 0) throw new Error(`OpenRouter returned no text or tool calls (200; finish=${body?.choices?.[0]?.finish_reason || 'unknown'}). Use only the advertised tool or text JSON protocol.`)
+    if (!res.ok) {
       throw new Error(`OpenRouter request failed (${res.status})${body?.error?.message ? `: ${body.error.message}` : ''}`)
     }
     return [text, ...calls].filter(Boolean).join('\n')
   }
 
-  /** Checks the key, not just the network. */
+  /** OpenRouter validates keys at /key; compatible gateways expose /models instead. */
   async reachable(): Promise<boolean> {
     try {
-      const res = await fetch(`${this.base()}/key`, { headers: { Authorization: `Bearer ${this.config().key}` }, signal: AbortSignal.timeout(5_000) })
+      const route = this.config().baseUrl ? 'models' : 'key'
+      const res = await fetch(`${this.base()}/${route}`, { headers: { Authorization: `Bearer ${this.config().key}` }, signal: AbortSignal.timeout(5_000) })
+      await res.body?.cancel()
       return res.ok
     } catch {
       return false
@@ -163,6 +174,7 @@ export class FallbackClient implements ModelClient {
   async complete(prompt: string, signal: AbortSignal, tools?: NativeTool[]): Promise<string> {
     const resting = (c: ModelClient) => (this.skipUntil.get(c) ?? 0) > this.now()
     const ready = this.clients.filter((c) => !resting(c))
+    const errors: unknown[] = []
     let last: unknown
     for (const client of ready.length ? ready : this.clients) {
       try {
@@ -172,11 +184,13 @@ export class FallbackClient implements ModelClient {
       } catch (err) {
         if (signal.aborted) throw err
         last = err
+        errors.push(err)
         const wait = backoffFor(err, this.now())
         if (wait > 0) this.skipUntil.set(client, this.now() + wait)
         this.onFallback(err)
       }
     }
+    if (errors.length > 1) throw new AggregateError(errors, `All configured model providers failed: ${errors.map(e => e instanceof Error ? e.message : String(e)).join('; ').slice(0, 1400)}`)
     throw last
   }
 
@@ -184,4 +198,12 @@ export class FallbackClient implements ModelClient {
     for (const client of this.clients) if (await client.reachable()) return true
     return false
   }
+}
+
+/** OpenRouter accepts `models`; other chat gateways need individual `model` requests. */
+export function createChatClient(config: OpenRouterConfig): ModelClient {
+  if (config.baseUrl && config.models.length > 1) {
+    return new FallbackClient(config.models.map((model) => new OpenRouterClient(() => ({ ...config, models: [model] }))))
+  }
+  return new OpenRouterClient(() => config)
 }
