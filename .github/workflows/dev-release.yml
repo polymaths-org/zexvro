@@ -30,6 +30,7 @@ jobs:
             services/nft-service/api/package-lock.json
             services/agent-auth/package-lock.json
             services/depin/package-lock.json
+            services/zk-prover/package-lock.json
             labs/package-lock.json
             labs/spacetimedb/package-lock.json
             landing/zexvro/package-lock.json

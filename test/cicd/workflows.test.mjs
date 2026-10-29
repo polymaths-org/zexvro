@@ -12,3 +12,8 @@ test('legacy manual script dispatches the verified workflow and contains no dire
 test('legacy Worker deployment alias cannot bypass production gates',async()=>{
  const script=await readFile('services/platform-api/scripts/deploy.mjs','utf8');assert.match(script,/scripts\/deploy-production.sh/);assert.doesNotMatch(script,/wrangler|d1.*migrations|npm.*build/);
 });
+test('all tested Node services have explicit clean-runner dependency installation',async()=>{
+ const install=await readFile('scripts/cicd/install.sh','utf8'),workflow=await readFile('.github/workflows/dev-release.yml','utf8');
+ for(const pkg of ['frontend','services/platform-api','services/nft-service/api','services/agent-auth','services/depin','services/zk-prover','labs'])assert.ok(install.includes(pkg),'Missing dependency install: '+pkg);
+ assert.match(workflow,/services\/zk-prover\/package-lock.json/);
+});
