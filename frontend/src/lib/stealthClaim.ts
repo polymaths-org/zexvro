@@ -38,9 +38,7 @@ function getRandomValues(len: number): Uint8Array {
       return out;
     }
   } catch { /* fall through */ }
-  // Fallback if getRandomValues is missing (should be rare on modern browsers)
-  for (let i = 0; i < len; i++) out[i] = Math.floor(Math.random() * 256) ^ ((Date.now() >> (i % 16)) & 0xff);
-  return out;
+  throw new Error('Secure randomness is unavailable. Use a modern HTTPS browser.');
 }
 
 /** Derive a 32-byte secretbox key from PIN + salt (pure JS, no WebCrypto). */
@@ -114,8 +112,10 @@ function concat(...parts: Uint8Array[]): Uint8Array {
 
 /** Generate a 6-digit withdraw PIN (never starts with 0 for readability). */
 export function generateWithdrawPin(): string {
-  const n = 100000 + Math.floor(Math.random() * 900000);
-  return String(n).slice(0, PIN_LEN);
+  const range=900000,limit=Math.floor(0x100000000/range)*range;
+  let value:number;
+  do {const bytes=getRandomValues(4);value=new DataView(bytes.buffer,bytes.byteOffset,4).getUint32(0)}while(value>=limit);
+  return String(100000+value%range);
 }
 
 /**
@@ -135,7 +135,10 @@ export async function createStealthClaim(args: {
   if (!args.oneTimeSecret?.startsWith('S')) {
     throw new Error('Invalid one-time secret (expected S…)');
   }
+  const pair=Keypair.fromSecret(args.oneTimeSecret);
+  if(pair.publicKey()!==args.oneTimePublicKey)throw new Error('One-time secret does not match its public key');
   const pin = args.pin || generateWithdrawPin();
+  if(!/^\d{6}$/.test(pin))throw new Error('Use a six-digit PIN');
   const salt = getRandomValues(SALT_LEN);
   const nonce = getRandomValues(NONCE_LEN);
   const key = deriveKeyBytes(pin, salt);
@@ -324,6 +327,8 @@ export async function sweepOneTimeToAddress(args: {
   }
 
   const source = Keypair.fromSecret(args.oneTimeSecret);
+  Keypair.fromPublicKey(to);
+  if(source.publicKey()===to)throw new Error('Destination must differ from the one-time account');
   const network = args.network || 'TESTNET';
   const horizon = (args.horizonUrl || horizonFor(network)).replace(/\/$/, '');
   const passphrase = passphraseFor(network);
@@ -345,6 +350,7 @@ export async function sweepOneTimeToAddress(args: {
 
   // Destination exists?
   const destRes = await fetch(`${horizon}/accounts/${to}`);
+  if(!destRes.ok && destRes.status!==404)throw new Error('Could not check destination account; retry without submitting a transaction');
   const destExists = destRes.ok;
 
   const sequence = srcData.sequence;
@@ -409,6 +415,7 @@ export async function sweepOneTimeToAddress(args: {
     throw new Error(`Withdraw failed: ${detail}`);
   }
 
+  if(!/^[a-f0-9]{64}$/i.test(String(submitData.hash || '')))throw new Error('Horizon did not confirm a transaction hash; check the account before retrying');
   return {
     txHash: submitData.hash,
     amountXlm: balanceXlm,

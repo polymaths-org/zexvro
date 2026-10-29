@@ -8,9 +8,11 @@ export interface AdminIdentity {
   via: 'dev' | 'cognito' | 'admin_key'
 }
 
-declare module 'express-serve-static-core' {
-  interface Locals {
-    gateAdmin?: AdminIdentity
+declare global {
+  // Express augments Locals through its global namespace.
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace Express {
+    interface Locals { gateAdmin?: AdminIdentity }
   }
 }
 

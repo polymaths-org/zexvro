@@ -1,3 +1,4 @@
+import {runtimeValue} from '../../lib/runtimeConfig';
 import React, { useEffect, useState } from 'react';
 import {
   Settings, ShieldAlert, CheckCircle2, ToggleLeft, ToggleRight, Sparkles, Save
@@ -15,10 +16,10 @@ import {
 } from '../../agent/settings';
 
 const IS_LOCAL_HOST = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-const API_BASE_URL = import.meta.env.VITE_API_URL ||
+const API_BASE_URL = runtimeValue('VITE_API_URL') ||
   (IS_LOCAL_HOST
-    ? 'https://qkuostruh3.execute-api.us-east-1.amazonaws.com'
-    : 'https://qkuostruh3.execute-api.us-east-1.amazonaws.com');
+    ? 'https://zexvro-platform-api.zexvro.workers.dev'
+    : 'https://zexvro-platform-api.zexvro.workers.dev');
 const AGENT_CHAT_URL = IS_LOCAL_HOST ? '/api/agent/chat' : `${API_BASE_URL}/api/chat`;
 
 interface SettingsProps {

@@ -77,7 +77,7 @@ function parseCorsOrigins(raw: string | undefined): string[] {
     .filter(Boolean)
 }
 
-export function loadConfig(env: NodeJS.ProcessEnv = process.env): GateConfig {
+export function loadConfig(env: Record<string,string|undefined> = process.env): GateConfig {
   const parsed = envSchema.parse(env)
   const isProd = parsed.NODE_ENV === 'production'
   const issuer = parsed.AGENT_AUTH_ISSUER.replace(/\/$/, '')

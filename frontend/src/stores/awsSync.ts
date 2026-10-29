@@ -1,4 +1,5 @@
-import { employeeApi, inviteApi, projectApi, workspaceApi, proofApi, payrollApi } from '../api/api';
+import {resolveWorkspaceMember,memberCan} from '../rbac/permissions';
+import { employeeApi, projectApi, workspaceApi, proofApi, payrollApi } from '../api/api';
 import { useWorkspaceStore } from './workspace';
 import { useProjectStore } from './project';
 import { useZer0Store } from './zer0';
@@ -24,136 +25,10 @@ function idFromRemote<T extends Record<string, any>>(item: T, fallbackKey: strin
   };
 }
 
-function memberDisplayScore(m: Workspace['members'][number]) {
-  const emailLocal = String(m.email || '').includes('@')
-    ? String(m.email).split('@')[0].toLowerCase()
-    : '';
-  const name = String(m.name || '');
-  const pid = String(m.principalId || m.id || '');
-  const hasRealUsername =
-    (pid && !pid.includes('@') && !pid.startsWith('member_') && pid.toLowerCase() !== emailLocal)
-    || (name && !name.includes('@') && name.toLowerCase() !== emailLocal);
-  return (
-    (m.status === 'active' ? 8 : 0)
-    + (m.email ? 4 : 0)
-    + (hasRealUsername ? 4 : 0)
-    + (m.role === 'Owner' ? 1 : 0)
-  );
-}
-
-function mergeMembersLists(
-  a: Workspace['members'] = [],
-  b: Workspace['members'] = [],
-): Workspace['members'] {
-  const byKey = new Map<string, Workspace['members'][number]>();
-  for (const m of [...a, ...b]) {
-    if (!m) continue;
-    const key = String(m.email || m.id || m.principalId || '').trim().toLowerCase();
-    if (!key) continue;
-    const prev = byKey.get(key);
-    if (!prev) {
-      byKey.set(key, m);
-      continue;
-    }
-    // Prefer active + real Cognito username (nabil3) over email-local name (snabilshaikh186)
-    const pick = memberDisplayScore(m) >= memberDisplayScore(prev)
-      ? { ...prev, ...m }
-      : { ...m, ...prev };
-    // Always keep the better username/principalId
-    const emailLocal = String(pick.email || '').includes('@')
-      ? String(pick.email).split('@')[0]
-      : '';
-    for (const src of [m, prev]) {
-      const pid = String(src.principalId || src.id || '');
-      if (pid && !pid.includes('@') && !pid.startsWith('member_') && pid !== emailLocal) {
-        pick.principalId = pid;
-        if (!pick.name || pick.name.toLowerCase() === emailLocal.toLowerCase()) {
-          pick.name = pid;
-        }
-      }
-    }
-    byKey.set(key, pick);
-  }
-  return Array.from(byKey.values());
-}
-
-function uniqueByWorkspaceId(items: Workspace[]) {
-  const byId = new Map<string, Workspace>();
-  for (const item of items) {
-    if (!item?.id) continue;
-    const existing = byId.get(item.id);
-    if (!existing) {
-      byId.set(item.id, item);
-      continue;
-    }
-    // Prefer richer member/invite data when merging shared + owned
-    byId.set(item.id, {
-      ...existing,
-      ...item,
-      members: mergeMembersLists(existing.members, item.members),
-      invitations: (item.invitations?.length ? item.invitations : existing.invitations) || [],
-      name: item.name || existing.name,
-      ownerId:
-        item.ownerId && item.ownerId !== 'remote-owner'
-          ? item.ownerId
-          : existing.ownerId || item.ownerId,
-    });
-  }
-  return Array.from(byId.values());
-}
-
-/** Collapse same-name rows (owner spam + shared stubs). Keep richest real workspace. */
-function collapseDuplicateNames(items: Workspace[], session?: { username?: string; email?: string }) {
-  const uname = String(session?.username || '').trim().toLowerCase();
-  const email = String(session?.email || '').trim().toLowerCase();
-  const score = (w: Workspace) => {
-    const members = w.members?.length || 0;
-    const invites = w.invitations?.length || 0;
-    const owner = String(w.ownerId || '').trim().toLowerCase();
-    const isStub = owner === 'remote-owner' || owner === '';
-    const isMine = owner && (owner === uname || owner === email);
-    // Prefer real Dynamo rows, then more members/invites, then newer
-    return (
-      (isStub ? 0 : 1_000_000)
-      + (isMine ? 100_000 : 0)
-      + members * 1000
-      + invites * 10
-      + (Number(w.createdAt) || 0) / 1e15
-    );
-  };
-  // Group by name; also group shared "N4bi10p's Workspace" spam across different owner ids
-  const byName = new Map<string, Workspace>();
-  for (const w of items) {
-    const key = String(w.name || '').trim().toLowerCase();
-    if (!key) {
-      byName.set(w.id, w);
-      continue;
-    }
-    const prev = byName.get(key);
-    if (!prev || score(w) >= score(prev)) byName.set(key, w);
-  }
-  return uniqueByWorkspaceId(Array.from(byName.values()));
-}
-
 let lastPullSucceeded = false;
-
-export function didLastWorkspacePullSucceed() {
-  return lastPullSucceeded;
-}
-
-function isSharedForSession(ws: Workspace, session: { username?: string; email?: string }) {
-  const uname = String(session.username || '').trim().toLowerCase();
-  const email = String(session.email || '').trim().toLowerCase();
-  const owner = String(ws.ownerId || '').trim().toLowerCase();
-  if (owner && (owner === uname || owner === email)) return false;
-  const members = ws.members || [];
-  return members.some(m => {
-    const status = String(m.status || 'active').toLowerCase();
-    if (status !== 'active' && m.role !== 'Owner') return false;
-    const mEmail = String(m.email || '').trim().toLowerCase();
-    const mId = String(m.id || m.principalId || '').trim().toLowerCase();
-    return (email && mEmail === email) || (uname && (mId === uname || mEmail.split('@')[0] === uname));
-  });
+export function didLastWorkspacePullSucceed() { return lastPullSucceeded; }
+function sameAccount(session: {username?: string}) {
+  return getUserSession()?.username === session.username;
 }
 
 function waitForZer0Rehydrate(timeoutMs = 2500): Promise<void> {
@@ -231,139 +106,28 @@ function normalizeProof(raw: any) {
   };
 }
 
-function membersFingerprint(members: Workspace['members'] = []) {
-  return members
-    .map(m =>
-      [
-        String(m.email || '').toLowerCase(),
-        m.role,
-        m.status,
-        m.principalId || m.id || '',
-        m.name || '',
-      ].join(':'),
-    )
-    .sort()
-    .join('|');
-}
-
 const detailInFlight = new Map<string, Promise<void>>();
 
-/** Refresh one workspace (members roster) from platform API + local accept index. */
+/** D1 is authoritative: removed members and revoked invites must disappear. */
 export async function loadWorkspaceDetail(workspaceId: string) {
   const session = getUserSession();
   if (!session?.token || !workspaceId) return;
-
-  const existingFlight = detailInFlight.get(workspaceId);
-  if (existingFlight) return existingFlight;
-
+  const key = `${session.username}:${workspaceId}`;
+  const existing = detailInFlight.get(key);
+  if (existing) return existing;
   const run = (async () => {
-    let remoteMembers: Workspace['members'] = [];
-    let remoteInvites: Workspace['invitations'] = [];
-    let remoteName = '';
-    let remoteOwner = '';
-
     try {
-      const res = await workspaceApi.get(workspaceId);
-      const remote = res?.workspace;
-      if (remote) {
-        remoteMembers = (remote.members || []) as Workspace['members'];
-        remoteInvites = (remote.invitations || []) as Workspace['invitations'];
-        remoteName = remote.name || '';
-        remoteOwner = remote.ownerId || '';
-      }
-    } catch {
-      /* old Lambda / no access — continue with local index */
+      const {workspace} = await workspaceApi.get(workspaceId);
+      if (!workspace || !sameAccount(session)) return;
+      useWorkspaceStore.setState(state => ({workspaces: state.workspaces.map(local =>
+        local.id === workspaceId ? {...local, ...workspace, id: workspaceId,
+          members: workspace.members || [], invitations: workspace.invitations || []} : local
+      )}));
+    } catch (error) {
+      console.error('Could not refresh workspace:', error);
     }
-
-    // Local Vite accepted-members index (works even if Dynamo never got the accept)
-    try {
-      const local = await inviteApi.listLocalMembers(workspaceId);
-      if (local.length) {
-        remoteMembers = mergeMembersLists(
-          remoteMembers,
-          local.map((m: any) => {
-            const email = String(m.email || '');
-            const pid = String(m.principalId || m.username || m.id || '');
-            const username = String(m.username || (!pid.includes('@') ? pid : '') || '');
-            const name =
-              username
-              || String(m.name || '')
-              || (email.includes('@') ? email.split('@')[0] : 'Member');
-            return {
-              id: pid || email,
-              email,
-              name,
-              role: (m.role || 'Viewer') as Workspace['members'][number]['role'],
-              status: (m.status === 'invited' || m.status === 'pending' ? m.status : 'active') as Workspace['members'][number]['status'],
-              joinedAt: Number(m.joinedAt) || Date.now(),
-              principalId: pid || undefined,
-              principalType: m.principalType,
-              inviteId: m.inviteId ? String(m.inviteId) : undefined,
-              roleBoundAt: m.roleBoundAt ? Number(m.roleBoundAt) : undefined,
-            };
-          }),
-        );
-      }
-    } catch {
-      /* ignore */
-    }
-
-    const prev = useWorkspaceStore.getState().workspaces;
-    const idx = prev.findIndex(w => w.id === workspaceId);
-    if (idx < 0) return;
-
-    const existing = prev[idx];
-    // Always union with existing local members so pull/detail never shrinks the roster
-    const merged = mergeMembersLists(existing.members, remoteMembers).map(m => {
-      const email = String(m.email || '').toLowerCase();
-      const better = remoteMembers.find(
-        r => String(r.email || '').toLowerCase() === email && r.status === 'active',
-      );
-      if (better && (m.status === 'invited' || m.status === 'pending')) {
-        return { ...m, ...better, status: 'active' as const };
-      }
-      // Never demote an active local member just because Dynamo is stale
-      if (m.status === 'active') return m;
-      return m;
-    });
-
-    if (!merged.length && !remoteName) return;
-
-    const invitations = (remoteInvites?.length ? remoteInvites : existing.invitations || []).map(inv => {
-      const active = merged.some(
-        m =>
-          String(m.email || '').toLowerCase() === String(inv.email || '').toLowerCase()
-          && m.status === 'active',
-      );
-      if (active && inv.status === 'pending') {
-        return { ...inv, status: 'accepted' as const, acceptedAt: Date.now() };
-      }
-      return inv;
-    });
-
-    // Skip setState when nothing meaningful changed (stops 5s flicker re-renders)
-    if (
-      membersFingerprint(existing.members) === membersFingerprint(merged)
-      && (remoteName || existing.name) === existing.name
-      && (remoteOwner || existing.ownerId) === existing.ownerId
-    ) {
-      return;
-    }
-
-    const next = [...prev];
-    next[idx] = {
-      ...existing,
-      name: remoteName || existing.name,
-      ownerId: remoteOwner || existing.ownerId,
-      members: merged,
-      invitations,
-    };
-    useWorkspaceStore.setState({ workspaces: next });
-  })().finally(() => {
-    detailInFlight.delete(workspaceId);
-  });
-
-  detailInFlight.set(workspaceId, run);
+  })().finally(() => detailInFlight.delete(key));
+  detailInFlight.set(key, run);
   return run;
 }
 
@@ -373,6 +137,7 @@ export async function loadProjectsForWorkspace(workspaceId: string) {
   if (!session?.token || !workspaceId) return;
   try {
     const projData = await projectApi.list(workspaceId);
+    if (!sameAccount(session)) return;
     const remoteProjects = (projData.projects || []).map(project =>
       idFromRemote({ ...project, workspaceId: project.workspaceId || workspaceId }, 'projectId'),
     );
@@ -424,56 +189,19 @@ export async function pullFromAWS() {
       // Never race empty remote data against localStorage rehydrate
       await waitForZer0Rehydrate();
 
-      const localBefore = useWorkspaceStore.getState().workspaces || [];
       const wsData = await workspaceApi.list();
+      if (!sameAccount(session)) return;
       lastPullSucceeded = true;
-      let remoteWorkspaces = (wsData.workspaces || []).map(workspace =>
+      const workspaces = (wsData.workspaces || []).map(workspace =>
         idFromRemote(workspace, 'workspaceId'),
       ) as Workspace[];
-
-      // Local Vite membership index (invite accept file store) — stubs only if AWS missing
-      let localShared: Workspace[] = [];
-      try {
-        const shared = await inviteApi.listShared(session.email);
-        localShared = (shared.workspaces || []).map(workspace =>
-          idFromRemote(workspace as Record<string, unknown>, 'workspaceId'),
-        ) as unknown as Workspace[];
-      } catch {
-        /* prod Lambda may not expose /api/me/workspaces yet */
-      }
-
-      // Keep local shared workspaces that pull would otherwise wipe
-      const preservedShared = localBefore.filter(ws => isSharedForSession(ws, session));
-
-      // Prefer AWS rows; still merge local shared stubs for richer member rosters
-      const extraShared = [...localShared, ...preservedShared].filter(w => {
-        if (/^ws_(smoke|e2e|shared_)/i.test(String(w.id || ''))) return false;
-        return true;
-      });
-
-      // Collapse same-name owned spam; merge members from all sources first
-      let workspaces = collapseDuplicateNames(
-        uniqueByWorkspaceId([...remoteWorkspaces, ...extraShared]),
-        session,
-      );
-
-      // Critical: never let a thin Dynamo list wipe accepted members between polls
-      const latestLocal = useWorkspaceStore.getState().workspaces || localBefore;
-      workspaces = workspaces.map(w => {
-        const prev = latestLocal.find(x => x.id === w.id);
-        if (!prev?.members?.length) return w;
-        return {
-          ...w,
-          members: mergeMembersLists(prev.members, w.members),
-          invitations: w.invitations?.length ? w.invitations : prev.invitations,
-        };
-      });
-      // Keep workspaces that exist only locally (shared stubs not yet on list)
-      for (const prev of latestLocal) {
-        if (!workspaces.some(w => w.id === prev.id) && isSharedForSession(prev, session)) {
-          workspaces = [...workspaces, prev];
-        }
-      }
+      // Keep distinct D1 IDs even when owners independently choose the same name.
+      const accessible = new Set(workspaces.map(w => w.id));
+      useProjectStore.setState(state => ({
+        projects: state.projects.filter(p => accessible.has(p.workspaceId)),
+        environments: state.environments.filter(e => accessible.has(e.workspaceId)),
+        serviceInstances: state.serviceInstances.filter(i => accessible.has(i.workspaceId)),
+      }));
 
       // Always apply successful list result (including empty) so auto-create can run once
       const currentWorkspaceId = useWorkspaceStore.getState().currentWorkspaceId;
@@ -492,7 +220,10 @@ export async function pullFromAWS() {
       // Single roster refresh for current workspace (avoid N parallel detail races)
       await loadWorkspaceDetail(resolvedWorkspaceId);
 
+      const active = useWorkspaceStore.getState().workspaces.find(w=>w.id===resolvedWorkspaceId);
+      if(!memberCan(resolveWorkspaceMember(active,session),'finance.view'))return;
       const empData = await employeeApi.list(resolvedWorkspaceId);
+      if (!sameAccount(session)) return;
       const employees = (empData.employees || []).map(employee => idFromRemote(employee, 'employeeId'));
 
       // Re-read after awaits so localStorage rehydrate / in-session data is not lost
@@ -528,7 +259,7 @@ export async function pullFromAWS() {
           };
         });
       } catch (e) {
-        console.error('Failed to pull proofs from AWS:', e);
+        console.error('Failed to pull proofs from the API:', e);
       }
 
       try {
@@ -581,19 +312,20 @@ export async function pullFromAWS() {
       payments.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
       proofs.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
+      if (!sameAccount(session)) return;
       useZer0Store.setState({
-        employees: employees.length ? employees : localState.employees,
+        employees,
         payments,
         proofs,
         settings: { ...useZer0Store.getState().settings },
       });
     } catch (err) {
       lastPullSucceeded = false;
-      console.error('Failed to pull ZEXVRO state from AWS DynamoDB:', err);
+      console.error('Failed to pull ZEXVRO state from Cloudflare D1:', err);
     } finally {
       isHydrating = false;
       // Only mark hydrated after a successful list so we never auto-create on network blips
-      if (lastPullSucceeded) {
+      if (sameAccount(session) && lastPullSucceeded) {
         useWorkspaceStore.getState().setHydrated(true);
       }
       pullInFlight = null;

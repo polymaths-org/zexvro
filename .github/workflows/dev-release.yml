@@ -1,0 +1,133 @@
+name: Verify and deploy dev
+on:
+  workflow_call:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: zexvro-verification-${{ github.event.pull_request.number || 'main' }}
+  cancel-in-progress: false
+  queue: max
+jobs:
+  verify:
+    name: All non-Morph checks and frozen-artifact browser tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            services/platform-api/package-lock.json
+            services/nft-service/api/package-lock.json
+            services/agent-auth/package-lock.json
+            services/depin/package-lock.json
+            labs/package-lock.json
+            labs/spacetimedb/package-lock.json
+            landing/zexvro/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            zer0-pool
+            services/nft-service
+      - name: Install dependencies
+        run: bash scripts/cicd/install.sh
+      - name: Install browser
+        working-directory: frontend
+        run: npx playwright install --with-deps chrome
+      - name: Prepare offline Wrangler configuration directory
+        run: sudo install -d -m 700 -o "$(id -u)" -g "$(id -g)" /home/wraient/.wrangler /home/wraient/.wrangler/config /home/wraient/.wrangler/profiles
+      - name: Select zexvro for credential-free local checks
+        run: |
+          printf '# Offline checks only; no Cloudflare credentials.\n' > /home/wraient/.wrangler/config/zexvro.toml
+          XDG_CONFIG_HOME=/home/wraient node services/platform-api/node_modules/wrangler/bin/wrangler.js auth activate zexvro "$GITHUB_WORKSPACE"
+      - name: Test, typecheck, lint and build every non-Morph service
+        run: bash scripts/cicd/check.sh
+      - name: Package immutable release artifacts
+        run: node scripts/cicd/build.mjs
+      - name: Browser acceptance against packaged dev and production configurations
+        run: node scripts/cicd/browser.mjs
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        with:
+          name: checked-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: release/
+          retention-days: 1
+          if-no-files-found: error
+      - name: Bound failure evidence size
+        if: failure()
+        run: node scripts/cicd/bound-traces.mjs
+      - name: Save failure traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failure-traces-${{ github.run_id }}-${{ github.run_attempt }}
+          path: frontend/test-results/
+          retention-days: 1
+          if-no-files-found: ignore
+  dev:
+    name: Isolated dev release and live integration verification
+    permissions:
+      contents: read
+      actions: write
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: verify
+    environment:
+      name: development
+      url: https://dev.zexvro.in
+    concurrency:
+      group: zexvro-deployment-lane
+      cancel-in-progress: false
+      queue: max
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      WRANGLER_ZEXVRO_PROFILE_TOML: ${{ secrets.WRANGLER_ZEXVRO_PROFILE_TOML }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Prepare protected profile directory
+        run: sudo install -d -m 700 -o "$(id -u)" -g "$(id -g)" /home/wraient/.wrangler /home/wraient/.wrangler/config /home/wraient/.wrangler/profiles
+      - name: Install deployment and smoke dependencies
+        run: |
+          for package in frontend services/platform-api services/nft-service/api services/agent-auth services/depin; do
+            npm ci --prefix "$package" --legacy-peer-deps --no-audit --no-fund
+          done
+      - uses: actions/download-artifact@v4
+        with:
+          name: checked-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: release/
+      - name: Install staging browser
+        working-directory: frontend
+        run: npx playwright install --with-deps chrome
+      - name: Deploy dev and verify exact release
+        run: node scripts/cicd/deploy.mjs dev release
+      - name: Finalize eligibility evidence
+        run: node scripts/cicd/finalize.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: candidate-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: release/
+          retention-days: 3
+          if-no-files-found: error
+      - name: Bound release artifact storage
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/cicd/prune-artifacts.mjs
+      - name: Remove ephemeral CI credentials
+        if: always()
+        run: rm -f /home/wraient/.wrangler/config/zexvro.toml

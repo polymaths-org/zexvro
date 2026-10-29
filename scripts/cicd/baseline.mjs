@@ -1,0 +1,11 @@
+import {readFile,readdir} from 'node:fs/promises';import {createHash} from 'node:crypto';
+import {authenticate,client} from './cloudflare.mjs';import {journal} from './journal.mjs';import {ACCOUNT} from './policy.mjs';
+const c=JSON.parse(await readFile('scripts/cicd/environments.json')),api=client(await authenticate()),state=await journal(c.journalBucket,'production');
+if(state.sha)throw Error('Production is already managed; baseline cannot be replaced');
+const rows=await api(`/accounts/${ACCOUNT}/d1/database/${c.production.databaseId}/query`,{method:'POST',body:{sql:'SELECT name FROM d1_migrations ORDER BY name'}});
+const names=rows[0]?.results?.map(r=>r.name);if(!Array.isArray(names))throw Error('Cannot read applied production migrations');
+const local=(await readdir('services/platform-api/migrations')).filter(n=>n.endsWith('.sql')).sort();
+if(JSON.stringify(names)!==JSON.stringify(local))throw Error('Remote migration history differs; operator reconciliation required');
+const files={};for(const name of names)files['migrations/'+name]=createHash('sha256').update(await readFile('services/platform-api/migrations/'+name)).digest('hex');
+for(const [path,hash] of Object.entries(state.files||{}))if(files[path]!==hash)throw Error('Existing migration baseline mismatch');
+await journal(c.journalBucket,'production',{...state,files,baselineVerified:true});console.log('Applied production migration baseline verified and recorded; no schema changed');

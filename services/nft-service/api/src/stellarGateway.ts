@@ -543,7 +543,7 @@ export class StellarNftChainGateway implements NftChainGateway {
       if (result.status === rpc.Api.GetTransactionStatus.FAILED) {
         const resultXdr =
           'resultXdr' in result && result.resultXdr
-            ? String(result.resultXdr)
+            ? typeof result.resultXdr === 'string' ? result.resultXdr : result.resultXdr.toXDR('base64')
             : undefined
         const mapped = resultXdr
           ? simulationFailureToApiError(new Error(`HostError: ${resultXdr}`))
@@ -592,7 +592,7 @@ export class StellarNftChainGateway implements NftChainGateway {
     // Sale/mint args can include BigInt (i128 prices). JSON.stringify throws on BigInt
     // and was causing HTTP 500 on sale-config/submit after Freighter sign.
     const stableSerialize = (value: unknown) =>
-      JSON.stringify(value, (_key, current) =>
+      JSON.stringify(value, (_key, current: unknown): unknown =>
         typeof current === 'bigint' ? current.toString() : current,
       )
 

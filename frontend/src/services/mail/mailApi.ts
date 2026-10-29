@@ -1,3 +1,4 @@
+import {runtimeValue} from '../../lib/runtimeConfig';
 /**
  * ZEXVRO transactional mail client.
  *
@@ -10,29 +11,24 @@
  * Never uses localhost:8080.
  */
 
-const IS_LOCAL =
-  typeof window !== 'undefined'
-  && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-
-const PROD_PLATFORM_API = 'https://qkuostruh3.execute-api.us-east-1.amazonaws.com';
+const PROD_PLATFORM_API = 'https://zexvro-platform-api.zexvro.workers.dev';
 
 /** Platform backend (workspaces, memory, …) — never localhost:8080. */
 export function platformApiBase(): string {
-  const fromEnv = (import.meta.env.VITE_API_URL as string | undefined)?.trim();
+  const fromEnv = (runtimeValue('VITE_API_URL') as string | undefined)?.trim();
   if (fromEnv) return fromEnv.replace(/\/$/, '');
   // Local mock on 8080 is unused; point at hosted API Gateway.
   return PROD_PLATFORM_API;
 }
 
 /**
- * Mail send base. Local same-origin so Vite Brevo middleware handles it.
- * Production uses platform API (Lambda + Brevo).
+ * Invitation API base. Both local and hosted consoles use the authenticated D1 API.
+ * Explicit overrides support isolated development fixtures.
  * Override with VITE_MAIL_API_URL if needed.
  */
 export function mailApiBase(): string {
   const override = (import.meta.env.VITE_MAIL_API_URL as string | undefined)?.trim();
   if (override) return override.replace(/\/$/, '');
-  if (IS_LOCAL) return ''; // → /api/invite/send on Vite
   return platformApiBase();
 }
 
@@ -194,7 +190,6 @@ export async function listMySharedWorkspaces(email?: string): Promise<{
 }> {
   const base = mailApiBase();
   const headers = authHeaders();
-  if (email) headers['X-User-Email'] = email.trim().toLowerCase();
   const q = email ? `?email=${encodeURIComponent(email.trim().toLowerCase())}` : '';
   const url = `${base}/api/me/workspaces${q}`;
   const response = await fetch(url, { headers });

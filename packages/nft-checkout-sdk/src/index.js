@@ -37,7 +37,7 @@
 async function requestJson(baseUrl, path, init = {}) {
   const response = await fetch(`${baseUrl.replace(/\/$/, '')}${path}`, init)
   const contentType = response.headers.get('content-type') || ''
-  const body = contentType.includes('application/json')
+  const body = /(?:application\/json|\+json)(?:;|$)/i.test(contentType)
     ? await response.json().catch(() => undefined)
     : await response.text().catch(() => undefined)
 
@@ -52,6 +52,7 @@ async function requestJson(baseUrl, path, init = {}) {
     error.details = body && typeof body === 'object' && body.error ? body.error.details : body
     throw error
   }
+  if(!body || typeof body!=='object' || Array.isArray(body))throw new Error('NFT API returned an invalid JSON response');
   return body
 }
 
@@ -143,7 +144,9 @@ export function openCheckout(options) {
   const collectionId = options.collectionId
   if (!collectionId) throw new Error('collectionId is required')
 
-  const origin = (options.checkoutOrigin || window.location.origin).replace(/\/$/, '')
+  const checkoutUrl = new URL(options.checkoutOrigin || window.location.origin);
+  if(!['http:','https:'].includes(checkoutUrl.protocol) || checkoutUrl.username || checkoutUrl.password)throw new Error('Invalid checkout origin');
+  const origin = checkoutUrl.origin
   const width = options.width || 440
   const height = options.height || 720
   const left = Math.max(0, Math.floor(window.screenX + (window.outerWidth - width) / 2))
@@ -174,7 +177,7 @@ export function openCheckout(options) {
   }
 
   const onMessage = (event) => {
-    if (event.origin !== origin) return
+    if (event.origin !== origin || event.source !== popup) return
     const data = event.data
     if (!data || data.source !== 'zexvro-nft-checkout') return
     if (data.type === 'success') {

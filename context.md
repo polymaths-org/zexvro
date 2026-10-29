@@ -78,6 +78,10 @@ Required for backend integration:
 
 If ZEXVRO does not hold signing credentials, the frontend must connect the user's wallet and the user must provide the wallet address/public key. In that model, store only public wallet addresses and non-secret connection metadata in DynamoDB; never ask users to paste secret seeds into the app.
 
+## Database reset (2026-10-28)
+
+AWS was deleted. User authorized a fresh database and account reset on Cloudflare D1 under profile `zexvro` / `zexvro@gmail.com`, emphasizing efficient usage. `services/platform-api/` is deployed at `https://zexvro-platform-api.zexvro.workers.dev` and the console at `https://console.zexvro.in/dashboard` uses it. New email/password accounts, recovery keys, revocable sessions, device authorization and core platform data routes replace Cognito/Lambda/DynamoDB for these flows. Users must register again. NFTo/Gate persistence now uses the same D1 Worker; NFT assets use R2. Credits/promos/admin APIs, share-link invitations, member management, waitlist and CSV imports are migrated. NFT chain wallet/WASM, paid credit checkout, email delivery and independent compute/prover hosting remain external setup; see the platform-api README for exact coverage. Existing AWS descriptions below describe legacy infrastructure, not restored availability.
+
 ## Current Repo State
 
 The repository currently contains:

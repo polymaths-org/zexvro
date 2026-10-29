@@ -1,6 +1,7 @@
+import {runtimeValue} from '../../lib/runtimeConfig';
 /**
  * Client for ZEXVRO Gate / REQWID (Agent Auth).
- * Production: set VITE_AGENT_AUTH_API_URL=https://api.zexvro.in/gate
+ * Production: set VITE_AGENT_AUTH_API_URL=https://zexvro-platform-api.zexvro.workers.dev/gate
  * Local dev: Vite proxies /api/agent-auth → :4103
  *
  * If VITE_* is missing on a hosted console host, fall back to production Gate
@@ -8,7 +9,7 @@
  */
 
 function resolveGateApiBase(): string {
-  const fromEnv = String(import.meta.env.VITE_AGENT_AUTH_API_URL || '').trim()
+  const fromEnv = String(runtimeValue('VITE_AGENT_AUTH_API_URL') || '').trim()
   if (fromEnv) return fromEnv.replace(/\/$/, '')
 
   if (typeof window !== 'undefined') {
@@ -21,12 +22,12 @@ function resolveGateApiBase(): string {
       host === 'zexvro.in' ||
       host === 'www.zexvro.in'
     ) {
-      return 'https://api.zexvro.in/gate'
+      return 'https://zexvro-platform-api.zexvro.workers.dev/gate'
     }
   }
 
-  // Local Vite dev proxy
-  return '/api/agent-auth'
+  // Shared Cloudflare production default (override explicitly for a local API).
+  return 'https://zexvro-platform-api.zexvro.workers.dev/gate'
 }
 
 const GATE_API_BASE = resolveGateApiBase()
@@ -104,12 +105,14 @@ export async function fetchGateStatus(): Promise<GateStatus> {
 }
 
 export async function listGateSites(authHeader?: string): Promise<GateSite[]> {
-  const res = await fetch(`${GATE_API_BASE}/v1/admin/sites`, {
-    headers: authHeaders(authHeader),
-  })
-  if (!res.ok) throw new Error(await parseError(res, 'list sites failed'))
-  const body = (await res.json()) as { sites?: GateSite[] }
-  return body.sites || []
+  const sites:GateSite[]=[];let cursor='';
+  for(let page=0;page<100;page++){
+    const res=await fetch(`${GATE_API_BASE}/v1/admin/sites${cursor?`?cursor=${encodeURIComponent(cursor)}`:''}`,{headers:authHeaders(authHeader)});
+    if(!res.ok)throw new Error(await parseError(res,'list sites failed'));
+    const body=await res.json() as {sites?:GateSite[];nextCursor?:string|null};sites.push(...(body.sites||[]));
+    if(!body.nextCursor)return sites;if(body.nextCursor===cursor)throw new Error('Invalid site pagination');cursor=body.nextCursor;
+  }
+  throw new Error('Too many sites; narrow the request');
 }
 
 export async function createGateSite(

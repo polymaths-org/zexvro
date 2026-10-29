@@ -1,0 +1,41 @@
+{
+  "account": "ac51c31a2a40b154a68a40bd5283fae2",
+  "journalBucket": "zexvro-release-state",
+  "targets": [
+    "console",
+    "platform-api",
+    "landing"
+  ],
+  "dev": {
+    "worker": "zexvro-platform-api-dev",
+    "api": "https://zexvro-platform-api-dev.zexvro.workers.dev",
+    "database": "zexvro-platform-dev",
+    "databaseId": "e446c835-9378-433e-a6c9-f599ea367728",
+    "bucket": "zexvro-nft-assets-dev",
+    "console": "https://dev.zexvro.in",
+    "pages": "zexvro-dev",
+    "landingPages": "zexvro-land-dev",
+    "landing": "https://landing.dev.zexvro.in",
+    "origins": [
+      "https://dev.zexvro.in",
+      "https://landing.dev.zexvro.in"
+    ]
+  },
+  "production": {
+    "worker": "zexvro-platform-api",
+    "api": "https://zexvro-platform-api.zexvro.workers.dev",
+    "database": "zexvro-platform",
+    "databaseId": "050a83ff-2404-4a75-8cf7-e2ca48644d24",
+    "bucket": "zexvro-nft-assets",
+    "console": "https://console.zexvro.in",
+    "pages": "zexvro",
+    "landingPages": "land",
+    "landing": "https://zexvro.in",
+    "origins": [
+      "https://console.zexvro.in",
+      "https://zexvro.in",
+      "https://www.zexvro.in",
+      "https://app.zexvro.in"
+    ]
+  }
+}

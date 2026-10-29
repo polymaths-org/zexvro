@@ -1,6 +1,7 @@
-const HOSTED_DEPIN_API = 'https://sr9k3xpmbj.us-east-1.awsapprunner.com';
-const configuredDepinApi = (import.meta.env.VITE_DEPIN_API_URL || '').trim().replace(/\/$/, '');
-// Prefer explicit env; fall back to hosted App Runner so Pages/local never hit a dead proxy.
+import {runtimeValue} from '../../lib/runtimeConfig';
+const HOSTED_DEPIN_API = 'https://zexvro-platform-api.zexvro.workers.dev/depin';
+const configuredDepinApi = (runtimeValue('VITE_DEPIN_API_URL') || '').trim().replace(/\/$/, '');
+// Prefer explicit env; fall back to Cloudflare gateway so Pages/local never hit a dead proxy.
 const DEPIN_API_BASE = configuredDepinApi || HOSTED_DEPIN_API;
 
 /** Shared API origin for dashboard + docs. */
@@ -32,7 +33,7 @@ export interface DepinStatus {
     type: 'file' | 'inline' | 'url';
     detail: string;
   };
-  stateBackend?: 'memory' | 'file';
+  stateBackend?: 'memory' | 'file' | 'd1';
   /** True only when state is shared across instances (not App Runner /tmp alone). */
   multiInstanceSafe?: boolean;
   capabilities: {

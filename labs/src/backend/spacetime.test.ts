@@ -65,7 +65,7 @@ describe('SpacetimeStore', () => {
   });
 
   it('lists catalog labs with banner refs and hydrated content', async () => {
-    const store = new SpacetimeStore({ url: 'https://test.invalid', db: 'labs-beta' });
+    const store = new SpacetimeStore({gatewayToken:'fixture-token', url: 'https://test.invalid', db: 'labs-beta' });
     const labs = await store.listLabs();
     assert.equal(labs.length, 1);
     assert.equal(labs[0].id, 'lab_solidity_101');
@@ -75,14 +75,14 @@ describe('SpacetimeStore', () => {
   });
 
   it('enrolls via the enroll_lab reducer', async () => {
-    const store = new SpacetimeStore({ url: 'https://test.invalid', db: 'labs-beta' });
+    const store = new SpacetimeStore({gatewayToken:'fixture-token', url: 'https://test.invalid', db: 'labs-beta' });
     await store.updateLab('lab_solidity_101', { enrolledCount: 8 });
     const wrote = calls.find((c) => c.url.endsWith('/call/upsert_lab_summary'));
     assert.ok(wrote, 'expected an upsert_lab_summary reducer call');
   });
 
   it('saves progress through the save_progress reducer', async () => {
-    const store = new SpacetimeStore({ url: 'https://test.invalid', db: 'labs-beta' });
+    const store = new SpacetimeStore({gatewayToken:'fixture-token', url: 'https://test.invalid', db: 'labs-beta' });
     await store.saveProgress('u1', 'lab_solidity_101', {
       labId: 'lab_solidity_101',
       startedAt: '2026-09-09',

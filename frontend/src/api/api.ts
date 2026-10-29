@@ -1,3 +1,4 @@
+import {ensureValidAccessToken, readStoredSession} from '../auth/cognito';
 /**
  * ZEXVRO API Client
  *
@@ -39,13 +40,20 @@ function getAuthHeaders(): Record<string, string> {
   }
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+async function performRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE}${path}`;
   let response: Response;
+  const session=readStoredSession();
+  if(session)await ensureValidAccessToken(session);
+  const account = readStoredSession()?.username;
+  const headers = {...getAuthHeaders(), ...(options.headers as Record<string,string> || {})};
+  const assertAccount = () => {
+    if(readStoredSession()?.username !== account)throw new Error('Account changed during the request; retry.');
+  };
   try {
     response = await fetch(url, {
       ...options,
-      headers: { ...getAuthHeaders(), ...(options.headers as Record<string, string> || {}) },
+      headers,
     });
   } catch (e: any) {
     const msg = e?.message || String(e);
@@ -55,11 +63,41 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
         : msg,
     );
   }
+  assertAccount();
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: response.statusText }));
     throw new Error(error.error_description || error.error || 'API request failed');
   }
-  return response.json();
+  const data = await response.json();
+  assertAccount();
+  if (options.method === 'GET' && data.nextCursor && !new URL(url).searchParams.has('cursor') && !new URL(url).searchParams.has('limit')) {
+    let cursor=data.nextCursor;
+    for(let page=0; cursor && page<99; page++) {
+      const nextUrl=new URL(url);nextUrl.searchParams.set('cursor',cursor);
+      assertAccount();
+      const nextResponse=await fetch(nextUrl,{headers});
+      if(!nextResponse.ok)throw new Error('Could not load the next page');
+      const next=await nextResponse.json();
+      assertAccount();
+      if(next.nextCursor===cursor)throw new Error('Invalid pagination cursor');
+      for(const key of Object.keys(data))if(Array.isArray(data[key])&&Array.isArray(next[key]))data[key].push(...next[key]);
+      cursor=next.nextCursor;data.nextCursor=cursor;
+    }
+    if(cursor)throw new Error('Too many results; narrow your request');
+  }
+  return data;
+}
+
+// A short, session-scoped read cache coalesces duplicate widget/poll requests.
+// Any mutation invalidates it; failed reads are never retained.
+const readCache=new Map<string,{expires:number;promise:Promise<unknown>}>();
+async function request<T>(path:string,options:RequestInit={}):Promise<T>{
+  if(options.method!=='GET'){readCache.clear();return performRequest<T>(path,options);}
+  const key=`${readStoredSession()?.token||''}:${path}`,now=Date.now(),cached=readCache.get(key);
+  if(cached&&cached.expires>now)return structuredClone(await cached.promise) as T;
+  if(readCache.size>=64)readCache.delete(readCache.keys().next().value!);
+  const promise=performRequest<T>(path,options);readCache.set(key,{expires:now+2000,promise});
+  try{return structuredClone(await promise);}catch(error){if(readCache.get(key)?.promise===promise)readCache.delete(key);throw error;}
 }
 
 export const api = {
@@ -132,6 +170,9 @@ export const workspaceApi = {
   create: (data: any) => api.post<any>('/api/workspaces', data),
   update: (id: string, data: any) => api.put<any>(`/api/workspaces/${id}`, data),
   delete: (id: string) => api.delete<any>(`/api/workspaces/${id}`),
+  leave: (id: string) => api.post<any>(`/api/workspaces/${encodeURIComponent(id)}/leave`,{}),
+  setMemberRole: (id:string,memberId:string,role:string) => api.post<any>(`/api/workspaces/${encodeURIComponent(id)}/members/${encodeURIComponent(memberId)}/role`,{role}),
+  removeMember: (id:string,memberId:string) => api.delete<any>(`/api/workspaces/${encodeURIComponent(id)}/members/${encodeURIComponent(memberId)}`),
   invite: (id: string, member: any) => api.post<any>(`/api/workspaces/${id}/invite`, member),
   /** Durable append-only audit ledger (Lambda → Dynamo). */
   listAudit: (id: string, opts?: { limit?: number; cursor?: string; projectId?: string }) => {

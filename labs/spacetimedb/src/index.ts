@@ -1,3 +1,4 @@
+import {isTrustedGateway} from './authorization';
 import { schema, table, t, SenderError } from 'spacetimedb/server';
 
 // ZEXVRO Labs database module.
@@ -153,6 +154,7 @@ export const upsert_lab_summary = spacetimedb.reducer(
     banner_hash: t.string().optional(),
   },
   (ctx, args) => {
+    if(!isTrustedGateway(ctx.sender))throw new SenderError('Trusted gateway authentication required');
     const existing = ctx.db.lab_summary.id.find(args.id);
     if (existing) {
       ctx.db.lab_summary.id.update({
@@ -201,6 +203,7 @@ export const save_lab_content = spacetimedb.reducer(
     initial_terminal_command: t.string().optional(),
   },
   (ctx, args) => {
+    if(!isTrustedGateway(ctx.sender))throw new SenderError('Trusted gateway authentication required');
     const existing = ctx.db.lab_content.lab_id.find(args.lab_id);
     const row = {
       lab_id: args.lab_id,
@@ -216,6 +219,7 @@ export const save_lab_content = spacetimedb.reducer(
 );
 
 export const delete_lab = spacetimedb.reducer({ lab_id: t.string() }, (ctx, { lab_id }) => {
+    if(!isTrustedGateway(ctx.sender))throw new SenderError('Trusted gateway authentication required');
   ctx.db.lab_summary.id.delete(lab_id);
   ctx.db.lab_content.lab_id.delete(lab_id);
   ctx.db.lab_private.lab_id.delete(lab_id);
@@ -224,6 +228,7 @@ export const delete_lab = spacetimedb.reducer({ lab_id: t.string() }, (ctx, { la
 // --- Enrollment + progress ---------------------------------------------------
 
 export const enroll_lab = spacetimedb.reducer({ lab_id: t.string() }, (ctx, { lab_id }) => {
+    if(!isTrustedGateway(ctx.sender))throw new SenderError('Trusted gateway authentication required');
   const lab = ctx.db.lab_summary.id.find(lab_id);
   if (!lab) throw new SenderError('Lab not found');
   ctx.db.lab_summary.id.update({ ...lab, enrolled_count: lab.enrolled_count + 1 });
@@ -240,6 +245,7 @@ export const save_progress = spacetimedb.reducer(
     detail_json: t.string().optional(),
   },
   (ctx, args) => {
+    if(!isTrustedGateway(ctx.sender))throw new SenderError('Trusted gateway authentication required');
     const id = `${args.user_id}:${args.lab_id}`;
     const row = {
       id,
@@ -263,6 +269,7 @@ export const save_progress = spacetimedb.reducer(
 export const save_lab_private = spacetimedb.reducer(
   { lab_id: t.string(), answers_json: t.string(), access_code_hash: t.string().optional() },
   (ctx, args) => {
+    if(!isTrustedGateway(ctx.sender))throw new SenderError('Trusted gateway authentication required');
     const existing = ctx.db.lab_private.lab_id.find(args.lab_id);
     const row = {
       lab_id: args.lab_id,
@@ -277,6 +284,7 @@ export const save_lab_private = spacetimedb.reducer(
 export const verify_task = spacetimedb.reducer(
   { lab_id: t.string(), task_id: t.string(), flag: t.string(), command: t.string() },
   (ctx, { lab_id, task_id, flag, command }) => {
+    if(!isTrustedGateway(ctx.sender))throw new SenderError('Trusted gateway authentication required');
     const priv = ctx.db.lab_private.lab_id.find(lab_id);
     if (!priv) throw new SenderError('Lab not found');
     const answers = JSON.parse(priv.answers_json) as Record<
@@ -319,6 +327,7 @@ export const complete_lab = spacetimedb.reducer(
     design_json: t.string().optional(),
   },
   (ctx, args) => {
+    if(!isTrustedGateway(ctx.sender))throw new SenderError('Trusted gateway authentication required');
     const now = ctx.timestamp.toString();
     ctx.db.submission.insert({
       id: `sub_${now}_${args.user_id}`,
@@ -369,6 +378,7 @@ export const save_submission = spacetimedb.reducer(
     payload_json: t.string().optional(),
   },
   (ctx, args) => {
+    if(!isTrustedGateway(ctx.sender))throw new SenderError('Trusted gateway authentication required');
     ctx.db.submission.insert({
       id: args.id,
       lab_id: args.lab_id,
@@ -392,6 +402,7 @@ export const update_submission = spacetimedb.reducer(
     payload_json: t.string().optional(),
   },
   (ctx, args) => {
+    if(!isTrustedGateway(ctx.sender))throw new SenderError('Trusted gateway authentication required');
     const existing = ctx.db.submission.id.find(args.id);
     if (!existing) throw new SenderError('Submission not found');
     ctx.db.submission.id.update({
@@ -416,6 +427,7 @@ export const upsert_user = spacetimedb.reducer(
     role: t.string(),
   },
   (ctx, args) => {
+    if(!isTrustedGateway(ctx.sender))throw new SenderError('Trusted gateway authentication required');
     const existing = ctx.db.user_profile.uid.find(args.uid);
     if (existing) {
       ctx.db.user_profile.uid.update({
@@ -445,6 +457,7 @@ export const upsert_user = spacetimedb.reducer(
 export const take_idea = spacetimedb.reducer(
   { idea_id: t.string(), user_id: t.string() },
   (ctx, { idea_id, user_id }) => {
+    if(!isTrustedGateway(ctx.sender))throw new SenderError('Trusted gateway authentication required');
     const idea = ctx.db.lab_idea.id.find(idea_id);
     if (!idea) throw new SenderError('Idea not found');
     if (idea.taken_by) throw new SenderError('This idea is already taken');

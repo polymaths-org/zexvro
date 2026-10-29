@@ -1,0 +1,96 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "zexvro-platform-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-19",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "workers_dev": true,
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 0.05
+  },
+  "vars": {
+    "ALLOWED_ORIGINS": "https://zexvro.in,https://www.zexvro.in,https://app.zexvro.in,https://console.zexvro.in,http://localhost:5173,http://localhost:3000,http://127.0.0.1:4173,http://127.0.0.1:5173",
+    "CREDITS_STARTER_GRANT": "100",
+    "CAPTCHA_ASSETS_ROOT": "/bundle/captcha-assets",
+    "STELLAR_RPC_URL": "https://soroban-rpc.mainnet.stellar.gateway.fm",
+    "STELLAR_NETWORK_PASSPHRASE": "Public Global Stellar Network ; September 2015",
+    "STELLAR_PAYMENT_TOKEN": "CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA",
+    "PUBLIC_API_URL": "https://zexvro-platform-api.zexvro.workers.dev",
+    "RELEASE_SHA": "manual"
+  },
+  "ratelimits": [
+    {
+      "name": "API_RATE_LIMITER",
+      "namespace_id": "28001",
+      "simple": {
+        "limit": 120,
+        "period": 60
+      }
+    },
+    {
+      "name": "WRITE_RATE_LIMITER",
+      "namespace_id": "28002",
+      "simple": {
+        "limit": 20,
+        "period": 60
+      }
+    },
+    {
+      "name": "AUTH_RATE_LIMITER",
+      "namespace_id": "28003",
+      "simple": {
+        "limit": 10,
+        "period": 60
+      }
+    },
+    {
+      "name": "DEVICE_RATE_LIMITER",
+      "namespace_id": "28004",
+      "simple": {
+        "limit": 12,
+        "period": 60
+      }
+    },
+    {
+      "name": "DEPIN_UNPAID_RATE_LIMITER",
+      "namespace_id": "28005",
+      "simple": {
+        "limit": 30,
+        "period": 60
+      }
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "zexvro-platform",
+      "database_id": "050a83ff-2404-4a75-8cf7-e2ca48644d24",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "account_id": "ac51c31a2a40b154a68a40bd5283fae2",
+  "r2_buckets": [
+    {
+      "binding": "NFT_MEDIA",
+      "bucket_name": "zexvro-nft-assets"
+    }
+  ],
+  "rules": [
+    {
+      "type": "Text",
+      "globs": [
+        "**/agent-auth-sdk/src/captcha.js"
+      ],
+      "fallthrough": true
+    }
+  ],
+  "triggers": {
+    "crons": [
+      "17 * * * *"
+    ]
+  },
+  "minify": true
+}

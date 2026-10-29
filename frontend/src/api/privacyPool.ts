@@ -1,3 +1,4 @@
+import {accountStorageKey,currentStorageAccount} from '../lib/accountStorage';
 /**
  * Privacy Pool Client
  *
@@ -15,6 +16,7 @@ import {
   Horizon, rpc, Keypair, Transaction, authorizeEntry,
 } from '@stellar/stellar-sdk';
 import { zkNotesApi, zkWorkerApi } from './api';
+import { assertPrivatePoolFundingAllowed } from '../lib/poolSafety';
 import { getUserTreasurySecret } from '../lib/userTreasury';
 
 /* ─── Network (runtime — follows Zer0 Settings Horizon / Soroban) ─── */
@@ -213,6 +215,7 @@ let activeDenomStroops = DEFAULT_TIER.stroops;
 let activeDenomXlm = DEFAULT_TIER.xlm;
 
 export function assertShieldedNetworkReady(): void {
+  assertPrivatePoolFundingAllowed();
   if (NETWORK_PASSPHRASE !== Networks.PUBLIC) return;
   const tiers = mainnetPoolTiers();
   if (tiers.length === 0) {
@@ -296,7 +299,7 @@ export function planShieldPay(amountXlm: number): ShieldPayPlan {
   const tiers = getPoolTiers();
   if (tiers.length === 0) {
     return {
-      amountXlm: Math.max(0, Math.ceil(Number(amountXlm) || 0)),
+      amountXlm: Number.isFinite(amountXlm) ? Math.max(0, Math.ceil(amountXlm)) : 0,
       settledXlm: 0,
       notes: [],
       totalNotes: 0,
@@ -304,7 +307,7 @@ export function planShieldPay(amountXlm: number): ShieldPayPlan {
       description: 'No privacy pools on this network',
     };
   }
-  const target = Math.max(0, Math.ceil(Number(amountXlm) || 0));
+  const target = Number.isFinite(amountXlm) ? Math.max(0, Math.ceil(amountXlm)) : 0;
   if (target <= 0) {
     return {
       amountXlm: 0, settledXlm: 0, notes: [], totalNotes: 0,
@@ -383,13 +386,13 @@ const AWS_SYNCED_KEY = 'zexvro_zk_notes_synced';
 export function saveNote(note: DepositNote) {
   const existing = getNotes();
   existing.push(note);
-  localStorage.setItem(NOTES_KEY, JSON.stringify(existing));
+  localStorage.setItem(accountStorageKey(NOTES_KEY), JSON.stringify(existing));
   // Also persist to AWS (fire-and-forget, local is source of truth)
   zkNotesApi.save(note).catch(() => {});
 }
 
 export function getNotes(): DepositNote[] {
-  try { return JSON.parse(localStorage.getItem(NOTES_KEY) || '[]'); }
+  try { return JSON.parse(localStorage.getItem(accountStorageKey(NOTES_KEY)) || '[]'); }
   catch { return []; }
 }
 
@@ -398,8 +401,10 @@ export function getNoteByCommitment(commitment: string): DepositNote | undefined
 }
 
 export async function syncNotesFromAws(): Promise<void> {
+  const account=currentStorageAccount();
   try {
     const { notes: awsNotes } = await zkNotesApi.list();
+    if(currentStorageAccount()!==account)return;
     if (!awsNotes || awsNotes.length === 0) return;
 
     const local = getNotes();
@@ -419,20 +424,23 @@ export async function syncNotesFromAws(): Promise<void> {
       }
     }
 
-    localStorage.setItem(NOTES_KEY, JSON.stringify(merged));
-    localStorage.setItem(AWS_SYNCED_KEY, Date.now().toString());
+    localStorage.setItem(accountStorageKey(NOTES_KEY), JSON.stringify(merged));
+    localStorage.setItem(accountStorageKey(AWS_SYNCED_KEY), Date.now().toString());
   } catch (err) {
     console.warn('Failed to sync ZK notes from AWS:', err);
   }
 }
 
 export async function pushNotesToAws(): Promise<void> {
+  const account=currentStorageAccount();
   try {
     const notes = getNotes();
     for (const note of notes) {
+      if(currentStorageAccount()!==account)return;
       await zkNotesApi.save(note);
     }
-    localStorage.setItem(AWS_SYNCED_KEY, Date.now().toString());
+    if(currentStorageAccount()!==account)return;
+    localStorage.setItem(accountStorageKey(AWS_SYNCED_KEY), Date.now().toString());
   } catch (err) {
     console.warn('Failed to push ZK notes to AWS:', err);
   }
@@ -841,7 +849,7 @@ export function getForceFreighterSigning(): boolean {
 /** Sync signing preference from persisted Zer0 settings (call on boot + settings save). */
 export function syncSigningPreferenceFromStorage() {
   try {
-    const raw = localStorage.getItem('zexvro_zer0');
+    const raw = localStorage.getItem(accountStorageKey('zexvro_zer0'));
     if (!raw) return;
     const parsed = JSON.parse(raw);
     const prefer = parsed?.state?.settings?.preferFreighterSigning;
@@ -997,6 +1005,7 @@ export async function fundPool(
   fromAddress: string,
   totalStroops: bigint,
 ): Promise<string> {
+  assertPrivatePoolFundingAllowed();
   syncSigningPreferenceFromStorage();
   const preferred = (fromAddress || '').trim();
   const from = resolveFundingAddress(fromAddress);
@@ -1087,6 +1096,7 @@ export async function deposit(
   amountStroops: bigint,
   opts?: { skipFund?: boolean },
 ): Promise<{ txHash: string; note: DepositNote }> {
+  assertPrivatePoolFundingAllowed();
   const from = resolveFundingAddress(fromAddress);
   if (!from) throw new Error('No funding address');
 
@@ -1156,6 +1166,7 @@ async function ensureZkWorkerOnline(onProgress: (label: string) => void, maxWait
   try {
     let st = await zkWorkerApi.status();
     if (st.online) return true;
+    if (!st.configured) return false;
     onProgress(`Waking ZK worker (${st.state || 'offline'})…`);
     try {
       st = await zkWorkerApi.start();
@@ -1733,8 +1744,8 @@ async function generateWithdrawProofLocal(
   return packGroth16Proof(proof);
 }
 
-/** When true (default), private pay requires EC2 prover — no silent browser snarkjs. */
-let preferRemoteProver = true;
+/** Explicit opt-in for deployments that require a remote prover. Browser is the reset default. */
+let preferRemoteProver = false;
 
 export function setPreferRemoteProver(v: boolean) {
   preferRemoteProver = !!v;
@@ -1801,7 +1812,7 @@ function markNoteSpent(note: DepositNote) {
   const notes = getNotes().map(n =>
     n.commitment === note.commitment ? { ...n, spent: true } : n,
   );
-  localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
+  localStorage.setItem(accountStorageKey(NOTES_KEY), JSON.stringify(notes));
   zkNotesApi.list().then(({ notes: awsNotes }) => {
     const awsNote = awsNotes.find((n: any) => n.commitment === note.commitment);
     if (awsNote?.id) return zkNotesApi.update(awsNote.id, { spent: true });

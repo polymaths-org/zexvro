@@ -6,8 +6,8 @@ import { BlurText } from './BlurText';
 const ease = [0.16, 1, 0.3, 1] as const;
 
 const API_BASE =
-  (import.meta.env.VITE_API_URL as string | undefined)?.trim().replace(/\/$/, '') ||
-  'https://qkuostruh3.execute-api.us-east-1.amazonaws.com';
+  (((globalThis as typeof globalThis & {__ZEXVRO_CONFIG__?:Record<string,string>}).__ZEXVRO_CONFIG__?.VITE_API_URL ?? import.meta.env.VITE_API_URL) as string | undefined)?.trim().replace(/\/$/, '') ||
+  'https://zexvro-platform-api.zexvro.workers.dev';
 
 export const Waitlist: React.FC = () => {
   const [email, setEmail] = useState('');

@@ -40,7 +40,7 @@ interface DepinAppOptions {
   replayStore?: ReplayStore
   rateLimitStore?: RateLimitStore
   configSource?: DepinConfigSource
-  stateBackend?: 'memory' | 'file'
+  stateBackend?: 'memory' | 'file' | 'd1'
   now?: () => number
 }
 
@@ -134,7 +134,7 @@ export function createDepinApp(options: DepinAppOptions) {
   const allowedOrigins = parseCorsOrigins(environment)
   // App Runner /tmp file store is per-instance — not shared across scale-out.
   const multiInstanceSafe =
-    stateBackend === 'file' && environment.DEPIN_SHARED_STATE === '1'
+    stateBackend === 'd1' || (stateBackend === 'file' && environment.DEPIN_SHARED_STATE === '1')
 
   const app = express()
   app.disable('x-powered-by')
@@ -196,7 +196,8 @@ export function createDepinApp(options: DepinAppOptions) {
         facilitatorAuthConfigured: facilitator.authConfigured,
         facilitatorOzChannels: facilitator.ozChannels,
         settleAuthRequired: facilitator.settleAuthRequired,
-        settleReady: facilitator.settleReady,
+        settleReady: config.providers.length > 0 && facilitator.settleReady,
+        configured: config.providers.length > 0,
         settlement: 'after_upstream_success',
         fees: 'sponsored',
         replayTtlMs: config.replayTtlMs,

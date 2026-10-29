@@ -7,7 +7,7 @@ import CollectionList from './CollectionList';
 
 const api = vi.hoisted(() => ({
   createNftCollection: vi.fn(),
-  getNftApiBaseUrl: vi.fn(() => 'https://iyk6idmup6.us-east-1.awsapprunner.com'),
+  getNftApiBaseUrl: vi.fn(() => 'https://zexvro-platform-api.zexvro.workers.dev/nft'),
   getNftServiceHealth: vi.fn(),
   listNftCollections: vi.fn(),
   uploadNftMedia: vi.fn(),
@@ -15,7 +15,10 @@ const api = vi.hoisted(() => ({
   submitNftSaleConfig: vi.fn(),
 }));
 
-vi.mock('./nftApi', () => api);
+vi.mock('./nftApi', async (importOriginal) => ({
+  ...await importOriginal<typeof import('./nftApi')>(),
+  ...api,
+}));
 
 vi.mock('./stellarWallet', () => ({
   formatWalletError: (error: unknown) => (error instanceof Error ? error.message : ''),
@@ -148,8 +151,7 @@ describe('CollectionCreate', () => {
     await user.upload(screen.getByLabelText(/NFT logo/), file);
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
-    await user.clear(screen.getByDisplayValue('1'));
-    await user.type(screen.getByDisplayValue(''), '10');
+    await user.type(screen.getByPlaceholderText('10'), '10');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
     await user.clear(screen.getByLabelText('Wallet address'));
@@ -198,6 +200,7 @@ describe('CollectionCreate', () => {
       new File(['cover'], 'gear.webp', { type: 'image/webp' }),
     );
     await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.type(screen.getByPlaceholderText('10'), '10');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     await user.clear(screen.getByLabelText('Wallet address'));
     await user.type(screen.getByLabelText('Wallet address'), ownerAddress);

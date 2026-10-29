@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { accountStorage, currentStorageAccount } from '../lib/accountStorage';
 import type {
   Zer0Employee, Zer0Payment, Zer0Proof, Zer0PoolState, Zer0Settings,
   Zer0Currency, Zer0PaymentStatus, Zer0ProofSystem, Zer0SecurityEvent,
@@ -1308,6 +1309,7 @@ export const useZer0Store = create<Zer0State>()(
   }),
   {
     name: 'zexvro_zer0',
+      storage: createJSONStorage(() => accountStorage),
     partialize: (state) => ({
       settings: state.settings,
       proofs: state.proofs,
@@ -1318,6 +1320,7 @@ export const useZer0Store = create<Zer0State>()(
       dailySpend: state.dailySpend,
     }),
     merge: (persisted, current) => {
+      const account=currentStorageAccount();
       const p = (persisted || {}) as Partial<Zer0State>;
       const rawSettings = { ...(p.settings || {}) } as Partial<Zer0Settings>;
       // Preserve user default currency across reloads (do not let DEFAULT overwrite a saved value)
@@ -1335,6 +1338,7 @@ export const useZer0Store = create<Zer0State>()(
       }
       // Align Freighter passphrase + RPC with rehydrated network before any pay.
       import('../api/privacyPool').then(m => {
+        if(currentStorageAccount()!==account)return;
         m.configurePrivacyPoolNetwork({
           horizonUrl: mergedSettings.horizonUrl,
           sorobanRpcUrl: mergedSettings.sorobanRpcUrl,
@@ -1343,6 +1347,7 @@ export const useZer0Store = create<Zer0State>()(
       });
       // After rehydrate, clear orphan Processing / Queued rows from prior sessions
       queueMicrotask(() => {
+        if(currentStorageAccount()!==account)return;
         try {
           useZer0Store.getState().reconcileStalePayments({ maxAgeMs: 60_000 });
         } catch (e) {

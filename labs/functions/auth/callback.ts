@@ -1,4 +1,4 @@
-import { Env, config, adminLogins, getStore, setSession } from '../_shared';
+import { Env, config, adminLogins, getStore, setSession, validOAuthState, oauthStateCookie } from '../_shared';
 import { User } from '../../src/types';
 
 // GET /auth/callback — GitHub OAuth redirect target
@@ -15,6 +15,8 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     });
   }
 
+  if(!validOAuthState(ctx.request))return new Response('Invalid OAuth state',{status:400});
+  if(c.SESSION_SECRET.length<32)return new Response('Session signing is not configured',{status:503});
   try {
     // 1) Exchange code for an access token (form-urlencoded per GitHub docs)
     const tokenBody = new URLSearchParams({
@@ -57,6 +59,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     });
     const gh: any = await parseJsonOrText(userRes.text(), `user (HTTP ${userRes.status})`);
 
+    if(!userRes.ok || !gh.id || !gh.login)throw new Error('GitHub profile lookup failed');
     let email = gh.email || '';
     if (!email) {
       try {
@@ -122,8 +125,8 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
       if (window.opener) {
         window.opener.postMessage({
           type: 'OAUTH_AUTH_SUCCESS',
-          user: ${JSON.stringify(user)},
-        }, '*');
+          user: ${JSON.stringify(user).replace(/</g,'\\u003c')},
+        }, ${JSON.stringify(new URL(c.APP_URL).origin)});
         setTimeout(() => window.close(), 600);
       } else {
         window.location.href = '/';
@@ -136,11 +139,13 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
       status: 200,
       headers: { 'Content-Type': 'text/html', 'Cache-Control': 'no-store' },
     });
-    return setSession(res, user, env);
+    const response=await setSession(res, user, env);
+    response.headers.append('Set-Cookie',oauthStateCookie('',c.isSecure));
+    return response;
   } catch (error: any) {
     // Temporary diagnostics: report the real cause on the failure page.
     return new Response(
-      `<h2>GitHub authentication failed.</h2><pre style="text-align:left;font-size:11px;white-space:pre-wrap">${escapeHtml(error?.message || String(error))}</pre>`,
+      `<h2>GitHub authentication failed.</h2><pre style="text-align:left;font-size:11px;white-space:pre-wrap">Please retry sign-in or contact the administrator.</pre>`,
       { status: 500, headers: { 'Content-Type': 'text/html' } },
     );
   }

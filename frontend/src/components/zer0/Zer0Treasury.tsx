@@ -1,3 +1,4 @@
+import LegacyLocalRecovery from './LegacyLocalRecovery';
 import { useCallback, useEffect, useState } from 'react';
 import {
   Vault,
@@ -212,6 +213,7 @@ export default function Zer0Treasury() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-1">
+      <LegacyLocalRecovery/>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Zer0</p>

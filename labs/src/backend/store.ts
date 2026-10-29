@@ -59,6 +59,7 @@ export interface StoreConfig {
   useFetchHandler?: boolean;
   url?: string;
   db?: string;
+  gatewayToken?:string;
   firestore?: { projectId: string; clientEmail: string; privateKey: string };
 }
 

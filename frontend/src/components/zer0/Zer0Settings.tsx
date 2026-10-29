@@ -1155,7 +1155,7 @@ export default function Zer0Settings() {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider flex items-center gap-1.5">
-                    <Server className="h-3.5 w-3.5" /> ZK prover worker (EC2)
+                    <Server className="h-3.5 w-3.5" /> ZK proof generation
                   </h3>
                   <p className="text-[11px] text-zinc-500 leading-relaxed mt-1">
                     Turn the RapidSNARK prove machine <strong>ON</strong> before private payroll testing,
@@ -1195,7 +1195,7 @@ export default function Zer0Settings() {
                       </span>
                     </div>
                     <p className="mt-1 text-[10px] leading-relaxed opacity-90">
-                      {zkWorker?.message || 'Deploy Lambda env ZK_WORKER_INSTANCE_ID (+ optional ZK_PROVER_URL) to enable.'}
+                      {zkWorker?.message || 'Proofs run locally in your browser. A remote prover can be configured separately.'}
                     </p>
                     {zkWorker?.instanceId && (
                       <p className="mt-1 font-mono text-[10px] opacity-70">instance: {zkWorker.instanceId}</p>
@@ -1220,7 +1220,7 @@ export default function Zer0Settings() {
                 <button
                   type="button"
                   onClick={startZkWorker}
-                  disabled={!!zkWorkerAction || zkWorkerLoading || (zkWorker?.online === true)}
+                  disabled={!zkWorker?.configured || !!zkWorkerAction || zkWorkerLoading || (zkWorker?.online === true)}
                   className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 text-xs font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {zkWorkerAction === 'start' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Power className="h-3.5 w-3.5" />}
@@ -1229,7 +1229,7 @@ export default function Zer0Settings() {
                 <button
                   type="button"
                   onClick={stopZkWorker}
-                  disabled={!!zkWorkerAction || zkWorkerLoading || zkWorker?.state === 'stopped' || zkWorker?.state === 'unconfigured'}
+                  disabled={!zkWorker?.configured || !!zkWorkerAction || zkWorkerLoading || zkWorker?.state === 'stopped' || zkWorker?.state === 'unconfigured'}
                   className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3.5 text-xs font-bold text-zinc-800 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900"
                 >
                   {zkWorkerAction === 'stop' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PowerOff className="h-3.5 w-3.5" />}

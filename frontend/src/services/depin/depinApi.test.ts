@@ -6,7 +6,7 @@ import {
   type DepinProvider,
 } from './depinApi';
 
-const DEPIN_BASE = 'https://sr9k3xpmbj.us-east-1.awsapprunner.com';
+const DEPIN_BASE = 'https://zexvro-platform-api.zexvro.workers.dev/depin';
 
 const provider: DepinProvider = {
   route: '/v1/nft-health',
@@ -29,7 +29,7 @@ describe('De-pin API client', () => {
     vi.unstubAllGlobals();
   });
 
-  it('reads health and sanitized status through the Vite proxy path', async () => {
+  it('reads health and sanitized status through the Cloudflare default', async () => {
     const fetchMock = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(new Response(
         JSON.stringify({ status: 'ok', service: 'depin' }),

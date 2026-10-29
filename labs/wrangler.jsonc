@@ -2,8 +2,10 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "labs",
   "pages_build_output_dir": "./dist",
-  "compatibility_date": "2025-01-01",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_date": "2026-10-19",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
   "vars": {
     "LABS_STATE_BACKEND": "spacetime",
     "SPACETIME_URL": "https://maincloud.spacetimedb.com",

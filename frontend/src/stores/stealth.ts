@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { accountStorage } from '../lib/accountStorage';
 import {
   generateStealthIdentity,
   createStealthPayment,
@@ -150,6 +151,7 @@ export const useStealthStore = create<StealthState>()(
     }),
     {
       name: 'zexvro_stealth',
+      storage: createJSONStorage(() => accountStorage),
       partialize: (s) => ({
         orgIdentity: s.orgIdentity,
         employeeMeta: s.employeeMeta,

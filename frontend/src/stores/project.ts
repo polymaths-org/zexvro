@@ -16,6 +16,7 @@ function slugify(name: string) {
 
 interface ProjectState {
   projects: Project[];
+  lastError: string|null;
   environments: Environment[];
   serviceInstances: ServiceInstance[];
   deployments: Deployment[];
@@ -66,6 +67,7 @@ interface ProjectState {
 export const useProjectStore = create<ProjectState>()(
   (set, get) => ({
     projects: [],
+    lastError:null,
     environments: [],
     serviceInstances: [],
     deployments: [],
@@ -114,7 +116,7 @@ export const useProjectStore = create<ProjectState>()(
         currentProjectId: project.id,
       }));
       projectApi.create({ ...project, projectId: project.id, environments: [], serviceInstances: [] })
-        .catch(err => console.error('Failed to save project to AWS:', err));
+        .catch(err => set(state=>({lastError:err.message || 'Project was not saved',projects:state.projects.filter(p=>p.id!==project.id),currentProjectId:state.currentProjectId===project.id?null:state.currentProjectId})));
       return project;
     },
 
@@ -152,17 +154,14 @@ export const useProjectStore = create<ProjectState>()(
     },
 
     deleteProject: (id) => {
-      set(state => ({
-        projects: state.projects.filter(p => p.id !== id),
-        environments: state.environments.filter(e => e.projectId !== id),
-        serviceInstances: state.serviceInstances.filter(i => i.projectId !== id),
-        deployments: state.deployments.filter(d => d.projectId !== id),
-        currentProjectId: state.currentProjectId === id ? null : state.currentProjectId,
-      }));
-      projectApi.delete(id).catch(err => console.error('Failed to delete project in AWS:', err));
+      void projectApi.delete(id).then(()=>set(state=>({
+        lastError:null,projects:state.projects.filter(p=>p.id!==id),
+        environments:state.environments.filter(e=>e.projectId!==id),serviceInstances:state.serviceInstances.filter(i=>i.projectId!==id),
+        deployments:state.deployments.filter(d=>d.projectId!==id),currentProjectId:state.currentProjectId===id?null:state.currentProjectId
+      }))).catch(error=>set({lastError:error.message || 'Project deletion failed'}));
     },
 
-    selectProject: (id) => set({ currentProjectId: id }),
+    selectProject: (id) => set({currentProjectId:id}),
 
     createEnvironment: (input) => {
       const env: Environment = {

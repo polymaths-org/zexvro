@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { accountStorage } from '../lib/accountStorage';
 
 export type PaymentSessionPhase =
   | 'starting'
@@ -263,6 +264,7 @@ export const usePaymentSession = create<PaymentSessionState>()(
     }),
     {
       name: 'zexvro_payment_session',
+      storage: createJSONStorage(() => accountStorage),
       partialize: (s) => ({
         // Keep session across reload so we can resume / show "still processing"
         session: s.session

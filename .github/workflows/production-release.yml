@@ -1,0 +1,49 @@
+name: Production release (scheduled or deploy now)
+on:
+  schedule:
+    - cron: '17 */3 * * *'
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: 'Optional full SHA already verified on dev; blank selects newest eligible release. Manual skips only the 30-minute observation period.'
+        type: string
+        required: false
+        default: ''
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: zexvro-deployment-lane
+  cancel-in-progress: false
+  queue: max
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: production
+      url: https://console.zexvro.in
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REQUESTED_SHA: ${{ inputs.commit_sha }}
+      WRANGLER_ZEXVRO_PROFILE_TOML: ${{ secrets.WRANGLER_ZEXVRO_PROFILE_TOML }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Prepare protected profile directory
+        run: sudo install -d -m 700 -o "$(id -u)" -g "$(id -g)" /home/wraient/.wrangler /home/wraient/.wrangler/config /home/wraient/.wrangler/profiles
+      - name: Install pinned deployment tooling
+        run: npm ci --prefix services/platform-api --no-audit --no-fund
+      - name: Validate release policy tooling
+        run: node --test test/cicd/*.test.mjs
+      - name: Select, verify and promote an immutable candidate
+        run: node scripts/cicd/promote.mjs
+      - name: Remove ephemeral CI credentials
+        if: always()
+        run: rm -f /home/wraient/.wrangler/config/zexvro.toml

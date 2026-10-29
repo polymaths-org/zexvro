@@ -18,6 +18,7 @@
  *   IDLE_EXIT_MS
  */
 import http from 'node:http';
+import {timingSafeEqual} from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -33,6 +34,7 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 8787);
+const HOST = process.env.HOST || '127.0.0.1';
 const ARTIFACT_DIR = process.env.ZK_ARTIFACT_DIR
   || path.resolve(__dirname, '../../zer0-pool/backups/zk-proofs-LATEST/frontend-public-zk');
 const SHARED_SECRET = (process.env.ZK_PROVER_SHARED_SECRET || '').trim();
@@ -98,9 +100,15 @@ function toHex32(n) {
 
 function readJson(req) {
   return new Promise((resolve, reject) => {
-    const chunks = [];
-    req.on('data', (c) => chunks.push(c));
+    let chunks = [], size = 0, oversized = false;
+    req.on('data', (c) => {
+      if(oversized)return;
+      size += c.length;
+      if(size>65536){oversized=true;chunks=[];const e=new Error('Request body exceeds 64 KiB');e.status=413;reject(e);return}
+      chunks.push(c);
+    });
     req.on('end', () => {
+      if(oversized)return;
       try {
         const raw = Buffer.concat(chunks).toString('utf8') || '{}';
         resolve(JSON.parse(raw));
@@ -125,7 +133,9 @@ function send(res, code, body) {
 
 function authOk(req) {
   if (!SHARED_SECRET) return true;
-  return req.headers['x-zexvro-prover-secret'] === SHARED_SECRET;
+  const supplied=Buffer.from(String(req.headers['x-zexvro-prover-secret'] || ''));
+  const expected=Buffer.from(SHARED_SECRET);
+  return supplied.length===expected.length && timingSafeEqual(supplied,expected);
 }
 
 function runCmd(cmd, args) {
@@ -780,20 +790,19 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'POST' && url.pathname === '/prove') {
+    let ownsSlot=false;
     try {
-      const body = await readJson(req);
-      const input = body.input;
-      if (!input || typeof input !== 'object') return send(res, 400, { error: 'input object required' });
-      proving += 1;
-      const t0 = Date.now();
-      const out = await prove(input);
-      proving -= 1;
-      lastBusy = Date.now();
-      return send(res, 200, { ...out, generationTimeMs: Date.now() - t0 });
-    } catch (e) {
-      proving = Math.max(0, proving - 1);
-      return send(res, 500, { error: e instanceof Error ? e.message : String(e) });
-    }
+      const body=await readJson(req), input=body.input;
+      if(!input || typeof input!=='object' || Array.isArray(input))return send(res,400,{error:'input object required'});
+      if(proving>=1)return send(res,429,{error:'prover_busy'});
+      proving++;ownsSlot=true;
+      const t0=Date.now(),out=await prove(input);
+      lastBusy=Date.now();
+      return send(res,200,{...out,generationTimeMs:Date.now()-t0});
+    } catch(e) {
+      const status=e.status || (e instanceof SyntaxError?400:e.message?.startsWith('Missing artifacts')?503:500);
+      return send(res,status,{error:status===500?'Proof generation failed':e.message});
+    } finally {if(ownsSlot)proving=Math.max(0,proving-1)}
   }
 
   if (req.method === 'POST' && url.pathname === '/merkle') {
@@ -812,6 +821,9 @@ const server = http.createServer(async (req, res) => {
 
   // Async settle — returns jobId immediately (API GW 30s limit safe)
   if (req.method === 'POST' && url.pathname === '/settle') {
+    // Legacy pool funding/recipient binding is unsafe; proofs and recovery remain available.
+    return send(res,503,{error:'pool_safety_upgrade_required',message:'New private-pool funding is paused pending verified contract upgrades.'});
+    /* Legacy relayer implementation retained below for the upgrade, unreachable meanwhile. */
     try {
       if (!relayerEnabled()) {
         return send(res, 503, {
@@ -862,8 +874,10 @@ const server = http.createServer(async (req, res) => {
   return send(res, 404, { error: 'not_found' });
 });
 
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`[zexvro-zk-prover] listening on :${PORT}`);
+if(!['127.0.0.1','localhost','::1'].includes(HOST) && !SHARED_SECRET)throw new Error('A shared secret is required for non-loopback prover hosting');
+server.requestTimeout=15000;server.headersTimeout=10000;
+server.listen(PORT, HOST, () => {
+  console.log(`[zexvro-zk-prover] listening on :${server.address().port}`);
   console.log(`[zexvro-zk-prover] artifacts: ${ARTIFACT_DIR}`);
   console.log(`[zexvro-zk-prover] wasm=${fs.existsSync(WASM)} zkey=${fs.existsSync(ZKEY)}`);
   console.log(`[zexvro-zk-prover] rapidsnark=${RAPIDSNARK_BIN || 'NOT FOUND'}`);

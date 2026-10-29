@@ -14,7 +14,7 @@ import {
   uploadNftMedia,
 } from './nftApi';
 
-const NFT_BASE = 'https://iyk6idmup6.us-east-1.awsapprunner.com';
+const NFT_BASE = 'https://zexvro-platform-api.zexvro.workers.dev/nft';
 
 describe('NFT API client', () => {
   afterEach(() => {

@@ -9,9 +9,10 @@
     "start": "node dist/server.mjs",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "deploy:plan": "node scripts/deploy-labs-aws.mjs --plan",
-    "deploy:infra": "node scripts/deploy-labs-aws.mjs --apply-all-infra",
-    "deploy:apprunner": "node scripts/deploy-labs-apprunner.mjs"
+    "deploy:plan": "XDG_CONFIG_HOME=/home/wraient npx --yes wrangler@4.151.0 pages functions build --profile zexvro",
+    "test": "node --import tsx --test src/backend/*.test.ts src/lib/assets.test.ts",
+    "deploy": "npm run lint && npm test && npm run build:web && XDG_CONFIG_HOME=/home/wraient npx --yes wrangler@4.151.0 pages deploy dist --project-name labs --branch main --profile zexvro",
+    "build:web": "vite build"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.1085.0",

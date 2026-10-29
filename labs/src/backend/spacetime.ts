@@ -87,10 +87,12 @@ function parseJson(text: string | undefined, fallback: unknown): unknown {
 export interface SpacetimeConfig {
   url?: string;
   db?: string;
+  gatewayToken?:string;
 }
 
 export function spacetimeConfigFrom(cfg: StoreConfig = {}): Required<SpacetimeConfig> {
   return {
+    gatewayToken:cfg.gatewayToken || process.env.SPACETIME_GATEWAY_TOKEN || '',
     url:
       process.env.SPACETIME_URL ||
       (cfg as unknown as Record<string, string>).url ||
@@ -105,10 +107,12 @@ export function spacetimeConfigFrom(cfg: StoreConfig = {}): Required<SpacetimeCo
 export class SpacetimeStore implements LabsStore {
   private readonly url: string;
   private readonly db: string;
+  private readonly gatewayToken:string;
 
   constructor(cfg: SpacetimeConfig = {}) {
     this.url = (cfg.url || 'https://maincloud.spacetimedb.com').replace(/\/$/, '');
     this.db = cfg.db || 'labs-beta';
+    this.gatewayToken=cfg.gatewayToken || '';
   }
 
   private async sql<T>(query: string): Promise<T[][]> {
@@ -123,9 +127,10 @@ export class SpacetimeStore implements LabsStore {
   }
 
   private async call(reducer: string, args: Record<string, unknown>): Promise<void> {
+    if(!this.gatewayToken)throw new Error('Labs database writes are not configured');
     const res = await fetch(`${this.url}/v1/database/${this.db}/call/${reducer}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json',Authorization:`Bearer ${this.gatewayToken}` },
       body: JSON.stringify(args),
     });
     if (!res.ok) {

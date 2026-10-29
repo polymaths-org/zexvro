@@ -1,8 +1,10 @@
+import {currentStorageAccount} from './accountStorage';
 import { zkWorkerApi } from '../api/api';
 import { usePaymentSession, isPaymentInFlight } from '../stores/paymentSession';
 import { useZer0Store } from '../stores/zer0';
 
-let resumeStarted = false;
+let resumedAccount: string|null=null;
+let listening=false;
 
 /**
  * After reload: if a payment session was mid-flight, re-open the modal and
@@ -13,8 +15,13 @@ let resumeStarted = false;
  * clear recovery message.
  */
 export function startPaymentResumeWatcher() {
-  if (resumeStarted || typeof window === 'undefined') return;
-  resumeStarted = true;
+  if(typeof window==='undefined')return;
+  if(!listening){listening=true;window.addEventListener('zexvro:account-changed',startPaymentResumeWatcher)}
+  const account=currentStorageAccount();
+  if(account==='signed-out'){resumedAccount=null;return}
+  if(resumedAccount===account)return;
+  resumedAccount=account;
+  const sameAccount=()=>currentStorageAccount()===account;
 
   const boot = async () => {
     // Wait for zustand rehydrate
@@ -34,6 +41,7 @@ export function startPaymentResumeWatcher() {
       // ignore
     }
 
+    if(!sameAccount())return;
     const session = usePaymentSession.getState().session;
     if (!session) return;
 
@@ -85,6 +93,7 @@ export function startPaymentResumeWatcher() {
         });
         // Soft fail after another wait window so modal is not permanent
         setTimeout(() => {
+          if(!sameAccount())return;
           const s = usePaymentSession.getState().session;
           if (s && s.paymentId === session.paymentId && isPaymentInFlight(s) && !(s.jobIds?.length)) {
             useZer0Store.getState().updatePaymentStatus(session.paymentId, 'failed', {
@@ -105,9 +114,11 @@ export function startPaymentResumeWatcher() {
     const remaining = new Set(jobIds);
 
     while (Date.now() < deadline && remaining.size > 0) {
+      if(!sameAccount())return;
       for (const jobId of [...remaining]) {
         try {
           const job = await zkWorkerApi.job(jobId);
+          if(!sameAccount())return;
           if (job.progress) {
             usePaymentSession.getState().updateProgress({
               paymentId: session.paymentId,
@@ -127,6 +138,7 @@ export function startPaymentResumeWatcher() {
             lastTx = job.result?.lastTxHash || lastTx;
           }
         } catch (e) {
+          if(!sameAccount())return;
           usePaymentSession.getState().updateProgress({
             paymentId: session.paymentId,
             label: `Network blip while checking job… (${e instanceof Error ? e.message : 'retrying'})`,
@@ -138,6 +150,7 @@ export function startPaymentResumeWatcher() {
       await new Promise(r => setTimeout(r, 1500));
     }
 
+    if(!sameAccount())return;
     if (remaining.size === 0 && lastTx) {
       const pay = useZer0Store.getState().payments.find(p => p.id === session.paymentId);
       if (pay && pay.status !== 'completed') {

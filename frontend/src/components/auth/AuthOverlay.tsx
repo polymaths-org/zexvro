@@ -87,13 +87,13 @@ export default function AuthOverlay({ onSuccess }: AuthOverlayProps) {
           throw new Error('Enter a valid email address.');
         }
         if (!password) throw new Error('Choose a password.');
-        if (password.length < 8) throw new Error('Password must be at least 8 characters.');
+        if (password.length < 12) throw new Error('Password must be at least 12 characters.');
         if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
           throw new Error('Password needs letters and numbers.');
         }
         const result = await signUpUser(cleanUsername, cleanEmail, password);
         if (result.UserConfirmed) {
-          setMessage('Account created. You can sign in now.');
+          setMessage(`Account created. Save this recovery key in your password manager: ${result.recoveryKey}. It is shown only now. Then sign in.`);
           setMode('signin');
         } else {
           setMessage('We sent a code to your email. Enter it below to finish signup.');
@@ -113,20 +113,20 @@ export default function AuthOverlay({ onSuccess }: AuthOverlayProps) {
 
       if (isForgot) {
         await forgotPassword(cleanUsername);
-        setMessage('If that account exists, we emailed a reset code.');
+        setMessage('Enter the recovery key you saved when creating your account.');
         setMode('reset');
         return;
       }
 
       if (isReset) {
-        if (!code.trim()) throw new Error('Enter the reset code from your email.');
+        if (!code.trim()) throw new Error('Enter your saved recovery key.');
         if (!password) throw new Error('Choose a new password.');
-        if (password.length < 8) throw new Error('New password must be at least 8 characters.');
+        if (password.length < 12) throw new Error('New password must be at least 12 characters.');
         if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
           throw new Error('Password needs letters and numbers.');
         }
-        await confirmForgotPassword(cleanUsername, code.trim(), password);
-        setMessage('Password updated. You can sign in now.');
+        const result = await confirmForgotPassword(cleanUsername, code.trim(), password);
+        setMessage(`Password updated. Save your NEW recovery key: ${result.recoveryKey}. The old key no longer works. You can sign in now.`);
         setMode('signin');
         setCode('');
         setPassword('');
@@ -181,10 +181,10 @@ export default function AuthOverlay({ onSuccess }: AuthOverlayProps) {
               </h2>
               <p className="mt-1 text-sm text-zinc-500">
                 {isSignIn && 'Sign in with your ZEXVRO account email or username.'}
-                {isSignUp && 'Create a workspace account to access services and projects.'}
+                {isSignUp && 'Create a fresh account. Previous AWS accounts have been reset.'}
                 {isConfirm && 'Enter the confirmation code sent to your email.'}
-                {isForgot && 'We will email a reset code to recover your password.'}
-                {isReset && 'Enter the reset code and choose a new password.'}
+                {isForgot && 'Recover your account using your saved recovery key.'}
+                {isReset && 'Enter your saved recovery key and choose a new password.'}
               </p>
             </div>
 
@@ -206,7 +206,7 @@ export default function AuthOverlay({ onSuccess }: AuthOverlayProps) {
               {message && (
                 <div className="mb-4 flex items-start gap-2 rounded-md border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs font-semibold leading-relaxed text-emerald-300">
                   <Check className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>{message}</span>
+                  <span className="min-w-0 break-all select-text">{message}</span>
                 </div>
               )}
 
@@ -250,7 +250,7 @@ export default function AuthOverlay({ onSuccess }: AuthOverlayProps) {
                 {(isConfirm || isReset) && (
                   <div>
                     <label className="mb-1.5 block text-[10px] font-bold uppercase text-zinc-500">
-                      Confirmation code
+                      Recovery key
                     </label>
                     <input
                       type="text"
@@ -295,7 +295,7 @@ export default function AuthOverlay({ onSuccess }: AuthOverlayProps) {
                         : isConfirm
                           ? 'Confirm account'
                           : isForgot
-                            ? 'Send reset code'
+                            ? 'Use recovery key'
                             : isReset
                               ? 'Update password'
                               : 'Sign in'}
@@ -324,8 +324,8 @@ export default function AuthOverlay({ onSuccess }: AuthOverlayProps) {
                 {isSignUp && (
                   <>
                     <span className="mx-2 text-zinc-700">/</span>
-                    <button type="button" onClick={() => setModeClean('confirm')} className="font-bold text-zinc-200 hover:text-white">
-                      Already have a code
+                    <button type="button" onClick={() => setModeClean('reset')} className="font-bold text-zinc-200 hover:text-white">
+                      Have a recovery key
                     </button>
                   </>
                 )}
