@@ -19,6 +19,7 @@ interface __BaseEnv_Env {
 	SIGNUPS_OPEN: "false";
 	RELEASE_SHA: "manual";
 	GATE_SIGNING_SECRET: string;
+	WAITLIST_ADMIN_SECRET: string;
 	STELLAR_SPONSOR_SECRET: string;
 	NFT_COLLECTION_WASM_HASH: string;
 	DEPIN_CONFIG_JSON: string;
