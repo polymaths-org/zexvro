@@ -35,5 +35,32 @@ export function HashScroll({ ready }: { ready: boolean }) {
     };
   }, [ready, lenis]);
 
+  // In-page links (navbar, hero, footer) scroll through Lenis. The browser's own hash jump races
+  // Lenis's wheel and easing animation, which left clicks short of the target.
+  useEffect(() => {
+    if (!lenis) return;
+
+    const onClick = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const href = (event.target as Element | null)?.closest?.('a[href^="#"]')?.getAttribute('href') ?? '';
+      let id: string;
+      try {
+        id = decodeURIComponent(href.slice(1));
+      } catch {
+        return;
+      }
+      const target = id ? document.getElementById(id) : null;
+      if (!target) return;
+
+      event.preventDefault();
+      lenis.scrollTo(target, { offset: 0, duration: 1.2 });
+      window.history.pushState(null, '', href);
+    };
+
+    document.addEventListener('click', onClick);
+    return () => document.removeEventListener('click', onClick);
+  }, [lenis]);
+
   return null;
 }
