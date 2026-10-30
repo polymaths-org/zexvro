@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ScrollProvider } from './components/ScrollProvider';
+import { HashScroll } from './components/HashScroll';
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
 import { Web3Grid } from './components/Web3Grid';
@@ -36,6 +37,7 @@ export default function App() {
     <>
       {!loaded && <Preloader onDone={() => setLoaded(true)} />}
       <ScrollProvider>
+        <HashScroll ready={loaded} />
         <div className="relative min-h-screen bg-black text-white selection:bg-blue-500/30 selection:text-white">
           <div className="grain-overlay" />
           <div className="vignette" />
