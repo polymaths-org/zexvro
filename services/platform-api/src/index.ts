@@ -176,6 +176,7 @@ export async function route(request: Request, env: Env): Promise<Response> {
       release: env.RELEASE_SHA,
       reset: true,
       auth: 'd1-accounts',
+      signupsOpen: String(env.SIGNUPS_OPEN) === 'true',
       version: 1,
     })
   if (path === '/api/waitlist' && method === 'POST') {

@@ -14,6 +14,7 @@
   "vars": {
     "ALLOWED_ORIGINS": "https://zexvro.in,https://www.zexvro.in,https://app.zexvro.in,https://console.zexvro.in,http://localhost:5173,http://localhost:3000,http://127.0.0.1:4173,http://127.0.0.1:5173",
     "CREDITS_STARTER_GRANT": "100",
+    "SIGNUPS_OPEN": "false",
     "CAPTCHA_ASSETS_ROOT": "/bundle/captcha-assets",
     "STELLAR_RPC_URL": "https://soroban-rpc.mainnet.stellar.gateway.fm",
     "STELLAR_NETWORK_PASSPHRASE": "Public Global Stellar Network ; September 2015",

@@ -219,14 +219,12 @@ export const Hero: React.FC = () => {
 
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-4 sm:space-y-0 sm:space-x-6 pt-1">
               <a
-                href="https://console.zexvro.in"
-                target="_blank"
-                rel="noopener noreferrer"
+                href="#waitlist"
                 className="group relative px-8 py-4 rounded-full overflow-hidden bg-white text-black font-bold text-sm transition-transform active:scale-95 duration-300 shadow-[0_0_35px_rgba(255,255,255,0.45)] hover:shadow-[0_0_50px_rgba(255,255,255,0.7)]"
               >
                 <span className="absolute inset-0 bg-gradient-to-r from-blue-100 via-white to-pink-100 group-hover:opacity-95 transition-opacity" />
                 <span className="relative z-10 flex items-center justify-center space-x-2">
-                  <span>Explore Platform</span>
+                  <span>Join the waitlist</span>
                   <ArrowRight size={16} className="transform group-hover:translate-x-1.5 transition-transform" />
                 </span>
               </a>

@@ -16,6 +16,7 @@ interface __BaseEnv_Env {
 	STELLAR_NETWORK_PASSPHRASE: "Public Global Stellar Network ; September 2015";
 	STELLAR_PAYMENT_TOKEN: "CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA";
 	PUBLIC_API_URL: "https://zexvro-platform-api.zexvro.workers.dev";
+	SIGNUPS_OPEN: "false";
 	RELEASE_SHA: "manual";
 	GATE_SIGNING_SECRET: string;
 	STELLAR_SPONSOR_SECRET: string;

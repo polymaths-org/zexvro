@@ -1,5 +1,6 @@
 import { AlertCircle, Check, ChevronRight, KeyRound, Lock, Mail, User } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
+import { runtimeValue } from '../../lib/runtimeConfig';
 import {
   confirmForgotPassword,
   confirmSignUp,
@@ -31,6 +32,20 @@ export default function AuthOverlay({ onSuccess }: AuthOverlayProps) {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  // Fail closed: sign-up stays hidden unless the platform reports that it is open.
+  const [signupsOpen, setSignupsOpen] = useState(false);
+  useEffect(() => {
+    let active = true;
+    fetch(`${runtimeValue('VITE_API_URL') || 'https://zexvro-platform-api.zexvro.workers.dev'}/api/health`, { cache: 'no-store' })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body: { signupsOpen?: boolean } | null) => {
+        if (active && body?.signupsOpen === true) setSignupsOpen(true);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const isSignIn = mode === 'signin';
   const isSignUp = mode === 'signup';
@@ -307,13 +322,25 @@ export default function AuthOverlay({ onSuccess }: AuthOverlayProps) {
               <div className="mt-5 space-y-2 border-t border-white/10 pt-3 text-center text-[11px] text-zinc-500">
                 {isSignIn && (
                   <>
-                    <button type="button" onClick={() => setModeClean('signup')} className="font-bold text-zinc-200 hover:text-white">
-                      Create account
-                    </button>
-                    <span className="mx-2 text-zinc-700">/</span>
+                    {signupsOpen && (
+                      <>
+                        <button type="button" onClick={() => setModeClean('signup')} className="font-bold text-zinc-200 hover:text-white">
+                          Create account
+                        </button>
+                        <span className="mx-2 text-zinc-700">/</span>
+                      </>
+                    )}
                     <button type="button" onClick={() => setModeClean('forgot')} className="font-bold text-zinc-200 hover:text-white">
                       Forgot password
                     </button>
+                    {!signupsOpen && (
+                      <p className="pt-1 text-[11px] text-zinc-500">
+                        New accounts are on the waitlist.{' '}
+                        <a href="https://zexvro.in/#waitlist" className="font-bold text-zinc-200 hover:text-white">
+                          Join at zexvro.in
+                        </a>
+                      </p>
+                    )}
                   </>
                 )}
                 {!isSignIn && (

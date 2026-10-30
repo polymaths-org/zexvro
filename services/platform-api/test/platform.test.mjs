@@ -9,7 +9,7 @@ const prefix=crypto.randomUUID();
 const limiter={limit:async()=>({success:true})};
 before(async()=>{
   proxy=await getPlatformProxy();
-  env={...proxy.env,API_RATE_LIMITER:limiter,WRITE_RATE_LIMITER:limiter,AUTH_RATE_LIMITER:limiter,DEVICE_RATE_LIMITER:limiter};
+  env={...proxy.env,SIGNUPS_OPEN:'true',API_RATE_LIMITER:limiter,WRITE_RATE_LIMITER:limiter,AUTH_RATE_LIMITER:limiter,DEVICE_RATE_LIMITER:limiter};
   const fixture=async name=>{
     const id=`${name}-${prefix}`;
     await env.DB.prepare('INSERT INTO accounts(id,username,email,password_hash,recovery_hash,created_at) VALUES(?,?,?,?,?,?)').bind(id,id,`${id}@example.test`,'fixture','fixture',Date.now()).run();
@@ -92,6 +92,16 @@ test('small patches cannot grow memory beyond its storage cap',async()=>{
  assert.equal((await call('/api/memory','POST',{memory:{largeA:'a'.repeat(40000)}})).status,200);
  assert.equal((await call('/api/memory','POST',{memory:{largeB:'b'.repeat(40000)}})).status,413);
  assert.equal((await call('/api/memory','POST',{memory:{largeA:null}})).status,200);
+});
+test('public sign-ups are closed while the waitlist is on, and health reports it',async()=>{
+ env.SIGNUPS_OPEN='false';
+ try{
+  const username=`waitlist_${prefix.slice(0,10)}`,email=`${username}@example.test`;
+  const closed=await call('/auth/signup','POST',{username,email,password:'A sufficiently long password 9'});
+  assert.equal(closed.status,403);assert.match(closed.body.error,/waitlist/);
+  assert.equal((await call('/api/health')).body.signupsOpen,false);
+  assert.equal((await env.DB.prepare('SELECT COUNT(*) AS n FROM accounts WHERE username=?').bind(username).first()).n,0);
+ }finally{env.SIGNUPS_OPEN='true'}
 });
 test('fresh accounts: signup, email login, refresh rotation, recovery replay denial and logout',async()=>{
  const username=`auth_${prefix.slice(0,12)}`,password='A sufficiently long password 9',email=`${username}@example.test`;

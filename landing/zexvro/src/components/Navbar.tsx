@@ -121,12 +121,10 @@ export const Navbar: React.FC = () => {
                   className="flex items-center gap-2 shrink-0"
                 >
                   <a
-                    href="https://console.zexvro.in"
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    href="#waitlist"
                     className="hidden sm:inline-flex items-center px-3.5 py-1.5 rounded-full text-[11px] font-bold tracking-wide bg-white text-black hover:bg-white/90 transition-colors"
                   >
-                    Get Started
+                    Join waitlist
                   </a>
                   <button
                     type="button"
@@ -166,13 +164,11 @@ export const Navbar: React.FC = () => {
                   ))}
                   <li className="p-1.5">
                     <a
-                      href="https://console.zexvro.in"
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      href="#waitlist"
                       onClick={() => setMobileOpen(false)}
                       className="flex items-center justify-center w-full py-2.5 rounded-full bg-white text-black text-xs font-bold"
                     >
-                      Get Started
+                      Join waitlist
                     </a>
                   </li>
                 </ul>
