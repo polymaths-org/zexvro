@@ -7,6 +7,7 @@ import { Web3Grid } from './components/Web3Grid';
 import { Team } from './components/Team';
 import { Waitlist } from './components/Waitlist';
 import { WaitlistAdmin } from './components/WaitlistAdmin';
+import { WaitlistPage } from './components/WaitlistPage';
 import { Footer } from './components/Footer';
 import { Preloader } from './components/Preloader';
 
@@ -21,16 +22,20 @@ function hasWaitlistSecret(): boolean {
   return false;
 }
 
-// zexvro.in 308s /waitlist → /, so also open admin when secret is on any path.
-const isWaitlistAdmin =
-  typeof window !== 'undefined' &&
-  (window.location.pathname.replace(/\/$/, '') === '/waitlist' || hasWaitlistSecret());
+// The admin list opens only with a secret in the query. /waitlist itself is the public page.
+const isWaitlistAdmin = typeof window !== 'undefined' && hasWaitlistSecret();
+const isWaitlistPage =
+  typeof window !== 'undefined' && window.location.pathname.replace(/\/$/, '') === '/waitlist';
 
 export default function App() {
   const [loaded, setLoaded] = useState(false);
 
   if (isWaitlistAdmin) {
     return <WaitlistAdmin />;
+  }
+
+  if (isWaitlistPage) {
+    return <WaitlistPage />;
   }
 
   return (

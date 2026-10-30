@@ -2,12 +2,9 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { ArrowRight, Loader2 } from 'lucide-react';
 import { BlurText } from './BlurText';
+import { joinWaitlist } from '../lib/waitlist';
 
 const ease = [0.16, 1, 0.3, 1] as const;
-
-const API_BASE =
-  (((globalThis as typeof globalThis & {__ZEXVRO_CONFIG__?:Record<string,string>}).__ZEXVRO_CONFIG__?.VITE_API_URL ?? import.meta.env.VITE_API_URL) as string | undefined)?.trim().replace(/\/$/, '') ||
-  'https://zexvro-platform-api.zexvro.workers.dev';
 
 export const Waitlist: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -22,33 +19,13 @@ export const Waitlist: React.FC = () => {
     setStatus('loading');
     setError('');
 
-    try {
-      const res = await fetch(`${API_BASE}/api/waitlist`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: trimmed, source: 'landing' }),
-      });
-      const data = (await res.json().catch(() => ({}))) as {
-        status?: string;
-        error_description?: string;
-        error?: string;
-      };
-
-      if (!res.ok) {
-        setStatus('error');
-        setError(data.error_description || data.error || 'Something went wrong. Try again.');
-        return;
-      }
-
-      if (data.status === 'already_joined') {
-        setStatus('already');
-      } else {
-        setStatus('joined');
-      }
-    } catch {
+    const result = await joinWaitlist(trimmed, 'landing');
+    if (result.kind === 'error') {
       setStatus('error');
-      setError('Network error. Check your connection and try again.');
+      setError(result.message);
+      return;
     }
+    setStatus(result.kind);
   };
 
   const done = status === 'joined' || status === 'already';
