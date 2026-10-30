@@ -11,6 +11,8 @@ export interface User {
   streakDays: number;
   completedLabsCount: number;
   githubConnected: boolean;
+  /** Set only from validated OAuth provider data, never an email prefix. */
+  verifiedGithubLogin?:string;
   startedLabIds?: string[]; // labs the user has enrolled/started
   completedLabIds?: string[]; // labs the user has submitted & finished
 }

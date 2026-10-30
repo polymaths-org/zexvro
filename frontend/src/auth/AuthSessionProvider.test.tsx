@@ -8,7 +8,7 @@ describe('AuthSessionProvider', () => {
     vi.unstubAllGlobals();
   });
 
-  it('keeps dashboard content behind the Cognito sign-in gate', () => {
+  it('keeps dashboard content behind the sign-in gate', () => {
     render(
       <MemoryRouter initialEntries={['/services/nft']}>
         <AuthSessionProvider>
@@ -24,7 +24,7 @@ describe('AuthSessionProvider', () => {
   it('restores a valid session without changing the requested deep link', async () => {
     window.localStorage.setItem(
       'zexvro_user_session',
-      JSON.stringify({ username: 'nabil', token: 'header.payload.signature' }),
+      JSON.stringify({ username: 'nabil', token: 'zx_test_session', expiresAt: Date.now()+3600000 }),
     );
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }));
 
@@ -61,7 +61,7 @@ describe('AuthSessionProvider', () => {
   it('preserves CLI activation links for authenticated users', async () => {
     window.localStorage.setItem(
       'zexvro_user_session',
-      JSON.stringify({ username: 'nabil', token: 'header.payload.signature' }),
+      JSON.stringify({ username: 'nabil', token: 'zx_test_session', expiresAt: Date.now()+3600000 }),
     );
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }));
 

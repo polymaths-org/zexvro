@@ -77,3 +77,9 @@
   X-Robots-Tag: noindex, noimageindex
 /rushi2.png
   X-Robots-Tag: noindex, noimageindex
+
+# Environment overlays and release markers must never be served stale.
+/runtime-config.js
+  Cache-Control: no-store
+/release.json
+  Cache-Control: no-store

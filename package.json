@@ -24,9 +24,9 @@
     "build:agent-auth": "npm --prefix services/agent-auth run build",
     "agent-auth:smoke": "node scripts/agent-auth-smoke.mjs",
     "dev:stack-gate": "node scripts/dev.mjs --with-depin --with-agent-auth",
-    "gate:deploy-plan": "node scripts/deploy-agent-auth-aws.mjs --plan",
+    "gate:deploy-plan": "XDG_CONFIG_HOME=/home/wraient npx --yes wrangler@4.151.0 deploy --config services/platform-api/wrangler.jsonc --dry-run --profile zexvro",
     "gate:dynamo-smoke": "node scripts/gate-dynamo-smoke.mjs",
-    "gate:deploy": "node scripts/deploy-agent-auth-codebuild.mjs",
+    "gate:deploy": "npm --prefix services/platform-api run deploy",
     "dev:gate": "node scripts/dev.mjs --only=agent-auth",
     "test:gate": "npm run test:agent-auth",
     "gate:smoke": "node scripts/agent-auth-smoke.mjs",
@@ -41,7 +41,10 @@
     "morph": "./services/morph/bin/morph",
     "morph:mcp": "node services/morph/mcp/src/index.mjs",
     "arcade:dev": "npx --yes lakebed@0.0.29 dev demos/arcade",
-    "arcade:deploy": "npx --yes lakebed@0.0.29 deploy demos/arcade"
+    "arcade:deploy": "npx --yes lakebed@0.0.29 deploy demos/arcade",
+    "deploy:cloudflare": "bash scripts/deploy-production.sh",
+    "test:non-morph": "node scripts/test-non-morph.mjs",
+    "test:non-morph:browser": "node scripts/test-non-morph.mjs --browser"
   },
   "engines": {
     "node": ">=22"

@@ -23,7 +23,7 @@ export interface JtiRecord {
 }
 
 export interface GateRepository {
-  kind: 'memory' | 'dynamo'
+  kind: 'memory' | 'dynamo' | 'd1'
   ensureDemoTenant(): Promise<{ siteKey: string; secretKey: string; siteId: string } | null>
   /** Load durable sites into cache (Dynamo scan). No-op for memory. */
   hydrateSites?(): Promise<void>
@@ -31,15 +31,16 @@ export interface GateRepository {
   getSiteById(siteId: string): Promise<SiteRecord | undefined>
   getSiteSecret(siteId: string): Promise<string | undefined>
   findSiteBySecret(siteSecret: string): Promise<SiteRecord | undefined>
-  listSites(): Promise<SiteRecord[]>
+  listSites(page?:{limit?:number;cursor?:string}): Promise<SiteRecord[]>
   createSite(site: SiteRecord, secretKey: string): Promise<void>
   updateSite(site: SiteRecord): Promise<void>
   rotateSiteSecret(siteId: string, secretKey: string): Promise<void>
   listAllowedOrigins(): Promise<string[]>
+  isOriginAllowed?(origin:string):Promise<boolean>
   getPolicy(siteId: string, action: string): Promise<ActionPolicy | undefined>
   putAgent(agent: AgentRecord): Promise<void>
   getAgentByPublicKey(siteId: string, publicKey: string): Promise<AgentRecord | undefined>
-  listAgents(siteId: string): Promise<AgentRecord[]>
+  listAgents(siteId: string,page?:{limit?:number;cursor?:string}): Promise<AgentRecord[]>
   putChallenge(challenge: ChallengeRecord): Promise<void>
   getChallenge(id: string): Promise<ChallengeRecord | undefined>
   saveChallenge(challenge: ChallengeRecord): Promise<void>

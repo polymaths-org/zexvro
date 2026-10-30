@@ -16,7 +16,7 @@ const onlyArg = [...args].find((arg) => arg.startsWith('--only='));
 const only = onlyArg?.slice('--only='.length);
 const withDepin = args.has('--with-depin') || only === 'depin';
 const withAgentAuth = args.has('--with-agent-auth') || only === 'agent-auth';
-const withNft = !(args.has('--no-nft') || args.has('--skip-nft'));
+const withNft = (args.has('--with-nft') || only === 'nft') && !(args.has('--no-nft') || args.has('--skip-nft'));
 
 if (only !== undefined && !['frontend', 'nft', 'depin', 'agent-auth'].includes(only)) {
   console.error(`Unsupported --only target: ${only}`);
@@ -57,11 +57,12 @@ function stellarCli(args) {
 function withDefaults(env) {
   const next = { ...env };
   next.APP_URL ||= 'http://127.0.0.1:3000';
-  next.VITE_NFT_API_URL ||= '/api/nft';
+  next.VITE_API_URL ||= 'https://zexvro-platform-api.zexvro.workers.dev';
+  next.VITE_NFT_API_URL ||= withNft ? '/api/nft' : 'https://zexvro-platform-api.zexvro.workers.dev/nft';
   next.NFT_API_PROXY_TARGET ||= 'http://127.0.0.1:4101';
-  next.VITE_DEPIN_API_URL ||= '/api/depin';
+  next.VITE_DEPIN_API_URL ||= withDepin ? '/api/depin' : 'https://zexvro-platform-api.zexvro.workers.dev/depin';
   next.DEPIN_API_PROXY_TARGET ||= 'http://127.0.0.1:4102';
-  next.VITE_AGENT_AUTH_API_URL ||= '/api/agent-auth';
+  next.VITE_AGENT_AUTH_API_URL ||= withAgentAuth ? '/api/agent-auth' : 'https://zexvro-platform-api.zexvro.workers.dev/gate';
   next.AGENT_AUTH_API_PROXY_TARGET ||= 'http://127.0.0.1:4103';
   next.PORT ||= '4101';
   next.NFT_STORAGE_MODE ||= 'local';
@@ -69,7 +70,7 @@ function withDefaults(env) {
   next.NFT_COLLECTION_WASM_HASH ||= defaultWasmHash;
   next.ZEXVRO_STELLAR_IDENTITY ||= 'zexvro-provider';
 
-  if (!next.STELLAR_SPONSOR_SECRET) {
+  if (withNft && !next.STELLAR_SPONSOR_SECRET) {
     const secret = stellarCli(['keys', 'secret', next.ZEXVRO_STELLAR_IDENTITY]);
     if (secret) {
       next.STELLAR_SPONSOR_SECRET = secret;
@@ -80,7 +81,7 @@ function withDefaults(env) {
     }
   }
 
-  if (!next.VITE_STELLAR_OWNER_ADDRESS) {
+  if (withNft && !next.VITE_STELLAR_OWNER_ADDRESS) {
     const address = stellarCli(['keys', 'address', next.ZEXVRO_STELLAR_IDENTITY]);
     if (address) next.VITE_STELLAR_OWNER_ADDRESS = address;
   }

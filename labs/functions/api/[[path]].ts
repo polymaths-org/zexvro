@@ -10,6 +10,8 @@ import {
   checkRateLimit,
   json,
   readBody,
+  setSession,
+  oauthStateCookie,
 } from '../_shared';
 import { Lab, User, LabIdea } from '../../src/types';
 
@@ -58,6 +60,9 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
       return res;
     }
 
+    // Legacy public test login is retired in every deployed environment.
+    if(path==='/auth/dev-login')return json({error:'Not found'},404);
+
     if (path === '/auth/github/url' && method === 'GET') {
       if (!c.GITHUB_CLIENT_ID) {
         return json({ error: 'GitHub OAuth is not configured on the server (missing GITHUB_CLIENT_ID).' }, 500);
@@ -67,9 +72,11 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
         client_id: c.GITHUB_CLIENT_ID,
         redirect_uri: redirectUri,
         scope: 'read:user user:email',
-        state: Math.random().toString(36).slice(2),
+        state: crypto.randomUUID(),
       });
-      return json({ url: `https://github.com/login/oauth/authorize?${params}` });
+      const response=json({ url: `https://github.com/login/oauth/authorize?${params}` });
+      response.headers.set('Set-Cookie',oauthStateCookie(params.get('state')!,c.isSecure));
+      return response;
     }
 
     // labs CRUD
@@ -85,7 +92,7 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
             const isDraft = l.status === 'draft' || l.isPublished === false;
             if (!isDraft) return true;
             const editors = Array.isArray(l.editors) ? l.editors.map((e: string) => e.toLowerCase()) : [];
-            return user ? editors.includes(user.username?.toLowerCase()) : false;
+            return user ? editors.includes(user.verifiedGithubLogin?.toLowerCase() || '') : false;
           });
       return json({ labs: visible.map((l: Lab) => sanitizeLab(l, false)) });
     }
@@ -98,11 +105,12 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
       const body = await readBody(ctx.request);
       const newLab: Lab = {
         ...body,
-        id: `lab_${Date.now()}`,
+        id: `lab_${crypto.randomUUID()}`,
         slug: body.title ? body.title.toLowerCase().replace(/[^a-z0-9]+/g, '-') : `lab-${Date.now()}`,
         createdAt: new Date().toISOString().split('T')[0],
         updatedAt: new Date().toISOString().split('T')[0],
         author: user.username,
+        ...(!isAdmin(user,env)?{status:'draft',isPublished:false,editors:[]} : {}),
       };
       await store.createLab(newLab);
       return json({ success: true, lab: sanitizeLab(newLab, isAdmin(user, env)) }, 201);
@@ -130,7 +138,7 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
         if (!lab) return json({ error: 'Lab not found' }, 404);
         const isDraft = lab.status === 'draft' || lab.isPublished === false;
         const editors = Array.isArray(lab.editors) ? lab.editors.map((e: string) => e.toLowerCase()) : [];
-        const privileged = admin || (user ? editors.includes(user.username?.toLowerCase()) : false);
+        const privileged = admin || (user ? editors.includes(user.verifiedGithubLogin?.toLowerCase() || '') : false);
         if (isDraft && !privileged) return json({ error: 'Lab not found' }, 404);
         return json({ lab: sanitizeLab(lab, admin) });
       }
@@ -233,12 +241,12 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
       if (throttle) return throttle;
       const body = await readBody(ctx.request);
       const submission = {
+        ...body,
         id: `sub_${Date.now()}`,
         userId: user.id,
         userName: user.name || user.username,
         status: 'pending',
         submittedAt: new Date().toISOString(),
-        ...body,
       };
       await store.saveSubmission(submission);
       return json({ success: true, submission }, 201);
@@ -378,6 +386,21 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
       const allTasks = [...(lab.pages || []).flatMap((p) => p.elements), ...lab.tasks];
       const task = allTasks.find((t) => t.id === taskId);
       if (!task) return json({ error: 'Task not found' }, 404);
+
+      // SpacetimeDB backend: answers live in a private table readable only
+      // inside reducers, so delegate the check to the database.
+      const spacetimeVerify = (store as unknown as {
+        verifyTask?: (labId: string, taskId: string, flag: string, command: string) => Promise<void>;
+      }).verifyTask;
+      if (typeof spacetimeVerify === 'function') {
+        try {
+          await spacetimeVerify.call(store, labId, taskId, flag || '', userCommand || codeContent || '');
+          return json({ passed: true, log: '[CHECK PASSED] Verified.', taskId, xpAwarded: 50 });
+        } catch (e: unknown) {
+          const message = e instanceof Error ? e.message : 'Check failed';
+          return json({ passed: false, log: `[CHECK FAILED] ${message}`, taskId, xpAwarded: 0 });
+        }
+      }
 
       const cmd = (userCommand || '').trim().toLowerCase();
       const reqCmd = (task.verificationCommand || '').trim().toLowerCase();

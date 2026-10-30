@@ -536,7 +536,7 @@ export default function CollectionStudio({
 
       <header className="flex flex-col gap-4 border-b border-zinc-200 pb-5 dark:border-zinc-900 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 items-start gap-4">
-          {collection.coverImageUri.startsWith('http') ? (
+          {collection.coverImageUri?.startsWith('http') ? (
             <img
               src={collection.coverImageUri}
               alt=""

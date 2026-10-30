@@ -25,7 +25,7 @@ pub enum DataKey {
 }
 
 #[contracterror]
-#[derive(Clone, Debug, Copy)]
+#[derive(Clone, Debug, Copy, PartialEq, Eq)]
 pub enum PoolError {
     AlreadyInitialized = 1,
     NullifierSpent = 2,
@@ -267,3 +267,6 @@ const VK_IC2: [u8; 64] = [
     0x18,0xee,0x0c,0x13,0x3d,0x0b,0xaf,0xf6,
     0xe0,0x62,0xac,0x3e,0xae,0x56,0x94,0x2c,
 ];
+
+#[cfg(test)]
+mod test;

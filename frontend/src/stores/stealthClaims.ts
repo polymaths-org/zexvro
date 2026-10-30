@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { accountStorage } from '../lib/accountStorage';
 import type { IssuedClaim } from '../lib/stealthClaim';
 
 interface StealthClaimsState {
@@ -44,6 +45,7 @@ export const useStealthClaimsStore = create<StealthClaimsState>()(
     }),
     {
       name: 'zexvro_stealth_claims',
+      storage: createJSONStorage(() => accountStorage),
       partialize: (s) => ({ issued: s.issued }),
     },
   ),

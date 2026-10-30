@@ -1,3 +1,4 @@
+import {accountStorageKey} from './accountStorage';
 /**
  * Per-browser personal treasury for Zer0 auto-approve.
  * Secret stays in localStorage only — never put in Zer0 settings / AWS sync.
@@ -24,7 +25,7 @@ function isValidPublic(publicKey: string): boolean {
 export function readUserTreasury(): UserTreasuryRecord | null {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(accountStorageKey(STORAGE_KEY));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<UserTreasuryRecord>;
     if (!isValidSecret(parsed.secret || '') || !isValidPublic(parsed.publicKey || '')) {
@@ -72,7 +73,7 @@ export function writeUserTreasury(record: UserTreasuryRecord): void {
     throw new Error('Treasury secret does not match public key');
   }
   localStorage.setItem(
-    STORAGE_KEY,
+    accountStorageKey(STORAGE_KEY),
     JSON.stringify({
       publicKey: record.publicKey,
       secret: record.secret,
@@ -112,7 +113,7 @@ export function importUserTreasurySecret(secret: string, label = 'Imported treas
 
 export function clearUserTreasury(): void {
   if (typeof window === 'undefined') return;
-  localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(accountStorageKey(STORAGE_KEY));
 }
 
 export function shortG(address: string): string {

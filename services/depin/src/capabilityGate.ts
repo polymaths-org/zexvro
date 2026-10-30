@@ -134,6 +134,10 @@ export async function verifyCapabilityWithGate(
         problem: json,
       }
     }
+    if(json.ok!==true || !['human','agent'].includes(String(json.class)) || json.action!==action ||
+       (gate.minClass && gate.minClass!=='either' && json.class!==gate.minClass)) {
+      return {ok:false,status:502,problem:{title:'invalid_gate_response',detail:'Gate did not verify the expected action/class'}}
+    }
     const cls = typeof json.class === 'string' ? json.class : 'unknown'
     const act = typeof json.action === 'string' ? json.action : action
     const stellarPk = typeof json.stellar_pk === 'string' ? json.stellar_pk : undefined

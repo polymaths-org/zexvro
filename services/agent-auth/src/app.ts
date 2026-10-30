@@ -41,7 +41,7 @@ import { dirname, extname, join } from 'node:path'
 import { invalidatePhotoBankCache, photoBankStats } from './captcha/assets.js'
 import { fileURLToPath } from 'node:url'
 
-export function createGateApp(config: GateConfig, repo: GateRepository) {
+export function createGateApp(config: GateConfig, repo: GateRepository, options:{adminAuth?:import('express').RequestHandler}={}) {
   const app = express()
   app.disable('x-powered-by')
 
@@ -52,8 +52,8 @@ export function createGateApp(config: GateConfig, repo: GateRepository) {
       let allowed = isCorsOriginAllowed(origin, config.corsOrigins)
       if (!allowed) {
         try {
-          const dynamic = await repo.listAllowedOrigins()
-          allowed = isCorsOriginAllowed(origin, dynamic)
+          if(repo.isOriginAllowed) allowed=await repo.isOriginAllowed(origin)
+          else allowed = isCorsOriginAllowed(origin, await repo.listAllowedOrigins())
         } catch {
           /* ignore */
         }
@@ -78,7 +78,7 @@ export function createGateApp(config: GateConfig, repo: GateRepository) {
 
   app.use(express.json({ limit: '64kb' }))
 
-  const adminAuth = createAdminAuthMiddleware({
+  const adminAuth = options.adminAuth ?? createAdminAuthMiddleware({
     requireAuth: config.adminRequireAuth,
     userPoolId: config.cognitoUserPoolId,
     clientId: config.cognitoClientId,
@@ -128,11 +128,10 @@ export function createGateApp(config: GateConfig, repo: GateRepository) {
         requestBoundPopSupported: true,
         note: 'soft_confirm is dev-only; captcha_pass is self-hosted multi-type human friction (not farm-proof / not request-bound); preferredType is server-filtered; session_pop key-bound soft; WebAuthn hard human. Agent requires PoP when requirePop=true. Pass expectedHtm/Htu/bodyHash for request-bound Pop.',
       },
-      sites: stores.sites.size,
-      agents: stores.agents.size,
+      ...(repo.kind==='d1'?{}:{sites:stores.sites.size,agents:stores.agents.size}),
       header: CAPABILITY_HEADER,
       stateBackend: config.stateBackend,
-      dynamoTable: config.dynamoTable,
+      ...(repo.kind==='d1'?{database:'cloudflare-d1'}:{dynamoTable:config.dynamoTable}),
       repository: repo.kind,
       adminRequireAuth: config.adminRequireAuth,
     })
@@ -360,10 +359,12 @@ export function createGateApp(config: GateConfig, repo: GateRepository) {
   })
 
   // --- Multi-tenant sites (stranger integration) ---
-  app.get('/v1/admin/sites', adminAuth, async (_req, res) => {
-    const sites = await repo.listSites()
+  app.get('/v1/admin/sites', adminAuth, async (req, res) => {
+    const cursor=typeof req.query.cursor==='string'?req.query.cursor:''
+    const sites = (await repo.listSites({limit:101,cursor})).filter(site=>site.siteId>cursor)
     res.json({
-      sites: sites.map((s) => ({
+      nextCursor:sites.length>100?sites[99]?.siteId:null,
+      sites: sites.slice(0,100).map((s) => ({
         siteId: s.siteId,
         projectId: s.projectId,
         siteKey: s.siteKey,

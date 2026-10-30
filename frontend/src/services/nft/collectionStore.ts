@@ -1,10 +1,11 @@
+import {accountStorageKey} from '../../lib/accountStorage';
 import type { NftCollection, NftCollectionDraft } from '../../types';
 
 const COLLECTIONS_PREFIX = 'zexvro:nft:collections:v1';
 const DRAFT_PREFIX = 'zexvro:nft:collection-draft:v1';
 
 function storageKey(prefix: string, workspaceId: string) {
-  return `${prefix}:${encodeURIComponent(workspaceId || 'default')}`;
+  return accountStorageKey(`${prefix}:${encodeURIComponent(workspaceId || 'default')}`);
 }
 
 function parseArray(value: string | null): NftCollection[] {

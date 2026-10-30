@@ -67,3 +67,12 @@ presentation/**/*.mp4
 # Scratch / accidental dumps
 frontend/public/marketing/a
 services/transformation-agent/
+
+# Local Wrangler bindings and state
+.wrangler/
+
+# Generated Soroban assertion snapshots; fixtures remain tracked.
+zer0-pool/contracts/zer0-pool/test_snapshots/
+
+# Immutable CI build artifacts and deployment staging.
+/release/

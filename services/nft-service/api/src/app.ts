@@ -1,7 +1,7 @@
 import cors from 'cors'
 import express, { type RequestHandler } from 'express'
 import multer, { MulterError } from 'multer'
-import { StrKey } from './index.js'
+import { StrKey } from '@stellar/stellar-sdk'
 import { z } from 'zod'
 import type { CheckoutIntentRecord, CollectionRecord } from './domain.js'
 import { ApiError, errorHandler } from './errors.js'
@@ -122,12 +122,13 @@ export interface NftServiceCapabilities {
   paymentTokenAddress?: string
   pinningConfigured: boolean
   stellarConfigured: boolean
-  storageMode: 'local' | 's3' | 'pinata'
+  storageMode: 'local' | 's3' | 'pinata' | 'r2'
 }
 
 interface CreateAppOptions {
   authenticate: RequestHandler
   capabilities: NftServiceCapabilities
+  migrateLegacyScope?:boolean
   allowedOrigins: string[]
   assetReader?: PublicAssetReader
 }
@@ -189,8 +190,11 @@ async function listSharedWorkspaceCollections(
   service: NftService,
   subject: string,
   workspaceId: string,
+  page?:import('./domain.js').NftPage,
+  migrateLegacy=true,
 ): Promise<CollectionRecord[]> {
   const teamKey = scopeWorkspaceTeam(workspaceId)
+  if(!migrateLegacy)return service.listCollections(teamKey,page)
   const legacyKey = scopeWorkspaceLegacy(subject, workspaceId)
   const [teamRows, legacyRows] = await Promise.all([
     service.listCollections(teamKey),
@@ -373,12 +377,16 @@ export function createApp(service: NftService, options: CreateAppOptions) {
       const collection = await service.getCollection(collectionId)
       presentPublicCollection(collection)
       const nextTokenId = await service.suggestNextTokenId(collectionId)
-      const items = await service.listMintedItems(collectionId)
+      const rawCursor=request.query.cursor;
+      const cursor=rawCursor===undefined?-1:Number(rawCursor);
+      if(!Number.isSafeInteger(cursor)||cursor< -1)throw new ApiError(400,'invalid_cursor','Invalid inventory cursor');
+      const items = await service.listMintedItems(collectionId,{limit:101,cursor})
       response.setHeader('Cache-Control', 'public, max-age=15')
       response.json({
-        items: items.map(presentMintedItem),
+        items: items.slice(0,100).map(presentMintedItem),
+        nextCursor:items.length>100?items[99]?.tokenId:null,
         nextTokenId,
-        mintedCount: items.length,
+        mintedCount: await service.countMintedItems(collectionId),
       })
     }),
   )
@@ -391,14 +399,18 @@ export function createApp(service: NftService, options: CreateAppOptions) {
         .parse(request.params)
       const collection = await service.getCollection(collectionId)
       const nextTokenId = await service.suggestNextTokenId(collectionId)
-      const items = await service.listMintedItems(collectionId)
+      const rawCursor=request.query.cursor;
+      const cursor=rawCursor===undefined?-1:Number(rawCursor);
+      if(!Number.isSafeInteger(cursor)||cursor< -1)throw new ApiError(400,'invalid_cursor','Invalid inventory cursor');
+      const items = await service.listMintedItems(collectionId,{limit:101,cursor})
       response.setHeader('Cache-Control', 'public, max-age=15')
       response.json({
         collection: presentPublicCollection(collection),
         inventory: {
-          items: items.map(presentMintedItem),
+          items: items.slice(0,100).map(presentMintedItem),
+          nextCursor:items.length>100?items[99]?.tokenId:null,
           nextTokenId,
-          mintedCount: items.length,
+          mintedCount: await service.countMintedItems(collectionId),
         },
       })
     }),
@@ -497,9 +509,12 @@ export function createApp(service: NftService, options: CreateAppOptions) {
         service,
         subject,
         workspaceId,
+        {limit:101,cursor:typeof request.query.cursor==='string'?request.query.cursor:''},
+        options.migrateLegacyScope!==false,
       )
       response.json({
-        collections: collections.map((collection) =>
+        nextCursor:collections.length>100?collections[99]?.id:null,
+        collections: collections.slice(0,100).map((collection) =>
           presentCollection(collection, subject),
         ),
       })
@@ -743,11 +758,15 @@ export function createApp(service: NftService, options: CreateAppOptions) {
         response.locals.nftIdentity.subject,
       )
       const nextTokenId = await service.suggestNextTokenId(collectionId)
-      const items = await service.listMintedItems(collectionId)
+      const rawCursor=request.query.cursor;
+      const cursor=rawCursor===undefined?-1:Number(rawCursor);
+      if(!Number.isSafeInteger(cursor)||cursor< -1)throw new ApiError(400,'invalid_cursor','Invalid inventory cursor');
+      const items = await service.listMintedItems(collectionId,{limit:101,cursor})
       response.json({
-        items: items.map(presentMintedItem),
+        items: items.slice(0,100).map(presentMintedItem),
+        nextCursor:items.length>100?items[99]?.tokenId:null,
         nextTokenId,
-        mintedCount: items.length,
+        mintedCount: await service.countMintedItems(collectionId),
       })
     }),
   )

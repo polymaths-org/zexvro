@@ -39,11 +39,12 @@ interface WorkspaceState {
   currentWorkspaceId: string | null;
   currentWorkspace: () => Workspace | null;
   isHydrated: boolean;
+  lastError: string | null;
   setHydrated: (val: boolean) => void;
   setWorkspaces: (workspaces: Workspace[]) => void;
   createWorkspace: (name: string, ownerId: string, ownerEmail?: string) => Workspace;
   selectWorkspace: (id: string) => void;
-  updateWorkspace: (id: string, updates: Partial<Pick<Workspace, 'name' | 'plan' | 'settings' | 'invitations' | 'members' | 'environment'>>) => void;
+  updateWorkspace: (id: string, updates: Partial<Pick<Workspace, 'name' | 'plan' | 'settings' | 'invitations' | 'members' | 'environment'>>) => Promise<boolean>;
   deleteWorkspace: (id: string) => void;
   /** @deprecated prefer createInvitation for IAM invite flow */
   addMember: (workspaceId: string, member: Omit<WorkspaceMember, 'id' | 'joinedAt'>) => void;
@@ -86,6 +87,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
     workspaces: [],
     currentWorkspaceId: null,
     isHydrated: false,
+    lastError: null,
 
     setHydrated: (val) => set({ isHydrated: val }),
 
@@ -145,77 +147,41 @@ export const useWorkspaceStore = create<WorkspaceState>()(
               state.currentWorkspaceId === workspace.id ? serverId : state.currentWorkspaceId,
           }));
         })
-        .catch(err => console.error('Failed to save workspace to AWS:', err));
+        .catch(err => set(state=>({lastError:err.message || 'Workspace was not saved',workspaces:state.workspaces.filter(w=>w.id!==workspace.id),currentWorkspaceId:state.currentWorkspaceId===workspace.id?null:state.currentWorkspaceId})));
       return workspace;
     },
 
     selectWorkspace: (id) => set({ currentWorkspaceId: id }),
 
-    updateWorkspace: (id, updates) => {
-      const trimmedName = updates.name?.trim();
-      if (trimmedName && get().workspaces.some(workspace => workspace.id !== id && namesEqual(workspace.name, trimmedName))) {
-        console.warn('Workspace name must be unique.');
-        return;
-      }
-      const safeUpdates = trimmedName ? { ...updates, name: trimmedName } : updates;
-      // Keep root environment in sync with settings.environment for shell badge
-      const envFromSettings = safeUpdates.settings?.environment;
-      const merged =
-        envFromSettings && !safeUpdates.environment
-          ? { ...safeUpdates, environment: envFromSettings }
-          : safeUpdates;
-      set(state => ({
-        workspaces: state.workspaces.map(w =>
-          w.id === id
-            ? {
-                ...w,
-                ...merged,
-                slug: merged.name ? slugify(merged.name) : w.slug,
-                settings: merged.settings ? { ...w.settings, ...merged.settings } : w.settings,
-              }
-            : w
-        ),
-      }));
-      workspaceApi.update(id, merged).catch(err => console.error('Failed to update workspace in AWS:', err));
+    updateWorkspace: async (id,updates) => {
+      const name=updates.name?.trim();
+      if(name && get().workspaces.some(w=>w.id!==id && w.ownerId===get().workspaces.find(x=>x.id===id)?.ownerId && namesEqual(w.name,name))){set({lastError:'Workspace name must be unique.'});return false}
+      const merged={...updates,...(name?{name}:{}),...(updates.settings?.environment&&!updates.environment?{environment:updates.settings.environment}:{})};
+      try {
+        const result=await workspaceApi.update(id,merged);
+        set(state=>({lastError:null,workspaces:state.workspaces.map(w=>w.id===id?{...w,...merged,...result.workspace,settings:result.workspace?.settings || {...w.settings,...merged.settings}}:w)}));
+        return true;
+      } catch(error){set({lastError:error instanceof Error?error.message:'Workspace update failed'});return false}
     },
 
     deleteWorkspace: (id) => {
-      set(state => {
-        const filtered = state.workspaces.filter(w => w.id !== id);
-        return {
-          workspaces: filtered,
-          currentWorkspaceId:
-            state.currentWorkspaceId === id
-              ? filtered[0]?.id || null
-              : state.currentWorkspaceId,
-        };
-      });
-      workspaceApi.delete(id).catch(err => console.error('Failed to delete workspace in AWS:', err));
+      void workspaceApi.delete(id).then(()=>set(state=>{
+        const workspaces=state.workspaces.filter(w=>w.id!==id);
+        return {workspaces,lastError:null,currentWorkspaceId:state.currentWorkspaceId===id?workspaces[0]?.id||null:state.currentWorkspaceId};
+      })).catch(error=>set({lastError:error.message || 'Workspace deletion failed'}));
     },
 
-    addMember: (workspaceId, member) => {
-      const fullMember: WorkspaceMember = {
-        ...member,
-        id: createId('member'),
-        joinedAt: Date.now(),
-        principalType: member.role === 'Agent' ? 'serviceAccount' : 'user',
-      };
-      set(state => ({
-        workspaces: patchWorkspace(state.workspaces, workspaceId, w => ({
-          ...w,
-          members: [...w.members, fullMember],
-        })),
-      }));
-      workspaceApi.invite(workspaceId, fullMember).catch(err => console.error('Failed to save invite to AWS:', err));
+    addMember: (workspaceId,member) => {
+      void get().createInvitation({workspaceId,email:member.email,role:member.role,
+        invitedBy:get().workspaces.find(w=>w.id===workspaceId)?.ownerId || ''})
+        .catch(error=>set({lastError:error.message || 'Invitation failed'}));
     },
 
-    removeMember: (workspaceId, memberId) =>
-      set(state => ({
-        workspaces: patchWorkspace(state.workspaces, workspaceId, w => ({
-          ...w,
-          members: w.members.filter(m => m.id !== memberId),
-        })),
-      })),
+    removeMember: (workspaceId,memberId) => {
+      void workspaceApi.removeMember(workspaceId,memberId).then(()=>set(state=>({
+        lastError:null,workspaces:patchWorkspace(state.workspaces,workspaceId,w=>({...w,members:w.members.filter(m=>m.id!==memberId)}))
+      }))).catch(error=>set({lastError:error.message || 'Member removal failed'}));
+    },
 
     leaveWorkspace: async (workspaceId, identity) => {
       const ws = get().workspaces.find(w => w.id === workspaceId);
@@ -243,7 +209,8 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         return true;
       });
 
-      // Drop from local switcher for this user
+      await workspaceApi.leave(workspaceId);
+      // Only remove the workspace after the server confirms the leave.
       set(state => {
         const filtered = state.workspaces.filter(w => w.id !== workspaceId);
         return {
@@ -255,38 +222,13 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         };
       });
 
-      // Best-effort: update owner roster on platform (may 403 for non-admins — ok)
-      workspaceApi.update(workspaceId, { members: nextMembers }).catch(() => undefined);
-
-      // Local Vite membership index
-      try {
-        await fetch(`/api/workspaces/${encodeURIComponent(workspaceId)}/leave`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: identity.email, username: identity.username }),
-        });
-      } catch {
-        /* ignore */
-      }
     },
 
-    updateMemberRole: (workspaceId, memberId, role, boundBy) =>
-      set(state => ({
-        workspaces: patchWorkspace(state.workspaces, workspaceId, w => ({
-          ...w,
-          members: w.members.map(m =>
-            m.id === memberId
-              ? {
-                  ...m,
-                  role,
-                  principalType: role === 'Agent' ? 'serviceAccount' : (m.principalType || 'user'),
-                  roleBoundAt: Date.now(),
-                  roleBoundBy: boundBy || m.roleBoundBy,
-                }
-              : m
-          ),
-        })),
-      })),
+    updateMemberRole: (workspaceId,memberId,role,boundBy) => {
+      void workspaceApi.setMemberRole(workspaceId,memberId,role).then(()=>set(state=>({
+        lastError:null,workspaces:patchWorkspace(state.workspaces,workspaceId,w=>({...w,members:w.members.map(m=>m.id===memberId?{...m,role,roleBoundBy:boundBy || m.roleBoundBy,roleBoundAt:Date.now()}:m)}))
+      }))).catch(error=>set({lastError:error.message || 'Role change failed'}));
+    },
 
     createInvitation: async ({ workspaceId, email, role, invitedBy, invitedByEmail, note }) => {
       const workspace = get().workspaces.find(w => w.id === workspaceId);
@@ -393,6 +335,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         });
         return Object.assign({}, invite, {
           _mailStatus: 'sent' as const,
+          _deliveryProvider: mail.provider,
           _messageId: mail.messageId,
           _acceptUrl: mail.acceptUrl,
         });

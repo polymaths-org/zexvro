@@ -1,8 +1,6 @@
-export const COGNITO_REGION = import.meta.env.VITE_AWS_REGION || 'us-east-1';
-export const COGNITO_USER_POOL_ID = import.meta.env.VITE_COGNITO_USER_POOL_ID || 'us-east-1_vyONcitBD';
-export const COGNITO_CLIENT_ID = import.meta.env.VITE_COGNITO_CLIENT_ID || '7qmkq33si9qk8pgo6ebi3qantm';
-
-const COGNITO_ENDPOINT = `https://cognito-idp.${COGNITO_REGION}.amazonaws.com/`;
+import {currentStorageAccount,notifyAccountChanged} from '../lib/accountStorage';
+// Compatibility filename for existing imports; authentication is now Cloudflare D1.
+import {platformApiBase} from '../services/mail/mailApi';
 
 export type UserSession = {
   username: string;
@@ -10,15 +8,7 @@ export type UserSession = {
   token: string;
   idToken?: string;
   refreshToken?: string;
-};
-
-type CognitoTokenResponse = {
-  AuthenticationResult?: {
-    AccessToken?: string;
-    IdToken?: string;
-    RefreshToken?: string;
-  };
-  ChallengeName?: string;
+  expiresAt?: number;
 };
 
 const SESSION_STORAGE_KEY = 'zexvro_user_session';
@@ -38,6 +28,9 @@ function decodeJwtPayload(token?: string): Record<string, unknown> {
 }
 
 export function getAccessTokenExpiryMs(token?: string): number | null {
+  if(token?.startsWith('zx_')) {
+    try {const stored=JSON.parse(localStorage.getItem(SESSION_STORAGE_KEY)||'{}');return stored.token===token&&typeof stored.expiresAt==='number'?stored.expiresAt:0;}catch{return 0;}
+  }
   const exp = decodeJwtPayload(token).exp;
   return typeof exp === 'number' ? exp * 1000 : null;
 }
@@ -57,8 +50,8 @@ export function readStoredSession(): UserSession | null {
     if (
       typeof parsed.username === 'string' &&
       typeof parsed.token === 'string' &&
-      parsed.token.split('.').length === 3 &&
-      !parsed.token.startsWith('prod_jwt_token_')
+      parsed.token.startsWith('zx_') &&
+      typeof parsed.expiresAt === 'number'
     ) {
       return {
         username: parsed.username,
@@ -66,6 +59,7 @@ export function readStoredSession(): UserSession | null {
         token: parsed.token,
         idToken: typeof parsed.idToken === 'string' ? parsed.idToken : undefined,
         refreshToken: typeof parsed.refreshToken === 'string' ? parsed.refreshToken : undefined,
+        expiresAt: parsed.expiresAt,
       };
     }
   } catch {
@@ -77,14 +71,18 @@ export function readStoredSession(): UserSession | null {
 }
 
 export function persistSession(session: UserSession) {
+  const previous=currentStorageAccount();
   localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+  notifyAccountChanged(previous);
 }
 
 export function clearStoredSession() {
+  const previous=currentStorageAccount();
   localStorage.removeItem(SESSION_STORAGE_KEY);
+  notifyAccountChanged(previous);
 }
 
-/** Map Cognito / network failures to short, user-facing copy. */
+/** Map Authentication / network failures to short, user-facing copy. */
 export function formatAuthError(error: unknown, action: 'signup' | 'signin' | 'confirm' | 'forgot' | 'reset' | 'general' = 'general'): string {
   if (!(error instanceof Error) && typeof error !== 'string') {
     return fallbackAuthMessage(action);
@@ -206,167 +204,49 @@ class CognitoAuthError extends Error {
   }
 }
 
-async function cognitoRequest<T>(target: string, payload: Record<string, unknown>): Promise<T> {
+async function authRequest<T>(path: string, payload: Record<string, unknown>, token?: string): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(COGNITO_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-amz-json-1.1',
-        'X-Amz-Target': `AWSCognitoIdentityProviderService.${target}`,
-      },
+    response = await fetch(`${platformApiBase()}/auth/${path}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? {Authorization: `Bearer ${token}`} : {}) },
       body: JSON.stringify(payload),
     });
-  } catch {
-    throw new CognitoAuthError('Network error. Check your connection and try again.');
-  }
-
-  const data = await response.json().catch(() => ({} as Record<string, unknown>));
-  if (!response.ok) {
-    const type = typeof data.__type === 'string' ? String(data.__type).split('#').pop() : 'CognitoError';
-    const message = typeof data.message === 'string' ? data.message : `${type}: request failed`;
-    throw new CognitoAuthError(message, type);
-  }
+  } catch { throw new CognitoAuthError('Network error. Check your connection and try again.'); }
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new CognitoAuthError(data.error || 'Sign-in request failed', response.status===401?'NotAuthorizedException':'AuthError');
   return data as T;
 }
-
-export async function signUpUser(username: string, email: string, password: string) {
-  return cognitoRequest<{ UserConfirmed?: boolean }>('SignUp', {
-    ClientId: COGNITO_CLIENT_ID,
-    Username: username,
-    Password: password,
-    UserAttributes: [
-      { Name: 'email', Value: email },
-    ],
-  });
+export function signUpUser(username: string, email: string, password: string) {
+  return authRequest<{UserConfirmed: boolean; recoveryKey: string}>('signup', {username,email,password});
 }
-
-export async function confirmSignUp(username: string, code: string) {
-  return cognitoRequest('ConfirmSignUp', {
-    ClientId: COGNITO_CLIENT_ID,
-    Username: username,
-    ConfirmationCode: code,
-  });
+export async function confirmSignUp(_username: string, _code: string) {
+  throw new Error('New accounts are ready immediately. Sign in with your password.');
 }
-
-export async function signInUser(username: string, password: string): Promise<UserSession> {
-  const data = await cognitoRequest<CognitoTokenResponse>('InitiateAuth', {
-    AuthFlow: 'USER_PASSWORD_AUTH',
-    ClientId: COGNITO_CLIENT_ID,
-    AuthParameters: {
-      USERNAME: username,
-      PASSWORD: password,
-    },
-  });
-
-  if (data.ChallengeName) {
-    throw new Error(`Cognito challenge required: ${data.ChallengeName}`);
-  }
-
-  const accessToken = data.AuthenticationResult?.AccessToken;
-  const idToken = data.AuthenticationResult?.IdToken;
-  if (!accessToken) {
-    throw new Error('Cognito did not return an access token.');
-  }
-
-  const claims = decodeJwtPayload(idToken);
-  return {
-    username: String(claims['cognito:username'] || claims.preferred_username || username),
-    email: String(claims.email || ''),
-    token: accessToken,
-    idToken,
-    refreshToken: data.AuthenticationResult?.RefreshToken,
-  };
+export function signInUser(username: string, password: string): Promise<UserSession> {
+  return authRequest<UserSession>('signin', {username,password});
 }
-
-export async function forgotPassword(username: string) {
-  return cognitoRequest('ForgotPassword', {
-    ClientId: COGNITO_CLIENT_ID,
-    Username: username,
-  });
+export async function forgotPassword(_username: string) {
+  return {recoveryRequired:true};
 }
-
-export async function confirmForgotPassword(username: string, code: string, password: string) {
-  return cognitoRequest('ConfirmForgotPassword', {
-    ClientId: COGNITO_CLIENT_ID,
-    Username: username,
-    ConfirmationCode: code,
-    Password: password,
-  });
+export function confirmForgotPassword(username: string, code: string, password: string) {
+  return authRequest<{recoveryKey:string}>('reset-password', {username,recoveryKey:code,password});
 }
-
 export async function globalSignOut(accessToken?: string) {
-  if (!accessToken) return;
-  await cognitoRequest('GlobalSignOut', {
-    AccessToken: accessToken,
-  });
+  if(accessToken)await authRequest('signout',{},accessToken);
 }
-
-/**
- * Exchange a Cognito refresh token for a new access (+ id) token.
- * Refresh tokens are long-lived; access tokens expire in ~1 hour.
- */
 export function isAuthFailure(error: unknown): boolean {
-  if (error instanceof CognitoAuthError) {
-    const t = (error.cognitoType || '').toLowerCase();
-    return (
-      t.includes('notauthorized')
-      || t.includes('usernotfound')
-      || t.includes('invalidparameter')
-      || t.includes('tokenrevoked')
-    );
-  }
-  const msg = error instanceof Error ? error.message.toLowerCase() : String(error || '').toLowerCase();
-  return (
-    msg.includes('not authorized')
-    || msg.includes('refresh token')
-    || msg.includes('token has been revoked')
-    || msg.includes('invalid refresh')
-    || msg.includes('session has no refresh token')
-  );
+  return error instanceof CognitoAuthError && error.cognitoType==='NotAuthorizedException';
 }
-
 export async function refreshSessionTokens(session: UserSession): Promise<UserSession> {
-  if (!session.refreshToken) {
-    throw new CognitoAuthError('Session has no refresh token. Sign in again.', 'NotAuthorizedException');
-  }
-
-  const data = await cognitoRequest<CognitoTokenResponse>('InitiateAuth', {
-    AuthFlow: 'REFRESH_TOKEN_AUTH',
-    ClientId: COGNITO_CLIENT_ID,
-    AuthParameters: {
-      REFRESH_TOKEN: session.refreshToken,
-    },
-  });
-
-  if (data.ChallengeName) {
-    throw new CognitoAuthError(`Cognito challenge required: ${data.ChallengeName}`, data.ChallengeName);
-  }
-
-  const accessToken = data.AuthenticationResult?.AccessToken;
-  if (!accessToken) {
-    throw new CognitoAuthError('Cognito did not return an access token on refresh.', 'NotAuthorizedException');
-  }
-
-  const idToken = data.AuthenticationResult?.IdToken || session.idToken;
-  const claims = decodeJwtPayload(idToken);
-  const next: UserSession = {
-    username:
-      String(claims['cognito:username'] || claims.preferred_username || session.username),
-    email: String(claims.email || session.email || ''),
-    token: accessToken,
-    idToken,
-    // Cognito usually omits RefreshToken on refresh — keep the existing one.
-    refreshToken: data.AuthenticationResult?.RefreshToken || session.refreshToken,
-  };
-  persistSession(next);
-  return next;
+  if (!session.refreshToken) throw new CognitoAuthError('Session has no refresh token. Sign in again.', 'NotAuthorizedException');
+  const next=await authRequest<UserSession>('refresh',{refreshToken:session.refreshToken});
+  persistSession(next);return next;
 }
 
 let refreshInFlight: Promise<UserSession> | null = null;
 
 /**
- * Return a usable Cognito **access** token for API calls (NFT dashboard, etc.).
+ * Return a usable Cloudflare session token for API calls (NFT dashboard, etc.).
  * Refreshes automatically when expired or near expiry.
  * Only clears storage on definitive auth failures (not network blips).
  */
@@ -378,7 +258,7 @@ export async function ensureValidAccessToken(
     throw new CognitoAuthError('Not signed in.', 'NotAuthorizedException');
   }
 
-  if (!isAccessTokenExpired(current.token)) {
+  if (typeof current.expiresAt === 'number' && Date.now() < current.expiresAt - ACCESS_TOKEN_SKEW_MS) {
     return current.token;
   }
 

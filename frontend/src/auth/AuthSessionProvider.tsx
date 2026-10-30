@@ -1,3 +1,4 @@
+import {runtimeValue} from '../lib/runtimeConfig';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import AuthOverlay from '../components/auth/AuthOverlay';
@@ -14,8 +15,8 @@ import {
   type UserSession,
 } from './cognito';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL ||
-  'https://qkuostruh3.execute-api.us-east-1.amazonaws.com';
+const API_BASE_URL = runtimeValue('VITE_API_URL') ||
+  'https://zexvro-platform-api.zexvro.workers.dev';
 
 interface AuthSessionContextValue {
   userSession: UserSession;
@@ -43,7 +44,7 @@ export function AuthSessionProvider({ children }: { children: React.ReactNode })
     return code?.toUpperCase() || null;
   }, [location.search]);
 
-  // Keep Cognito access token fresh. Only update React state when the token string changes
+  // Keep the Cloudflare session fresh. Only update React state when the token string changes
   // (avoid re-render loops from re-reading localStorage every interval).
   useEffect(() => {
     if (!userSession) return;

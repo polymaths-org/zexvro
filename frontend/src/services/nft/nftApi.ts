@@ -1,8 +1,9 @@
+import {runtimeValue} from '../../lib/runtimeConfig';
 import type { CollectionStatus } from '../../types';
 import { ensureValidAccessToken, isAccessTokenExpired } from '../../auth/cognito';
 
-const HOSTED_NFT_API = 'https://iyk6idmup6.us-east-1.awsapprunner.com';
-const configuredNftApi = (import.meta.env.VITE_NFT_API_URL || '').trim().replace(/\/$/, '');
+const HOSTED_NFT_API = 'https://zexvro-platform-api.zexvro.workers.dev/nft';
+const configuredNftApi = (runtimeValue('VITE_NFT_API_URL') || '').trim().replace(/\/$/, '');
 // Prefer explicit env; fall back to hosted App Runner so local/Pages never hit a dead proxy or SPA HTML 200.
 const NFT_API_BASE = configuredNftApi || HOSTED_NFT_API;
 
@@ -21,7 +22,7 @@ export interface NftServiceHealth {
     paymentTokenAddress?: string;
     pinningConfigured: boolean;
     stellarConfigured: boolean;
-    storageMode: 'local' | 's3' | 'pinata';
+    storageMode: 'local' | 's3' | 'pinata' | 'r2';
   };
 }
 
@@ -217,6 +218,7 @@ export interface NftMintedItem {
 }
 
 export interface NftInventorySummary {
+  nextCursor?:number|null;
   items: NftMintedItem[];
   nextTokenId: number;
   mintedCount: number;
@@ -232,7 +234,7 @@ export interface PublicTokenMetadata {
     symbol: string;
   };
   attributes: Array<{ trait_type: string; value: string | number }>;
-  availability: 'available' | 'sold';
+  availability: 'available' | 'sold' | 'unknown';
   ownerAddress?: string;
   source?: 'mint' | 'purchase';
   transactionHash?: string;
@@ -396,12 +398,13 @@ export async function listNftCollections(
   accessToken: string,
   signal?: AbortSignal,
 ) {
-  const result = await requestJson<{ collections?: ApiNftCollection[] }>(
-    `/v1/collections?workspaceId=${encodeURIComponent(workspaceId)}`,
-    { signal },
-    accessToken,
-  );
-  return Array.isArray(result?.collections) ? result.collections : [];
+  const all:ApiNftCollection[]=[];let cursor='';
+  for(let page=0;page<100;page++){
+    const result=await requestJson<{collections?:ApiNftCollection[];nextCursor?:string|null}>(`/v1/collections?workspaceId=${encodeURIComponent(workspaceId)}${cursor?`&cursor=${encodeURIComponent(cursor)}`:''}`,{signal},accessToken);
+    all.push(...(result.collections||[]));if(!result.nextCursor)return all;
+    if(result.nextCursor===cursor)throw new Error('Invalid collection pagination');cursor=result.nextCursor;
+  }
+  throw new Error('Too many collections; narrow the request');
 }
 
 export async function uploadNftMedia(file: File, accessToken: string) {
@@ -578,15 +581,20 @@ export async function getPublicNftBranding(collectionId: string, signal?: AbortS
   };
 }
 
+async function inventoryPages(path:string,signal?:AbortSignal,token?:string){
+  const first=await requestJson<NftInventorySummary>(path,{signal},token);let cursor=first.nextCursor;
+  for(let page=0;cursor!==null&&cursor!==undefined&&page<99;page++){
+    const next=await requestJson<NftInventorySummary>(`${path}?cursor=${encodeURIComponent(String(cursor))}`,{signal},token);first.items.push(...next.items);
+    if(next.nextCursor===cursor)throw new Error('Invalid inventory pagination');cursor=next.nextCursor;
+  }
+  if(cursor!==null&&cursor!==undefined)throw new Error('Too many tokens; narrow the request');first.nextCursor=null;return first;
+}
+
 export async function getPublicCollectionInventory(
   collectionId: string,
   signal?: AbortSignal,
 ) {
-  const result = await requestJson<NftInventorySummary>(
-    `/v1/public/collections/${encodeURIComponent(collectionId)}/tokens`,
-    { signal },
-  );
-  return result;
+  return inventoryPages(`/v1/public/collections/${encodeURIComponent(collectionId)}/tokens`,signal);
 }
 
 export async function getPublicTokenMetadata(
@@ -605,11 +613,7 @@ export async function listCollectionItems(input: {
   accessToken: string;
   signal?: AbortSignal;
 }) {
-  return requestJson<NftInventorySummary>(
-    `/v1/collections/${encodeURIComponent(input.collectionId)}/items`,
-    { signal: input.signal },
-    input.accessToken,
-  );
+  return inventoryPages(`/v1/collections/${encodeURIComponent(input.collectionId)}/items`,input.signal,input.accessToken);
 }
 
 export async function archiveNftCollection(input: {

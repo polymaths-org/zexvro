@@ -1,3 +1,4 @@
+import {runtimeValue} from './lib/runtimeConfig';
 import React, { useState, useEffect } from 'react';
 import {
   Search, Menu, X, ChevronRight, User,
@@ -22,10 +23,10 @@ import CliActivation from './components/auth/CliActivation';
 import { globalSignOut, type UserSession } from './auth/cognito';
 import { buildAgentChatPayload } from './agent/settings';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL ||
+const API_BASE_URL = runtimeValue('VITE_API_URL') ||
   ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-    ? 'https://qkuostruh3.execute-api.us-east-1.amazonaws.com'
-    : 'https://qkuostruh3.execute-api.us-east-1.amazonaws.com');
+    ? 'https://zexvro-platform-api.zexvro.workers.dev'
+    : 'https://zexvro-platform-api.zexvro.workers.dev');
 
 // Mock Lists initial data
 import {

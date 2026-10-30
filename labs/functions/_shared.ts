@@ -13,9 +13,13 @@ export interface Env {
   GITHUB_CLIENT_ID?: string;
   GITHUB_CLIENT_SECRET?: string;
   LABS_ADMIN_GITHUB_LOGINS?: string;
+
   LABS_STATE_BACKEND?: string;
   LABS_DYNAMO_REGION?: string;
   LABS_DYNAMO_TABLE?: string;
+  SPACETIME_URL?: string;
+  SPACETIME_DB?: string;
+  SPACETIME_GATEWAY_TOKEN?:string;
   AWS_ACCESS_KEY_ID?: string;
   AWS_SECRET_ACCESS_KEY?: string;
   FIREBASE_API_KEY?: string;
@@ -28,15 +32,15 @@ export interface Env {
 
 let cachedStore: any = null;
 let cachedStoreKey = '';
-const ADMIN_SET: Set<string> = new Set();
+
 
 export function config(env: Env) {
   const APP_URL = env.APP_URL || 'https://labs.zexvro.in';
   const isSecure = APP_URL.startsWith('https://');
-  const SESSION_SECRET = env.LABS_SESSION_SECRET || 'dev-only-change-me';
+  const SESSION_SECRET = env.LABS_SESSION_SECRET || '';
   const GITHUB_CLIENT_ID = env.GITHUB_CLIENT_ID || '';
   const GITHUB_CLIENT_SECRET = env.GITHUB_CLIENT_SECRET || '';
-  const backend = env.LABS_STATE_BACKEND || 'firestore';
+  const backend = env.LABS_STATE_BACKEND || 'spacetime';
   return {
     APP_URL,
     isSecure,
@@ -48,19 +52,12 @@ export function config(env: Env) {
   };
 }
 
-export function adminLogins(env: Env): Set<string> {
-  if (ADMIN_SET.size === 0) {
-    (env.LABS_ADMIN_GITHUB_LOGINS || 'zexvro')
-      .split(',')
-      .map((s) => s.trim().toLowerCase())
-      .filter(Boolean)
-      .forEach((s) => ADMIN_SET.add(s));
-  }
-  return ADMIN_SET;
+export function adminLogins(env:Env):Set<string>{
+ return new Set((env.LABS_ADMIN_GITHUB_LOGINS || 'zexvro').split(',').map(s=>s.trim().toLowerCase()).filter(Boolean));
 }
 
 export function getStore(env: Env) {
-  const backend = env.LABS_STATE_BACKEND || 'firestore';
+  const backend = env.LABS_STATE_BACKEND || 'spacetime';
   const dynamoCreds =
     env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY
       ? {
@@ -69,9 +66,10 @@ export function getStore(env: Env) {
         }
       : undefined;
   const hasFirebaseSA = !!(env.FIREBASE_PROJECT_ID && env.FIREBASE_CLIENT_EMAIL && env.FIREBASE_PRIVATE_KEY);
-  const effectiveBackend =
-    backend === 'firestore' && !hasFirebaseSA ? 'memory' : backend;
-  const key = `${effectiveBackend}|${dynamoCreds?.accessKeyId || ''}|${env.FIREBASE_PROJECT_ID || ''}`;
+  if(backend==='dynamo')throw new Error('AWS hosting is retired; configure SpacetimeDB');
+  if(backend==='firestore'&&!hasFirebaseSA)throw new Error('Firestore credentials are not configured');
+  const effectiveBackend=backend;
+  const key = `${effectiveBackend}|${env.APP_URL || ''}|${env.SPACETIME_URL || ''}|${env.SPACETIME_DB || ''}|${env.SPACETIME_GATEWAY_TOKEN || ''}|${env.FIREBASE_PROJECT_ID || ''}`;
   if (cachedStore && cachedStoreKey === key) return cachedStore;
   cachedStore = createStore({
     backend: effectiveBackend,
@@ -79,6 +77,9 @@ export function getStore(env: Env) {
     tableName: env.LABS_DYNAMO_TABLE || 'zexvro-labs',
     credentials: dynamoCreds,
     useFetchHandler: true,
+    url: env.SPACETIME_URL || 'https://maincloud.spacetimedb.com',
+    db: env.SPACETIME_DB || 'labs-beta',
+    gatewayToken:env.SPACETIME_GATEWAY_TOKEN,
     firestore: {
       projectId: env.FIREBASE_PROJECT_ID || '',
       clientEmail: env.FIREBASE_CLIENT_EMAIL || '',
@@ -93,11 +94,7 @@ export function getStore(env: Env) {
 
 export function isAdmin(user: User | null, env: Env): boolean {
   if (!user) return false;
-  const set = adminLogins(env);
-  const candidates = [user.username, user.email, (user.email || '').split('@')[0]].map((s) =>
-    (s || '').toLowerCase(),
-  );
-  return candidates.some((c) => c && set.has(c)) || user.role === 'admin';
+  return user.role==='admin' || Boolean(user.verifiedGithubLogin && adminLogins(env).has(user.verifiedGithubLogin.toLowerCase()));
 }
 
 // Verify a Firebase ID token using the identitytoolkit lookup API (no service
@@ -134,6 +131,7 @@ export async function verifyFirebaseToken(token: string, env: Env): Promise<User
       streakDays: 0,
       completedLabsCount: 0,
       githubConnected: !!fbUser.providerUserInfo?.some((p: any) => p.providerId === 'github.com'),
+      verifiedGithubLogin:fbUser.providerUserInfo?.find((p:any)=>p.providerId==='github.com')?.screenName?.toLowerCase(),
     };
     // Allow an admin override stored on the Firestore user document.
     try {
@@ -191,6 +189,7 @@ export function getSessionUser(req: Request, env: Env): User | null {
     streakDays: 0,
     completedLabsCount: 0,
     githubConnected: true,
+    verifiedGithubLogin:payload.githubId.startsWith('dev_') ? undefined : payload.login.toLowerCase(),
   };
 }
 
@@ -260,6 +259,7 @@ export function sanitizeLab(lab: Lab | null | undefined, admin: boolean): Lab | 
 
 export async function setSession(res: Response, user: User, env: Env): Promise<Response> {
   const { SESSION_SECRET, isSecure } = config(env);
+  if(SESSION_SECRET.length<32)return json({error:'Session signing is not configured'},503);
   const token = signSession(
     {
       githubId: user.id,
@@ -292,4 +292,13 @@ export async function readBody(req: Request): Promise<any> {
   } catch {
     return {};
   }
+}
+
+export function oauthStateCookie(state:string,secure:boolean):string {
+ return `zexvro_labs_oauth_state=${state}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${state?600:0}${secure?'; Secure':''}`;
+}
+export function validOAuthState(req:Request):boolean {
+ const state=new URL(req.url).searchParams.get('state');
+ const saved=req.headers.get('cookie')?.split(';').map(v=>v.trim()).find(v=>v.startsWith('zexvro_labs_oauth_state='))?.split('=')[1];
+ return Boolean(state && saved && state===saved && /^[a-f0-9-]{36}$/.test(state));
 }

@@ -189,7 +189,7 @@ export default defineConfig(({ mode }) => {
       include: [
         '@stellar/js-xdr',
         '@stellar/stellar-base',
-        'stellar-sdk',
+        '@stellar/stellar-sdk',
         '@creit.tech/stellar-wallets-kit',
         'react-is',
         'recharts',

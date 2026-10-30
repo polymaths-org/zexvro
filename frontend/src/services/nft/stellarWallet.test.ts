@@ -16,6 +16,12 @@ vi.mock('@stellar/freighter-api', () => ({
   ...freighterApi,
 }));
 
+// The browser wallet picker is separate from the direct Freighter adapter under test.
+vi.mock('../../api/stellarWalletsKit', () => ({
+  getStellarWalletsKit: vi.fn(),
+  connectWithWalletsKit: vi.fn(),
+}));
+
 import {
   formatWalletError,
   getPublicKey,
@@ -112,8 +118,9 @@ describe('stellarWallet', () => {
     await expect(getPublicKey()).rejects.toMatchObject({ code: 'wallet_unavailable' });
   });
 
-  it('rejects when Freighter is not on testnet', async () => {
+  it('rejects testnet signing when Freighter is on mainnet', async () => {
     freighterApi.isConnected.mockResolvedValue({ isConnected: true });
+    freighterApi.isAllowed.mockResolvedValue({ isAllowed: true });
     freighterApi.requestAccess.mockResolvedValue({
       address: 'GCD4SBBOLPUM7UYWLPRKOP6IYKOZ6FX5YQOJHVVE7RKC2QGZYNUHKRCZ',
     });
@@ -122,7 +129,7 @@ describe('stellarWallet', () => {
       networkPassphrase: 'Public Global Stellar Network ; September 2015',
     });
 
-    await expect(getPublicKey()).rejects.toMatchObject({
+    await expect(signTransaction('prepared-xdr')).rejects.toMatchObject({
       name: 'StellarWalletError',
       code: 'wallet_network_mismatch',
     });

@@ -8,7 +8,7 @@ import { createCollection } from './collectionStore';
 const api = vi.hoisted(() => ({
   archiveNftCollection: vi.fn(),
   deleteNftCollection: vi.fn(),
-  getNftApiBaseUrl: vi.fn(() => 'https://iyk6idmup6.us-east-1.awsapprunner.com'),
+  getNftApiBaseUrl: vi.fn(() => 'https://zexvro-platform-api.zexvro.workers.dev/nft'),
   getNftServiceHealth: vi.fn(),
   listCollectionItems: vi.fn(),
   listNftCollections: vi.fn(),
@@ -28,7 +28,10 @@ const wallet = vi.hoisted(() => ({
   signTransaction: vi.fn(),
 }));
 
-vi.mock('./nftApi', () => api);
+vi.mock('./nftApi', async (importOriginal) => ({
+  ...await importOriginal<typeof import('./nftApi')>(),
+  ...api,
+}));
 vi.mock('./stellarWallet', () => wallet);
 
 const remoteCollection = {
@@ -279,7 +282,7 @@ describe('CollectionDashboard', () => {
     await user.click(screen.getByRole('button', { name: /prepare sale/i }));
     await user.click(await screen.findByRole('button', { name: /sign with wallet/i }));
 
-    expect(wallet.signTransaction).toHaveBeenCalledWith('prepared-sale');
+    expect(wallet.signTransaction).toHaveBeenCalledWith('prepared-sale', 'Test SDF Network ; September 2015');
     expect(api.submitNftSaleConfig).toHaveBeenCalledWith({
       collectionId: remoteCollection.id,
       preparedTransaction: 'prepared-sale',
@@ -322,7 +325,7 @@ describe('CollectionDashboard', () => {
     expect(await screen.findByText(/Assigned token #7/i)).toBeInTheDocument();
 
     await user.click(await screen.findByRole('button', { name: /sign with wallet/i }));
-    expect(wallet.signTransaction).toHaveBeenCalledWith('prepared-mint');
+    expect(wallet.signTransaction).toHaveBeenCalledWith('prepared-mint', 'Test SDF Network ; September 2015');
     expect(api.submitNftMint).toHaveBeenCalledWith({
       collectionId: remoteCollection.id,
       preparedTransaction: 'prepared-mint',

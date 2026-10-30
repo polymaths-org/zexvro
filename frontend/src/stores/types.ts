@@ -42,6 +42,7 @@ export type InviteStatus = 'pending' | 'accepted' | 'expired' | 'revoked';
  * Stored on workspace until accepted or revoked; not a full member until accept.
  */
 export interface TeamInvite {
+  _deliveryProvider?: string;
   id: string;
   workspaceId: string;
   workspaceName?: string;

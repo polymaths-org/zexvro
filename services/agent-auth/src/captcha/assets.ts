@@ -48,7 +48,7 @@ const EXT_MIME: Record<string, string> = {
   '.svg': 'image/svg+xml',
 }
 
-const IMAGE_EXT_RE = /\.(jpe?g|png|webp|gif|svg)$/i
+const IMAGE_EXT_RE = /\.(jpe?g|png|webp|gif)$/i
 
 function assetsRoot(): string {
   // Prefer CAPTCHA_ASSETS_ROOT, then /app/captcha-assets (Docker), then package-relative.
@@ -87,7 +87,7 @@ function loadBank(): Map<AssetLabel, string[]> {
       for (const label of LABELS) {
         const files = (man[label] || [])
           .map((f) => join(fileRoot, label, f))
-          .filter((p) => existsSync(p))
+          .filter((p) => IMAGE_EXT_RE.test(p) && existsSync(p))
         if (files.length) map.set(label, files)
       }
     } catch {

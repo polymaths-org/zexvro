@@ -6,6 +6,7 @@ import type {
   MintedItemSource,
   NftChainGateway,
   NftRepository,
+  NftPage,
   PinningService,
   PreparedContractCall,
   SubmissionResult,
@@ -165,8 +166,8 @@ export class NftService {
     }
   }
 
-  listCollections(workspaceId: string): Promise<CollectionRecord[]> {
-    return this.repository.listCollections(workspaceId)
+  listCollections(workspaceId: string,page?:NftPage): Promise<CollectionRecord[]> {
+    return this.repository.listCollections(workspaceId,page)
   }
 
   /** Re-key workspace scope (e.g. legacy per-user → shared team scope). */
@@ -198,7 +199,7 @@ export class NftService {
     if (collection.status !== 'live') {
       throw new ApiError(404, 'collection_not_found', 'Collection not found')
     }
-    const minted = await this.resolveMintedItem(collection, tokenId)
+    const minted = this.repository.countersAreAuthoritative ? await this.repository.getMintedItem(collection.id,tokenId) : await this.resolveMintedItem(collection, tokenId)
     return {
       name: `${collection.name} #${String(tokenId)}`,
       description: collection.description,
@@ -214,7 +215,7 @@ export class NftService {
         { trait_type: 'Collection', value: collection.name },
         { trait_type: 'Token ID', value: tokenId },
       ],
-      availability: minted === undefined ? 'available' : 'sold',
+      availability: minted === undefined ? (this.repository.countersAreAuthoritative?'unknown':'available') : 'sold',
       ...(minted === undefined
         ? {}
         : {
@@ -226,9 +227,9 @@ export class NftService {
     }
   }
 
-  async listMintedItems(collectionId: string): Promise<MintedItemRecord[]> {
+  async listMintedItems(collectionId: string,page?:NftPage): Promise<MintedItemRecord[]> {
     await this.getCollection(collectionId)
-    return this.repository.listMintedItems(collectionId)
+    return this.repository.listMintedItems(collectionId,page)
   }
 
   async getMintedItem(
@@ -239,8 +240,11 @@ export class NftService {
     return this.resolveMintedItem(collection, tokenId)
   }
 
+  async countMintedItems(id:string){return this.repository.countMintedItems?this.repository.countMintedItems(id):(await this.repository.listMintedItems(id)).length}
+
   async suggestNextTokenId(collectionId: string): Promise<number> {
     const collection = await this.getCollection(collectionId)
+    if(this.repository.countersAreAuthoritative)return (await this.repository.getTokenCounter(collectionId))+1
     const items = await this.repository.listMintedItems(collectionId)
     const counter = await this.repository.getTokenCounter(collectionId)
     let candidate = items.length === 0 ? 1 : Math.max(...items.map((item) => item.tokenId)) + 1

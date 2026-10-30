@@ -20,6 +20,7 @@ import { fileURLToPath } from 'node:url'
 const IMG_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp'])
 
 function packageRoot(): string {
+  if(process.env.CAPTCHA_ASSETS_ROOT)return dirname(process.env.CAPTCHA_ASSETS_ROOT)
   return join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 }
 

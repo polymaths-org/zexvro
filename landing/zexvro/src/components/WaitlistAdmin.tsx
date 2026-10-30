@@ -2,8 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Loader2, RefreshCw } from 'lucide-react';
 
 const API_BASE =
-  (import.meta.env.VITE_API_URL as string | undefined)?.trim().replace(/\/$/, '') ||
-  'https://qkuostruh3.execute-api.us-east-1.amazonaws.com';
+  (((globalThis as typeof globalThis & {__ZEXVRO_CONFIG__?:Record<string,string>}).__ZEXVRO_CONFIG__?.VITE_API_URL ?? import.meta.env.VITE_API_URL) as string | undefined)?.trim().replace(/\/$/, '') ||
+  'https://zexvro-platform-api.zexvro.workers.dev';
 
 type Entry = {
   email: string;

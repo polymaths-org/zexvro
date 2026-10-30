@@ -17,7 +17,7 @@ export const POP_HEADER = 'x-zexvro-pop'
 async function requestJson(baseUrl, path, init = {}) {
   const response = await fetch(`${baseUrl.replace(/\/$/, '')}${path}`, init)
   const contentType = response.headers.get('content-type') || ''
-  const body = contentType.includes('application/json')
+  const body = /(?:application\/json|\+json)(?:;|$)/i.test(contentType)
     ? await response.json().catch(() => undefined)
     : await response.text().catch(() => undefined)
 
@@ -31,6 +31,7 @@ async function requestJson(baseUrl, path, init = {}) {
     error.problem = body
     throw error
   }
+  if(!body || typeof body!=='object' || Array.isArray(body))throw new Error('Gate API returned an invalid JSON response');
   return body
 }
 
@@ -284,6 +285,10 @@ export async function verifyCapabilityRemote(input) {
   const body = await response.json().catch(() => ({}))
   if (!response.ok) {
     return { ok: false, status: response.status, problem: body }
+  }
+  if(body.ok!==true || !['human','agent'].includes(body.class) || body.action!==input.action ||
+     (input.minClass && input.minClass!=='either' && body.class!==input.minClass)){
+    return {ok:false,status:502,problem:{title:'invalid_verify_response',detail:'Gate did not return a matching verified capability'}}
   }
   return { ok: true, ...body }
 }

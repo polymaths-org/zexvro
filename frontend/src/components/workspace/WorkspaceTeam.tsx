@@ -141,7 +141,9 @@ export default function WorkspaceTeam() {
         || `${origin}/invite/accept?token=${invite.token}`;
       setLastAcceptUrl(url);
       setNotice(
-        `Invitation email sent to ${invite.email} as roles/${invite.role}.`,
+        invite._deliveryProvider==='link'
+          ? `Invitation ready for ${invite.email}. Copy and share the link below; email delivery is not configured.`
+          : `Invitation email sent to ${invite.email} as roles/${invite.role}.`,
       );
       setInviteEmail('');
       setInviteNote('');

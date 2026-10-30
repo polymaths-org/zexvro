@@ -195,7 +195,7 @@ export interface GateConfig {
   isProd: boolean
   /** When true, agent capabilities must present a valid PoP signature. */
   requirePop: boolean
-  stateBackend: 'memory' | 'dynamo'
+  stateBackend: 'memory' | 'dynamo' | 'd1'
   dynamoTable: string
   adminRequireAuth: boolean
   cognitoUserPoolId?: string

@@ -41,11 +41,11 @@ export default function WorkspaceSettings() {
 
   if (!workspace) return null;
 
-  const handleSave = (event: React.FormEvent) => {
+  const handleSave = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!canWrite) return;
     const environment = form.defaultNetwork.toLowerCase().includes('main') ? 'mainnet' as const : 'testnet' as const;
-    updateWorkspace(workspace.id, {
+    const success=await updateWorkspace(workspace.id, {
       name: form.name,
       plan: form.plan,
       settings: {
@@ -61,6 +61,7 @@ export default function WorkspaceSettings() {
         preferredCurrency: form.preferredCurrency,
       } as any,
     });
+    if(!success)return;
     setSaved(true);
     window.setTimeout(() => setSaved(false), 1800);
   };

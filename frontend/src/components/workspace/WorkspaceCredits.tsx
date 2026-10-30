@@ -60,7 +60,7 @@ export default function WorkspaceCredits() {
     unitPriceUsdc: 0.05,
   });
   const [nftCollectionId, setNftCollectionId] = useState<string | null>(null);
-  const [purchaseMode, setPurchaseMode] = useState('sandbox');
+  const [purchaseMode, setPurchaseMode] = useState('unconfigured');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [promoCode, setPromoCode] = useState('');
@@ -94,7 +94,7 @@ export default function WorkspaceCredits() {
       if (catalog) {
         setPacks(catalog.packs || []);
         setNftCollectionId(catalog.nftCollectionId || null);
-        setPurchaseMode(catalog.purchaseMode || 'sandbox');
+        setPurchaseMode(catalog.purchaseMode || 'unconfigured');
         if (catalog.custom) {
           setCustomPricing({
             enabled: catalog.custom.enabled !== false,
@@ -521,12 +521,12 @@ export default function WorkspaceCredits() {
               <span aria-hidden>→</span>
               <span className={buyStep === 'confirm' ? 'font-semibold text-zinc-700 dark:text-zinc-200' : ''}>2 · Pay</span>
               <span className="ml-2 normal-case tracking-normal text-zinc-500">
-                {purchaseMode === 'nft' ? 'Wallet / Stellar' : 'Sandbox'}
+                {purchaseMode === 'unconfigured' ? 'Unavailable' : purchaseMode === 'nft' ? 'Wallet / Stellar' : 'Sandbox'}
               </span>
             </div>
           </div>
           <div className="p-5">
-            {buyStep === 'select' ? (
+            {purchaseMode === 'unconfigured' ? <p role="status" className="text-sm text-zinc-500">Credit purchases are unavailable until payment setup is complete. Promos and admin grants remain available.</p> : buyStep === 'select' ? (
               <>
                 <p className="mb-4 text-xs text-zinc-500">
                   Choose a pack or enter any custom ZCR amount ({customPricing.min.toLocaleString()}–

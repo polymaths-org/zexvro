@@ -165,8 +165,12 @@ export interface RepositoryState {
   tokenCounters?: Record<string, number>
 }
 
+export interface NftPage {limit?:number;cursor?:string|number}
+
 export interface NftRepository {
-  listCollections(workspaceId: string): Promise<CollectionRecord[]>
+  readonly countersAreAuthoritative?:boolean
+  countMintedItems?(collectionId:string):Promise<number>
+  listCollections(workspaceId: string,page?:NftPage): Promise<CollectionRecord[]>
   getCollection(id: string): Promise<CollectionRecord | undefined>
   saveCollection(collection: CollectionRecord): Promise<void>
   deleteCollection(id: string): Promise<boolean>
@@ -179,7 +183,7 @@ export interface NftRepository {
     id: string,
     now: Date,
   ): Promise<CheckoutIntentRecord | undefined>
-  listMintedItems(collectionId: string): Promise<MintedItemRecord[]>
+  listMintedItems(collectionId: string,page?:NftPage): Promise<MintedItemRecord[]>
   getMintedItem(
     collectionId: string,
     tokenId: number,

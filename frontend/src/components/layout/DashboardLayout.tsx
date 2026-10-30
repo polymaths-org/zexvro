@@ -1,3 +1,4 @@
+import {runtimeValue} from '../../lib/runtimeConfig';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Search, Menu, X, ChevronRight, User,
@@ -40,8 +41,8 @@ import { INVITABLE_ROLES } from '../../rbac/permissions';
 import type { WorkspaceRole } from '../../stores/types';
 
 const IS_LOCAL_HOST = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-const API_BASE_URL = import.meta.env.VITE_API_URL ||
-  'https://qkuostruh3.execute-api.us-east-1.amazonaws.com';
+const API_BASE_URL = runtimeValue('VITE_API_URL') ||
+  'https://zexvro-platform-api.zexvro.workers.dev';
 const AGENT_CHAT_URL = IS_LOCAL_HOST ? '/api/agent/chat' : `${API_BASE_URL}/api/chat`;
 const SHOULD_CHECK_CLI_STATUS =
   !IS_LOCAL_HOST ||
@@ -303,6 +304,8 @@ export default function DashboardLayout() {
   const { theme, density, reducedMotion, sidebarCollapsed, setTheme, toggleSidebar } = useUIStore();
   const workspaces = useWorkspaceStore(s => s.workspaces);
   const isHydrated = useWorkspaceStore(s => s.isHydrated);
+  const workspaceMutationError=useWorkspaceStore(s=>s.lastError);
+  const projectMutationError=useProjectStore(s=>s.lastError);
   const createWorkspace = useWorkspaceStore(s => s.createWorkspace);
   const selectWorkspace = useWorkspaceStore(s => s.selectWorkspace);
   const deleteWorkspace = useWorkspaceStore(s => s.deleteWorkspace);
@@ -1422,6 +1425,10 @@ export default function DashboardLayout() {
           {/* Main content with router outlet */}
           <main className="flex-1 p-4 sm:p-6 overflow-y-auto w-full">
             <div className="space-y-6">
+              {(workspaceMutationError || projectMutationError) && <div role="alert" className="rounded-md border border-red-500/30 p-3 text-sm text-red-500">
+                {workspaceMutationError || projectMutationError}
+                <button className="ml-3 underline" onClick={()=>{useWorkspaceStore.setState({lastError:null});useProjectStore.setState({lastError:null})}}>Dismiss</button>
+              </div>}
               {!isHydrated ? (
                 <ScreenSkeleton />
               ) : screenLoading ? (

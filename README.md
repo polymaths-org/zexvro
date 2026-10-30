@@ -21,7 +21,7 @@
 <p align="center">
   <img alt="Frontend: Vite + React" src="https://img.shields.io/badge/frontend-Vite%20%2B%20React-646CFF?style=flat-square" />
   <img alt="Network: Stellar" src="https://img.shields.io/badge/network-Stellar-7D00FF?style=flat-square" />
-  <img alt="Cloud: AWS" src="https://img.shields.io/badge/cloud-AWS-FF9900?style=flat-square" />
+  <img alt="Cloud: Cloudflare" src="https://img.shields.io/badge/cloud-Cloudflare-F38020?style=flat-square" />
   <img alt="Status: MVP planning" src="https://img.shields.io/badge/status-MVP%20planning-111111?style=flat-square" />
 </p>
 
@@ -61,18 +61,25 @@ cp .env.example .env
 npm run dev
 ```
 
-`npm run dev` starts the NFT API and frontend together. The root dev script loads
-`.env` and `.env.local`, injects the same environment into both processes, and
-uses the local Stellar CLI identity in `ZEXVRO_STELLAR_IDENTITY` when
-`STELLAR_SPONSOR_SECRET` is empty.
+`npm run dev` starts the frontend against the deployed Cloudflare platform API,
+NFTo data API and Gate. Accounts and records use D1; NFT assets use R2. Old AWS
+accounts/data have been reset, so register a fresh account and save its recovery key.
+
+For an isolated local Worker/database:
 
 ```bash
-npm run dev:all
+npm --prefix services/platform-api run db:local
+npm --prefix services/platform-api run dev
 ```
 
-Use `dev:all` when you also want the De-pin gateway. Keep real secrets only in
-root `.env` or your shell; folder-level `.env.example` files are compatibility
-pointers to the root template.
+Set `VITE_API_URL`, `VITE_NFT_API_URL` and `VITE_AGENT_AUTH_API_URL` to your local
+Worker URL (with `/nft` and `/gate` suffixes for those services) when testing local data.
+The legacy standalone NFT/Gate development servers are opt-in; they are not production
+storage backends. `dev:all` additionally starts the local De-pin gateway when configured.
+
+Deployment and exact migration coverage: [Cloudflare platform API](services/platform-api/README.md).
+Always use Wrangler profile `zexvro` / `zexvro@gmail.com`; never deploy this project
+through another Cloudflare profile. `scripts/deploy-production.sh` now deploys Cloudflare.
 
 ## NFT smoke
 
@@ -128,5 +135,11 @@ The platform is built around five MVP services:
 - **NFTo** — deploy and sell NFT collections on Stellar Soroban without chain complexity.
 - **DEDSEC** — x402 paid-access gateway for APIs and compute resources.
 
-ZEXVRO ships as a Vite + React console, a standalone public landing site, service APIs on AWS (Lambda + App Runner), and the Morph agent CLI. The frontend targets Stellar mainnet NFTo flows and testnet/local paths for services still under active integration. For the current product state, ownership, and remaining work, see [`context.md`](context.md).
+ZEXVRO ships as a Vite + React console, a standalone public landing site, platform, NFT data and Gate APIs on Cloudflare Workers (D1 + R2), and the Morph agent CLI. The frontend targets Stellar mainnet NFTo flows and testnet/local paths for services still under active integration. For the current product state, ownership, and remaining work, see [`context.md`](context.md).
 
+
+## Verified development and production releases
+
+See [CI/CD operations](docs/ci-cd.md) for main-to-dev checks, three-hour production
+promotion and the GitHub Actions **Deploy now** path. Manual releases keep every
+verification gate and skip only the observation delay. Morph is excluded.
