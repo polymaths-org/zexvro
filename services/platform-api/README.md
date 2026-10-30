@@ -90,6 +90,13 @@ navigation; existing IDs cannot be overwritten across tenants. SQL triggers main
 membership indexes transactionally. Viewer writes are rejected; only the owner can
 remove a workspace or change ownership-sensitive membership.
 
+## Sign-up gate (waitlist)
+
+- `SIGNUPS_OPEN` (Worker var) controls public account creation. `wrangler.jsonc` ships `"false"`. `scripts/cicd/build.mjs` opens it only in the dev overlay, so the dev smoke test can still create accounts.
+- While closed, `POST /auth/signup` returns 403 with a waitlist message, and `GET /api/health` reports `signupsOpen: false`. Sign-in, password recovery and existing accounts are unaffected.
+- The console hides the sign-up toggle unless `/api/health` reports `signupsOpen: true`. The landing sends visitors to `#waitlist`, which posts to `POST /api/waitlist`.
+- Reopening sign-ups is a release change: set the production value in `build.mjs` (or the base var) and ship it through the verified release path, not a direct deploy.
+
 ## Platform administration
 
 The Wrangler login controls Cloudflare infrastructure. It does not create an application

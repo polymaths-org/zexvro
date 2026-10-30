@@ -202,6 +202,9 @@ export async function authRoute(
     return { status: 'success' }
   }
   if (path === '/auth/signup') {
+    // Public sign-ups stay closed while ZEXVRO is on the waitlist. Existing accounts keep signing in.
+    if (String(env.SIGNUPS_OPEN) !== 'true')
+      throw new HttpError(403, 'Sign-ups are on the waitlist. Join at zexvro.in to be invited.')
     const username = text(body, 'username', 32).toLowerCase(),
       email = text(body, 'email', 254).toLowerCase()
     if (!/^[a-z0-9_.-]{3,32}$/.test(username))

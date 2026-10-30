@@ -24,7 +24,7 @@ for(const target of ['dev','production']){
  await writeFile(resolve(dir,'runtime-config.js'),'globalThis.__ZEXVRO_CONFIG__='+JSON.stringify(runtime)+';\n');
  const worker={...base,name:env.worker,main:'../../worker/index.js',no_bundle:true,minify:false,build:undefined,upload_source_maps:false,
   rules:[{type:'Text',globs:['**/*-captcha.js'],fallthrough:true}],
-  vars:{...base.vars,PUBLIC_API_URL:env.api,RELEASE_SHA:sha,ALLOWED_ORIGINS:target==='production'?base.vars.ALLOWED_ORIGINS:[env.console,env.landing,'http://127.0.0.1:4173'].join(',')},
+  vars:{...base.vars,PUBLIC_API_URL:env.api,RELEASE_SHA:sha,SIGNUPS_OPEN:target==='dev'?'true':base.vars.SIGNUPS_OPEN,ALLOWED_ORIGINS:target==='production'?base.vars.ALLOWED_ORIGINS:[env.console,env.landing,'http://127.0.0.1:4173'].join(',')},
   d1_databases:[{binding:'DB',database_name:env.database,database_id:env.databaseId,migrations_dir:'../../migrations'}],
   r2_buckets:[{binding:'NFT_MEDIA',bucket_name:env.bucket}],
   ratelimits:base.ratelimits.map(r=>({...r,namespace_id:target==='dev'?String(Number(r.namespace_id)+100):r.namespace_id}))};
