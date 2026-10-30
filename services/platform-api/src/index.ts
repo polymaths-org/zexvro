@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from 'node:crypto'
 import { authenticate, authRoute } from './auth'
 import { creditRoute } from './credits'
 import { inviteRoute, previewInvite } from './invites'
@@ -188,7 +189,7 @@ export async function route(request: Request, env: Env): Promise<Response> {
         .toLowerCase()
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254)
       throw new HttpError(400, 'Enter a valid email')
-    await env.DB.prepare(
+    const inserted = await env.DB.prepare(
       'INSERT INTO waitlist(email,source,created_at) VALUES(?,?,?) ON CONFLICT(email) DO NOTHING',
     )
       .bind(
@@ -197,7 +198,26 @@ export async function route(request: Request, env: Env): Promise<Response> {
         Math.floor(Date.now() / 1000),
       )
       .run()
-    return json({ status: 'joined' }, 201)
+    // ON CONFLICT DO NOTHING reports no changes when the email is already on the list.
+    return inserted.meta.changes > 0
+      ? json({ status: 'joined' }, 201)
+      : json({ status: 'already_joined' })
+  }
+  if (path === '/api/waitlist' && method === 'GET') {
+    // Operator list for the landing admin page. Off unless WAITLIST_ADMIN_SECRET is configured.
+    if (!env.WAITLIST_ADMIN_SECRET) throw new HttpError(404, 'Not found')
+    if (!(await env.AUTH_RATE_LIMITER.limit({ key: `waitlist-admin:${ip}` })).success)
+      throw new HttpError(429, 'Too many requests')
+    const supplied = createHash('sha256').update(url.searchParams.get('secret') || '').digest(),
+      expected = createHash('sha256').update(env.WAITLIST_ADMIN_SECRET).digest()
+    if (!timingSafeEqual(supplied, expected)) throw new HttpError(401, 'Invalid admin secret')
+    const [total, rows] = await Promise.all([
+      env.DB.prepare('SELECT COUNT(*) AS n FROM waitlist').first<{ n: number }>(),
+      env.DB.prepare(
+        'SELECT email,source,created_at FROM waitlist ORDER BY created_at DESC,email LIMIT 500',
+      ).all<{ email: string; source: string; created_at: number }>(),
+    ])
+    return json({ count: total?.n ?? 0, entries: rows.results })
   }
   if (method === 'GET' && /^\/api\/invite\/[^/]+$/.test(path))
     return json(
