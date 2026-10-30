@@ -48,3 +48,8 @@ test('every CI Wrangler call takes its profile flag from the single helper',asyn
   assert.match(text,/import \{[^}]*profileArgs[^}]*\} from '\.\/cloudflare\.mjs'/,file);
  }
 });
+test('smoke cleanup hands the scoped CI token to Wrangler inside Actions',async()=>{
+ const text=await readFile('services/platform-api/scripts/smoke-services.mjs','utf8');
+ assert.match(text,/process\.env\.ZEXVRO_CI_CLOUDFLARE_API_TOKEN/);
+ assert.match(text,/\.\.\.\(ciToken\?\{CLOUDFLARE_API_TOKEN:ciToken\}:\{\}\)/);
+});
