@@ -20,7 +20,8 @@ const q=value=>`'${String(value).replaceAll("'","''")}'`
 const wrangler=fileURLToPath(new URL('../node_modules/.bin/wrangler',import.meta.url))
 const config=target==='dev'?fileURLToPath(new URL('../../../release/config/dev/wrangler.json',import.meta.url)):fileURLToPath(new URL('../wrangler.jsonc',import.meta.url))
 const cwd=fileURLToPath(new URL('..',import.meta.url))
-function cli(args){const r=spawnSync(wrangler,args,{cwd,env:{...process.env,XDG_CONFIG_HOME:'/home/wraient'},stdio:'inherit'});if(r.status!==0)throw Error('Cleanup CLI failed')}
+// Inside Actions, cleanup runs on the scoped CI token; locally it uses the zexvro profile.
+function cli(args){const ciToken=process.env.ZEXVRO_CI_CLOUDFLARE_API_TOKEN;const r=spawnSync(wrangler,args,{cwd,env:{...process.env,XDG_CONFIG_HOME:'/home/wraient',...(ciToken?{CLOUDFLARE_API_TOKEN:ciToken}:{})},stdio:'inherit'});if(r.status!==0)throw Error('Cleanup CLI failed')}
 async function call(path,{body,token,method=body?'POST':'GET',expected=200}={}){
  const r=await fetch(base+path,{method,headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},...(body?{body:JSON.stringify(body)}:{})})
  const label=path.split('?')[0].replace(/(\/api\/invite\/)[A-Za-z0-9_-]{32,128}/,'$1[redacted]');
