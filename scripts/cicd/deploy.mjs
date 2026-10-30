@@ -5,7 +5,7 @@ import {ACCOUNT,verify,advance,migrationsCompatible,assertTarget} from './policy
 import {capture,run} from './process.mjs';
 import {recover,transact} from './transaction.mjs';
 import {cloudState} from './cloud-state.mjs';
-import {authenticate,client,cf} from './cloudflare.mjs';
+import {authenticate,client,cf,profileArgs} from './cloudflare.mjs';
 import {journal} from './journal.mjs';
 import {smoke} from './smoke.mjs';
 const target=process.argv[2],root=resolve(process.argv[3]||'release');
@@ -36,17 +36,17 @@ try{
  snapshot,restore,reconcile,save:value=>journal(config.journalBucket,target,value),now:()=>new Date().toISOString(),
  migrate:async()=>{
  const workerConfig=resolve(root,'config',target,'wrangler.json');
- cf(['d1','migrations','apply',env.database,'--remote','--config',workerConfig,'--profile','zexvro']);
+ cf(['d1','migrations','apply',env.database,'--remote','--config',workerConfig,...profileArgs()]);
  },
  checkPrevious:oldSha=>smoke(env,oldSha),
  publish:async()=>{
  const workerConfig=resolve(root,'config',target,'wrangler.json');
- cf(['deploy','--config',workerConfig,'--profile','zexvro']);
+ cf(['deploy','--config',workerConfig,...profileArgs()]);
  for(const [site,name] of [['console',env.pages],['landing',env.landingPages]]){
   const dir=join(temp,site);await cp(join(root,site),dir,{recursive:true});
   await cp(join(root,'config',target,'runtime-config.js'),join(dir,'runtime-config.js'));await cp(join(root,'config',target,'release.json'),join(dir,'release.json'));
   // Pages reads the config in cwd. Use a sterile directory, never the repo's unrelated Pages config.
-  cf(['pages','deploy',dir,'--project-name',name,'--branch','main','--commit-dirty=true','--profile','zexvro'],{cwd:temp});
+  cf(['pages','deploy',dir,'--project-name',name,'--branch','main','--commit-dirty=true',...profileArgs()],{cwd:temp});
  }
  },
  verify:async()=>{

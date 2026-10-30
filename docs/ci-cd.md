@@ -94,13 +94,17 @@ merely to force publication. There is intentionally no public force button.
 
 All local Cloudflare operations remain pinned to Wrangler `4.151.0`, profile
 `zexvro`, email `zexvro@gmail.com`, account
-`ac51c31a2a40b154a68a40bd5283fae2`. Mutating tools verify identity first. The current
-implementation also requires the named profile in Actions, using protected secret
-`WRANGLER_ZEXVRO_PROFILE_TOML`; missing credentials fail, never produce a green skip.
-The proposed alternative of a dedicated scoped CI API token needs the user's
-explicit exception to the existing profile-everywhere rule before implementation.
-Never copy a personal refresh token into logs or source. GitHub-hosted runners must
-own the entire `/home/wraient/.wrangler` storage directory, not only `config/`.
+`ac51c31a2a40b154a68a40bd5283fae2`. Mutating tools verify identity first.
+GitHub Actions is the one approved exception (2026-10-31). Deploy jobs use the
+account-owned token `zexvro-ci-github-actions` (ID `2e37f4240ba31ad20e32facd5ca5c042`,
+expires 2027-10-30) from the environment secret `ZEXVRO_CI_CLOUDFLARE_API_TOKEN` in
+`development` and `production`. Its scopes: Workers Scripts, D1, Pages and R2 write,
+Account Settings read, and DNS write plus Zone read on `zexvro.in`. `cloudflare.mjs`
+verifies the token is active and scoped to the ZEXVRO account before any mutation.
+Actions never falls back to the profile; a missing secret fails closed, and the verify
+job stays credential-free with its offline placeholder profile.
+Never copy a personal refresh token or the CI token into logs or source. Deploy jobs
+write no profile files; only the verify job creates the offline placeholder profile.
 Offline PR checks use an empty named-profile metadata file, with no credentials.
 
 Provisioning commands, each explicitly verifying the ZEXVRO identity:

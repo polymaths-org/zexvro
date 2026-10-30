@@ -3,6 +3,7 @@ import {resolve} from 'node:path';
 import {stat} from 'node:fs/promises';
 import {run,capture} from './process.mjs';
 import {inventory,assertSha,ACCOUNT} from './policy.mjs';
+import {profileArgs} from './cloudflare.mjs';
 const root=process.cwd(),out=resolve('release'),sha=assertSha(process.env.GITHUB_SHA||capture('git',['rev-parse','HEAD']));
 await rm(out,{recursive:true,force:true});await mkdir(out,{recursive:true});
 const sourceDirty=!!capture('git',['status','--porcelain','--untracked-files=normal']);
@@ -14,7 +15,7 @@ for(const key of Object.keys(process.env))if(key.startsWith('VITE_'))delete proc
 for(const [pkg,target] of [['frontend','console'],['landing/zexvro','landing']]){
  run('npm',['--prefix',pkg,'run','build']);await cp(resolve(pkg,'dist'),resolve(out,target),{recursive:true});
 }
-run('node',['services/platform-api/node_modules/wrangler/bin/wrangler.js','deploy','--dry-run','--outdir',resolve(out,'worker'),'--config','services/platform-api/wrangler.jsonc','--profile','zexvro'],{env:{...process.env,XDG_CONFIG_HOME:'/home/wraient'}});
+run('node',['services/platform-api/node_modules/wrangler/bin/wrangler.js','deploy','--dry-run','--outdir',resolve(out,'worker'),'--config','services/platform-api/wrangler.jsonc',...profileArgs()],{env:{...process.env,XDG_CONFIG_HOME:'/home/wraient'}});
 await cp('services/platform-api/migrations',resolve(out,'migrations'),{recursive:true});
 const base=JSON.parse(await readFile('services/platform-api/wrangler.jsonc'));
 for(const target of ['dev','production']){

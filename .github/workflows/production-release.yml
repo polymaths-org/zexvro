@@ -27,7 +27,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       REQUESTED_SHA: ${{ inputs.commit_sha }}
-      WRANGLER_ZEXVRO_PROFILE_TOML: ${{ secrets.WRANGLER_ZEXVRO_PROFILE_TOML }}
+      ZEXVRO_CI_CLOUDFLARE_API_TOKEN: ${{ secrets.ZEXVRO_CI_CLOUDFLARE_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
