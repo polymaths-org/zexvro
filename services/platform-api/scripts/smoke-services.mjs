@@ -27,9 +27,9 @@ async function call(path,{body,token,method=body?'POST':'GET',expected=200}={}){
  const label=path.split('?')[0].replace(/(\/api\/invite\/)[A-Za-z0-9_-]{32,128}/,'$1[redacted]');
  const text=await r.text();let result;
  try{result=JSON.parse(text)}catch{
-  // Name the response so a Cloudflare error page (for example a Worker exception) is visible in the CI log.
-  const title=text.match(/<title>([^<]{0,200})<\/title>/i)?.[1]??text.replace(/\s+/g,' ').slice(0,160);
-  throw Error(`${method} ${label}: HTTP ${r.status} ${r.headers.get('content-type')??'no content-type'} cf-ray=${r.headers.get('cf-ray')??'none'} is not JSON: ${title}`)
+  // Name the response so a Cloudflare error page or a framework error page (Express puts its message in a <pre>) is visible in the CI log.
+  const summary=text.replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi,' ').replace(/<[^>]+>/g,' ').replace(/&nbsp;/g,' ').replace(/&#39;/g,"'").replace(/&quot;/g,'"').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&').replace(/\s+/g,' ').trim().slice(0,300).replace(/(\/api\/invite\/)[A-Za-z0-9_-]{32,128}/g,'$1[redacted]');
+  throw Error(`${method} ${label}: HTTP ${r.status} ${r.headers.get('content-type')??'no content-type'} cf-ray=${r.headers.get('cf-ray')??'none'} is not JSON: ${summary}`)
  }
  assert.equal(r.status,expected,`${label} HTTP status`);console.log(`${method} ${label}: ${r.status}`);return result
 }
