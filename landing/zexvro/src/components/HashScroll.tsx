@@ -3,10 +3,13 @@ import type Lenis from 'lenis';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { useScroll } from './ScrollProvider';
 
-// Smooth-scrolls to an in-page target. Lazy images and fonts can change the page height while the
-// scroll runs, so the target is re-aimed until it is in place, unless the reader scrolls first.
+// Smooth-scrolls to an in-page target and keeps it in place while the page settles. Lazy images and
+// fonts can change the page height after the scroll starts, so the target is re-aimed. If the page
+// stops moving short of the target (a pinned section can hold a smooth scroll), the rest is jumped.
+// Any wheel, touch or key input hands control back to the reader.
 function scrollToTarget(lenis: Lenis, target: HTMLElement): () => void {
   let checks = 0;
+  let lastY = -1;
   let timer = 0;
   const cancel = () => {
     window.clearTimeout(timer);
@@ -15,8 +18,16 @@ function scrollToTarget(lenis: Lenis, target: HTMLElement): () => void {
     window.removeEventListener('keydown', cancel);
   };
   const reaim = () => {
-    if (Math.abs(target.getBoundingClientRect().top) <= 2 || ++checks > 6) return cancel();
-    lenis.scrollTo(target, { offset: 0, duration: 0.4 });
+    if (Math.abs(target.getBoundingClientRect().top) <= 2 || ++checks > 12) return cancel();
+    if (window.scrollY === lastY) {
+      lenis.scrollTo(target, { offset: 0, immediate: true });
+      if (Math.abs(target.getBoundingClientRect().top) > 2) {
+        window.scrollTo({ top: window.scrollY + target.getBoundingClientRect().top, behavior: 'auto' });
+      }
+    } else {
+      lenis.scrollTo(target, { offset: 0, duration: 0.4 });
+    }
+    lastY = window.scrollY;
     timer = window.setTimeout(reaim, 700);
   };
   lenis.scrollTo(target, { offset: 0, duration: 1.2 });
