@@ -1,6 +1,31 @@
 import { useEffect } from 'react';
+import type Lenis from 'lenis';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { useScroll } from './ScrollProvider';
+
+// Smooth-scrolls to an in-page target. Lazy images and fonts can change the page height while the
+// scroll runs, so the target is re-aimed until it is in place, unless the reader scrolls first.
+function scrollToTarget(lenis: Lenis, target: HTMLElement): () => void {
+  let checks = 0;
+  let timer = 0;
+  const cancel = () => {
+    window.clearTimeout(timer);
+    window.removeEventListener('wheel', cancel);
+    window.removeEventListener('touchstart', cancel);
+    window.removeEventListener('keydown', cancel);
+  };
+  const reaim = () => {
+    if (Math.abs(target.getBoundingClientRect().top) <= 2 || ++checks > 6) return cancel();
+    lenis.scrollTo(target, { offset: 0, duration: 0.4 });
+    timer = window.setTimeout(reaim, 700);
+  };
+  lenis.scrollTo(target, { offset: 0, duration: 1.2 });
+  timer = window.setTimeout(reaim, 1300);
+  window.addEventListener('wheel', cancel, { passive: true });
+  window.addEventListener('touchstart', cancel, { passive: true });
+  window.addEventListener('keydown', cancel);
+  return cancel;
+}
 
 // Lenis owns scrolling on this page, and the preloader holds it while the intro plays.
 // The browser's own #hash jump runs before React has rendered the target, so a direct link
@@ -20,26 +45,29 @@ export function HashScroll({ ready }: { ready: boolean }) {
     const target = id ? document.getElementById(id) : null;
     if (!target) return;
 
+    let stop = () => {};
     let inner = 0;
     // Two frames let the preloader unmount and GSAP pins settle before the target is measured.
     const outer = requestAnimationFrame(() => {
       inner = requestAnimationFrame(() => {
         ScrollTrigger.refresh();
-        lenis.scrollTo(target, { offset: 0, duration: 1.2 });
+        stop = scrollToTarget(lenis, target);
       });
     });
 
     return () => {
       cancelAnimationFrame(outer);
       cancelAnimationFrame(inner);
+      stop();
     };
   }, [ready, lenis]);
 
   // In-page links (navbar, hero, footer) scroll through Lenis. The browser's own hash jump races
-  // Lenis's wheel and easing animation, which left clicks short of the target.
+  // Lenis's wheel and easing animation, and it measures the target before late layout settles.
   useEffect(() => {
     if (!lenis) return;
 
+    let stop = () => {};
     const onClick = (event: MouseEvent) => {
       if (event.defaultPrevented || event.button !== 0) return;
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -54,12 +82,16 @@ export function HashScroll({ ready }: { ready: boolean }) {
       if (!target) return;
 
       event.preventDefault();
-      lenis.scrollTo(target, { offset: 0, duration: 1.2 });
+      stop();
+      stop = scrollToTarget(lenis, target);
       window.history.pushState(null, '', href);
     };
 
     document.addEventListener('click', onClick);
-    return () => document.removeEventListener('click', onClick);
+    return () => {
+      stop();
+      document.removeEventListener('click', onClick);
+    };
   }, [lenis]);
 
   return null;
