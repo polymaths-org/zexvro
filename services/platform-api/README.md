@@ -96,6 +96,8 @@ remove a workspace or change ownership-sensitive membership.
 - While closed, `POST /auth/signup` returns 403 with a waitlist message, and `GET /api/health` reports `signupsOpen: false`. Sign-in, password recovery and existing accounts are unaffected.
 - The console hides the sign-up toggle unless `/api/health` reports `signupsOpen: true`. The landing sends visitors to `#waitlist`, which posts to `POST /api/waitlist`.
 - Reopening sign-ups is a release change: set the production value in `build.mjs` (or the base var) and ship it through the verified release path, not a direct deploy.
+- Joins: `POST /api/waitlist` returns `201 {status:'joined'}` for a new email and `200 {status:'already_joined'}` for a duplicate. Rows live in D1 table `waitlist` (migration 0010; index 0013 on `created_at`).
+- Admin list: `GET /api/waitlist?secret=…` returns `{count, entries}` (500 newest). It is off (404) unless the Worker secret `WAITLIST_ADMIN_SECRET` is set. Production has it set (2026-10-31); the value lives in `~/.config/zexvro/waitlist-admin.env` (mode 600). The landing admin page is `zexvro.in/?secret=<value>`.
 
 ## Platform administration
 

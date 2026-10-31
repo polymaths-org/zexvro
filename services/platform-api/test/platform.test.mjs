@@ -9,7 +9,7 @@ const prefix=crypto.randomUUID();
 const limiter={limit:async()=>({success:true})};
 before(async()=>{
   proxy=await getPlatformProxy();
-  env={...proxy.env,SIGNUPS_OPEN:'true',API_RATE_LIMITER:limiter,WRITE_RATE_LIMITER:limiter,AUTH_RATE_LIMITER:limiter,DEVICE_RATE_LIMITER:limiter};
+  env={...proxy.env,SIGNUPS_OPEN:'true',WAITLIST_ADMIN_SECRET:'test-waitlist-admin-secret',API_RATE_LIMITER:limiter,WRITE_RATE_LIMITER:limiter,AUTH_RATE_LIMITER:limiter,DEVICE_RATE_LIMITER:limiter};
   const fixture=async name=>{
     const id=`${name}-${prefix}`;
     await env.DB.prepare('INSERT INTO accounts(id,username,email,password_hash,recovery_hash,created_at) VALUES(?,?,?,?,?,?)').bind(id,id,`${id}@example.test`,'fixture','fixture',Date.now()).run();
@@ -92,6 +92,18 @@ test('small patches cannot grow memory beyond its storage cap',async()=>{
  assert.equal((await call('/api/memory','POST',{memory:{largeA:'a'.repeat(40000)}})).status,200);
  assert.equal((await call('/api/memory','POST',{memory:{largeB:'b'.repeat(40000)}})).status,413);
  assert.equal((await call('/api/memory','POST',{memory:{largeA:null}})).status,200);
+});
+test('waitlist joins are idempotent and the admin list needs the secret',async()=>{
+ const email=`waitlist-${prefix.slice(0,8)}@example.test`;
+ try{
+  const first=await call('/api/waitlist','POST',{email,source:'test'});
+  assert.equal(first.status,201);assert.equal(first.body.status,'joined');
+  const again=await call('/api/waitlist','POST',{email,source:'test'});
+  assert.equal(again.status,200);assert.equal(again.body.status,'already_joined');
+  assert.equal((await call('/api/waitlist?secret=wrong','GET')).status,401);
+  const list=await call(`/api/waitlist?secret=${encodeURIComponent(env.WAITLIST_ADMIN_SECRET)}`,'GET');
+  assert.equal(list.status,200);assert.ok(list.body.count>=1);assert.ok(list.body.entries.some(entry=>entry.email===email));
+ }finally{await env.DB.prepare('DELETE FROM waitlist WHERE email=?').bind(email).run()}
 });
 test('public sign-ups are closed while the waitlist is on, and health reports it',async()=>{
  env.SIGNUPS_OPEN='false';
@@ -244,7 +256,7 @@ test('bulk import is bounded and atomic; waitlist inserts are idempotent',async(
  const result=await call('/api/employees/bulk','POST',{workspaceId:ws.id,csv:'name,salary\n"Last, First",12.5\nSecond,20'});assert.equal(result.status,200);assert.equal(result.body.employees.length,2);assert.equal(result.body.employees[0].name,'Last, First');
  assert.equal((await call('/api/employees/bulk','POST',{workspaceId:ws.id,employees:Array.from({length:26},()=>({name:'reject'}))})).status,400);
  assert.equal((await call('/api/employees/bulk','POST',{workspaceId:ws.id,employees:[{name:'deny'}]},outsider)).status,403);
- const email=`wait_${prefix}@example.test`;assert.equal((await call('/api/waitlist','POST',{email},'fake')).status,201);assert.equal((await call('/api/waitlist','POST',{email},'fake')).status,201);
+ const email=`wait_${prefix}@example.test`;assert.equal((await call('/api/waitlist','POST',{email},'fake')).status,201);const duplicate=await call('/api/waitlist','POST',{email},'fake');assert.equal(duplicate.status,200);assert.equal(duplicate.body.status,'already_joined');
  assert.equal((await env.DB.prepare('SELECT count(*) AS n FROM waitlist WHERE email=?').bind(email).first()).n,1);await env.DB.prepare('DELETE FROM waitlist WHERE email=?').bind(email).run();
 });
 test('workspace member role updates persist and cannot transfer ownership; member can leave',async()=>{
