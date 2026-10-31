@@ -138,7 +138,7 @@ export class X402PaymentProtocol implements PaymentProtocol {
     )
   }
 
-  cancel(
+  async cancel(
     payment: VerifiedPayment,
     input: {
       reason: 'handler_threw' | 'handler_failed'
@@ -146,6 +146,6 @@ export class X402PaymentProtocol implements PaymentProtocol {
       responseStatus?: number
     },
   ): Promise<void> {
-    return payment.cancellationDispatcher.cancel(input)
+    await payment.cancellationDispatcher.cancel(input)
   }
 }

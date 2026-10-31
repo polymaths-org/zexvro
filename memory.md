@@ -1,5 +1,11 @@
 # ZEXVRO Shared Memory
 
+## 2026-10-31 - Dependabot remediation before making the repo public (Paris)
+- **Scope:** all 324 open npm alerts on `main`, across `frontend`, `labs`, `landing/zexvro`, `services/{depin,nft-service/api,agent-auth,zk-prover,platform-api}`. Same-major bumps and `overrides`; ESLint 10 and `@x402/*` 2.29 in services; `toml`, `uuid`, `stream-json`, `minimatch` major overrides; unused `@svgr/cli` removed; `services/depin/src/payment.ts` `cancel` adapted to the new x402 return type.
+- **Verified:** builds, lint and tests pass (depin 49, nft 68, agent-auth 63, frontend 138, platform-api 26), plus a zk-prover Poseidon/import smoke test. `labs` lint still fails on `spacetimedb/server`, same as `main`. No live mainnet or wallet flow was run.
+- **Left:** 2 low `elliptic` alerts (GHSA-848j-6mx2-7j84, no patched release) via `circomlibjs`, the wallet kit and node polyfills.
+- **Next:** lockfiles on `morphic/tool-browser-iteration` only (`MORPHIC/desktop`, `landing/zexvro-main`, `services/handshake/handshake`) have their own audit findings and were not touched.
+
 ## 2026-08-15 - Funding plan deck + PDF delivered; peakCTF confirmed separate project (Paris)
 - **Confirmed**: `peakctf-*` resources (7 Dynamo tables, S3 bucket, Lambda in acct `290294660486`) are PQDF/peakCTF — **another project, not part of ZEXVRO**. Excluded from the funding plan and cost model. Do not touch/bill under ZEXVRO.
 - **Deliverables**:
