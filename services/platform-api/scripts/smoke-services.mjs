@@ -25,7 +25,13 @@ function cli(args){const ciToken=process.env.ZEXVRO_CI_CLOUDFLARE_API_TOKEN;cons
 async function call(path,{body,token,method=body?'POST':'GET',expected=200}={}){
  const r=await fetch(base+path,{method,headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},...(body?{body:JSON.stringify(body)}:{})})
  const label=path.split('?')[0].replace(/(\/api\/invite\/)[A-Za-z0-9_-]{32,128}/,'$1[redacted]');
- const result=await r.json();assert.equal(r.status,expected,`${label} HTTP status`);console.log(`${method} ${label}: ${r.status}`);return result
+ const text=await r.text();let result;
+ try{result=JSON.parse(text)}catch{
+  // Name the response so a Cloudflare error page (for example a Worker exception) is visible in the CI log.
+  const title=text.match(/<title>([^<]{0,200})<\/title>/i)?.[1]??text.replace(/\s+/g,' ').slice(0,160);
+  throw Error(`${method} ${label}: HTTP ${r.status} ${r.headers.get('content-type')??'no content-type'} cf-ray=${r.headers.get('cf-ray')??'none'} is not JSON: ${title}`)
+ }
+ assert.equal(r.status,expected,`${label} HTTP status`);console.log(`${method} ${label}: ${r.status}`);return result
 }
 async function account(name){
  const username=`smoke_${name}_${nonce}`,email=`${username}@example.test`,password=randomBytes(24).toString('base64url')
