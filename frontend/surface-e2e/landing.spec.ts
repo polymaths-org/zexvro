@@ -11,6 +11,8 @@ test('landing page renders without an application crash',async({page})=>{
 });
 // The preloader holds the page while its intro plays, so these allow for that before measuring.
 const waitlistTop=(page:import('@playwright/test').Page)=>page.locator('#waitlist').boundingBox().then(box=>Math.round(box?.y??9999));
+// Temporary diagnostics for the navbar scroll in CI: where the page is, and whether ScrollTrigger pins exist.
+const diag=(page:import('@playwright/test').Page)=>page.evaluate(()=>({y:Math.round(scrollY),doc:document.documentElement.scrollHeight,inner:innerHeight,wl:Math.round(document.getElementById('waitlist')?.getBoundingClientRect().top??-1),pinSpacers:document.querySelectorAll('.pin-spacer').length,htmlClass:document.documentElement.className,bodyOverflow:document.body.style.overflow,hash:location.hash}));
 test('a direct /#waitlist link lands on the waitlist form',async({page})=>{
  test.setTimeout(120000);
  await page.goto('/#waitlist',{waitUntil:'domcontentloaded'});
@@ -24,7 +26,8 @@ test('the navbar Join waitlist link scrolls to the waitlist form',async({page})=
  await expect(page.locator('[class*="z-[10000]"]')).toHaveCount(0,{timeout:90000});
  await page.mouse.wheel(0,1500);
  await page.getByRole('link',{name:'Join waitlist'}).filter({visible:true}).first().click({timeout:30000});
- await expect.poll(()=>waitlistTop(page),{timeout:15000}).toBeLessThan(120);
+ console.log('navbar diag at click',JSON.stringify(await diag(page)));
+ try{await expect.poll(()=>waitlistTop(page),{timeout:15000}).toBeLessThan(120)}finally{console.log('navbar diag after',JSON.stringify(await diag(page)))}
  await expect(page.locator('#waitlist input[type="email"]')).toBeVisible();
 });
 test('zexvro.in/waitlist centres the email form and confirms a new join',async({page})=>{

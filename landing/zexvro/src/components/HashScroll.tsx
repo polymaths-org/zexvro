@@ -20,6 +20,7 @@ function scrollToTarget(lenis: Lenis, target: HTMLElement): () => void {
   const reaim = () => {
     if (Math.abs(target.getBoundingClientRect().top) <= 2 || ++checks > 12) return cancel();
     if (window.scrollY === lastY) {
+      ScrollTrigger.refresh();
       lenis.scrollTo(target, { offset: 0, immediate: true });
       if (Math.abs(target.getBoundingClientRect().top) > 2) {
         window.scrollTo({ top: window.scrollY + target.getBoundingClientRect().top, behavior: 'auto' });
@@ -94,6 +95,8 @@ export function HashScroll({ ready }: { ready: boolean }) {
 
       event.preventDefault();
       stop();
+      // Pin positions depend on the layout, so align them with the page before the target is measured.
+      ScrollTrigger.refresh();
       stop = scrollToTarget(lenis, target);
       window.history.pushState(null, '', href);
     };
