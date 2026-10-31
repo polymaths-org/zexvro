@@ -15,5 +15,9 @@
   },
   "engines": {
     "node": ">=18"
+  },
+  "overrides": {
+    "ws@8": "^8.21.0",
+    "minimatch@5": "^11.0.1"
   }
 }
