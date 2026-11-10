@@ -1,4 +1,4 @@
-import {PRIVATE_POOL_FUNDING_PAUSED,PRIVATE_POOL_SAFETY_MESSAGE} from '../../lib/poolSafety';
+import {PRIVATE_POOL_SAFETY_MESSAGE,PRIVATE_POOL_DEMO_MESSAGE,isPrivatePoolDemoUnlocked,isPrivatePoolFundingPaused} from '../../lib/poolSafety';
 import { useMemo, useState, useEffect } from 'react';
 import { useParams, useNavigate } from '@tanstack/react-router';
 import {
@@ -327,7 +327,7 @@ export default function Zer0PayParty() {
   });
   const privacyNet = getPrivacyPoolNetwork();
   const poolTiers = getPoolTiers();
-  const privatePoolsAvailable = poolTiers.length > 0 && !PRIVATE_POOL_FUNDING_PAUSED;
+  const privatePoolsAvailable = poolTiers.length > 0 && !isPrivatePoolFundingPaused();
   const onMainnet = !privacyNet.isTestnet;
 
   // Free-form amount → multi-denom plan (1000/100/10/1 XLM notes) for few ZK proofs.
@@ -390,7 +390,7 @@ export default function Zer0PayParty() {
     }
     if (shielded && !privatePoolsAvailable) {
       alert(
-        PRIVATE_POOL_FUNDING_PAUSED ? PRIVATE_POOL_SAFETY_MESSAGE : onMainnet
+        isPrivatePoolFundingPaused() ? PRIVATE_POOL_SAFETY_MESSAGE : onMainnet
           ? 'Private pay is not available on mainnet yet (privacy pools not deployed). Switch to public pay, or use Testnet for private pays.'
           : 'No privacy pool tiers are configured for this network.',
       );
@@ -554,7 +554,7 @@ export default function Zer0PayParty() {
       const settleAmount = shielded ? shieldedOnChainXlm : parsedAmount;
       if (shielded && !privatePoolsAvailable) {
         alert(
-          PRIVATE_POOL_FUNDING_PAUSED ? PRIVATE_POOL_SAFETY_MESSAGE : onMainnet
+          isPrivatePoolFundingPaused() ? PRIVATE_POOL_SAFETY_MESSAGE : onMainnet
             ? 'Private pay is not available on mainnet yet. Use public pay, or switch Zer0 to Testnet.'
             : 'No privacy pools configured for this network.',
         );
@@ -710,7 +710,10 @@ export default function Zer0PayParty() {
 
   return (
     <div className="space-y-6">
-      {PRIVATE_POOL_FUNDING_PAUSED && <div role="status" className="rounded-md border border-amber-500/30 p-3 text-sm text-amber-700 dark:text-amber-400">{PRIVATE_POOL_SAFETY_MESSAGE}</div>}
+      {isPrivatePoolDemoUnlocked() && (
+        <div role="status" className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">{PRIVATE_POOL_DEMO_MESSAGE}</div>
+      )}
+      {isPrivatePoolFundingPaused() && <div role="status" className="rounded-md border border-amber-500/30 p-3 text-sm text-amber-700 dark:text-amber-400">{PRIVATE_POOL_SAFETY_MESSAGE}</div>}
       <div>
         <h1 className="text-lg font-bold text-zinc-900 dark:text-white">Send payment</h1>
         <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
@@ -1058,7 +1061,7 @@ export default function Zer0PayParty() {
                 <button
                   type="button"
                   onClick={fundFromFaucet}
-                  disabled={isFunding || PRIVATE_POOL_FUNDING_PAUSED}
+                  disabled={isFunding || isPrivatePoolFundingPaused()}
                   className="shrink-0 h-8 px-3 rounded bg-red-600/90 text-white font-semibold hover:bg-red-600 transition disabled:opacity-50 flex items-center justify-center gap-1.5 text-[11px] shadow-sm hover:shadow active:scale-[0.98]"
                 >
                   {isFunding ? (
