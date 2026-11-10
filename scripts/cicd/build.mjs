@@ -20,7 +20,7 @@ await cp('services/platform-api/migrations',resolve(out,'migrations'),{recursive
 const base=JSON.parse(await readFile('services/platform-api/wrangler.jsonc'));
 for(const target of ['dev','production']){
  const env=config[target],dir=resolve(out,'config',target);await mkdir(dir,{recursive:true});
- const runtime={VITE_API_URL:env.api,VITE_NFT_API_URL:env.api+'/nft',VITE_AGENT_AUTH_API_URL:env.api+'/gate',VITE_DEPIN_API_URL:env.api+'/depin',VITE_APP_URL:env.console};
+ const runtime={VITE_API_URL:env.api,VITE_NFT_API_URL:env.api+'/nft',VITE_AGENT_AUTH_API_URL:env.api+'/gate',VITE_DEPIN_API_URL:env.api+'/depin',VITE_APP_URL:env.console,...(target==='production'?{VITE_ZER0_DEMO_UNSAFE_POOLS:'true'}:{})};
  await writeFile(resolve(dir,'runtime-config.js'),'globalThis.__ZEXVRO_CONFIG__='+JSON.stringify(runtime)+';\n');
  const worker={...base,name:env.worker,main:'../../worker/index.js',no_bundle:true,minify:false,build:undefined,upload_source_maps:false,
   rules:[{type:'Text',globs:['**/*-captcha.js'],fallthrough:true}],

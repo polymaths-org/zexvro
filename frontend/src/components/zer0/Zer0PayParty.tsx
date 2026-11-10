@@ -1,4 +1,4 @@
-import {PRIVATE_POOL_SAFETY_MESSAGE,PRIVATE_POOL_DEMO_MESSAGE,isPrivatePoolDemoUnlocked,isPrivatePoolFundingPaused} from '../../lib/poolSafety';
+import {PRIVATE_POOL_SAFETY_MESSAGE,isPrivatePoolFundingPaused} from '../../lib/poolSafety';
 import { useMemo, useState, useEffect } from 'react';
 import { useParams, useNavigate } from '@tanstack/react-router';
 import {
@@ -710,9 +710,6 @@ export default function Zer0PayParty() {
 
   return (
     <div className="space-y-6">
-      {isPrivatePoolDemoUnlocked() && (
-        <div role="status" className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">{PRIVATE_POOL_DEMO_MESSAGE}</div>
-      )}
       {isPrivatePoolFundingPaused() && <div role="status" className="rounded-md border border-amber-500/30 p-3 text-sm text-amber-700 dark:text-amber-400">{PRIVATE_POOL_SAFETY_MESSAGE}</div>}
       <div>
         <h1 className="text-lg font-bold text-zinc-900 dark:text-white">Send payment</h1>

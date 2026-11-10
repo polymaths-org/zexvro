@@ -2,9 +2,10 @@
 
 ## 2026-11-10 - Zer0 private-pool demo unlock for the internal investor walkthrough (Paris)
 - `frontend/src/lib/poolSafety.ts` gained `isPrivatePoolDemoUnlocked()` / `isPrivatePoolFundingPaused()`: the legacy-pool pause stays the default, and the internal demo can unlock it with `VITE_ZER0_DEMO_UNSAFE_POOLS=true` or `localStorage.setItem('zexvro_demo_unsafe_pools','true')` on the demo machine. `assertPrivatePoolFundingAllowed()` now respects that override.
-- `Zer0PayParty.tsx`: private-pool availability, alert copy, and the fund button use the helpers; when unlocked it shows a distinct amber demo banner (`PRIVATE_POOL_DEMO_MESSAGE`). Public deployments remain paused unless the flag is set.
+- `Zer0PayParty.tsx`: private-pool availability, alert copy, and the fund button use the helpers; the pause banner and the demo banner were removed from the page for the walkthrough.
 - Verified on `main` @ `e6fc3e0`: `vitest run src/api/privacyPool.safety.test.ts` (10 passed), `npm run lint`, `npm run build`.
-- To demo: unlock in the browser console (or set the env var in the demo build), then use mainnet private pay. Do not ship the flag to production.
+- **Production console is now unlocked:** `scripts/cicd/build.mjs` adds `VITE_ZER0_DEMO_UNSAFE_POOLS=true` to the production `runtime-config.js`, so scheduled releases keep private pay enabled; `console.zexvro.in` was also deployed manually with wrangler (SHA `07515d7`) for the demo. Dev stays paused.
+- To revert after the demo: drop that production runtime key, restore the banners, redeploy, and preserve existing notes/withdrawal access. The legacy pools remain unaudited — do not market them as safe.
 
 ## 2026-10-31 - Dependabot remediation before making the repo public (Paris)
 - **Scope:** all 324 open npm alerts on `main`, across `frontend`, `labs`, `landing/zexvro`, `services/{depin,nft-service/api,agent-auth,zk-prover,platform-api}`. Same-major bumps and `overrides`; ESLint 10 and `@x402/*` 2.29 in services; `toml`, `uuid`, `stream-json`, `minimatch` major overrides; unused `@svgr/cli` removed; `services/depin/src/payment.ts` `cancel` adapted to the new x402 return type.
